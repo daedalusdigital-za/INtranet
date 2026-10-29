@@ -260,7 +260,7 @@ export interface SohImportDialogResult {
                     {{ importSummary()?.warningCount || 0 }} Warning(s), {{ importSummary()?.errorCount || 0 }} Error(s)
                   </mat-panel-title>
                   <mat-panel-description>
-                    <button mat-icon-button matTooltip="Export Issues to CSV" (click)="exportIssues($event)">
+                    <button aria-label="Export Issues to CSV" mat-icon-button matTooltip="Export Issues to CSV" (click)="exportIssues($event)">
                       <mat-icon>download</mat-icon>
                     </button>
                   </mat-panel-description>
@@ -420,19 +420,19 @@ export interface SohImportDialogResult {
     .company-selector {
       margin-bottom: 24px;
       padding: 16px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 8px;
-      border-left: 4px solid #1976d2;
+      border-left: 4px solid var(--color-primary);
 
       h4 {
         display: flex;
         align-items: center;
         gap: 8px;
         margin: 0 0 12px;
-        color: #1565c0;
+        color: var(--color-primary-hover);
 
         mat-icon {
-          color: #1976d2;
+          color: var(--color-primary);
         }
       }
 
@@ -450,13 +450,13 @@ export interface SohImportDialogResult {
 
     /* Upload Area */
     .upload-area {
-      border: 2px dashed #ccc;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 12px;
       padding: 48px 24px;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s;
-      background: #fafafa;
+      background: var(--color-canvas);
 
       &:hover:not(.disabled) {
         border-color: #00695c;
@@ -466,7 +466,7 @@ export interface SohImportDialogResult {
       &.disabled {
         opacity: 0.5;
         cursor: not-allowed;
-        background: #f0f0f0;
+        background: var(--color-surface-2);
       }
 
       &.drag-over {
@@ -486,22 +486,22 @@ export interface SohImportDialogResult {
         font-size: 48px;
         width: 48px;
         height: 48px;
-        color: #4caf50;
+        color: var(--color-ok);
       }
 
       h3 {
         margin: 16px 0 8px;
-        color: #333;
+        color: var(--color-text);
       }
 
       p {
         margin: 0;
-        color: #666;
+        color: var(--color-text-2);
       }
 
       .file-hint {
         font-size: 12px;
-        color: #999;
+        color: var(--color-text-3);
         margin-top: 8px;
       }
     }
@@ -510,7 +510,7 @@ export interface SohImportDialogResult {
     .options-section {
       margin-top: 24px;
       padding: 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
 
       h4 {
@@ -518,7 +518,7 @@ export interface SohImportDialogResult {
         align-items: center;
         gap: 8px;
         margin: 0 0 16px;
-        color: #333;
+        color: var(--color-text);
 
         mat-icon {
           color: #00695c;
@@ -541,7 +541,7 @@ export interface SohImportDialogResult {
 
       .toggle-hint {
         font-size: 12px;
-        color: #666;
+        color: var(--color-text-2);
         margin: 0;
         padding-left: 48px;
       }
@@ -560,7 +560,7 @@ export interface SohImportDialogResult {
       }
 
       p {
-        color: #666;
+        color: var(--color-text-2);
         margin: 0 0 24px;
       }
 
@@ -579,7 +579,7 @@ export interface SohImportDialogResult {
     }
 
     .summary-card {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       padding: 12px;
       text-align: center;
@@ -588,7 +588,7 @@ export interface SohImportDialogResult {
         font-size: 24px;
         width: 24px;
         height: 24px;
-        color: #666;
+        color: var(--color-text-2);
       }
 
       .value {
@@ -599,20 +599,20 @@ export interface SohImportDialogResult {
 
       .label {
         font-size: 11px;
-        color: #666;
+        color: var(--color-text-2);
         text-transform: uppercase;
       }
 
       &.qty {
-        background: #e8f5e9;
-        mat-icon { color: #4caf50; }
-        .value { color: #2e7d32; }
+        background: var(--color-ok-soft);
+        mat-icon { color: var(--color-ok); }
+        .value { color: var(--color-ok); }
       }
 
       &.value {
-        background: #e3f2fd;
-        mat-icon { color: #1976d2; }
-        .value { color: #1565c0; }
+        background: var(--color-primary-soft);
+        mat-icon { color: var(--color-primary); }
+        .value { color: var(--color-primary-hover); }
       }
     }
 
@@ -626,7 +626,7 @@ export interface SohImportDialogResult {
 
       .chip-label {
         font-weight: 500;
-        color: #666;
+        color: var(--color-text-2);
       }
 
       .location-chip {
@@ -644,15 +644,15 @@ export interface SohImportDialogResult {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 8px;
       margin-bottom: 16px;
-      color: #1565c0;
-      border-left: 4px solid #1976d2;
+      color: var(--color-primary-hover);
+      border-left: 4px solid var(--color-primary);
 
       mat-icon {
         font-size: 20px;
-        color: #1976d2;
+        color: var(--color-primary);
       }
     }
 
@@ -676,8 +676,8 @@ export interface SohImportDialogResult {
     .issues-panel {
       margin-bottom: 16px;
 
-      mat-icon.warning { color: #ff9800; }
-      mat-icon.error { color: #f44336; }
+      mat-icon.warning { color: var(--color-warn); }
+      mat-icon.error { color: var(--color-danger); }
     }
 
     .issues-list {
@@ -695,22 +695,22 @@ export interface SohImportDialogResult {
       align-items: center;
 
       &.warning {
-        background: #fff8e1;
+        background: var(--color-warn-soft);
       }
 
       &.error {
-        background: #ffebee;
+        background: var(--color-danger-soft);
       }
 
       .row-num {
         font-weight: 500;
-        color: #666;
+        color: var(--color-text-2);
         min-width: 60px;
       }
 
       .issue-code {
         font-family: monospace;
-        color: #9e9e9e;
+        color: var(--color-text-3);
         font-size: 11px;
       }
 
@@ -721,8 +721,8 @@ export interface SohImportDialogResult {
       .issue-item-code {
         font-family: monospace;
         font-size: 11px;
-        color: #666;
-        background: #eee;
+        color: var(--color-text-2);
+        background: var(--color-surface-2);
         padding: 2px 6px;
         border-radius: 4px;
       }
@@ -731,7 +731,7 @@ export interface SohImportDialogResult {
     .more-issues {
       text-align: center;
       padding: 8px;
-      color: #666;
+      color: var(--color-text-2);
       font-style: italic;
     }
 
@@ -749,11 +749,11 @@ export interface SohImportDialogResult {
       th, td {
         padding: 8px 12px;
         text-align: left;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--color-line);
       }
 
       th {
-        background: #fafafa;
+        background: var(--color-canvas);
         font-weight: 500;
         position: sticky;
         top: 0;
@@ -777,7 +777,7 @@ export interface SohImportDialogResult {
       }
 
       tr.has-issues {
-        background: #fff8e1;
+        background: var(--color-warn-soft);
       }
     }
 
@@ -793,23 +793,23 @@ export interface SohImportDialogResult {
         font-size: 64px;
         width: 64px;
         height: 64px;
-        color: #f44336;
+        color: var(--color-danger);
       }
 
       h3 {
         margin: 16px 0 8px;
-        color: #f44336;
+        color: var(--color-danger);
       }
 
       p {
-        color: #666;
+        color: var(--color-text-2);
       }
     }
 
     /* Dialog Actions */
     mat-dialog-actions {
       padding: 16px 24px !important;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
 
       button {
         mat-icon {

@@ -6,8 +6,9 @@ import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/materia
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { ToastService } from '../../ui/toast.service';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 interface PumaOrder {
   id?: number;
@@ -33,7 +34,7 @@ interface PumaOrder {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatButtonModule,
-    MatIconModule, MatTooltipModule, MatProgressSpinnerModule
+    MatIconModule, MatTooltipModule, MatProgressSpinnerModule, EmptyStateComponent
   ],
   template: `
     <div class="puma-dialog">
@@ -45,7 +46,7 @@ interface PumaOrder {
             <span class="puma-sub">Rocket Freight · Bronkhorstspruit, GP</span>
           </div>
         </div>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
 
       <!-- KPI strip -->
@@ -82,7 +83,7 @@ interface PumaOrder {
         <button mat-stroked-button (click)="toggleAdd()">
           <mat-icon>add</mat-icon> Add Order
         </button>
-        <button mat-icon-button (click)="reload()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
+        <button aria-label="Refresh" mat-icon-button (click)="reload()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
       </div>
 
       <!-- Import panel -->
@@ -134,33 +135,41 @@ interface PumaOrder {
       <!-- Table -->
       <div class="puma-table-wrap">
         @if (filtered.length === 0) {
-          <div class="empty">
-            <mat-icon>local_gas_station</mat-icon>
-            <h3>No Puma Garage orders yet</h3>
-            <p>Use “Import / Paste” to load a monthly sheet, or “Add Order” to capture one.</p>
-          </div>
+          @if (orders.length) {
+            <app-empty-state icon="search_off" title="No orders match “{{ search.trim() }}”"
+                             message="Search looks at the order number, driver, registration and vehicle type.">
+              <button mat-stroked-button (click)="search = ''; applyFilter()">Clear the search</button>
+            </app-empty-state>
+          } @else {
+            <app-empty-state icon="local_gas_station" title="No Puma Garage orders yet"
+                             message="Use “Import / Paste” to load a monthly sheet, or “Add Order” to capture one.">
+              @if (!showAdd) {
+                <button mat-stroked-button (click)="toggleAdd()"><mat-icon>add</mat-icon> Add Order</button>
+              }
+            </app-empty-state>
+          }
         } @else {
-          <table class="puma-table">
+          <table class="app-table">
             <thead>
               <tr>
                 <th>Order #</th><th>Driver</th><th>Vehicle</th><th>Registration</th>
-                <th class="r">Capacity</th><th class="r">Litres</th><th class="r">Value</th>
+                <th class="num">Capacity</th><th class="num">Litres</th><th class="num">Value</th>
                 <th>Date</th><th></th>
               </tr>
             </thead>
             <tbody>
               @for (o of filtered; track o.id) {
                 <tr>
-                  <td class="mono b">{{ o.orderNumber }}</td>
+                  <td class="ref b">{{ o.orderNumber }}</td>
                   <td>{{ o.driverName || '—' }}</td>
                   <td>{{ o.vehicleType || '—' }}</td>
-                  <td class="mono">{{ o.registration || '—' }}</td>
-                  <td class="r">{{ o.capacity != null ? (o.capacity | number:'1.0-0') : '—' }}</td>
-                  <td class="r">{{ o.litersFilled != null ? (o.litersFilled | number:'1.2-2') : '—' }}</td>
-                  <td class="r b">{{ o.value != null ? ('R ' + (o.value | number:'1.2-2')) : '—' }}</td>
+                  <td class="ref">{{ o.registration || '—' }}</td>
+                  <td class="num">{{ o.capacity != null ? (o.capacity | number:'1.0-0') : '—' }}</td>
+                  <td class="num">{{ o.litersFilled != null ? (o.litersFilled | number:'1.2-2') : '—' }}</td>
+                  <td class="num b">{{ o.value != null ? ('R ' + (o.value | number:'1.2-2')) : '—' }}</td>
                   <td>{{ o.date ? (o.date | date:'dd MMM yyyy') : '—' }}</td>
-                  <td class="r">
-                    <button mat-icon-button color="warn" matTooltip="Delete" (click)="doDelete(o)">
+                  <td class="row-actions">
+                    <button aria-label="Delete" mat-icon-button color="warn" matTooltip="Delete" (click)="doDelete(o)">
                       <mat-icon>delete_outline</mat-icon>
                     </button>
                   </td>
@@ -176,40 +185,41 @@ interface PumaOrder {
     .puma-dialog { display: flex; flex-direction: column; max-height: 88vh; }
     .puma-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 20px; border-bottom: 1px solid #eef0f4;
+      padding: 16px 20px; border-bottom: 1px solid var(--color-line);
     }
     .puma-title { display: flex; align-items: center; gap: 14px; }
     .puma-logo {
-      width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
-      background: linear-gradient(135deg, #d32f2f, #ff6d00); color: #fff;
+      width: 46px; height: 46px; border-radius: var(--radius-md); display: grid; place-items: center;
+      background: var(--color-primary-soft); color: var(--color-primary);
     }
-    .puma-logo mat-icon { color: #fff; }
-    .puma-title h2 { margin: 0; font-size: 20px; font-weight: 700; color: #1e293b; }
-    .puma-sub { font-size: 12.5px; color: #64748b; }
+    .puma-logo mat-icon { color: var(--color-primary); }
+    .puma-title h2 { margin: 0; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
+    .puma-sub { font-size: var(--text-sm); color: var(--color-text-3); }
 
     .puma-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px 20px 4px; }
     .puma-kpi {
-      background: #f8fafc; border: 1px solid #eef0f4; border-radius: 12px;
+      background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md);
       padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
     }
-    .puma-kpi .k-label { font-size: 11.5px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
-    .puma-kpi .k-value { font-size: 19px; font-weight: 700; color: #0f172a; }
-    .puma-kpi .k-value.sm { font-size: 13.5px; font-weight: 600; }
+    .puma-kpi .k-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-3); }
+    .puma-kpi .k-value { font-size: var(--text-xl); font-weight: 700; color: var(--color-text); font-variant-numeric: tabular-nums; }
+    .puma-kpi .k-value.sm { font-size: var(--text-sm); font-weight: 600; }
 
     .puma-toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 20px; flex-wrap: wrap; }
     .puma-toolbar .spacer { flex: 1; }
     .puma-search {
       display: flex; align-items: center; gap: 8px; flex: 1 1 320px; min-width: 240px;
-      background: #f1f5f9; border-radius: 10px; padding: 8px 12px;
+      background: var(--color-surface-2); border-radius: 10px; padding: 8px 12px;
     }
-    .puma-search mat-icon { color: #94a3b8; font-size: 20px; width: 20px; height: 20px; }
-    .puma-search input { border: none; background: transparent; outline: none; width: 100%; font-size: 14px; }
+    .puma-search mat-icon { color: var(--color-text-3); font-size: 20px; width: 20px; height: 20px; }
+    .puma-search input { border: none; background: transparent; outline: none; width: 100%; font-size: var(--text-md); color: var(--color-text); }
 
-    .puma-import, .puma-add { margin: 0 20px 8px; padding: 16px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; }
-    .puma-import .hint { margin: 0 0 10px; font-size: 12.5px; color: #64748b; }
+    .puma-import, .puma-add { margin: 0 20px 8px; padding: 16px; background: var(--color-canvas); border: 1px dashed var(--color-line-strong); border-radius: var(--radius-md); }
+    .puma-import .hint { margin: 0 0 10px; font-size: var(--text-sm); color: var(--color-text-3); }
     .puma-import textarea, .period-input {
-      width: 100%; border: 1px solid #d5dbe3; border-radius: 8px; padding: 10px 12px;
-      font-family: 'Consolas', monospace; font-size: 12.5px; box-sizing: border-box;
+      width: 100%; border: 1px solid var(--color-line-strong); border-radius: 8px; padding: 10px 12px;
+      font-family: var(--font-mono); font-size: var(--text-sm); box-sizing: border-box;
+      background: var(--color-surface); color: var(--color-text);
     }
     .import-row { margin-bottom: 8px; }
     .period-input { font-family: inherit; max-width: 280px; }
@@ -217,25 +227,11 @@ interface PumaOrder {
     .import-actions mat-spinner { margin-right: 4px; }
 
     .add-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .add-grid input { border: 1px solid #d5dbe3; border-radius: 8px; padding: 9px 11px; font-size: 13px; box-sizing: border-box; }
+    .add-grid input { border: 1px solid var(--color-line-strong); border-radius: 8px; padding: 9px 11px; font-size: var(--text-sm); box-sizing: border-box; background: var(--color-surface); color: var(--color-text); }
 
     .puma-table-wrap { overflow: auto; padding: 4px 20px 20px; flex: 1; }
-    .puma-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    .puma-table thead th {
-      position: sticky; top: 0; background: #f8fafc; z-index: 1; text-align: left;
-      padding: 10px 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em;
-      color: #64748b; border-bottom: 2px solid #eef0f4;
-    }
-    .puma-table tbody td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
-    .puma-table tbody tr:hover { background: #f8fafc; }
-    .puma-table .r { text-align: right; }
-    .puma-table .b { font-weight: 700; }
-    .puma-table .mono { font-family: 'Consolas', monospace; }
-
-    .empty { text-align: center; padding: 48px 20px; color: #94a3b8; }
-    .empty mat-icon { font-size: 48px; width: 48px; height: 48px; color: #cbd5e1; }
-    .empty h3 { margin: 12px 0 4px; color: #475569; }
-    .empty p { margin: 0; font-size: 13px; }
+    .app-table .b { font-weight: 700; }
+    .app-table .row-actions { text-align: right; padding-top: 0; padding-bottom: 0; }
 
     @media (max-width: 720px) {
       .puma-kpis, .add-grid { grid-template-columns: repeat(2, 1fr); }
@@ -260,7 +256,7 @@ export class PumaGarageDialog {
     @Inject(MAT_DIALOG_DATA) public data: { orders: PumaOrder[]; apiUrl: string },
     private dialogRef: MatDialogRef<PumaGarageDialog>,
     private http: HttpClient,
-    private snack: MatSnackBar
+    private toast: ToastService
   ) {
     this.apiUrl = data.apiUrl;
     this.orders = [...(data.orders || [])];
@@ -307,16 +303,15 @@ export class PumaGarageDialog {
     }).subscribe({
       next: (res) => {
         this.importing = false;
-        this.snack.open(
-          `Imported ${res.imported} new, updated ${res.updated}, skipped ${res.skipped}.`,
-          'Close', { duration: 4000 });
+        this.toast.done(
+          `Imported ${res.imported} new, updated ${res.updated}, skipped ${res.skipped}.`);
         this.importText = '';
         this.showImport = false;
         this.reload();
       },
       error: (err) => {
         this.importing = false;
-        this.snack.open(err.error?.message || 'Import failed.', 'Close', { duration: 4000 });
+        this.toast.error(err.error?.message || 'Import failed.');
       }
     });
   }
@@ -325,20 +320,20 @@ export class PumaGarageDialog {
     if (!this.newOrder.orderNumber.trim()) return;
     this.http.post<PumaOrder>(this.base(), this.newOrder).subscribe({
       next: () => {
-        this.snack.open('Order added.', 'Close', { duration: 2500 });
+        this.toast.done('Order added.');
         this.newOrder = { orderNumber: '' };
         this.showAdd = false;
         this.reload();
       },
-      error: (err) => this.snack.open(err.error?.message || 'Failed to add order.', 'Close', { duration: 3000 })
+      error: (err) => this.toast.error(err.error?.message || 'Failed to add order.')
     });
   }
 
   doDelete(o: PumaOrder): void {
     if (!o.id) return;
     this.http.delete(`${this.base()}/${o.id}`).subscribe({
-      next: () => { this.snack.open('Order deleted.', 'Close', { duration: 2000 }); this.reload(); },
-      error: () => this.snack.open('Failed to delete order.', 'Close', { duration: 3000 })
+      next: () => { this.toast.done('Order deleted.'); this.reload(); },
+      error: () => this.toast.error('Failed to delete order.')
     });
   }
 }

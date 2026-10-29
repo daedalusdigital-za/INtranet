@@ -1,6 +1,8 @@
-import { Component, OnInit, inject, signal, computed, Inject } from '@angular/core';
+import { Component, OnInit, DoCheck, OnDestroy, inject, signal, computed, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router, ActivatedRoute, NavigationEnd, Params } from '@angular/router';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, filter } from 'rxjs/operators';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
@@ -24,7 +26,6 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatDialogModule, MatDialog, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
@@ -39,6 +40,15 @@ import { PROMED_BACK_ORDERS, ACCESS_BACK_ORDERS, PHARMATECH_BACK_ORDERS, SEBENZA
 import { TENDER_PRICE_ITEMS, TenderPriceItem } from './tender-pricing-data';
 import * as XLSX from 'xlsx';
 import { AuthService } from '../../services/auth.service';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { SubNavComponent } from '../../ui/sub-nav/sub-nav.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { ChipTone, StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { formatDay, isFilterRecord, parseDay, queryText, recordFilters, toQuery } from '../../ui/sub-pages';
+import { SALES_SECTIONS, SalesSlug, salesSection } from './sales-sections';
 
 // Company definitions
 import { COMPANIES, Company, SalesHistoryRow, SalesHistoryLine, SalesHistoryReconcile, CompanySales, Customer, SalesTripSheetLine, SalesTripSheet, Invoice, Order, IncomingOrderEmail, SalesStats } from './sales.models';
@@ -76,7 +86,6 @@ import { BackOrderStockDialog } from './back-order-stock-dialog.component';
     MatDialogModule,
     MatTabsModule,
     MatDividerModule,
-    MatSnackBarModule,
     MatExpansionModule,
     MatCheckboxModule,
     MatSlideToggleModule,
@@ -84,24 +93,190 @@ import { BackOrderStockDialog } from './back-order-stock-dialog.component';
     CdkDropList,
     CdkDrag,
     CdkDragHandle,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent,
+    SubNavComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent,
+    StatusChipComponent
   ],
   templateUrl: './sales-dashboard.component.html',
   styleUrls: ['./sales-dashboard.component.scss']
 })
-export class SalesDashboardComponent implements OnInit {
+export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
   private http = inject(HttpClient);
   private dialog = inject(MatDialog);
-  private snackBar = inject(MatSnackBar);
+  private readonly toast = inject(ToastService);
   private wellyActivity = inject(WellyActivityService);
   private auth = inject(AuthService);
+  private readonly confirmDialog = inject(ConfirmService);
   private apiUrl = environment.apiUrl;
 
   // Companies
   companies = COMPANIES;
 
-  // Tab state
-  selectedTab = 0;
+  // ---------- Sub-pages with their own addresses (design review D-12) ----------
+  // /sales/<section>?<filters> picks the sub-page and its filters. Moving between sub-pages adds
+  // to the browser history, so Back works; changing a filter replaces the current entry instead.
+
+  readonly sections = SALES_SECTIONS;
+  readonly section = signal<SalesSlug>('orders');
+  readonly currentSection = computed(() => salesSection(this.section()));
+  /** Each sub-page's filters as last used, so its link in the sub-navigation brings them back. */
+  readonly sectionQuery = signal<Partial<Record<SalesSlug, Params>>>({});
+
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly subscriptions = new Subscription();
+  private readonly filterWrites = new Subject<void>();
+  private lastFilterKey = '';
+
+  /** One line of context under the page title. */
+  sectionSubtitle(): string {
+    return this.section() === 'orders'
+      ? 'Customers, invoices and orders for all four companies'
+      : this.currentSection()?.hint ?? '';
+  }
+
+  /** Counts after the sub-page links, as the tabs had. */
+  sectionCounts(): Partial<Record<SalesSlug, number>> {
+    return {
+      orders: this.stats().incomingOrders,
+      history: this.salesHistoryTotalCount(),
+      'back-orders': this.backOrderTotalCount(),
+      pods: this.podTotalCount
+    };
+  }
+
+  /** POD filters reload the list from the first page. */
+  podFilterChanged(): void {
+    this.podCurrentPage = 1;
+    this.loadPodDocuments();
+  }
+
+  /** Filters change from many fields and buttons, so look for a change once per check and follow it in the address. */
+  ngDoCheck(): void {
+    const key = JSON.stringify(this.currentQuery(this.section()));
+    if (key !== this.lastFilterKey) {
+      this.lastFilterKey = key;
+      this.filterWrites.next();
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+  }
+
+  /** Reads the sub-page and its filters from the address. Runs after every navigation. */
+  private applyUrl(): void {
+    const section = salesSection(this.route.snapshot.firstChild?.paramMap.get('section'));
+    if (!section) {
+      // An old or mistyped address: open Sales where it normally opens rather than an empty page.
+      this.router.navigate(['/sales', SALES_SECTIONS[0].slug], { replaceUrl: true });
+      return;
+    }
+    this.section.set(section.slug);
+    const query = this.route.snapshot.queryParams;
+    if (!isFilterRecord(this.router)) {
+      this.applyFilters(section.slug, query);
+    }
+    this.sectionQuery.update(all => ({ ...all, [section.slug]: query }));
+    this.onSectionShown(section.slug);
+  }
+
+  /** Sets a sub-page's filters from the address. Filters missing from it go back to their defaults. */
+  private applyFilters(slug: SalesSlug, q: Params): void {
+    const text = (key: string): string => queryText(q, key);
+    switch (slug) {
+      case 'orders':
+        this.emailFilterSearch.set(text('q'));
+        this.emailReadFilter.set(text('read') || 'all');
+        break;
+      case 'customers': {
+        const before = this.customerSearch() + '|' + this.customerProvinceFilter();
+        this.customerSearch.set(text('q'));
+        this.customerProvinceFilter.set(text('province') || 'all');
+        if (this.customerSearch() + '|' + this.customerProvinceFilter() !== before) this.customerPageIndex.set(0);
+        break;
+      }
+      case 'invoices': {
+        const before = this.invoiceSearch() + '|' + this.invoiceStatusFilter();
+        this.invoiceSearch.set(text('q'));
+        this.invoiceStatusFilter.set(text('status') || 'all');
+        if (this.invoiceSearch() + '|' + this.invoiceStatusFilter() !== before) this.invoicePageIndex.set(0);
+        break;
+      }
+      case 'history': {
+        const before = JSON.stringify(this.currentQuery('history'));
+        this.salesHistorySearch.set(text('q'));
+        this.salesHistoryCompany.set(text('company'));
+        this.salesHistoryDetailedOnly.set(text('detailed') === '1');
+        this.salesHistoryFromDate = parseDay(text('from'));
+        this.salesHistoryToDate = parseDay(text('to'));
+        // Before the first visit, onSectionShown() loads the history with these filters.
+        if (JSON.stringify(this.currentQuery('history')) !== before && this.salesHistoryLoaded) {
+          this.salesHistoryPageIndex.set(0);
+          this.loadSalesHistory();
+        }
+        break;
+      }
+      case 'back-orders': {
+        const stock = text('stock');
+        this.backOrderSearch.set(text('q'));
+        this.backOrderStockFilter.set(stock === 'full' || stock === 'partial' || stock === 'none' || stock === 'unmapped' ? stock : '');
+        break;
+      }
+      case 'pods': {
+        const next = [text('region'), text('month'), text('driver'), text('link')];
+        const now = [this.podRegionFilter, this.podMonthFilter, this.podDriverFilter, this.podLinkFilter];
+        if (next.join('|') !== now.join('|')) {
+          [this.podRegionFilter, this.podMonthFilter, this.podDriverFilter, this.podLinkFilter] = next;
+          this.podFilterChanged();
+        }
+        break;
+      }
+      case 'trip-sheets':
+        this.logisticsTripsheetSearch.set(text('q'));
+        break;
+      case 'tender-pricing':
+        this.tenderNoFilter.set(text('tender') || 'all');
+        this.tenderSearch.set(text('q'));
+        break;
+    }
+  }
+
+  /** A sub-page's filters as address parameters, leaving out the defaults. */
+  private currentQuery(slug: SalesSlug): Params {
+    switch (slug) {
+      case 'orders':
+        return toQuery({ q: this.emailFilterSearch(), read: this.emailReadFilter() }, { read: 'all' });
+      case 'customers':
+        return toQuery({ q: this.customerSearch(), province: this.customerProvinceFilter() }, { province: 'all' });
+      case 'invoices':
+        return toQuery({ q: this.invoiceSearch(), status: this.invoiceStatusFilter() }, { status: 'all' });
+      case 'history':
+        return toQuery({
+          q: this.salesHistorySearch(), company: this.salesHistoryCompany(), detailed: this.salesHistoryDetailedOnly() ? '1' : null,
+          from: formatDay(this.salesHistoryFromDate), to: formatDay(this.salesHistoryToDate)
+        });
+      case 'back-orders':
+        return toQuery({ q: this.backOrderSearch(), stock: this.backOrderStockFilter() });
+      case 'pods':
+        return toQuery({ region: this.podRegionFilter, month: this.podMonthFilter, driver: this.podDriverFilter, link: this.podLinkFilter });
+      case 'trip-sheets':
+        return toQuery({ q: this.logisticsTripsheetSearch() });
+      case 'tender-pricing':
+        return toQuery({ tender: this.tenderNoFilter(), q: this.tenderSearch() }, { tender: 'all' });
+    }
+  }
+
+  private writeFilters(): void {
+    const slug = this.section();
+    const query = this.currentQuery(slug);
+    this.sectionQuery.update(all => ({ ...all, [slug]: query }));
+    recordFilters(this.router, this.route, query);
+  }
+
 
   // ── Tender Pricing tab state ─────────────────────────────────────────────
   tenderItems: TenderPriceItem[] = TENDER_PRICE_ITEMS;
@@ -952,6 +1127,12 @@ export class SalesDashboardComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    // Read the address first, so the first requests already use any filters in it.
+    this.applyUrl();
+    this.subscriptions.add(this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => this.applyUrl()));
+    this.subscriptions.add(this.filterWrites.pipe(debounceTime(250)).subscribe(() => this.writeFilters()));
     this.startLoadingProgress();
     this.loadDashboardData();
     this.loadImportedBackOrders();
@@ -1073,7 +1254,7 @@ export class SalesDashboardComponent implements OnInit {
         console.error('Failed to load customers:', err);
         this.loadingCustomers.set(false);
         this.checkInitialLoadComplete();
-        this.snackBar.open('Failed to load customers', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load customers');
       }
     });
   }
@@ -1086,7 +1267,7 @@ export class SalesDashboardComponent implements OnInit {
   exportCustomers(): void {
     const source = this.allFilteredCustomers();
     if (!source || source.length === 0) {
-      this.snackBar.open('No customers to export', 'Close', { duration: 3000 });
+      this.toast.warn('No customers to export');
       return;
     }
 
@@ -1131,10 +1312,10 @@ export class SalesDashboardComponent implements OnInit {
       const stamp = new Date().toISOString().split('T')[0];
       XLSX.writeFile(wb, `Customers_Export_${stamp}.xlsx`);
 
-      this.snackBar.open(`Exported ${rows.length} customers to Excel`, 'Close', { duration: 3000 });
+      this.toast.done(`Exported ${rows.length} customers to Excel`);
     } catch (err) {
       console.error('Failed to export customers:', err);
-      this.snackBar.open('Failed to export customers', 'Close', { duration: 3000 });
+      this.toast.error('Failed to export customers');
     }
   }
 
@@ -1152,7 +1333,7 @@ export class SalesDashboardComponent implements OnInit {
       error: (err) => {
         console.error('Failed to load trip sheets:', err);
         this.loadingTripSheets.set(false);
-        this.snackBar.open('Failed to load trip sheets', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load trip sheets');
       }
     });
     this.loadLogisticsTripsheets();
@@ -1173,6 +1354,13 @@ export class SalesDashboardComponent implements OnInit {
     });
   }
 
+  tripsheetTone(status: string | null | undefined): ChipTone {
+    if (status === 'Completed' || status === 'Delivered') return 'ok';
+    if (status === 'In Progress' || status === 'In Transit' || status === 'Assigned') return 'warn';
+    if (status === 'Pending' || status === 'Available' || status === 'Draft') return 'info';
+    return 'neutral';
+  }
+
   /** Open the printable Rocket Freight tripsheet for a logistics load. */
   viewLogisticsTripsheet(trip: any): void {
     const loadId = trip.loadId || trip.id;
@@ -1181,7 +1369,7 @@ export class SalesDashboardComponent implements OnInit {
         const w = window.open('', '_blank');
         if (w) { w.document.write(html); w.document.close(); }
       },
-      error: () => this.snackBar.open('Failed to load tripsheet', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to load tripsheet')
     });
   }
 
@@ -1239,7 +1427,7 @@ export class SalesDashboardComponent implements OnInit {
     });
     dialogRef.afterClosed().subscribe((result: any) => {
       if (result?.created || result?.updated) {
-        this.snackBar.open('Trip sheet created — it now appears in Logistics too', 'Close', { duration: 4000 });
+        this.toast.done('Trip sheet created — it now appears in Logistics too');
         this.loadLogisticsTripsheets();
       }
     });
@@ -1379,15 +1567,15 @@ export class SalesDashboardComponent implements OnInit {
   /** Stage 0 -> Stage 1: validate signer & approver, then move to the mode chooser. */
   proceedFromSignoff(): void {
     if (this.tripSheetSignerId == null) {
-      this.snackBar.open('Select who is signing (creating) this trip sheet.', 'Close', { duration: 3000 });
+      this.toast.warn('Select who is signing (creating) this trip sheet.');
       return;
     }
     if (this.tripSheetApproverId == null) {
-      this.snackBar.open('Select the approver who will check & sign this trip sheet.', 'Close', { duration: 3000 });
+      this.toast.warn('Select the approver who will check & sign this trip sheet.');
       return;
     }
     if (this.tripSheetSignerId === this.tripSheetApproverId) {
-      this.snackBar.open('The approver must be a different person than the signer.', 'Close', { duration: 3500 });
+      this.toast.warn('The approver must be a different person than the signer.');
       return;
     }
     this.tripSheetMode = 'choose';
@@ -1461,7 +1649,7 @@ export class SalesDashboardComponent implements OnInit {
         const msg = result.sentToSign
           ? 'Trip sheet generated — sent to the signer to sign off'
           : 'Trip sheet generated — awaiting approval by the designated approver';
-        this.snackBar.open(msg, 'Close', { duration: 4000 });
+        this.toast.done(msg);
         this.loadSalesTripSheets();
       }
     });
@@ -1628,7 +1816,7 @@ export class SalesDashboardComponent implements OnInit {
     const line = this.tripSheetLines[index];
     const inv = (line?.invoiceNumber || '').trim();
     if (!inv) {
-      this.snackBar.open('Enter an invoice number first', 'Close', { duration: 2500 });
+      this.toast.warn('Enter an invoice number first');
       return;
     }
     this.lineLookupBusy = { ...this.lineLookupBusy, [index]: true };
@@ -1636,7 +1824,7 @@ export class SalesDashboardComponent implements OnInit {
       next: (res) => {
         this.lineLookupBusy = { ...this.lineLookupBusy, [index]: false };
         if (!res?.found) {
-          this.snackBar.open(`No invoice found for ${inv} — you can type the details manually`, 'Close', { duration: 4000 });
+          this.toast.warn(`No invoice found for ${inv} — you can type the details manually`);
           return;
         }
         const resultLines: SalesTripSheetLine[] = (res.lines || []).map((l: any) => ({
@@ -1664,15 +1852,13 @@ export class SalesDashboardComponent implements OnInit {
         } else {
           this.tripSheetLines = [...this.tripSheetLines];
         }
-        this.snackBar.open(
-          resultLines.length > 1
+        this.toast.done(resultLines.length > 1
             ? `Loaded ${resultLines.length} product lines from ${res.invoiceNumber}`
-            : `Loaded details from ${res.invoiceNumber}`,
-          'Close', { duration: 3000 });
+            : `Loaded details from ${res.invoiceNumber}`);
       },
       error: () => {
         this.lineLookupBusy = { ...this.lineLookupBusy, [index]: false };
-        this.snackBar.open('Invoice lookup failed', 'Close', { duration: 3000 });
+        this.toast.error('Invoice lookup failed');
       }
     });
   }
@@ -1682,7 +1868,7 @@ export class SalesDashboardComponent implements OnInit {
     const line = this.tripSheetLines[index];
     const addr = [line?.address, line?.city, line?.province].filter(Boolean).join(', ');
     if (!addr) {
-      this.snackBar.open('Enter an address first', 'Close', { duration: 2500 });
+      this.toast.warn('Enter an address first');
       return;
     }
     this.lineGeocodeBusy = { ...this.lineGeocodeBusy, [index]: true };
@@ -1695,14 +1881,14 @@ export class SalesDashboardComponent implements OnInit {
           if (res.province) this.tripSheetLines[index].province = res.province;
           this.tripSheetLines = [...this.tripSheetLines];
           this.lineAddressConfirmed = { ...this.lineAddressConfirmed, [index]: true };
-          this.snackBar.open('Address confirmed via Google Maps', 'Close', { duration: 2500 });
+          this.toast.done('Address confirmed via Google Maps');
         } else {
-          this.snackBar.open(res?.error || 'Could not confirm this address', 'Close', { duration: 3500 });
+          this.toast.warn(res?.error || 'Could not confirm this address');
         }
       },
       error: () => {
         this.lineGeocodeBusy = { ...this.lineGeocodeBusy, [index]: false };
-        this.snackBar.open('Address verification failed', 'Close', { duration: 3000 });
+        this.toast.error('Address verification failed');
       }
     });
   }
@@ -1750,7 +1936,7 @@ export class SalesDashboardComponent implements OnInit {
   saveTripSheet(): void {
     const lines = this.tripSheetLines.filter(l => (l.customerName || '').trim() || (l.invoiceNumber || '').trim());
     if (lines.length === 0) {
-      this.snackBar.open('Add at least one delivery line (customer or invoice).', 'Close', { duration: 3500 });
+      this.toast.warn('Add at least one delivery line (customer or invoice).');
       return;
     }
     this.savingTripSheet = true;
@@ -1785,13 +1971,13 @@ export class SalesDashboardComponent implements OnInit {
     req.subscribe({
       next: () => {
         this.savingTripSheet = false;
-        this.snackBar.open(this.editingTripSheetId ? 'Trip sheet updated' : 'Trip sheet created — awaiting approval by another agent', 'Close', { duration: 3500 });
+        this.toast.done(this.editingTripSheetId ? 'Trip sheet updated' : 'Trip sheet created — awaiting approval by another agent');
         this.closeTripSheetDialog();
         this.loadSalesTripSheets();
       },
       error: (err) => {
         this.savingTripSheet = false;
-        this.snackBar.open(err?.error?.error || 'Failed to save trip sheet', 'Close', { duration: 4000 });
+        this.toast.error(err?.error?.error || 'Failed to save trip sheet');
       }
     });
   }
@@ -1808,24 +1994,24 @@ export class SalesDashboardComponent implements OnInit {
 
   signTripSheet(sheet: SalesTripSheet): void {
     if (!this.canSignTripSheet(sheet)) {
-      this.snackBar.open('Only the designated signer can sign this trip sheet.', 'Close', { duration: 4000 });
+      this.toast.warn('Only the designated signer can sign this trip sheet.');
       return;
     }
     this.http.post<SalesTripSheet>(`${this.tripSheetApi}/${sheet.id}/sign`, {
       signedByName: this.currentUserName || null
     }).subscribe({
       next: () => {
-        this.snackBar.open('Trip sheet signed — now awaiting approval', 'Close', { duration: 3500 });
+        this.toast.done('Trip sheet signed — now awaiting approval');
         this.closeViewTripSheet();
         this.loadSalesTripSheets();
       },
-      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to sign trip sheet', 'Close', { duration: 4000 })
+      error: (err) => this.toast.error(err?.error?.error || 'Failed to sign trip sheet')
     });
   }
 
   approveTripSheet(sheet: SalesTripSheet): void {
     if (!this.canApproveTripSheet(sheet)) {
-      this.snackBar.open('You cannot approve your own trip sheet — it must be checked by a different sales agent.', 'Close', { duration: 4000 });
+      this.toast.warn('You cannot approve your own trip sheet — it must be checked by a different sales agent.');
       return;
     }
     this.http.post<SalesTripSheet>(`${this.tripSheetApi}/${sheet.id}/approve`, {
@@ -1833,11 +2019,11 @@ export class SalesDashboardComponent implements OnInit {
       approvalNotes: this.approvalNotes || null
     }).subscribe({
       next: () => {
-        this.snackBar.open('Trip sheet approved & sent to Logistics', 'Close', { duration: 3500 });
+        this.toast.done('Trip sheet approved & sent to Logistics');
         this.closeViewTripSheet();
         this.loadSalesTripSheets();
       },
-      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to approve trip sheet', 'Close', { duration: 4000 })
+      error: (err) => this.toast.error(err?.error?.error || 'Failed to approve trip sheet')
     });
   }
 
@@ -1846,22 +2032,27 @@ export class SalesDashboardComponent implements OnInit {
       reason: this.rejectionReason || null
     }).subscribe({
       next: () => {
-        this.snackBar.open('Trip sheet rejected', 'Close', { duration: 3000 });
+        this.toast.done('Trip sheet rejected');
         this.closeViewTripSheet();
         this.loadSalesTripSheets();
       },
-      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to reject trip sheet', 'Close', { duration: 4000 })
+      error: (err) => this.toast.error(err?.error?.error || 'Failed to reject trip sheet')
     });
   }
 
-  deleteTripSheet(sheet: SalesTripSheet): void {
-    if (!confirm(`Delete trip sheet ${sheet.tripSheetNumber}?`)) return;
+  async deleteTripSheet(sheet: SalesTripSheet): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete trip sheet ${sheet.tripSheetNumber}?`,
+      message: 'The trip sheet is deleted and removed from the list.',
+      confirmText: 'Delete trip sheet',
+      danger: true
+    }))) return;
     this.http.delete(`${this.tripSheetApi}/${sheet.id}`).subscribe({
       next: () => {
-        this.snackBar.open('Trip sheet deleted', 'Close', { duration: 3000 });
+        this.toast.done('Trip sheet deleted');
         this.loadSalesTripSheets();
       },
-      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to delete trip sheet', 'Close', { duration: 4000 })
+      error: (err) => this.toast.error(err?.error?.error || 'Failed to delete trip sheet')
     });
   }
 
@@ -1888,7 +2079,7 @@ export class SalesDashboardComponent implements OnInit {
       error: (err) => {
         console.error('Failed to load invoices:', err);
         this.loadingInvoices.set(false);
-        this.snackBar.open('Failed to load invoices', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load invoices');
       }
     });
   }
@@ -1918,7 +2109,7 @@ export class SalesDashboardComponent implements OnInit {
         this.loadingOrders.set(false);
         this.updateStats();
         this.checkInitialLoadComplete();
-        this.snackBar.open('Failed to load incoming emails. Check IMAP connection.', 'Close', { duration: 5000 });
+        this.toast.error('Failed to load incoming emails. Check IMAP connection.');
       }
     });
   }
@@ -1977,11 +2168,11 @@ export class SalesDashboardComponent implements OnInit {
 
   // Customer methods
   openCustomerDialog(customer?: Customer): void {
-    this.snackBar.open('Customer dialog coming soon', 'Close', { duration: 2000 });
+    this.toast.info('Customer dialog coming soon');
   }
 
   editCustomer(customer: Customer): void {
-    this.snackBar.open('Edit customer: ' + customer.name, 'Close', { duration: 2000 });
+    this.toast.info('Edit customer: ' + customer.name);
   }
 
   selectCustomer(customer: Customer): void {
@@ -1990,42 +2181,46 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   viewCustomerInvoices(customer: Customer): void {
-    this.customerSearch.set(customer.customerCode || customer.name);
-    this.selectedTab = 2; // Switch to invoices tab
     this.showCustomerSidebar = false;
+    this.router.navigate(['/sales/invoices'], { queryParams: { q: customer.customerCode || customer.name } });
   }
 
   geocodeCustomer(customer: Customer): void {
-    this.snackBar.open('Geocoding address...', 'Close', { duration: 2000 });
+    this.toast.info('Geocoding address...');
     // Call geocode API
     this.http.post(`${this.apiUrl}/logistics/googlemaps/geocode-customer/${customer.id}`, {}).subscribe({
       next: () => {
-        this.snackBar.open('Address geocoded successfully', 'Close', { duration: 3000 });
+        this.toast.done('Address geocoded successfully');
         this.loadCustomers();
       },
       error: () => {
-        this.snackBar.open('Failed to geocode address', 'Close', { duration: 3000 });
+        this.toast.error('Failed to geocode address');
       }
     });
   }
 
   createOrderForCustomer(customer: Customer): void {
-    this.snackBar.open('Create order for: ' + customer.name, 'Close', { duration: 2000 });
+    this.toast.info('Create order for: ' + customer.name);
   }
 
   viewCustomerHistory(customer: Customer): void {
-    this.snackBar.open('View history for: ' + customer.name, 'Close', { duration: 2000 });
+    this.toast.info('View history for: ' + customer.name);
   }
 
-  deleteCustomer(customer: Customer): void {
-    if (confirm(`Are you sure you want to delete ${customer.name}?`)) {
+  async deleteCustomer(customer: Customer): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete customer ${customer.name}?`,
+      message: 'The customer record is deleted.',
+      confirmText: 'Delete customer',
+      danger: true
+    })) {
       this.http.delete(`${this.apiUrl}/logistics/customers/${customer.id}`).subscribe({
         next: () => {
-          this.snackBar.open('Customer deleted', 'Close', { duration: 3000 });
+          this.toast.done('Customer deleted');
           this.loadCustomers();
         },
         error: () => {
-          this.snackBar.open('Failed to delete customer', 'Close', { duration: 3000 });
+          this.toast.error('Failed to delete customer');
         }
       });
     }
@@ -2039,7 +2234,7 @@ export class SalesDashboardComponent implements OnInit {
 
   // Invoice methods
   openInvoiceDialog(invoice?: Invoice): void {
-    this.snackBar.open('Invoice capture dialog coming soon', 'Close', { duration: 2000 });
+    this.toast.info('Invoice capture dialog coming soon');
   }
 
   editInvoice(invoice: Invoice): void {
@@ -2090,13 +2285,13 @@ export class SalesDashboardComponent implements OnInit {
     };
     this.http.put(`${this.apiUrl}/logistics/importedinvoices/${this.editingInvoiceId}`, payload).subscribe({
       next: () => {
-        this.snackBar.open('Invoice updated successfully', 'Close', { duration: 3000 });
+        this.toast.done('Invoice updated successfully');
         this.closeEditInvoiceDialog();
         this.loadInvoices();
       },
       error: (err) => {
         console.error('Failed to update invoice:', err);
-        this.snackBar.open('Failed to update invoice', 'Close', { duration: 3000 });
+        this.toast.error('Failed to update invoice');
         this.editInvoiceSaving = false;
       }
     });
@@ -2245,7 +2440,7 @@ export class SalesDashboardComponent implements OnInit {
         this.deliverySuccess = true;
         this.deliverySuccessRef = res?.referenceNumber || 'Submitted';
         this.deliverySuccessMsg = `${this.deliverySelectedInvoices.length} invoice(s) sent to logistics for ${this.deliveryForm.priority.toLowerCase()} delivery`;
-        this.snackBar.open('Delivery request submitted!', 'Close', { duration: 3000 });
+        this.toast.done('Delivery request submitted');
       },
       error: (err) => {
         this.deliverySaving = false;
@@ -2255,50 +2450,55 @@ export class SalesDashboardComponent implements OnInit {
   }
 
   printInvoice(invoice: Invoice): void {
-    this.snackBar.open('Printing invoice...', 'Close', { duration: 2000 });
+    this.toast.info('Printing invoice...');
   }
 
   emailInvoice(invoice: Invoice): void {
-    this.snackBar.open('Emailing invoice...', 'Close', { duration: 2000 });
+    this.toast.info('Emailing invoice...');
   }
 
   duplicateInvoice(invoice: Invoice): void {
-    this.snackBar.open('Duplicating invoice...', 'Close', { duration: 2000 });
+    this.toast.info('Duplicating invoice...');
   }
 
-  deleteInvoice(invoice: Invoice): void {
-    if (confirm(`Are you sure you want to delete invoice ${invoice.transactionNumber}?`)) {
+  async deleteInvoice(invoice: Invoice): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete invoice ${invoice.transactionNumber}?`,
+      message: 'The imported invoice is deleted.',
+      confirmText: 'Delete invoice',
+      danger: true
+    })) {
       this.http.delete(`${this.apiUrl}/logistics/importedinvoices/${invoice.id}`).subscribe({
         next: () => {
-          this.snackBar.open('Invoice deleted', 'Close', { duration: 3000 });
+          this.toast.done('Invoice deleted');
           this.loadInvoices();
         },
         error: () => {
-          this.snackBar.open('Failed to delete invoice', 'Close', { duration: 3000 });
+          this.toast.error('Failed to delete invoice');
         }
       });
     }
   }
 
   importInvoices(): void {
-    this.snackBar.open('Import invoices dialog coming soon', 'Close', { duration: 2000 });
+    this.toast.info('Import invoices dialog coming soon');
   }
 
   // Order methods
   processOrder(order: Order): void {
-    this.snackBar.open('Processing order: ' + order.orderNumber, 'Close', { duration: 2000 });
+    this.toast.info('Processing order: ' + order.orderNumber);
   }
 
   viewOrderDetails(order: Order): void {
-    this.snackBar.open('View order details: ' + order.orderNumber, 'Close', { duration: 2000 });
+    this.toast.info('View order details: ' + order.orderNumber);
   }
 
   createInvoiceFromOrder(order: Order): void {
-    this.snackBar.open('Creating invoice from order...', 'Close', { duration: 2000 });
+    this.toast.info('Creating invoice from order...');
   }
 
   assignToLogistics(order: Order): void {
-    this.snackBar.open('Assigning to logistics...', 'Close', { duration: 2000 });
+    this.toast.info('Assigning to logistics...');
   }
 
   // Email action methods
@@ -2402,23 +2602,30 @@ export class SalesDashboardComponent implements OnInit {
 
   copyEmailSender(email: IncomingOrderEmail): void {
     navigator.clipboard.writeText(email.fromEmail).then(() => {
-      this.snackBar.open(`Copied: ${email.fromEmail}`, 'Close', { duration: 2000 });
+      this.toast.done(`Copied: ${email.fromEmail}`);
     });
   }
 
   createOrderFromEmail(email: IncomingOrderEmail): void {
-    this.snackBar.open('Create order from email: ' + email.subject, 'Close', { duration: 3000 });
+    this.toast.info('Create order from email: ' + email.subject);
   }
 
   forwardToLogistics(email: IncomingOrderEmail): void {
-    this.snackBar.open('Forwarding email to logistics...', 'Close', { duration: 3000 });
+    this.toast.info('Forwarding email to logistics...');
   }
 
-  cancelOrder(order: Order): void {
-    const reason = prompt('Please enter cancellation reason:', 'CustomerRequest');
+  async cancelOrder(order: Order): Promise<void> {
+    const reason = await this.confirmDialog.askText({
+      title: `Cancel order ${order.orderNumber}?`,
+      label: 'Cancellation reason',
+      value: 'CustomerRequest',
+      confirmText: 'Cancel order',
+      cancelText: 'Keep order',
+      danger: true
+    });
     if (!reason) return;
 
-    this.snackBar.open('Order cancellation is no longer available. Use Back Orders tab instead.', 'Close', { duration: 3000 });
+    this.toast.warn('Order cancellation is no longer available. Use Back Orders tab instead.');
   }
 
   // ============= Import Methods (Sales & Customers) =============
@@ -2512,7 +2719,7 @@ export class SalesDashboardComponent implements OnInit {
     if (entered === this.IMPORT_ACCESS_CODE) {
       const type = this.pendingImportType;
       this.closeImportPasswordDialog();
-      this.snackBar.open(`Access granted - select your Excel file`, 'Close', { duration: 2000 });
+      this.toast.info(`Access granted - select your Excel file`);
       setTimeout(() => {
         const inputId = type === 'customers' ? '#customerFileInput' : '#salesFileInput';
         const fileInput = document.querySelector(inputId) as HTMLInputElement;
@@ -2539,7 +2746,7 @@ export class SalesDashboardComponent implements OnInit {
 
     const ext = file.name.toLowerCase();
     if (!ext.endsWith('.xlsx') && !ext.endsWith('.xls')) {
-      this.snackBar.open('Please select an Excel file (.xlsx or .xls)', 'Close', { duration: 3000 });
+      this.toast.warn('Please select an Excel file (.xlsx or .xls)');
       return;
     }
 
@@ -2556,7 +2763,7 @@ export class SalesDashboardComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe((result: SalesImportDialogResult) => {
       if (result?.success && result?.committed) {
-        this.snackBar.open(result.message || 'Sales transactions imported successfully!', 'Close', { duration: 5000 });
+        this.toast.done(result.message || 'Sales transactions imported');
         this.loadDashboardData();
       }
     });
@@ -2570,7 +2777,7 @@ export class SalesDashboardComponent implements OnInit {
 
     const ext = file.name.toLowerCase();
     if (!ext.endsWith('.xlsx') && !ext.endsWith('.xls')) {
-      this.snackBar.open('Please select an Excel file (.xlsx or .xls)', 'Close', { duration: 3000 });
+      this.toast.warn('Please select an Excel file (.xlsx or .xls)');
       return;
     }
 
@@ -2613,15 +2820,18 @@ export class SalesDashboardComponent implements OnInit {
     this.showAttentionDialog = false;
   }
 
-  geocodeAllCustomers(): void {
+  async geocodeAllCustomers(): Promise<void> {
     const customers = this.customersWithoutLocation();
     if (customers.length === 0) {
-      this.snackBar.open('No customers need geocoding', 'Close', { duration: 2000 });
+      this.toast.info('No customers need geocoding');
       return;
     }
 
-    const confirmMsg = `This will geocode ${customers.length} customers using their names/addresses.\\n\\nThis uses Google Maps API and may take a few minutes. Continue?`;
-    if (!confirm(confirmMsg)) return;
+    if (!(await this.confirmDialog.ask({
+      title: `Geocode ${customers.length} customers?`,
+      message: 'Their locations are looked up from their names and addresses with the Google Maps API and saved to the customer records. This may take a few minutes.',
+      confirmText: 'Geocode customers'
+    }))) return;
 
     this.isGeocoding = true;
     this.geocodeProgress = `0/${customers.length}`;
@@ -2632,7 +2842,7 @@ export class SalesDashboardComponent implements OnInit {
         this.geocodeProgress = '';
         
         const message = `Geocoding complete: ${result.updated} updated, ${result.failed} failed`;
-        this.snackBar.open(message, 'Close', { duration: 5000 });
+        this.toast.done(message);
         
         // Reload customers to reflect changes
         this.loadCustomers();
@@ -2641,32 +2851,35 @@ export class SalesDashboardComponent implements OnInit {
         this.isGeocoding = false;
         this.geocodeProgress = '';
         console.error('Geocode all failed:', err);
-        this.snackBar.open('Geocoding failed. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Geocoding failed. Please try again.');
       }
     });
   }
 
   geocodeCustomerFromAttention(customer: Customer): void {
-    this.snackBar.open('Geocoding ' + customer.name + '...', 'Close', { duration: 2000 });
+    this.toast.info('Geocoding ' + customer.name + '...');
     this.http.post(`${this.apiUrl}/logistics/googlemaps/geocode-customer/${customer.id}`, {}).subscribe({
       next: () => {
-        this.snackBar.open('Location set for ' + customer.name, 'Close', { duration: 3000 });
+        this.toast.done('Location set for ' + customer.name);
         this.loadCustomers();
       },
       error: () => {
-        this.snackBar.open('Failed to geocode. Please set location manually.', 'Close', { duration: 3000 });
+        this.toast.error('Failed to geocode. Please set location manually.');
       }
     });
   }
 
-  editCustomerLocation(customer: Customer): void {
-    const address = prompt(
-      'Enter full address to geocode:\n(e.g., "123 Main Road, Sandton, Johannesburg, Gauteng")', 
-      customer.deliveryAddress || customer.address || ''
-    );
+  async editCustomerLocation(customer: Customer): Promise<void> {
+    const address = await this.confirmDialog.askText({
+      title: `Set the location for ${customer.name}`,
+      label: 'Full address',
+      value: customer.deliveryAddress || customer.address || '',
+      hint: 'e.g. 123 Main Road, Sandton, Johannesburg, Gauteng',
+      confirmText: 'Find location'
+    });
     if (address === null || address.trim() === '') return;
 
-    this.snackBar.open('Geocoding address...', 'Close', { duration: 2000 });
+    this.toast.info('Geocoding address...');
 
     // Call the geocode API
     this.http.get<any>(`${this.apiUrl}/logistics/googlemaps/geocode`, {
@@ -2684,27 +2897,19 @@ export class SalesDashboardComponent implements OnInit {
             postalCode: result.postalCode || customer.postalCode
           }).subscribe({
             next: () => {
-              this.snackBar.open(
-                `Location set for ${customer.name}: ${result.formattedAddress || address}`, 
-                'Close', 
-                { duration: 4000 }
-              );
+              this.toast.done(`Location set for ${customer.name}: ${result.formattedAddress || address}`);
               this.loadCustomers();
             },
             error: () => {
-              this.snackBar.open('Failed to save location', 'Close', { duration: 3000 });
+              this.toast.error('Failed to save location');
             }
           });
         } else {
-          this.snackBar.open(
-            'Could not find location for that address. Please try a more specific address.', 
-            'Close', 
-            { duration: 4000 }
-          );
+          this.toast.warn('Could not find location for that address. Please try a more specific address.');
         }
       },
       error: () => {
-        this.snackBar.open('Geocoding service unavailable. Please try again later.', 'Close', { duration: 3000 });
+        this.toast.error('Geocoding service unavailable. Please try again later.');
       }
     });
   }
@@ -2714,11 +2919,11 @@ export class SalesDashboardComponent implements OnInit {
       deliveryProvince: province
     }).subscribe({
       next: () => {
-        this.snackBar.open('Province set to ' + province, 'Close', { duration: 2000 });
+        this.toast.done('Province set to ' + province);
         this.loadInvoices();
       },
       error: () => {
-        this.snackBar.open('Failed to update province', 'Close', { duration: 3000 });
+        this.toast.error('Failed to update province');
       }
     });
   }
@@ -2730,7 +2935,7 @@ export class SalesDashboardComponent implements OnInit {
     const total = invoicesToUpdate.length;
     let completed = 0;
 
-    this.snackBar.open(`Updating ${total} invoices...`, 'Close', { duration: 2000 });
+    this.toast.info(`Updating ${total} invoices...`);
 
     invoicesToUpdate.forEach(invoice => {
       this.http.put(`${this.apiUrl}/logistics/importedinvoices/${invoice.id}/delivery`, {
@@ -2739,7 +2944,7 @@ export class SalesDashboardComponent implements OnInit {
         next: () => {
           completed++;
           if (completed === total) {
-            this.snackBar.open(`All ${total} invoices updated to ${this.bulkProvince}`, 'Close', { duration: 3000 });
+            this.toast.done(`All ${total} invoices updated to ${this.bulkProvince}`);
             this.loadInvoices();
             this.bulkProvince = '';
           }
@@ -2770,15 +2975,12 @@ export class SalesDashboardComponent implements OnInit {
         this.showWellyCustomerReview = true;
 
         const fixable = this.wellyCustomerFixes.filter(f => f.success).length;
-        this.snackBar.open(
-          `Welly found fixes for ${fixable} of ${this.wellyCustomerFixes.length} customers`,
-          'Close', { duration: 4000 }
-        );
+        this.toast.info(`Welly found fixes for ${fixable} of ${this.wellyCustomerFixes.length} customers`);
       },
       error: (err) => {
         this.wellyCustomerFixLoading = false;
         console.error('Welly customer fix error:', err);
-        this.snackBar.open('Welly could not analyze customers. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not analyze customers. Please try again.');
       }
     });
   }
@@ -2786,7 +2988,7 @@ export class SalesDashboardComponent implements OnInit {
   applyWellyCustomerFixes(): void {
     const approved = this.wellyCustomerFixes.filter(f => f.approved && f.success);
     if (approved.length === 0) {
-      this.snackBar.open('No fixes approved to apply', 'Close', { duration: 2000 });
+      this.toast.warn('No fixes approved to apply');
       return;
     }
 
@@ -2806,15 +3008,12 @@ export class SalesDashboardComponent implements OnInit {
         this.wellyCustomerFixApplying = false;
         this.showWellyCustomerReview = false;
         this.wellyCustomerFixes = [];
-        this.snackBar.open(
-          `✅ Welly updated ${result.applied} customer locations` + (result.failed > 0 ? ` (${result.failed} failed)` : ''),
-          'Close', { duration: 4000 }
-        );
+        this.toast.done(`Welly updated ${result.applied} customer locations` + (result.failed > 0 ? ` (${result.failed} failed)` : ''));
         this.loadCustomers();
       },
       error: () => {
         this.wellyCustomerFixApplying = false;
-        this.snackBar.open('Failed to apply fixes. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Failed to apply fixes. Please try again.');
       }
     });
   }
@@ -2855,15 +3054,12 @@ export class SalesDashboardComponent implements OnInit {
         this.showWellyInvoiceReview = true;
 
         const fixable = this.wellyInvoiceFixes.filter(f => f.success).length;
-        this.snackBar.open(
-          `Welly found province data for ${fixable} of ${this.wellyInvoiceFixes.length} invoices`,
-          'Close', { duration: 4000 }
-        );
+        this.toast.info(`Welly found province data for ${fixable} of ${this.wellyInvoiceFixes.length} invoices`);
       },
       error: (err) => {
         this.wellyInvoiceFixLoading = false;
         console.error('Welly invoice fix error:', err);
-        this.snackBar.open('Welly could not analyze invoices. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not analyze invoices. Please try again.');
       }
     });
   }
@@ -2871,7 +3067,7 @@ export class SalesDashboardComponent implements OnInit {
   applyWellyInvoiceFixes(): void {
     const approved = this.wellyInvoiceFixes.filter(f => f.approved && f.success);
     if (approved.length === 0) {
-      this.snackBar.open('No fixes approved to apply', 'Close', { duration: 2000 });
+      this.toast.warn('No fixes approved to apply');
       return;
     }
 
@@ -2887,15 +3083,12 @@ export class SalesDashboardComponent implements OnInit {
         this.wellyInvoiceFixApplying = false;
         this.showWellyInvoiceReview = false;
         this.wellyInvoiceFixes = [];
-        this.snackBar.open(
-          `✅ Welly updated ${result.applied} invoice provinces` + (result.failed > 0 ? ` (${result.failed} failed)` : ''),
-          'Close', { duration: 4000 }
-        );
+        this.toast.done(`Welly updated ${result.applied} invoice provinces` + (result.failed > 0 ? ` (${result.failed} failed)` : ''));
         this.loadInvoices();
       },
       error: () => {
         this.wellyInvoiceFixApplying = false;
-        this.snackBar.open('Failed to apply fixes. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Failed to apply fixes. Please try again.');
       }
     });
   }
@@ -2921,8 +3114,15 @@ export class SalesDashboardComponent implements OnInit {
       c.shortName.toLowerCase() === key);
   }
 
+  /** Theme colour for a company on screen; COMPANIES keeps the brand hex for PDF and Excel output. */
   getCompanyColor(companyCode: string): string {
-    return this.findCompany(companyCode)?.color || '#666';
+    const tokens: Record<string, string> = {
+      PMT: 'var(--color-brand)',
+      ACM: 'var(--color-cat-teal)',
+      PHT: 'var(--color-cat-pink)',
+      SBT: 'var(--color-cat-purple)'
+    };
+    return tokens[this.findCompany(companyCode)?.code ?? ''] || 'var(--color-text-3)';
   }
 
   getCompanyShortName(companyCode: string): string {
@@ -2969,7 +3169,7 @@ export class SalesDashboardComponent implements OnInit {
       error: (err) => {
         console.error('Failed to load sales history', err);
         this.salesHistoryLoading.set(false);
-        this.snackBar.open('Failed to load sales history', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load sales history');
       }
     });
   }
@@ -3026,7 +3226,7 @@ export class SalesDashboardComponent implements OnInit {
       error: (err) => {
         console.error('Failed to load line items', err);
         this.salesHistoryLinesLoading.set(false);
-        this.snackBar.open('Failed to load product detail', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load product detail');
       }
     });
   }
@@ -3053,18 +3253,17 @@ export class SalesDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Reconcile failed', err);
-        this.snackBar.open('Reconciliation failed', 'Close', { duration: 3000 });
+        this.toast.error('Reconciliation failed');
       }
     });
   }
 
-  onSalesTabChange(index: number): void {
-    // Sales History is tab index 3 — lazy load on first view
-    if (index === 3 && !this.salesHistoryLoaded) {
+  /** Sales history and trip sheets load the first time their sub-page is shown. */
+  private onSectionShown(slug: SalesSlug): void {
+    if (slug === 'history' && !this.salesHistoryLoaded) {
       this.loadSalesHistory();
     }
-    // Trip Sheets is the last tab (index 6) — lazy load on first view
-    if (index === 6 && !this.tripSheetsLoaded) {
+    if (slug === 'trip-sheets' && !this.tripSheetsLoaded) {
       this.loadSalesTripSheets();
     }
   }
@@ -3225,7 +3424,7 @@ export class SalesDashboardComponent implements OnInit {
     
     this.http.post(`${this.apiUrl}/logistics/importedinvoices`, newInvoice).subscribe({
       next: () => {
-        this.snackBar.open('Sale captured successfully', 'Close', { duration: 3000 });
+        this.toast.done('Sale captured successfully');
         this.loadInvoices();
         this.newSaleFormVisible = false;
         this.resetNewSaleForm();
@@ -3236,7 +3435,7 @@ export class SalesDashboardComponent implements OnInit {
         }, 500);
       },
       error: () => {
-        this.snackBar.open('Failed to capture sale', 'Close', { duration: 3000 });
+        this.toast.error('Failed to capture sale');
       }
     });
   }
@@ -3387,11 +3586,11 @@ export class SalesDashboardComponent implements OnInit {
       const filename = `${this.selectedCompanyForDialog.shortName}_Sales_${this.exportFromDate.toISOString().split('T')[0]}_to_${this.exportToDate.toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, filename);
 
-      this.snackBar.open(`Excel exported: ${invoices.length} invoices ✓`, 'Close', { duration: 3000 });
+      this.toast.done(`Excel exported: ${invoices.length} invoices`);
       this.closeExportDatePicker();
     } catch (err) {
       console.error('Excel export error:', err);
-      this.snackBar.open('Failed to export Excel', 'Close', { duration: 3000 });
+      this.toast.error('Failed to export Excel');
       this.exportGenerating = false;
     }
   }
@@ -3622,11 +3821,11 @@ export class SalesDashboardComponent implements OnInit {
       const filename = `${company.shortName}_Sales_Report_${this.exportFromDate.toISOString().split('T')[0]}_to_${this.exportToDate.toISOString().split('T')[0]}.pdf`;
       pdf.save(filename);
 
-      this.snackBar.open(`PDF generated: ${invoices.length} invoices ✓`, 'Close', { duration: 3000 });
+      this.toast.done(`PDF generated: ${invoices.length} invoices`);
       this.closeExportDatePicker();
     } catch (err) {
       console.error('PDF generation error:', err);
-      this.snackBar.open('Failed to generate PDF', 'Close', { duration: 3000 });
+      this.toast.error('Failed to generate PDF');
       this.exportGenerating = false;
     }
   }
@@ -3874,11 +4073,11 @@ export class SalesDashboardComponent implements OnInit {
       const filename = `${companyA.shortName}_vs_${companyB.shortName}_${this.compareFromDate.toISOString().split('T')[0]}_to_${this.compareToDate.toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, filename);
 
-      this.snackBar.open('Comparison Excel exported ✓', 'Close', { duration: 3000 });
+      this.toast.done('Comparison Excel exported');
       this.compareExporting = false;
     } catch (err) {
       console.error('Comparison export error:', err);
-      this.snackBar.open('Failed to export comparison', 'Close', { duration: 3000 });
+      this.toast.error('Failed to export comparison');
       this.compareExporting = false;
     }
   }
@@ -3932,7 +4131,7 @@ export class SalesDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to view POD:', err);
-        this.snackBar.open('Failed to open POD document', 'Close', { duration: 3000 });
+        this.toast.error('Failed to open POD document');
       }
     });
   }
@@ -3951,7 +4150,7 @@ export class SalesDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to download POD:', err);
-        this.snackBar.open('Failed to download POD', 'Close', { duration: 3000 });
+        this.toast.error('Failed to download POD');
       }
     });
   }
@@ -4003,61 +4202,92 @@ export class SalesDashboardComponent implements OnInit {
         const linked = result.linkedInvoiceCount ?? 0;
         const msg = linked > 0
           ? `POD uploaded — Welly linked ${linked} invoice${linked === 1 ? '' : 's'}${result.loadNumber ? ' → tripsheet ' + result.loadNumber : ''}`
-          : 'POD uploaded successfully!';
-        this.snackBar.open(msg, 'Close', { duration: 4000 });
+          : 'POD uploaded successfully';
+        this.toast.done(msg);
       }
     });
   }
 
-  openLinkTripsheetDialog(pod: any): void {
-    const search = prompt('Enter tripsheet/load number to search:');
+  private podLabel(pod: any): string {
+    const name = pod?.originalFileName || pod?.fileName;
+    return name ? `POD ${name}` : 'this POD';
+  }
+
+  async openLinkTripsheetDialog(pod: any): Promise<void> {
+    const title = `Link ${this.podLabel(pod)} to a tripsheet`;
+    const search = await this.confirmDialog.askText({
+      title,
+      label: 'Tripsheet or load number',
+      hint: 'Matching tripsheets are listed next',
+      confirmText: 'Search'
+    });
     if (!search) return;
 
     this.http.get<any[]>(`${this.apiUrl}/PodDocuments/search-loads?search=${encodeURIComponent(search)}`).subscribe({
-      next: (loads) => {
+      next: async (loads) => {
         if (loads.length === 0) {
-          this.snackBar.open('No matching tripsheets found', 'Close', { duration: 3000 });
+          this.toast.warn('No matching tripsheets found');
           return;
         }
-        const options = loads.map((l, i) => `${i + 1}. ${l.loadNumber} - ${l.customerName || 'N/A'} (${l.status})`).join('\n');
-        const choice = prompt(`Select a tripsheet:\n${options}\n\nEnter number:`);
+        const choice = await this.confirmDialog.askForm({
+          title,
+          message: `${loads.length} tripsheet${loads.length === 1 ? '' : 's'} match "${search}".`,
+          fields: [{
+            key: 'load',
+            label: 'Tripsheet',
+            type: 'select',
+            required: true,
+            options: loads.map((l, i) => ({ value: String(i), label: `${l.loadNumber} - ${l.customerName || 'N/A'} (${l.status})` }))
+          }],
+          confirmText: 'Link POD'
+        });
         if (!choice) return;
-        const idx = parseInt(choice) - 1;
+        const idx = parseInt(String(choice['load']), 10);
         if (idx >= 0 && idx < loads.length) {
           this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/link`, { loadId: loads[idx].id }).subscribe({
             next: () => {
               this.loadPodDocuments();
               this.loadPodSummary();
-              this.snackBar.open(`POD linked to ${loads[idx].loadNumber}`, 'Close', { duration: 3000 });
+              this.toast.done(`POD linked to ${loads[idx].loadNumber}`);
             },
-            error: () => this.snackBar.open('Failed to link POD', 'Close', { duration: 3000 })
+            error: () => this.toast.error('Failed to link POD')
           });
         }
       },
-      error: () => this.snackBar.open('Failed to search tripsheets', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to search tripsheets')
     });
   }
 
-  delinkPod(pod: any): void {
-    if (!confirm(`Delink this POD from tripsheet ${pod.loadNumber || ''}?`)) return;
+  async delinkPod(pod: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: pod.loadNumber ? `Delink this POD from tripsheet ${pod.loadNumber}?` : 'Delink this POD from its tripsheet?',
+      message: 'The POD will no longer be linked to the tripsheet.',
+      confirmText: 'Delink POD',
+      danger: true
+    }))) return;
 
     this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink`, {}).subscribe({
       next: () => {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open('POD delinked from tripsheet', 'Close', { duration: 3000 });
+        this.toast.done('POD delinked from tripsheet');
       },
       error: (err) => {
         console.error('Failed to delink POD:', err);
-        this.snackBar.open('Failed to delink POD', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delink POD');
       }
     });
   }
 
-  openLinkInvoiceDialog(pod: any): void {
+  async openLinkInvoiceDialog(pod: any): Promise<void> {
     // A single POD can be linked to multiple invoices — accept a comma/space
     // separated list of invoice numbers and link them all in one go.
-    const input = prompt('Enter invoice number(s) to link to this POD.\nSeparate multiple with a comma, e.g. IN123456, IN123457');
+    const input = await this.confirmDialog.askText({
+      title: `Link ${this.podLabel(pod)} to invoices`,
+      label: 'Invoice number(s)',
+      hint: 'Separate multiple with a comma, e.g. IN123456, IN123457',
+      confirmText: 'Link invoices'
+    });
     if (!input || !input.trim()) return;
 
     const tokens = input.split(/[\s,;]+/).map(t => t.trim()).filter(Boolean);
@@ -4080,7 +4310,7 @@ export class SalesDashboardComponent implements OnInit {
       const notFound = resolved.filter(r => r.id == null).map(r => r.token);
 
       if (invoiceIds.length === 0) {
-        this.snackBar.open('No matching invoices found for: ' + notFound.join(', '), 'Close', { duration: 4000 });
+        this.toast.warn('No matching invoices found for: ' + notFound.join(', '));
         return;
       }
 
@@ -4090,9 +4320,9 @@ export class SalesDashboardComponent implements OnInit {
           this.loadPodSummary();
           const base = res?.message || `POD linked to ${invoiceIds.length} invoice(s)`;
           const warn = notFound.length ? ` · Not found: ${notFound.join(', ')}` : '';
-          this.snackBar.open(base + warn, 'Close', { duration: 5000 });
+          this.toast.done(base + warn);
         },
-        error: () => this.snackBar.open('Failed to link POD to invoices', 'Close', { duration: 3000 })
+        error: () => this.toast.error('Failed to link POD to invoices')
       });
     });
   }
@@ -4426,7 +4656,7 @@ export class SalesDashboardComponent implements OnInit {
   applyWellyPodLinks(): void {
     const approved = this.wellyPodMatches.filter(m => m.approved).map(m => m.id);
     if (approved.length === 0 || !this.wellyPodCurrent) {
-      this.snackBar.open('No invoices selected to link', 'Close', { duration: 2500 });
+      this.toast.warn('No invoices selected to link');
       return;
     }
     this.wellyPodLinking = true;
@@ -4437,13 +4667,11 @@ export class SalesDashboardComponent implements OnInit {
           this.showWellyPodPanel = false;
           this.loadPodDocuments();
           this.loadPodSummary();
-          this.snackBar.open(
-            `✅ Welly linked ${res?.linkedInvoiceCount ?? approved.length} invoice(s) to this POD → marked Delivered`,
-            'Close', { duration: 4000 });
+          this.toast.done(`Welly linked ${res?.linkedInvoiceCount ?? approved.length} invoice(s) to this POD → marked Delivered`);
         },
         error: () => {
           this.wellyPodLinking = false;
-          this.snackBar.open('Failed to link invoices', 'Close', { duration: 3000 });
+          this.toast.error('Failed to link invoices');
         }
       });
   }
@@ -4462,10 +4690,14 @@ export class SalesDashboardComponent implements OnInit {
       ((p.contentType || '').includes('image') || (p.contentType || '').includes('pdf') ||
        /\.(pdf|jpe?g|png)$/i.test(p.fileName || '')));
     if (queue.length === 0) {
-      this.snackBar.open('No unlinked image/PDF PODs in the current list to scan', 'Close', { duration: 3000 });
+      this.toast.info('No unlinked image/PDF PODs in the current list to scan');
       return;
     }
-    if (!confirm(`Welly will scan ${queue.length} unlinked POD(s) and auto-link exact invoice-number matches. Continue?`)) return;
+    if (!(await this.confirmDialog.ask({
+      title: `Scan ${queue.length} unlinked POD(s) with Welly?`,
+      message: 'Welly reads each POD and automatically links it to the invoices whose numbers it reads exactly.',
+      confirmText: 'Scan PODs'
+    }))) return;
 
     this.wellyPodBatchMode = true;
     this.wellyPodBatchQueue = queue;
@@ -4527,7 +4759,7 @@ export class SalesDashboardComponent implements OnInit {
     this.loadPodDocuments();
     this.loadPodSummary();
     this.wellyPodStatus = `Done — auto-linked ${totalLinked} invoice(s) across ${queue.length} POD(s).`;
-    this.snackBar.open(this.wellyPodStatus, 'Close', { duration: 5000 });
+    this.toast.done(this.wellyPodStatus);
   }
 
   private finishWellyPodActivity(): void {
@@ -4537,18 +4769,23 @@ export class SalesDashboardComponent implements OnInit {
     }
   }
 
-  delinkInvoice(pod: any): void {
-    if (!confirm(`Delink this POD from invoice ${pod.invoiceNumber || ''}? The invoice status will revert to Pending.`)) return;
+  async delinkInvoice(pod: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: pod.invoiceNumber ? `Delink this POD from invoice ${pod.invoiceNumber}?` : 'Delink this POD from its invoice?',
+      message: 'The invoice status will revert to Pending.',
+      confirmText: 'Delink invoice',
+      danger: true
+    }))) return;
 
     this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink-invoice`, {}).subscribe({
       next: () => {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open('POD delinked from invoice → Status reverted to Pending', 'Close', { duration: 4000 });
+        this.toast.done('POD delinked from invoice → Status reverted to Pending');
       },
       error: (err) => {
         console.error('Failed to delink invoice:', err);
-        this.snackBar.open('Failed to delink from invoice', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delink from invoice');
       }
     });
   }
@@ -4564,7 +4801,7 @@ export class SalesDashboardComponent implements OnInit {
       if (result?.updated) {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open('POD details updated', 'Close', { duration: 3000 });
+        this.toast.done('POD details updated');
       }
     });
   }
@@ -4580,7 +4817,7 @@ export class SalesDashboardComponent implements OnInit {
   // Open the tripsheet attachments side panel for a linked POD
   openTripsheetPanel(pod: any): void {
     if (!pod?.loadId) {
-      this.snackBar.open('This POD is not linked to a tripsheet', 'Close', { duration: 3000 });
+      this.toast.warn('This POD is not linked to a tripsheet');
       return;
     }
     this.tripsheetPanelOpen = true;
@@ -4597,7 +4834,7 @@ export class SalesDashboardComponent implements OnInit {
       },
       error: () => {
         this.tripsheetPanelLoading = false;
-        this.snackBar.open('Failed to load tripsheet attachments', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load tripsheet attachments');
       }
     });
   }
@@ -4610,7 +4847,7 @@ export class SalesDashboardComponent implements OnInit {
   previewTripsheet(): void {
     const loadId = this.tripsheetPanelLoad?.id;
     if (!loadId) {
-      this.snackBar.open('No tripsheet linked to preview', 'Close', { duration: 3000 });
+      this.toast.warn('No tripsheet linked to preview');
       return;
     }
     this.tripsheetPreviewLoading = true;
@@ -4626,7 +4863,7 @@ export class SalesDashboardComponent implements OnInit {
       error: (err) => {
         this.tripsheetPreviewLoading = false;
         console.error('Failed to preview tripsheet:', err);
-        this.snackBar.open('Failed to load tripsheet', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load tripsheet');
       }
     });
   }
@@ -4635,7 +4872,7 @@ export class SalesDashboardComponent implements OnInit {
   previewTripsheetFromPod(pod: any): void {
     const loadId = pod?.loadId;
     if (!loadId) {
-      this.snackBar.open('This POD is not linked to a tripsheet', 'Close', { duration: 3000 });
+      this.toast.warn('This POD is not linked to a tripsheet');
       return;
     }
     this.http.get(`${this.apiUrl}/logistics/tripsheet/${loadId}/pdf`, { responseType: 'text' }).subscribe({
@@ -4648,7 +4885,7 @@ export class SalesDashboardComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to load tripsheet preview:', err);
-        this.snackBar.open('Failed to load tripsheet', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load tripsheet');
       }
     });
   }

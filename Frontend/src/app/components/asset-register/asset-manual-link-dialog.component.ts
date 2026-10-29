@@ -6,9 +6,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 
 export interface ManualLinkDialogData {
   itemId: number;
@@ -33,7 +34,7 @@ interface InvoiceOption {
 @Component({
   selector: 'app-asset-manual-link-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, SkeletonRowsComponent],
   template: `
     <div class="link-dialog">
       <div class="link-header">
@@ -68,7 +69,7 @@ interface InvoiceOption {
         <div class="field">
           <label for="invoice">2 · Invoice</label>
           @if (loadingInvoices()) {
-            <div class="loading-row"><mat-spinner diameter="18"></mat-spinner> Loading invoices…</div>
+            <div class="loading-row"><app-skeleton-rows [rows]="1" [avatar]="false"></app-skeleton-rows></div>
           } @else {
             <select id="invoice" [(ngModel)]="selectedInvoiceId" [disabled]="!supplierName || invoices().length === 0">
               <option [ngValue]="null">— Select an invoice —</option>
@@ -122,33 +123,33 @@ interface InvoiceOption {
   styles: [`
     .link-dialog { display: flex; flex-direction: column; gap: 16px; padding: 20px; width: 560px; max-width: 95vw; max-height: 88vh; overflow-y: auto; }
     .link-header { display: flex; gap: 12px; align-items: flex-start; }
-    .link-header mat-icon { color: #2563eb; font-size: 28px; width: 28px; height: 28px; }
-    .link-header h2 { margin: 0 0 4px; font-size: 20px; }
-    .link-header p { margin: 0; color: #6b7280; font-size: 13px; }
+    .link-header mat-icon { color: var(--color-primary); font-size: var(--text-3xl); width: 24px; height: 24px; }
+    .link-header h2 { margin: 0 0 4px; font-size: var(--text-2xl); color: var(--color-text); }
+    .link-header p { margin: 0; color: var(--color-text-3); font-size: var(--text-sm); }
 
-    .current-link { display: flex; gap: 8px; align-items: center; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #1e40af; }
-    .current-link mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .current-link { display: flex; gap: 8px; align-items: center; background: var(--color-primary-soft); border: 1px solid var(--color-primary-soft); border-radius: 8px; padding: 10px 12px; font-size: var(--text-sm); color: var(--color-primary-hover); }
+    .current-link mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
 
     .link-body { display: flex; flex-direction: column; gap: 16px; }
     .field { display: flex; flex-direction: column; gap: 6px; }
-    .field label { font-weight: 600; font-size: 13px; color: #374151; }
-    .field select { padding: 9px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: white; }
-    .field select:disabled { background: #f3f4f6; color: #9ca3af; }
-    .hint { font-size: 12px; color: #9ca3af; }
-    .hint.warn { color: #d97706; }
-    .loading-row { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #6b7280; padding: 6px 0; }
+    .field label { font-weight: 600; font-size: var(--text-sm); color: var(--color-text-2); }
+    .field select { padding: 9px 10px; border: 1px solid var(--color-line-strong); border-radius: 8px; font-size: var(--text-md); background: var(--color-surface); color: var(--color-text); }
+    .field select:disabled { background: var(--color-surface-2); color: var(--color-text-3); }
+    .hint { font-size: var(--text-xs); color: var(--color-text-3); }
+    .hint.warn { color: var(--color-warn); }
+    .loading-row { border: 1px solid var(--color-line); border-radius: 8px; overflow: hidden; }
 
-    .invoice-preview { background: #f9fafb; border: 1px solid #eef2f7; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
-    .ip-row { display: flex; gap: 10px; font-size: 13px; }
-    .ip-lbl { min-width: 92px; color: #9ca3af; font-weight: 600; }
-    .ip-total { font-weight: 700; color: #059669; }
-    .ip-scan { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 12px; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 6px 8px; }
-    .ip-scan mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .invoice-preview { background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+    .ip-row { display: flex; gap: 10px; font-size: var(--text-sm); }
+    .ip-lbl { min-width: 92px; color: var(--color-text-3); font-weight: 600; }
+    .ip-total { font-weight: 700; color: var(--color-ok); }
+    .ip-scan { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: var(--text-xs); color: var(--color-warn); background: var(--color-warn-soft); border: 1px solid var(--color-warn-soft); border-radius: 6px; padding: 6px 8px; }
+    .ip-scan mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
 
     .value-input { display: flex; align-items: center; gap: 8px; }
-    .value-input .cur { font-weight: 600; color: #374151; }
-    .value-input input { flex: 1; padding: 9px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
-    .use-total { white-space: nowrap; font-size: 12px; }
+    .value-input .cur { font-weight: 600; color: var(--color-text-2); }
+    .value-input input { flex: 1; padding: 9px 10px; border: 1px solid var(--color-line-strong); border-radius: 8px; font-size: var(--text-md); background: var(--color-surface); color: var(--color-text); }
+    .use-total { white-space: nowrap; font-size: var(--text-xs); }
 
     .link-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
   `]
@@ -167,7 +168,7 @@ export class AssetManualLinkDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: ManualLinkDialogData,
     private dialogRef: MatDialogRef<AssetManualLinkDialogComponent>,
     private http: HttpClient,
-    private snack: MatSnackBar
+    private toast: ToastService
   ) {}
 
   private headers(): HttpHeaders {
@@ -177,7 +178,7 @@ export class AssetManualLinkDialogComponent implements OnInit {
 
   ngOnInit(): void {
     this.http.get<SupplierOption[]>(`${environment.apiUrl}/asset-register/all-suppliers`, { headers: this.headers() })
-      .subscribe({ next: s => this.suppliers.set(s || []), error: () => this.snack.open('Could not load suppliers.', 'Close', { duration: 3000 }) });
+      .subscribe({ next: s => this.suppliers.set(s || []), error: () => this.toast.error('Could not load suppliers.') });
   }
 
   selectedInvoice(): InvoiceOption | undefined {
@@ -194,7 +195,7 @@ export class AssetManualLinkDialogComponent implements OnInit {
     const url = `${environment.apiUrl}/asset-register/invoices-by-supplier?supplier=${encodeURIComponent(this.supplierName)}`;
     this.http.get<InvoiceOption[]>(url, { headers: this.headers() }).subscribe({
       next: inv => { this.invoices.set(inv || []); this.loadingInvoices.set(false); },
-      error: () => { this.loadingInvoices.set(false); this.snack.open('Could not load invoices.', 'Close', { duration: 3000 }); }
+      error: () => { this.loadingInvoices.set(false); this.toast.error('Could not load invoices.'); }
     });
   }
 
@@ -220,7 +221,7 @@ export class AssetManualLinkDialogComponent implements OnInit {
       },
       error: err => {
         this.saving.set(false);
-        this.snack.open(err?.error?.detail || err?.error?.error || 'Failed to link invoice.', 'Close', { duration: 4000 });
+        this.toast.error(err?.error?.detail || err?.error?.error || 'Failed to link invoice.');
       }
     });
   }

@@ -473,7 +473,7 @@ export interface SalesImportDialogResult {
       gap: 12px;
       margin: 0;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #1976d2, #1565c0);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       color: white;
       margin: -24px -24px 0;
 
@@ -496,7 +496,7 @@ export interface SalesImportDialogResult {
       align-items: center;
       gap: 16px;
       padding: 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       margin-bottom: 24px;
 
@@ -504,7 +504,7 @@ export interface SalesImportDialogResult {
         font-size: 40px;
         width: 40px;
         height: 40px;
-        color: #4caf50;
+        color: var(--color-ok);
       }
 
       .file-details {
@@ -517,7 +517,7 @@ export interface SalesImportDialogResult {
         }
 
         .file-size {
-          color: #666;
+          color: var(--color-text-2);
           font-size: 13px;
         }
       }
@@ -535,12 +535,12 @@ export interface SalesImportDialogResult {
         font-weight: 500;
 
         mat-icon {
-          color: #1976d2;
+          color: var(--color-primary);
         }
       }
 
       .hint {
-        color: #666;
+        color: var(--color-text-2);
         font-size: 13px;
         margin: 0 0 16px;
       }
@@ -555,20 +555,20 @@ export interface SalesImportDialogResult {
 
     .company-card {
       padding: 16px;
-      border: 2px solid #e0e0e0;
+      border: 2px solid var(--color-line);
       border-radius: 8px;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s;
 
       &:hover {
-        border-color: #1976d2;
-        background: #e3f2fd;
+        border-color: var(--color-primary);
+        background: var(--color-primary-soft);
       }
 
       &.selected {
-        border-color: #1976d2;
-        background: #1976d2;
+        border-color: var(--color-primary);
+        background: var(--color-primary);
         color: white;
 
         .company-code {
@@ -579,7 +579,7 @@ export interface SalesImportDialogResult {
       .company-code {
         font-weight: 700;
         font-size: 18px;
-        color: #1976d2;
+        color: var(--color-primary);
       }
 
       .company-name {
@@ -602,7 +602,7 @@ export interface SalesImportDialogResult {
       }
 
       .date-separator {
-        color: #666;
+        color: var(--color-text-2);
       }
     }
 
@@ -619,7 +619,7 @@ export interface SalesImportDialogResult {
       }
 
       p {
-        color: #666;
+        color: var(--color-text-2);
         margin: 0 0 24px;
       }
 
@@ -638,7 +638,7 @@ export interface SalesImportDialogResult {
     }
 
     .summary-card {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       padding: 12px;
       text-align: center;
@@ -647,7 +647,7 @@ export interface SalesImportDialogResult {
         font-size: 24px;
         width: 24px;
         height: 24px;
-        color: #666;
+        color: var(--color-text-2);
       }
 
       .value {
@@ -658,26 +658,26 @@ export interface SalesImportDialogResult {
 
       .label {
         font-size: 11px;
-        color: #666;
+        color: var(--color-text-2);
         text-transform: uppercase;
       }
 
       &.sales {
-        background: #e8f5e9;
-        mat-icon { color: #4caf50; }
-        .value { color: #2e7d32; }
+        background: var(--color-ok-soft);
+        mat-icon { color: var(--color-ok); }
+        .value { color: var(--color-ok); }
       }
 
       &.cost {
-        background: #fff3e0;
-        mat-icon { color: #ff9800; }
-        .value { color: #e65100; }
+        background: var(--color-warn-soft);
+        mat-icon { color: var(--color-warn); }
+        .value { color: var(--color-warn); }
       }
 
       &.profit {
-        background: #e3f2fd;
-        mat-icon { color: #1976d2; }
-        .value { color: #1565c0; }
+        background: var(--color-primary-soft);
+        mat-icon { color: var(--color-primary); }
+        .value { color: var(--color-primary-hover); }
       }
     }
 
@@ -687,10 +687,10 @@ export interface SalesImportDialogResult {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 8px;
       margin-bottom: 16px;
-      color: #1565c0;
+      color: var(--color-primary-hover);
 
       mat-icon {
         font-size: 20px;
@@ -699,8 +699,8 @@ export interface SalesImportDialogResult {
 
     /* Duplicate Warning Banner */
     .duplicate-warning-banner {
-      background: #fff3e0;
-      border: 2px solid #ff9800;
+      background: var(--color-warn-soft);
+      border: 2px solid var(--color-warn);
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 16px;
@@ -712,7 +712,7 @@ export interface SalesImportDialogResult {
         margin-bottom: 12px;
 
         mat-icon {
-          color: #ff9800;
+          color: var(--color-warn);
           font-size: 32px;
           width: 32px;
           height: 32px;
@@ -724,12 +724,12 @@ export interface SalesImportDialogResult {
           gap: 4px;
 
           strong {
-            color: #e65100;
+            color: var(--color-warn);
             font-size: 16px;
           }
 
           span {
-            color: #666;
+            color: var(--color-text-2);
             font-size: 13px;
           }
         }
@@ -746,24 +746,24 @@ export interface SalesImportDialogResult {
           align-items: center;
           gap: 6px;
           font-size: 14px;
-          color: #666;
+          color: var(--color-text-2);
 
           mat-icon {
             font-size: 18px;
             width: 18px;
             height: 18px;
-            color: #ff9800;
+            color: var(--color-warn);
           }
 
           strong {
-            color: #e65100;
+            color: var(--color-warn);
           }
         }
       }
 
       .duplicates-detail-panel {
         margin-top: 12px;
-        background: white;
+        background: var(--color-surface);
       }
 
       .duplicates-table {
@@ -774,11 +774,11 @@ export interface SalesImportDialogResult {
         th, td {
           padding: 6px 10px;
           text-align: left;
-          border-bottom: 1px solid #e0e0e0;
+          border-bottom: 1px solid var(--color-line);
         }
 
         th {
-          background: #fafafa;
+          background: var(--color-canvas);
           font-weight: 500;
         }
 
@@ -787,7 +787,7 @@ export interface SalesImportDialogResult {
         }
 
         .existing {
-          color: #666;
+          color: var(--color-text-2);
           font-style: italic;
         }
       }
@@ -795,7 +795,7 @@ export interface SalesImportDialogResult {
       .more-duplicates {
         text-align: center;
         padding: 8px;
-        color: #666;
+        color: var(--color-text-2);
         font-style: italic;
         font-size: 12px;
       }
@@ -805,8 +805,8 @@ export interface SalesImportDialogResult {
     .issues-panel {
       margin-bottom: 16px;
 
-      mat-icon.warning { color: #ff9800; }
-      mat-icon.error { color: #f44336; }
+      mat-icon.warning { color: var(--color-warn); }
+      mat-icon.error { color: var(--color-danger); }
     }
 
     .issues-list {
@@ -823,28 +823,28 @@ export interface SalesImportDialogResult {
       margin-bottom: 4px;
 
       &.warning {
-        background: #fff8e1;
+        background: var(--color-warn-soft);
       }
 
       &.error {
-        background: #ffebee;
+        background: var(--color-danger-soft);
       }
 
       .row-num {
         font-weight: 500;
-        color: #666;
+        color: var(--color-text-2);
       }
 
       .issue-code {
         font-family: monospace;
-        color: #9e9e9e;
+        color: var(--color-text-3);
       }
     }
 
     .more-issues, .more-customers {
       text-align: center;
       padding: 8px;
-      color: #666;
+      color: var(--color-text-2);
       font-style: italic;
     }
 
@@ -857,11 +857,11 @@ export interface SalesImportDialogResult {
       th, td {
         padding: 8px 12px;
         text-align: left;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--color-line);
       }
 
       th {
-        background: #fafafa;
+        background: var(--color-canvas);
         font-weight: 500;
       }
 
@@ -879,7 +879,7 @@ export interface SalesImportDialogResult {
         }
 
         .cust-name {
-          color: #666;
+          color: var(--color-text-2);
           font-size: 11px;
         }
       }
@@ -894,11 +894,11 @@ export interface SalesImportDialogResult {
       th, td {
         padding: 8px 12px;
         text-align: left;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--color-line);
       }
 
       th {
-        background: #fafafa;
+        background: var(--color-canvas);
         font-weight: 500;
         position: sticky;
         top: 0;
@@ -909,7 +909,7 @@ export interface SalesImportDialogResult {
       }
 
       tr.has-issues {
-        background: #fff8e1;
+        background: var(--color-warn-soft);
       }
 
       .customer-info {
@@ -922,7 +922,7 @@ export interface SalesImportDialogResult {
         }
 
         .cust-name {
-          color: #666;
+          color: var(--color-text-2);
           font-size: 10px;
           max-width: 150px;
           white-space: nowrap;
@@ -949,23 +949,23 @@ export interface SalesImportDialogResult {
         font-size: 64px;
         width: 64px;
         height: 64px;
-        color: #f44336;
+        color: var(--color-danger);
       }
 
       h3 {
         margin: 16px 0 8px;
-        color: #f44336;
+        color: var(--color-danger);
       }
 
       p {
-        color: #666;
+        color: var(--color-text-2);
       }
     }
 
     /* Dialog Actions */
     mat-dialog-actions {
       padding: 16px 24px !important;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
 
       button {
         mat-icon {

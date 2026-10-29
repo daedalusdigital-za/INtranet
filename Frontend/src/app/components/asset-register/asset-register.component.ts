@@ -6,11 +6,12 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import * as XLSX from 'xlsx';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { AssetRegisterDialogComponent } from './asset-register-dialog.component';
 import { AssetPasswordDialogComponent } from './asset-password-dialog.component';
 import { AssetInvoicePreviewDialogComponent, AssetInvoicePreviewData } from './asset-invoice-preview-dialog.component';
@@ -37,7 +38,7 @@ interface AssetSummary {
   selector: 'app-asset-register',
   standalone: true,
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule,
-    MatDialogModule, MatProgressSpinnerModule, MatTooltipModule, NavbarComponent],
+    MatDialogModule, MatTooltipModule, NavbarComponent, SkeletonRowsComponent, EmptyStateComponent],
   template: `
     <app-navbar></app-navbar>
     <div class="asset-container">
@@ -49,10 +50,10 @@ interface AssetSummary {
             <p class="subtitle">
               @if (regionName || locationName) {
                 <span class="crumb" (click)="goHome()">All Regions</span>
-                <span class="crumb-sep">›</span>
+                <mat-icon class="crumb-sep" aria-hidden="true">chevron_right</mat-icon>
                 @if (locationName && locationName !== regionName) {
                   <span class="crumb" (click)="filterRegionOnly()">{{ regionName }}</span>
-                  <span class="crumb-sep">›</span>
+                  <mat-icon class="crumb-sep" aria-hidden="true">chevron_right</mat-icon>
                   <span class="crumb active">{{ locationName }}</span>
                 } @else {
                   <span class="crumb active">{{ regionName }}</span>
@@ -68,7 +69,7 @@ interface AssetSummary {
             <mat-icon>file_download</mat-icon> Export Excel
           </button>
           <button mat-stroked-button class="change-btn" (click)="exportMasterList()" [disabled]="exportingMaster()" matTooltip="Export a consolidated master list of ALL assets across every region and location">
-            @if (exportingMaster()) { <mat-icon class="spin">progress_activity</mat-icon> Building… }
+            @if (exportingMaster()) { <mat-icon class="spin">autorenew</mat-icon> Building… }
             @else { <mat-icon>library_books</mat-icon> Master Excel }
           </button>
           <button mat-stroked-button class="change-btn ai-match-btn" (click)="openInvoiceMatch()" matTooltip="Let Welly match assets to Books invoices (quantity-aware, no double-counting)">
@@ -108,7 +109,7 @@ interface AssetSummary {
           <div class="search-wrap">
             <mat-icon class="search-icon">search</mat-icon>
             <input class="search-input" [(ngModel)]="searchText" placeholder="Search name, model, serial…">
-            @if (searchText) { <button class="clear-search" (click)="searchText=''"><mat-icon>close</mat-icon></button> }
+            @if (searchText) { <button aria-label="Close" class="clear-search" (click)="searchText=''"><mat-icon>close</mat-icon></button> }
           </div>
           <select class="filter-select" [(ngModel)]="selectedCategory" (ngModelChange)="loadItems()">
             <option value="">All Categories</option>
@@ -124,17 +125,17 @@ interface AssetSummary {
       }
 
       @if (loading()) {
-        <div class="loading-wrap"><mat-spinner diameter="48"></mat-spinner></div>
+        <div class="table-wrap"><app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows></div>
       }
 
       @if (!loading() && filteredItems().length > 0) {
         <div class="table-wrap">
-          <table class="assets-table">
+          <table class="assets-table app-table">
             <thead>
               <tr>
                 <th>Location</th><th>Assigned To</th><th>Category</th>
                 <th>Model / Description</th><th>Serial Number</th>
-                <th>Invoice #</th><th>Book Value</th><th>Market Value</th>
+                <th>Invoice #</th><th class="num">Book Value</th><th class="num">Market Value</th>
               </tr>
             </thead>
             <tbody>
@@ -151,14 +152,14 @@ interface AssetSummary {
                     </span>
                   </td>
                   <td class="model-cell">{{item.model || '—'}}</td>
-                  <td class="serial-cell">{{item.serialNumber || '—'}}</td>
+                  <td class="serial-cell ref">{{item.serialNumber || '—'}}</td>
                   <td class="invoice-cell">
                     @if (item.invoiceNumber) {
                       <button class="invoice-link" (click)="openInvoicePreview(item)" matTooltip="Preview invoice from Books">
                         <mat-icon>receipt_long</mat-icon>{{item.invoiceNumber}}
                         @if (item.bookInvoiceId) { <span class="inv-linked" title="Linked in Books"></span> }
                       </button>
-                      <button class="inv-relink" (click)="openManualLink(item)" matTooltip="Change / re-link invoice">
+                      <button aria-label="Change / re-link invoice" class="inv-relink" (click)="openManualLink(item)" matTooltip="Change / re-link invoice">
                         <mat-icon>edit</mat-icon>
                       </button>
                     } @else {
@@ -167,8 +168,8 @@ interface AssetSummary {
                       </button>
                     }
                   </td>
-                  <td class="value-cell">{{ formatValue(item.value) }}</td>
-                  <td class="value-cell">{{ formatValue(item.marketValue) }}</td>
+                  <td class="value-cell num">{{ formatValue(item.value) }}</td>
+                  <td class="value-cell num">{{ formatValue(item.marketValue) }}</td>
                 </tr>
               }
             </tbody>
@@ -177,89 +178,86 @@ interface AssetSummary {
       }
 
       @if (!loading() && hasFilter() && filteredItems().length === 0 && !loading()) {
-        <div class="empty-state">
-          <mat-icon>inventory</mat-icon>
-          <h3>No assets found</h3>
-          <p>Try adjusting your search or filters.</p>
+        <div class="empty-card">
+          @if (searchText || selectedCategory || selectedAssignedTo) {
+            <app-empty-state icon="filter_alt_off" title="No assets match your search or filters"
+                             message="Try different words, or clear the filters to see every asset here.">
+              <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
+            </app-empty-state>
+          } @else {
+            <app-empty-state icon="inventory" title="No assets found"
+                             message="No assets are recorded for this location yet."></app-empty-state>
+          }
         </div>
       }
     </div>
   `,
   styles: [`
-    :host { display: block; min-height: 100vh; background: linear-gradient(135deg,#0ea5e9 0%,#2563eb 100%); }
+    :host { display: block; min-height: 100vh; background: var(--color-canvas); }
     .asset-container { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
     .asset-header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:28px; flex-wrap:wrap; }
     .header-left { display:flex; align-items:center; gap:16px; }
-    .header-icon-wrap { width:56px; height:56px; border-radius:16px; background:rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .header-icon { color:white; font-size:30px; width:30px; height:30px; }
-    .asset-header h1 { margin:0; color:white; font-size:24px; font-weight:700; }
-    .subtitle { margin:4px 0 0; color:rgba(255,255,255,0.8); font-size:14px; display:flex; align-items:center; gap:6px; }
-    .crumb { cursor:pointer; } .crumb:hover { text-decoration:underline; } .crumb.active { font-weight:600; color:white; } .crumb-sep { opacity:0.6; }
-    .change-btn { color:white !important; border-color:rgba(255,255,255,0.5) !important; } .change-btn mat-icon { margin-right:6px; }
+    .header-icon-wrap { width:56px; height:56px; border-radius:var(--radius-lg); background:var(--color-primary-soft); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .header-icon { color:var(--color-primary); font-size:var(--text-4xl); width:32px; height:32px; }
+    .asset-header h1 { margin:0; color:var(--color-text); font-size:var(--text-3xl); font-weight:700; }
+    .subtitle { margin:4px 0 0; color:var(--color-text-3); font-size:var(--text-md); display:flex; align-items:center; gap:6px; }
+    .crumb { cursor:pointer; color:var(--color-primary); } .crumb:hover { text-decoration:underline; } .crumb.active { font-weight:600; color:var(--color-text); } .crumb-sep { font-size:var(--text-lg); width:16px; height:16px; color:var(--color-text-3); }
+    .change-btn mat-icon { margin-right:6px; }
     .change-btn .spin { animation:spin 1s linear infinite; }
     @keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
     .summary-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; margin-bottom:20px; }
-    .summary-card { background:white; border-radius:14px; padding:16px; display:flex; align-items:center; gap:14px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
-    .summary-card:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.15); }
-    .sc-icon { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .sc-icon mat-icon { color:white; font-size:22px; width:22px; height:22px; }
-    .region-kzn { background:linear-gradient(135deg,#6366f1,#4f46e5); }
-    .region-capetown { background:linear-gradient(135deg,#0ea5e9,#0284c7); }
-    .region-gauteng { background:linear-gradient(135deg,#f59e0b,#d97706); }
-    .region-easterncape { background:linear-gradient(135deg,#10b981,#059669); }
-    .region-properties { background:linear-gradient(135deg,#ec4899,#db2777); }
-    .region-contracts { background:linear-gradient(135deg,#64748b,#475569); }
-    .sc-info { flex:1; } .sc-name { font-weight:700; color:#1f2937; font-size:15px; } .sc-count { font-size:12px; color:#6b7280; margin-top:2px; } .sc-arrow { color:#9ca3af; }
+    .summary-card { background:var(--color-surface); border:1px solid var(--color-line); border-radius:14px; padding:16px; display:flex; align-items:center; gap:14px; cursor:pointer; transition:all 0.2s; box-shadow:var(--shadow-sm); }
+    .summary-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-md); }
+    .sc-icon { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:var(--color-surface-2); color:var(--color-text-2); }
+    .sc-icon mat-icon { font-size:var(--text-2xl); width:20px; height:20px; }
+    .region-kzn { background:var(--color-primary-soft); color:var(--color-primary); }
+    .region-capetown { background:var(--color-cat-teal-soft); color:var(--color-cat-teal); }
+    .region-gauteng { background:var(--color-cat-amber-soft); color:var(--color-cat-amber); }
+    .region-easterncape { background:var(--color-cat-purple-soft); color:var(--color-cat-purple); }
+    .region-properties { background:var(--color-cat-pink-soft); color:var(--color-cat-pink); }
+    .region-contracts { background:var(--color-surface-2); color:var(--color-text-2); }
+    .sc-info { flex:1; } .sc-name { font-weight:700; color:var(--color-text); font-size:var(--text-md); } .sc-count { font-size:var(--text-xs); color:var(--color-text-3); margin-top:2px; } .sc-arrow { color:var(--color-text-3); }
     .cat-chips { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:24px; }
-    .cat-chip { background:rgba(255,255,255,0.15); color:white; border-radius:20px; padding:8px 16px; font-size:13px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; border:1px solid rgba(255,255,255,0.25); transition:background 0.2s; }
-    .cat-chip:hover { background:rgba(255,255,255,0.25); }
-    .cat-icon { font-size:16px; width:16px; height:16px; }
-    .cat-count { background:rgba(255,255,255,0.25); border-radius:10px; padding:1px 7px; font-size:11px; }
-    .filter-bar { background:white; border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:12px; margin-bottom:18px; box-shadow:0 2px 8px rgba(0,0,0,0.08); flex-wrap:wrap; }
-    .search-wrap { flex:1; min-width:200px; position:relative; display:flex; align-items:center; background:#f3f4f6; border-radius:8px; padding:0 12px; }
-    .search-icon { color:#9ca3af; font-size:20px; width:20px; height:20px; margin-right:8px; }
-    .search-input { border:none; background:transparent; outline:none; font-size:14px; color:#1f2937; width:100%; padding:10px 0; }
-    .clear-search { background:none; border:none; cursor:pointer; color:#9ca3af; display:flex; align-items:center; }
-    .filter-select { border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; font-size:13px; color:#374151; background:white; outline:none; cursor:pointer; }
-    .result-count { font-size:13px; color:#6b7280; white-space:nowrap; }
-    .clear-filters { background:none; border:1px solid #e5e7eb; border-radius:8px; padding:6px 12px; font-size:12px; color:#374151; cursor:pointer; display:flex; align-items:center; gap:4px; }
-    .clear-filters mat-icon { font-size:16px; width:16px; height:16px; }
-    .table-wrap { background:white; border-radius:16px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.08); overflow-x:auto; }
-    .assets-table { width:100%; border-collapse:collapse; font-size:13px; }
-    .assets-table thead tr { background:#f8fafc; border-bottom:2px solid #e5e7eb; }
-    .assets-table th { padding:12px 14px; text-align:left; font-weight:600; color:#374151; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; }
-    .assets-table tbody tr { border-bottom:1px solid #f1f5f9; transition:background 0.15s; }
-    .assets-table tbody tr:hover { background:#f8fafc; }
-    .assets-table td { padding:10px 14px; color:#374151; vertical-align:middle; }
+    .cat-chip { background:var(--color-surface); color:var(--color-text-2); border-radius:20px; padding:8px 16px; font-size:var(--text-sm); font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; border:1px solid var(--color-line); transition:background 0.2s; }
+    .cat-chip:hover { background:var(--color-surface-2); border-color:var(--color-line-strong); }
+    .cat-icon { font-size:var(--text-lg); width:16px; height:16px; color:var(--color-text-3); }
+    .cat-count { background:var(--color-surface-3); color:var(--color-text-2); border-radius:10px; padding:1px 7px; font-size:var(--text-xs); }
+    .filter-bar { background:var(--color-surface); border:1px solid var(--color-line); border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:12px; margin-bottom:18px; box-shadow:var(--shadow-sm); flex-wrap:wrap; }
+    .search-wrap { flex:1; min-width:200px; position:relative; display:flex; align-items:center; background:var(--color-surface-2); border-radius:8px; padding:0 12px; }
+    .search-icon { color:var(--color-text-3); font-size:var(--text-2xl); width:20px; height:20px; margin-right:8px; }
+    .search-input { border:none; background:transparent; outline:none; font-size:var(--text-md); color:var(--color-text); width:100%; padding:10px 0; }
+    .clear-search { background:none; border:none; cursor:pointer; color:var(--color-text-3); display:flex; align-items:center; }
+    .filter-select { border:1px solid var(--color-line); border-radius:8px; padding:8px 12px; font-size:var(--text-sm); color:var(--color-text-2); background:var(--color-surface); outline:none; cursor:pointer; }
+    .result-count { font-size:var(--text-sm); color:var(--color-text-3); white-space:nowrap; }
+    .clear-filters { background:none; border:1px solid var(--color-line); border-radius:8px; padding:6px 12px; font-size:var(--text-xs); color:var(--color-text-2); cursor:pointer; display:flex; align-items:center; gap:4px; }
+    .clear-filters mat-icon { font-size:var(--text-lg); width:16px; height:16px; }
+    .table-wrap { background:var(--color-surface); border:1px solid var(--color-line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow-sm); overflow-x:auto; }
     .assigned-cell { display:flex; align-items:center; gap:8px; white-space:nowrap; }
-    .person-avatar { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#4f46e5); color:white; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .loc-badge { background:#eff6ff; color:#1d4ed8; border-radius:6px; padding:3px 8px; font-size:12px; font-weight:500; white-space:nowrap; }
+    .person-avatar { width:28px; height:28px; border-radius:50%; background:var(--color-primary-soft); color:var(--color-primary); font-size:var(--text-xs); font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .loc-badge { background:var(--color-primary-soft); color:var(--color-primary-hover); border-radius:6px; padding:3px 8px; font-size:var(--text-xs); font-weight:500; white-space:nowrap; }
     .model-cell { max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .serial-cell { font-family:monospace; font-size:12px; color:#6b7280; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .serial-cell { color:var(--color-text-3); max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .invoice-cell { white-space:nowrap; }
-    .invoice-link { display:inline-flex; align-items:center; gap:5px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:8px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; font-family:inherit; }
-    .invoice-link:hover { background:#dbeafe; border-color:#93c5fd; transform:translateY(-1px); box-shadow:0 2px 6px rgba(37,99,235,0.2); }
-    .invoice-link mat-icon { font-size:15px; width:15px; height:15px; }
-    .inv-linked { width:7px; height:7px; border-radius:50%; background:#10b981; display:inline-block; }
-    .no-invoice { color:#cbd5e1; }
-    .inv-relink { display:inline-flex; align-items:center; justify-content:center; margin-left:4px; background:transparent; border:none; color:#94a3b8; cursor:pointer; padding:2px; border-radius:6px; vertical-align:middle; transition:all 0.15s; }
-    .inv-relink:hover { color:#2563eb; background:#eff6ff; }
-    .inv-relink mat-icon { font-size:15px; width:15px; height:15px; }
-    .inv-link-btn { display:inline-flex; align-items:center; gap:4px; background:#f8fafc; color:#64748b; border:1px dashed #cbd5e1; border-radius:8px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; font-family:inherit; }
-    .inv-link-btn:hover { background:#eff6ff; color:#1d4ed8; border-color:#93c5fd; }
-    .inv-link-btn mat-icon { font-size:15px; width:15px; height:15px; }
-    .notes-cell { max-width:150px; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .cat-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:500; white-space:nowrap; }
-    .cat-badge mat-icon { font-size:13px; width:13px; height:13px; }
-    .cat-computer{background:#dbeafe;color:#1d4ed8;} .cat-monitor{background:#ede9fe;color:#7c3aed;} .cat-laptop{background:#d1fae5;color:#065f46;}
-    .cat-telephone{background:#fef3c7;color:#92400e;} .cat-keyboard,.cat-mouse{background:#f3f4f6;color:#374151;} .cat-mobilephone{background:#fce7f3;color:#9d174d;} .cat-{background:#f3f4f6;color:#374151;}
-    .cond-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:500; }
-    .value-cell { font-weight:600; color:#065f46; white-space:nowrap; }
-    .cond-good{background:#d1fae5;color:#065f46;} .cond-fair{background:#fef3c7;color:#92400e;} .cond-poor{background:#fee2e2;color:#991b1b;} .cond-notassessed,.cond-default{background:#f3f4f6;color:#6b7280;}
-    .loading-wrap { display:flex; justify-content:center; padding:60px; }
-    .empty-state { background:white; border-radius:16px; padding:60px; text-align:center; }
-    .empty-state mat-icon { font-size:56px; width:56px; height:56px; color:#d1d5db; }
-    .empty-state h3 { color:#374151; margin:16px 0 8px; } .empty-state p { color:#6b7280; }
+    .invoice-link { display:inline-flex; align-items:center; gap:5px; background:var(--color-primary-soft); color:var(--color-primary-hover); border:1px solid var(--color-primary-soft); border-radius:8px; padding:4px 10px; font-size:var(--text-xs); font-weight:600; cursor:pointer; transition:all 0.15s; font-family:inherit; }
+    .invoice-link:hover { background:var(--color-primary-soft); border-color:var(--color-primary); transform:translateY(-1px); box-shadow:var(--shadow-sm); }
+    .invoice-link mat-icon { font-size:var(--text-md); width:14px; height:14px; }
+    .inv-linked { width:7px; height:7px; border-radius:50%; background:var(--color-ok); display:inline-block; }
+    .no-invoice { color:var(--color-line-strong); }
+    .inv-relink { display:inline-flex; align-items:center; justify-content:center; margin-left:4px; background:transparent; border:none; color:var(--color-text-3); cursor:pointer; padding:2px; border-radius:6px; vertical-align:middle; transition:all 0.15s; }
+    .inv-relink:hover { color:var(--color-primary); background:var(--color-primary-soft); }
+    .inv-relink mat-icon { font-size:var(--text-md); width:14px; height:14px; }
+    .inv-link-btn { display:inline-flex; align-items:center; gap:4px; background:var(--color-canvas); color:var(--color-text-3); border:1px dashed var(--color-line-strong); border-radius:8px; padding:4px 10px; font-size:var(--text-xs); font-weight:600; cursor:pointer; transition:all 0.15s; font-family:inherit; }
+    .inv-link-btn:hover { background:var(--color-primary-soft); color:var(--color-primary-hover); border-color:var(--color-primary); }
+    .inv-link-btn mat-icon { font-size:var(--text-md); width:14px; height:14px; }
+    .notes-cell { max-width:150px; color:var(--color-text-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cat-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:12px; font-size:var(--text-xs); font-weight:500; white-space:nowrap; }
+    .cat-badge mat-icon { font-size:var(--text-sm); width:13px; height:13px; }
+    .cat-computer{background:var(--color-primary-soft);color:var(--color-primary-hover);} .cat-monitor{background:var(--color-cat-purple-soft);color:var(--color-cat-purple);} .cat-laptop{background:var(--color-cat-teal-soft);color:var(--color-cat-teal);}
+    .cat-telephone{background:var(--color-cat-amber-soft);color:var(--color-cat-amber);} .cat-keyboard,.cat-mouse{background:var(--color-surface-2);color:var(--color-text-2);} .cat-mobilephone{background:var(--color-cat-pink-soft);color:var(--color-cat-pink);} .cat-{background:var(--color-surface-2);color:var(--color-text-2);}
+    .cond-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:var(--text-xs); font-weight:500; }
+    .value-cell { font-weight:600; color:var(--color-text); white-space:nowrap; }
+    .cond-good{background:var(--color-ok-soft);color:var(--color-ok);} .cond-fair{background:var(--color-warn-soft);color:var(--color-warn);} .cond-poor{background:var(--color-danger-soft);color:var(--color-danger);} .cond-notassessed,.cond-default{background:var(--color-surface-2);color:var(--color-text-3);}
+    .empty-card { background:var(--color-surface); border:1px solid var(--color-line); border-radius:16px; }
   `]
 })
 export class AssetRegisterComponent implements OnInit {
@@ -295,7 +293,7 @@ export class AssetRegisterComponent implements OnInit {
 
   hasFilter = computed(() => !!(this.locationId || this.regionName || this.locationName || this.selectedCategory || this.searchText || this.selectedAssignedTo));
 
-  constructor(private route: ActivatedRoute, private router: Router, private http: HttpClient, private dialog: MatDialog, private snack: MatSnackBar) {}
+  constructor(private route: ActivatedRoute, private router: Router, private http: HttpClient, private dialog: MatDialog, private toast: ToastService) {}
 
   ngOnInit() {
     if (!this.ensureAccess()) return;
@@ -374,7 +372,7 @@ export class AssetRegisterComponent implements OnInit {
     });
     ref.afterClosed().subscribe(res => {
       if (res?.applied > 0) {
-        this.snack.open(`${res.applied} asset(s) linked to invoices.`, 'Close', { duration: 3500 });
+        this.toast.done(`${res.applied} asset(s) linked to invoices.`);
         this.loadItems();
       }
     });
@@ -421,10 +419,10 @@ export class AssetRegisterComponent implements OnInit {
             });
             ref.afterClosed().subscribe(() => URL.revokeObjectURL(blobUrl));
           },
-          error: () => this.snack.open('Invoice found but the file could not be loaded.', 'Close', { duration: 4000 })
+          error: () => this.toast.error('Invoice found but the file could not be loaded.')
         });
       },
-      error: () => this.snack.open('Failed to look up invoice.', 'Close', { duration: 4000 })
+      error: () => this.toast.error('Failed to look up invoice.')
     });
   }
 
@@ -443,7 +441,7 @@ export class AssetRegisterComponent implements OnInit {
     });
     ref.afterClosed().subscribe(res => {
       if (res?.linked) {
-        this.snack.open('Invoice linked to asset.', 'Close', { duration: 3000 });
+        this.toast.done('Invoice linked to asset.');
         this.loadItems();
       }
     });
@@ -452,7 +450,7 @@ export class AssetRegisterComponent implements OnInit {
   /** Export the currently filtered assets to an Excel workbook. */
   exportToExcel() {
     const rows = this.filteredItems();
-    if (!rows.length) { this.snack.open('Nothing to export.', 'Close', { duration: 2500 }); return; }
+    if (!rows.length) { this.toast.info('Nothing to export.'); return; }
     const data = rows.map(i => ({
       'Location': i.locationName || '',
       'Region': i.region || '',
@@ -473,7 +471,7 @@ export class AssetRegisterComponent implements OnInit {
     const scope = this.locationName || this.regionName || 'All';
     const stamp = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `AssetRegister_${scope.replace(/[^a-z0-9]+/gi, '-')}_${stamp}.xlsx`);
-    this.snack.open(`Exported ${rows.length} assets to Excel`, 'Close', { duration: 3000 });
+    this.toast.done(`Exported ${rows.length} assets to Excel`);
   }
 
   /**
@@ -487,7 +485,7 @@ export class AssetRegisterComponent implements OnInit {
     this.http.get<AssetItem[]>(`${environment.apiUrl}/asset-register/items`, { headers: this.headers() }).subscribe({
       next: (all) => {
         try {
-          if (!all.length) { this.snack.open('No assets to export.', 'Close', { duration: 2500 }); return; }
+          if (!all.length) { this.toast.info('No assets to export.'); return; }
 
           const wb = XLSX.utils.book_new();
 
@@ -528,14 +526,14 @@ export class AssetRegisterComponent implements OnInit {
 
           const stamp = new Date().toISOString().slice(0, 10);
           XLSX.writeFile(wb, `AssetRegister_MASTER_${stamp}.xlsx`);
-          this.snack.open(`Master list exported — ${all.length} assets across ${byRegion.length} regions`, 'Close', { duration: 4000 });
+          this.toast.done(`Master list exported — ${all.length} assets across ${byRegion.length} regions`);
         } finally {
           this.exportingMaster.set(false);
         }
       },
       error: () => {
         this.exportingMaster.set(false);
-        this.snack.open('Failed to build master list. Please try again.', 'Close', { duration: 4000 });
+        this.toast.error('Failed to build master list. Please try again.');
       }
     });
   }

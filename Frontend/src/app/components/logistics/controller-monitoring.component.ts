@@ -11,13 +11,15 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { environment } from '../../../environments/environment';
 import { GoogleMapsLoaderService } from '../../services/google-maps-loader.service';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import * as XLSX from 'xlsx';
 
 declare const google: any;
@@ -60,8 +62,8 @@ interface Geofence {
   imports: [
     CommonModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule,
     MatTabsModule, MatTableModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatSlideToggleModule, MatProgressSpinnerModule, MatTooltipModule,
-    MatDatepickerModule, MatNativeDateModule, MatSnackBarModule
+    MatSlideToggleModule, MatTooltipModule,
+    MatDatepickerModule, MatNativeDateModule, SkeletonRowsComponent, EmptyStateComponent
   ],
   template: `
   <div class="controller-wrap">
@@ -72,7 +74,7 @@ interface Geofence {
         <mat-icon>{{ inCurfew() ? 'nightlight' : 'wb_sunny' }}</mat-icon>
         <div>
           <div class="curfew-title">
-            {{ inCurfew() ? 'CURFEW ACTIVE — vehicles should be parked off' : 'Daytime — normal operations' }}
+            {{ inCurfew() ? 'Curfew active — vehicles should be parked off' : 'Daytime — normal operations' }}
           </div>
           <div class="curfew-sub">
             Monitoring window {{ curfewStart }}:00 → {{ curfewEnd }}:00 ·
@@ -123,7 +125,7 @@ interface Geofence {
             </div>
 
             @if (loading()) {
-              <div class="veh-loading"><mat-spinner diameter="30"></mat-spinner></div>
+              <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
             } @else {
               @for (v of filteredVehicles(); track v.vehicleId) {
                 <div class="veh-item" [class.sel]="selected()?.vehicleId===v.vehicleId"
@@ -144,7 +146,11 @@ interface Geofence {
                 </div>
               }
               @if (filteredVehicles().length === 0) {
-                <div class="veh-empty">No vehicles match</div>
+                <app-empty-state icon="search_off" title="No vehicles match" message="No vehicle fits this search and status filter." [compact]="true">
+                  @if (statusFilter() !== 'all') {
+                    <button mat-stroked-button (click)="filter = ''; statusFilter.set('all')">Show all vehicles</button>
+                  }
+                </app-empty-state>
               }
             }
           </div>
@@ -159,7 +165,7 @@ interface Geofence {
               <button mat-stroked-button (click)="toggleActiveLoads()" matTooltip="Show/hide routes for active loads">
                 <mat-icon>alt_route</mat-icon> {{ activeLoadsVisible() ? 'Hide' : 'Load' }} Active Loads
                 @if (activeLoadRoutes().length > 0 && activeLoadsVisible()) {
-                  <span style="margin-left:4px;color:#60a5fa;font-weight:700;">({{ activeLoadRoutes().length }})</span>
+                  <span class="btn-count">({{ activeLoadRoutes().length }})</span>
                 }
               </button>
             </div>
@@ -201,7 +207,7 @@ interface Geofence {
           </div>
 
           @if (archiveLoading()) {
-            <div class="veh-loading"><mat-spinner diameter="34"></mat-spinner></div>
+            <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
           } @else if (archiveLoaded()) {
             <div class="archive-summary">
               <div><strong>{{ archiveTotalTrips() }}</strong> movements ·
@@ -225,30 +231,34 @@ interface Geofence {
                 }
               </div>
 
-              <table class="hist-table">
-                <thead>
-                  <tr><th>Reg</th><th>Start</th><th>End</th><th>From</th><th>To</th><th>Dist</th><th>Max</th><th>Harsh</th></tr>
-                </thead>
-                <tbody>
-                  @for (e of archiveEvents(); track e.tripId) {
-                    <tr>
-                      <td class="mono">{{ e.registration }}</td>
-                      <td>{{ e.start }}</td>
-                      <td>{{ e.end }}</td>
-                      <td class="loc">{{ e.startLocation || '—' }}</td>
-                      <td class="loc">{{ e.endLocation || '—' }}</td>
-                      <td>{{ e.distanceKm }} km</td>
-                      <td>{{ e.maxSpeed }}</td>
-                      <td [class.harsh]="e.harshEvents > 0">{{ e.harshEvents }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              <div class="table-wrap">
+                <table class="hist-table app-table">
+                  <thead>
+                    <tr><th>Reg</th><th>Start</th><th>End</th><th>From</th><th>To</th><th class="num">Dist</th><th class="num">Max</th><th class="num">Harsh</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (e of archiveEvents(); track e.tripId) {
+                      <tr>
+                        <td class="ref">{{ e.registration }}</td>
+                        <td>{{ e.start }}</td>
+                        <td>{{ e.end }}</td>
+                        <td class="loc">{{ e.startLocation || '—' }}</td>
+                        <td class="loc">{{ e.endLocation || '—' }}</td>
+                        <td class="num">{{ e.distanceKm }} km</td>
+                        <td class="num">{{ e.maxSpeed }}</td>
+                        <td class="num" [class.harsh]="e.harshEvents > 0">{{ e.harshEvents }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             } @else {
-              <div class="veh-empty">No movements recorded for this window 🎉</div>
+              <app-empty-state icon="event_available" title="No movements recorded for this window"
+                               message="No vehicle moved in the selected window."></app-empty-state>
             }
           } @else {
-            <div class="veh-empty">Pick a date and press Load to review overnight vehicle movement.</div>
+            <app-empty-state icon="history" title="No date loaded yet"
+                             message="Pick a date and press Load to review overnight vehicle movement."></app-empty-state>
           }
         </div>
       </mat-tab>
@@ -272,12 +282,14 @@ interface Geofence {
                     <div class="geo-name">{{ z.name }}</div>
                     <div class="geo-meta">{{ z.type }} · {{ z.radiusMeters }}m @if (z.region) { · {{ z.region }} }</div>
                   </div>
-                  <button mat-icon-button matTooltip="Edit / resize" (click)="editZone(z); $event.stopPropagation()"><mat-icon>edit</mat-icon></button>
-                  <button mat-icon-button color="warn" (click)="deleteZone(z, $event)"><mat-icon>delete</mat-icon></button>
+                  <button aria-label="Edit / resize" mat-icon-button matTooltip="Edit / resize" (click)="editZone(z); $event.stopPropagation()"><mat-icon>edit</mat-icon></button>
+                  <button aria-label="Delete" mat-icon-button color="warn" (click)="deleteZone(z, $event)"><mat-icon>delete</mat-icon></button>
                 </div>
               }
               @if (geofences().length === 0) {
-                <div class="veh-empty">No geofences yet. Add your parking depots.</div>
+                <app-empty-state icon="fence" title="No geofences yet" message="Add your parking depots." [compact]="true">
+                  <button mat-stroked-button (click)="startAddZone()"><mat-icon>add_location_alt</mat-icon> Add Zone</button>
+                </app-empty-state>
               }
             </div>
             <div class="map-holder">
@@ -345,9 +357,11 @@ interface Geofence {
           <div class="cam-layout">
             <div class="cam-list">
               @if (cameraVehiclesLoading()) {
-                <div class="veh-loading"><mat-spinner diameter="30"></mat-spinner></div>
+                <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
               } @else if (cameraVehicles().length === 0) {
-                <div class="veh-empty">No vehicles available. Click "Reload Vehicles".</div>
+                <app-empty-state icon="videocam_off" title="No vehicles available" message="Load the camera-equipped vehicles from CarTrack." [compact]="true">
+                  <button mat-stroked-button (click)="loadCameraVehicles()"><mat-icon>refresh</mat-icon> Reload Vehicles</button>
+                </app-empty-state>
               } @else {
                 <div class="veh-search">
                   <mat-icon>search</mat-icon>
@@ -356,7 +370,7 @@ interface Geofence {
                 @for (v of filteredCameraVehicles(); track v.registration) {
                   <div class="veh-item" [class.sel]="selectedCameraVehicle()?.registration === v.registration"
                        (click)="selectCameraVehicle(v)">
-                    <mat-icon style="color:#60a5fa">local_shipping</mat-icon>
+                    <mat-icon class="cam-veh-ic">local_shipping</mat-icon>
                     <div>
                       <div class="veh-reg">{{ v.registration }}</div>
                       <div class="veh-meta">{{ v.vehicleName || 'CarTrack Vehicle' }}</div>
@@ -368,26 +382,19 @@ interface Geofence {
 
             <div class="cam-viewer">
               @if (!selectedCameraVehicle()) {
-                <div class="cam-empty">
-                  <mat-icon>videocam_off</mat-icon>
-                  <p>Select a vehicle to view its cameras</p>
-                </div>
+                <app-empty-state icon="videocam_off" title="No vehicle selected" message="Select a vehicle to view its cameras."></app-empty-state>
               } @else if (livestreamLoading()) {
-                <div class="cam-empty">
-                  <mat-spinner diameter="40"></mat-spinner>
-                  <p>Requesting camera feeds from {{ selectedCameraVehicle()!.registration }}...</p>
-                </div>
+                <p class="cam-wait">Requesting camera feeds from {{ selectedCameraVehicle()!.registration }}...</p>
+                <app-skeleton-rows [rows]="4" [avatar]="false"></app-skeleton-rows>
               } @else if (livestreamError()) {
                 <div class="cam-empty error">
                   <mat-icon>error</mat-icon>
                   <p><strong>Unable to load cameras</strong></p>
-                  <p style="font-size:.85rem; max-width:500px;">{{ livestreamError() }}</p>
+                  <p class="cam-error-msg">{{ livestreamError() }}</p>
                 </div>
               } @else if (activeStreams().length === 0) {
-                <div class="cam-empty">
-                  <mat-icon>videocam_off</mat-icon>
-                  <p>No active cameras for {{ selectedCameraVehicle()!.registration }}</p>
-                </div>
+                <app-empty-state icon="videocam_off" [title]="'No active cameras for ' + selectedCameraVehicle()!.registration"
+                                 message="CarTrack returned no live camera feeds for this vehicle."></app-empty-state>
               } @else {
                 <div class="cam-grid" [attr.data-count]="activeStreams().length">
                   @for (s of activeStreams(); track s.cameraId) {
@@ -397,20 +404,18 @@ interface Geofence {
                         <span>{{ s.cameraName }}</span>
                       </div>
                       @if (s.streamUrl.endsWith('.m3u8') || s.streamUrl.includes('m3u8')) {
-                        <video [src]="s.streamUrl" controls autoplay muted playsinline
-                               style="width:100%; height:100%; background:#000; border-radius:8px;"></video>
+                        <video class="cam-media" [src]="s.streamUrl" controls autoplay muted playsinline></video>
                       } @else if (s.streamUrl.startsWith('rtmp') || s.streamUrl.startsWith('rtsp')) {
                         <div class="cam-stream-info">
                           <mat-icon>info</mat-icon>
                           <p>Stream: <code>{{ s.streamUrl }}</code></p>
-                          <p style="font-size:.75rem">RTMP/RTSP streams need an external player (VLC, ffplay)</p>
+                          <p class="cam-note">RTMP/RTSP streams need an external player (VLC, ffplay)</p>
                           <button mat-stroked-button (click)="copyStreamUrl(s.streamUrl)">
                             <mat-icon>content_copy</mat-icon> Copy URL
                           </button>
                         </div>
                       } @else {
-                        <img [src]="s.thumbnailUrl || s.streamUrl" alt="Camera feed"
-                             style="width:100%; height:100%; object-fit:cover; background:#000; border-radius:8px;">
+                        <img class="cam-media" [src]="s.thumbnailUrl || s.streamUrl" alt="Camera feed">
                       }
                     </div>
                   }
@@ -432,7 +437,7 @@ interface Geofence {
               <div class="tv-title"><mat-icon>local_shipping</mat-icon> {{ tripsDialogReg() }}</div>
               <div class="tv-sub">{{ archiveDate | date:'EEE dd MMM yyyy' }} · {{ archiveCurfewOnly ? 'Curfew window (18:00–05:00)' : 'Full day' }}</div>
             </div>
-            <button mat-icon-button (click)="closeVehicleTrips()"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" mat-icon-button (click)="closeVehicleTrips()"><mat-icon>close</mat-icon></button>
           </div>
 
           <div class="tv-summary">
@@ -444,22 +449,22 @@ interface Geofence {
           </div>
 
           <div class="tv-body">
-            <table class="tv-table">
+            <table class="tv-table app-table">
               <thead>
-                <tr><th>#</th><th>Departed</th><th>Arrived</th><th>Duration</th><th>From (stop)</th><th>To (stop)</th><th>Distance</th><th>Max</th><th>Harsh</th></tr>
+                <tr><th class="num">#</th><th>Departed</th><th>Arrived</th><th>Duration</th><th>From (stop)</th><th>To (stop)</th><th class="num">Distance</th><th class="num">Max</th><th class="num">Harsh</th></tr>
               </thead>
               <tbody>
                 @for (t of tripsDialogTrips(); track t.tripId; let i = $index) {
                   <tr>
-                    <td>{{ i + 1 }}</td>
-                    <td class="mono">{{ t.start }}</td>
-                    <td class="mono">{{ t.end }}</td>
+                    <td class="num">{{ i + 1 }}</td>
+                    <td>{{ t.start }}</td>
+                    <td>{{ t.end }}</td>
                     <td>{{ t.duration || '—' }}</td>
                     <td class="loc">{{ t.startLocation || t.startGeofence || '—' }}</td>
                     <td class="loc">{{ t.endLocation || t.endGeofence || '—' }}</td>
-                    <td>{{ t.distanceKm }} km</td>
-                    <td>{{ t.maxSpeed }}</td>
-                    <td [class.harsh]="t.harshEvents > 0">{{ t.harshEvents }}</td>
+                    <td class="num">{{ t.distanceKm }} km</td>
+                    <td class="num">{{ t.maxSpeed }}</td>
+                    <td class="num" [class.harsh]="t.harshEvents > 0">{{ t.harshEvents }}</td>
                   </tr>
                 }
               </tbody>
@@ -478,177 +483,172 @@ interface Geofence {
   </div>
   `,
   styles: [`
-    .controller-wrap { padding: 16px; border-radius:16px; background:#0f172a; color:#e2e8f0; }
+    .controller-wrap { padding: 16px; color:var(--color-text); }
 
     /* Curfew banner */
     .curfew-banner { display:flex; justify-content:space-between; align-items:center; gap:16px;
-      padding:16px 20px; border-radius:16px; margin-bottom:16px; color:#fff;
-      box-shadow:0 8px 24px rgba(0,0,0,.25); }
-    .curfew-banner.active { background:linear-gradient(135deg,#3b0764,#1e1b4b 60%,#0f172a); border:1px solid rgba(139,92,246,.4); }
-    .curfew-banner.day { background:linear-gradient(135deg,#0e7490,#0369a1 60%,#0f172a); border:1px solid rgba(56,189,248,.3); }
+      padding:16px 20px; border-radius:var(--radius-lg); margin-bottom:16px; color:var(--color-text);
+      background:var(--color-surface); border:1px solid var(--color-line); box-shadow:var(--shadow-sm); }
+    .curfew-banner.active { background:var(--color-warn-soft); border-color:var(--color-warn); }
+    .curfew-banner.active .curfew-left mat-icon { color:var(--color-warn); }
+    .curfew-banner.day .curfew-left mat-icon { color:var(--color-primary); }
     .curfew-left { display:flex; align-items:center; gap:14px; }
-    .curfew-left mat-icon { font-size:34px; height:34px; width:34px; }
-    .curfew-title { font-weight:700; font-size:1.05rem; }
-    .curfew-sub { font-size:.8rem; opacity:.8; }
+    .curfew-left mat-icon { font-size:var(--text-4xl); height:var(--text-4xl); width:var(--text-4xl); }
+    .curfew-title { font-weight:700; font-size:var(--text-lg); }
+    .curfew-sub { font-size:var(--text-sm); color:var(--color-text-2); }
     .curfew-right { display:flex; align-items:center; gap:12px; }
-    .curfew-right button { color:#fff; border-color:rgba(255,255,255,.4); }
 
     /* Counters */
     .counter-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:12px; margin-bottom:16px; }
-    .counter { background:#1e293b; border:1px solid rgba(148,163,184,.25); border-radius:14px;
+    .counter { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-lg);
       padding:14px; display:flex; flex-direction:column; align-items:center; }
-    .counter .c-val { font-size:1.8rem; font-weight:800; line-height:1; }
-    .counter .c-lbl { font-size:.72rem; color:#cbd5e1; opacity:.9; margin-top:6px; text-transform:uppercase; letter-spacing:.5px; }
-    .counter.total .c-val { color:#e2e8f0; }
-    .counter.alert .c-val { color:#f87171; }
-    .counter.breach .c-val { color:#fb923c; }
-    .counter.moving .c-val { color:#60a5fa; }
-    .counter.parked .c-val { color:#4ade80; }
-    .counter.idling .c-val { color:#fbbf24; }
-    .counter.offline .c-val { color:#94a3b8; }
-    .counter.pulse { animation:pulseRed 1.4s infinite; }
-    @keyframes pulseRed { 0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.5);} 50%{box-shadow:0 0 0 8px rgba(248,113,113,0);} }
+    .counter .c-val { font-size:var(--text-3xl); font-weight:800; line-height:1; }
+    .counter .c-lbl { font-size:var(--text-xs); color:var(--color-text-2); margin-top:6px; text-transform:uppercase; letter-spacing:.5px; }
+    .counter.total .c-val { color:var(--color-text); }
+    .counter.alert .c-val { color:var(--color-danger); }
+    .counter.breach .c-val { color:var(--color-danger); }
+    .counter.moving .c-val { color:var(--color-info); }
+    .counter.parked .c-val { color:var(--color-ok); }
+    .counter.idling .c-val { color:var(--color-warn); }
+    .counter.offline .c-val { color:var(--color-text-3); }
+    .counter.pulse { border-color:var(--color-danger); animation:pulseRed 1.4s infinite; }
+    @keyframes pulseRed { 0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--color-danger) 50%, transparent);} 50%{box-shadow:0 0 0 8px transparent;} }
 
     @media (max-width:1100px){ .counter-grid{ grid-template-columns:repeat(4,1fr);} }
 
     /* Live layout */
     .live-layout { display:grid; grid-template-columns:340px 1fr; gap:14px; height:620px; margin-top:12px; }
-    .veh-list { background:#0b1220; border:1px solid rgba(148,163,184,.25); border-radius:14px;
+    .veh-list { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-lg);
       padding:10px; overflow-y:auto; }
-    .veh-search { display:flex; align-items:center; gap:8px; background:rgba(30,41,59,.7); border-radius:10px; padding:8px 10px; margin-bottom:8px; }
-    .veh-search input { background:transparent; border:none; outline:none; color:#e2e8f0; width:100%; }
-    .veh-search mat-icon { color:#94a3b8; }
+    .veh-search { display:flex; align-items:center; gap:8px; background:var(--color-surface-2); border:1px solid var(--color-line); border-radius:var(--radius-md); padding:8px 10px; margin-bottom:8px; }
+    .veh-search input { background:transparent; border:none; outline:none; color:var(--color-text); width:100%; }
+    .veh-search mat-icon { color:var(--color-text-3); }
     .veh-filter-chips { display:flex; gap:6px; margin-bottom:10px; }
-    .veh-filter-chips button { flex:1; font-size:.72rem; padding:5px; border-radius:8px; border:1px solid rgba(148,163,184,.2);
-      background:rgba(30,41,59,.6); color:#cbd5e1; cursor:pointer; }
-    .veh-filter-chips button.on { background:#334155; color:#fff; border-color:#64748b; }
-    .veh-filter-chips button.red.on { background:#7f1d1d; border-color:#ef4444; }
-    .veh-filter-chips button.grn.on { background:#14532d; border-color:#22c55e; }
+    .veh-filter-chips button { flex:1; font-size:var(--text-xs); padding:5px; border-radius:var(--radius-control); border:1px solid var(--color-line);
+      background:var(--color-surface); color:var(--color-text-2); cursor:pointer; }
+    .veh-filter-chips button.on { background:var(--color-primary-soft); color:var(--color-primary); border-color:var(--color-primary); }
+    .veh-filter-chips button.red.on { background:var(--color-danger-soft); color:var(--color-danger); border-color:var(--color-danger); }
+    .veh-filter-chips button.grn.on { background:var(--color-ok-soft); color:var(--color-ok); border-color:var(--color-ok); }
 
-    .veh-item { display:flex; gap:10px; align-items:flex-start; padding:10px; border-radius:10px; cursor:pointer;
+    .veh-item { display:flex; gap:10px; align-items:flex-start; padding:10px; border-radius:var(--radius-md); cursor:pointer;
       border:1px solid transparent; margin-bottom:6px; transition:.15s; }
-    .veh-item:hover { background:rgba(51,65,85,.5); }
-    .veh-item.sel { background:rgba(51,65,85,.8); border-color:#64748b; }
-    .veh-item.alerted { background:rgba(127,29,29,.35); border-color:rgba(248,113,113,.4); }
+    .veh-item:hover { background:var(--color-surface-2); }
+    .veh-item.sel { background:var(--color-primary-soft); border-color:var(--color-primary); }
+    .veh-item.alerted { background:var(--color-danger-soft); border-color:var(--color-danger); }
     .veh-dot { width:12px; height:12px; border-radius:50%; margin-top:4px; flex-shrink:0; }
-    .dot-alert { background:#ef4444; box-shadow:0 0 8px #ef4444; }
-    .dot-moving { background:#60a5fa; }
-    .dot-parked { background:#22c55e; }
-    .dot-idling { background:#fbbf24; }
-    .dot-offline { background:#6b7280; }
-    .veh-reg { font-weight:700; color:#f1f5f9; display:flex; align-items:center; gap:6px; }
-    .warn-ic { color:#f87171; font-size:16px; height:16px; width:16px; }
-    .veh-meta { font-size:.76rem; color:#cbd5e1; }
-    .veh-zone { font-size:.72rem; color:#fb923c; margin-top:2px; }
-    .veh-loading { display:flex; justify-content:center; padding:30px; }
-    .veh-empty { text-align:center; color:#64748b; padding:30px 10px; font-size:.85rem; }
+    .dot-alert { background:var(--color-danger); box-shadow:0 0 0 3px var(--color-danger-soft); }
+    .dot-moving { background:var(--color-info); }
+    .dot-parked { background:var(--color-ok); }
+    .dot-idling { background:var(--color-warn); }
+    .dot-offline { background:var(--color-text-3); }
+    .veh-reg { font-weight:700; color:var(--color-text); display:flex; align-items:center; gap:6px; }
+    .warn-ic { color:var(--color-danger); font-size:var(--text-lg); height:var(--text-lg); width:var(--text-lg); }
+    .veh-meta { font-size:var(--text-xs); color:var(--color-text-2); }
+    .veh-zone { font-size:var(--text-xs); color:var(--color-danger); margin-top:2px; }
 
-    .map-holder { position:relative; border-radius:14px; overflow:hidden; border:1px solid rgba(148,163,184,.15); }
+    .map-holder { position:relative; border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--color-line); }
     .ctrl-map { width:100%; height:100%; min-height:400px; }
     .live-layout .map-holder { height:620px; }
-    .map-legend { position:absolute; bottom:12px; left:12px; background:rgba(15,23,42,.85); border-radius:10px;
-      padding:8px 12px; display:flex; gap:14px; flex-wrap:wrap; font-size:.72rem; color:#cbd5e1; }
+    .map-legend { position:absolute; bottom:12px; left:12px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-md);
+      padding:8px 12px; display:flex; gap:14px; flex-wrap:wrap; font-size:var(--text-xs); color:var(--color-text-2); box-shadow:var(--shadow-md); }
     .map-legend i.lg { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; }
-    .lg.red{background:#ef4444;} .lg.grn{background:#22c55e;} .lg.amb{background:#fbbf24;}
-    .lg.gry{background:#6b7280;} .lg.blu{background:#60a5fa;}
+    .lg.red{background:var(--color-danger);} .lg.grn{background:var(--color-ok);} .lg.amb{background:var(--color-warn);}
+    .lg.gry{background:var(--color-text-3);} .lg.blu{background:var(--color-info);}
 
     /* Archive */
     .archive-pane { padding:16px 4px; }
     .archive-toolbar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
     .archive-toolbar .af { width:180px; }
-    .archive-summary { background:#1e293b; border:1px solid rgba(148,163,184,.2); border-radius:10px; padding:12px 16px; margin-bottom:14px; color:#f1f5f9; }
+    .archive-summary { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-md); padding:12px 16px; margin-bottom:14px; color:var(--color-text); }
     .by-veh-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-bottom:16px; }
-    .by-veh-card { background:#1e293b; border:1px solid rgba(148,163,184,.25); border-radius:12px; padding:12px; }
+    .by-veh-card { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-md); padding:12px; }
     .by-veh-card.clickable { cursor:pointer; transition:transform .12s, border-color .12s, box-shadow .12s; }
-    .by-veh-card.clickable:hover { transform:translateY(-2px); border-color:rgba(96,165,250,.6); box-shadow:0 6px 18px rgba(0,0,0,.35); }
-    .bv-reg { font-weight:700; color:#f1f5f9; }
-    .bv-stats { display:flex; gap:12px; font-size:.8rem; color:#60a5fa; margin:4px 0; }
-    .bv-times { font-size:.72rem; color:#cbd5e1; }
-    .bv-cta { display:flex; align-items:center; gap:4px; font-size:.72rem; color:#60a5fa; margin-top:6px; }
-    .bv-cta mat-icon { font-size:15px; width:15px; height:15px; }
-    .hist-table { width:100%; border-collapse:collapse; font-size:.8rem; background:#0b1220; border-radius:10px; overflow:hidden; }
-    .hist-table th { text-align:left; padding:10px 8px; color:#e2e8f0; font-weight:700; background:#1e293b; border-bottom:1px solid rgba(148,163,184,.3); position:sticky; top:0; }
-    .hist-table td { padding:9px 8px; border-bottom:1px solid rgba(148,163,184,.12); color:#e2e8f0; }
-    .hist-table tbody tr:nth-child(even) td { background:rgba(148,163,184,.05); }
-    .hist-table td.mono { font-weight:700; color:#ffffff; }
-    .hist-table td.loc { max-width:180px; font-size:.72rem; }
-    .hist-table td.harsh { color:#f87171; font-weight:700; }
+    .by-veh-card.clickable:hover { transform:translateY(-2px); border-color:var(--color-primary); box-shadow:var(--shadow-md); }
+    .bv-reg { font-weight:700; color:var(--color-text); }
+    .bv-stats { display:flex; gap:12px; font-size:var(--text-sm); color:var(--color-primary); margin:4px 0; }
+    .bv-times { font-size:var(--text-xs); color:var(--color-text-2); }
+    .bv-cta { display:flex; align-items:center; gap:4px; font-size:var(--text-xs); color:var(--color-primary); margin-top:6px; }
+    .bv-cta mat-icon { font-size:var(--text-md); width:var(--text-md); height:var(--text-md); }
+    .table-wrap { border:1px solid var(--color-line); border-radius:var(--radius-md); overflow:hidden; }
+    .hist-table td.loc { max-width:180px; font-size:var(--text-xs); }
+    .hist-table td.harsh { color:var(--color-danger); font-weight:700; }
 
     /* Geofences */
     .geo-pane { padding:16px 4px; }
     .geo-toolbar { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:14px; }
-    .geo-hint { color:#cbd5e1; font-size:.82rem; margin:0; flex:1; }
+    .geo-hint { color:var(--color-text-2); font-size:var(--text-sm); margin:0; flex:1; }
     .geo-layout { display:grid; grid-template-columns:320px 1fr; gap:14px; height:480px; }
-    .geo-list { background:#0b1220; border:1px solid rgba(148,163,184,.25); border-radius:14px; padding:10px; overflow-y:auto; }
-    .geo-item { display:flex; align-items:center; gap:10px; padding:10px; border-radius:10px; cursor:pointer; }
-    .geo-item:hover { background:rgba(51,65,85,.5); }
+    .geo-list { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-lg); padding:10px; overflow-y:auto; }
+    .geo-item { display:flex; align-items:center; gap:10px; padding:10px; border-radius:var(--radius-md); cursor:pointer; }
+    .geo-item:hover { background:var(--color-surface-2); }
     .geo-swatch { width:14px; height:14px; border-radius:4px; flex-shrink:0; }
-    .geo-name { font-weight:600; color:#f1f5f9; }
-    .geo-meta { font-size:.74rem; color:#cbd5e1; }
+    .geo-name { font-weight:600; color:var(--color-text); }
+    .geo-meta { font-size:var(--text-xs); color:var(--color-text-2); }
     .geo-layout .map-holder { height:480px; }
-    .add-hint { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:#4f46e5; color:#fff;
-      padding:8px 16px; border-radius:20px; font-size:.82rem; box-shadow:0 4px 12px rgba(0,0,0,.3); }
-    .zone-form { margin-top:14px; background:rgba(15,23,42,.6); border:1px solid rgba(148,163,184,.2); border-radius:14px; padding:16px; }
-    .zone-form h4 { margin:0 0 12px; color:#f1f5f9; }
+    .add-hint { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:var(--color-primary); color:var(--color-on-primary);
+      padding:8px 16px; border-radius:20px; font-size:var(--text-sm); box-shadow:var(--shadow-md); }
+    .zone-form { margin-top:14px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-lg); padding:16px; }
+    .zone-form h4 { margin:0 0 12px; color:var(--color-text); }
     .zf-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
     .zf-slider { display:flex; align-items:center; gap:12px; margin:4px 2px 2px; }
-    .zf-slider input[type=range] { flex:1; accent-color:#60a5fa; height:4px; }
-    .zf-slbl { font-size:.78rem; color:#cbd5e1; width:40px; }
-    .zf-sval { font-size:.82rem; color:#f1f5f9; font-weight:700; width:70px; text-align:right; }
+    .zf-slider input[type=range] { flex:1; accent-color:var(--color-primary); height:4px; }
+    .zf-slbl { font-size:var(--text-xs); color:var(--color-text-2); width:40px; }
+    .zf-sval { font-size:var(--text-sm); color:var(--color-text); font-weight:700; width:70px; text-align:right; }
     .zf-actions { display:flex; align-items:center; gap:12px; margin-top:10px; }
-    .zf-coords { font-family:monospace; color:#cbd5e1; flex:1; }
-    .geo-item.editing { background:rgba(129,140,248,.18); border:1px solid rgba(129,140,248,.5); }
+    .zf-coords { font-family:var(--font-mono); color:var(--color-text-2); flex:1; }
+    .geo-item.editing { background:var(--color-primary-soft); border:1px solid var(--color-primary); }
 
     /* Vehicle trips dialog */
-    .tv-overlay { position:fixed; inset:0; background:rgba(2,6,23,.72); backdrop-filter:blur(3px); z-index:1200; display:flex; align-items:center; justify-content:center; padding:24px; }
-    .tv-dialog { width:min(1000px,96vw); max-height:90vh; display:flex; flex-direction:column; background:linear-gradient(160deg,#0f172a,#1e1b4b); border:1px solid rgba(148,163,184,.2); border-radius:18px; box-shadow:0 24px 60px rgba(0,0,0,.5); overflow:hidden; }
-    .tv-header { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid rgba(148,163,184,.15); }
-    .tv-title { display:flex; align-items:center; gap:10px; font-size:1.3rem; font-weight:700; color:#f1f5f9; }
-    .tv-title mat-icon { color:#60a5fa; }
-    .tv-sub { font-size:.8rem; color:#94a3b8; margin-top:2px; }
+    .tv-overlay { position:fixed; inset:0; background:var(--color-scrim); z-index:1200; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .tv-dialog { width:min(1000px,96vw); max-height:90vh; display:flex; flex-direction:column; background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); overflow:hidden; }
+    .tv-header { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--color-line); }
+    .tv-title { display:flex; align-items:center; gap:10px; font-size:var(--text-2xl); font-weight:700; color:var(--color-text); }
+    .tv-title mat-icon { color:var(--color-primary); }
+    .tv-sub { font-size:var(--text-sm); color:var(--color-text-2); margin-top:2px; }
     .tv-summary { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; padding:16px 22px; }
-    .tvs-card { background:rgba(15,23,42,.6); border:1px solid rgba(148,163,184,.15); border-radius:12px; padding:12px; text-align:center; }
-    .tvs-card.warn { border-color:rgba(248,113,113,.5); }
-    .tvs-val { display:block; font-size:1.4rem; font-weight:800; color:#f8fafc; }
-    .tvs-card.warn .tvs-val { color:#f87171; }
-    .tvs-lbl { font-size:.72rem; color:#94a3b8; text-transform:uppercase; letter-spacing:.04em; }
+    .tvs-card { background:var(--color-surface-2); border:1px solid var(--color-line); border-radius:var(--radius-md); padding:12px; text-align:center; }
+    .tvs-card.warn { background:var(--color-danger-soft); border-color:var(--color-danger); }
+    .tvs-val { display:block; font-size:var(--text-3xl); font-weight:800; color:var(--color-text); }
+    .tvs-card.warn .tvs-val { color:var(--color-danger); }
+    .tvs-lbl { font-size:var(--text-xs); color:var(--color-text-2); text-transform:uppercase; letter-spacing:.04em; }
     .tv-body { flex:1; overflow-y:auto; padding:0 22px; }
-    .tv-table { width:100%; border-collapse:collapse; font-size:.8rem; }
-    .tv-table th { text-align:left; padding:9px 8px; color:#e2e8f0; font-weight:700; border-bottom:1px solid rgba(148,163,184,.3); position:sticky; top:0; background:#1e293b; z-index:1; }
-    .tv-table td { padding:9px 8px; border-bottom:1px solid rgba(148,163,184,.12); color:#e2e8f0; }
-    .tv-table tbody tr:nth-child(even) td { background:rgba(148,163,184,.05); }
-    .tv-table td.mono { font-weight:700; color:#ffffff; font-size:.76rem; }
-    .tv-table td.loc { max-width:200px; font-size:.74rem; }
-    .tv-table td.harsh { color:#f87171; font-weight:700; }
-    .tv-footer { display:flex; justify-content:flex-end; gap:12px; padding:16px 22px; border-top:1px solid rgba(148,163,184,.15); }
+    .tv-table td.loc { max-width:200px; font-size:var(--text-xs); }
+    .tv-table td.harsh { color:var(--color-danger); font-weight:700; }
+    .tv-footer { display:flex; justify-content:flex-end; gap:12px; padding:16px 22px; border-top:1px solid var(--color-line); }
 
     /* Map toolbar */
-    .map-toolbar { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,.9);
-      border-radius:10px; padding:8px 12px; display:flex; gap:8px; z-index:100; border:1px solid rgba(148,163,184,.2);
-      box-shadow:0 4px 12px rgba(0,0,0,.35); }
-    .map-toolbar button { font-size:.8rem; }
-    .map-toolbar mat-icon { font-size:18px; width:18px; height:18px; }
+    .map-toolbar { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:var(--color-surface);
+      border-radius:var(--radius-md); padding:8px 12px; display:flex; gap:8px; z-index:100; border:1px solid var(--color-line);
+      box-shadow:var(--shadow-md); }
+    .map-toolbar button { font-size:var(--text-sm); }
+    .map-toolbar mat-icon { font-size:var(--text-xl); width:var(--text-xl); height:var(--text-xl); }
+    .btn-count { margin-left:4px; color:var(--color-primary); font-weight:700; }
 
     /* Cameras */
     .cam-pane { padding:16px 4px; }
     .cam-toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
-    .vision-status { display:flex; align-items:center; gap:10px; padding:12px 16px; border-radius:10px; margin-bottom:14px; font-size:.85rem; }
-    .vision-status.ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#4ade80; }
-    .vision-status.err { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#f87171; }
+    .vision-status { display:flex; align-items:center; gap:10px; padding:12px 16px; border-radius:var(--radius-md); margin-bottom:14px; font-size:var(--text-sm); }
+    .vision-status.ok { background:var(--color-ok-soft); border:1px solid var(--color-ok); color:var(--color-ok); }
+    .vision-status.err { background:var(--color-danger-soft); border:1px solid var(--color-danger); color:var(--color-danger); }
     .cam-layout { display:grid; grid-template-columns:320px 1fr; gap:14px; height:600px; }
-    .cam-list { background:#0b1220; border:1px solid rgba(148,163,184,.25); border-radius:14px; padding:10px; overflow-y:auto; }
-    .cam-viewer { background:#0b1220; border:1px solid rgba(148,163,184,.25); border-radius:14px; padding:14px; display:flex; flex-direction:column; }
-    .cam-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#94a3b8; gap:10px; text-align:center; }
-    .cam-empty mat-icon { font-size:48px; height:48px; width:48px; opacity:.5; }
-    .cam-empty.error { color:#f87171; }
-    .cam-empty.error mat-icon { color:#ef4444; opacity:.8; }
+    .cam-list { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-lg); padding:10px; overflow-y:auto; }
+    .cam-viewer { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-lg); padding:14px; display:flex; flex-direction:column; }
+    .cam-veh-ic { color:var(--color-primary); }
+    .cam-wait { margin:0 0 8px; color:var(--color-text-2); font-size:var(--text-sm); }
+    .cam-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; }
+    .cam-empty mat-icon { font-size:var(--text-4xl); height:var(--text-4xl); width:var(--text-4xl); }
+    .cam-empty.error { color:var(--color-danger); }
+    .cam-error-msg { font-size:var(--text-sm); max-width:500px; }
     .cam-grid { flex:1; display:grid; gap:10px; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); }
     .cam-grid[data-count="1"] { grid-template-columns:1fr; }
-    .cam-tile { background:#000; border:1px solid rgba(148,163,184,.2); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; min-height:240px; }
-    .cam-tile-header { display:flex; align-items:center; gap:6px; padding:8px 12px; background:rgba(15,23,42,.9); color:#e2e8f0; font-size:.82rem; font-weight:600; }
-    .cam-tile-header mat-icon { font-size:16px; height:16px; width:16px; color:#60a5fa; }
-    .cam-stream-info { padding:16px; color:#cbd5e1; font-size:.82rem; text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px; flex:1; justify-content:center; }
-    .cam-stream-info code { background:rgba(148,163,184,.15); padding:4px 8px; border-radius:4px; font-size:.7rem; word-break:break-all; }
+    .cam-tile { background:var(--color-surface-2); border:1px solid var(--color-line); border-radius:var(--radius-md); overflow:hidden; display:flex; flex-direction:column; min-height:240px; }
+    .cam-tile-header { display:flex; align-items:center; gap:6px; padding:8px 12px; background:var(--color-surface); border-bottom:1px solid var(--color-line); color:var(--color-text); font-size:var(--text-sm); font-weight:600; }
+    .cam-tile-header mat-icon { font-size:var(--text-lg); height:var(--text-lg); width:var(--text-lg); color:var(--color-primary); }
+    .cam-media { width:100%; height:100%; background:var(--color-surface-3); border-radius:var(--radius-control); }
+    img.cam-media { object-fit:cover; }
+    .cam-stream-info { padding:16px; color:var(--color-text-2); font-size:var(--text-sm); text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px; flex:1; justify-content:center; }
+    .cam-stream-info code { background:var(--color-surface); padding:4px 8px; border-radius:4px; font-family:var(--font-mono); font-size:var(--text-xs); word-break:break-all; }
+    .cam-note { font-size:var(--text-xs); }
   `]
 })
 export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -657,6 +657,8 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
 
   private apiUrl = environment.apiUrl;
   private readonly mapsLoader = inject(GoogleMapsLoaderService);
+  private readonly confirmDialog = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
 
   curfewStart = 18;
   curfewEnd = 5;
@@ -747,7 +749,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
     });
   });
 
-  constructor(private http: HttpClient, private zone: NgZone, private snack: MatSnackBar) {}
+  constructor(private http: HttpClient, private zone: NgZone) {}
 
   ngOnInit(): void {
     this.loadGoogleMaps()
@@ -779,7 +781,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
           this.loading.set(false);
           this.renderMarkers();
         },
-        error: () => { this.loading.set(false); this.snack.open('Failed to load fleet status', 'Close', { duration: 3000 }); }
+        error: () => { this.loading.set(false); this.toast.error('Failed to load fleet status'); }
       });
   }
 
@@ -798,7 +800,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
         this.archiveLoaded.set(true);
         this.archiveLoading.set(false);
       },
-      error: () => { this.archiveLoading.set(false); this.snack.open('Failed to load history', 'Close', { duration: 3000 }); }
+      error: () => { this.archiveLoading.set(false); this.toast.error('Failed to load history'); }
     });
   }
 
@@ -864,12 +866,12 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, reg.substring(0, 28));
     XLSX.writeFile(wb, `Trips_${reg}_${this.dateStr()}.xlsx`);
-    this.snack.open('Exported to Excel', 'Close', { duration: 2500 });
+    this.toast.done('Exported to Excel');
   }
 
   exportArchiveExcel(): void {
     const events = this.archiveEvents();
-    if (events.length === 0) { this.snack.open('Nothing to export', 'Close', { duration: 2500 }); return; }
+    if (events.length === 0) { this.toast.info('Nothing to export'); return; }
 
     // Sheet 1: all movements
     const detail = events.map((e, i) => ({
@@ -903,7 +905,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
     XLSX.utils.book_append_sheet(wb, wsDetail, 'All Movements');
     const window = this.archiveCurfewOnly ? 'Curfew' : 'FullDay';
     XLSX.writeFile(wb, `MovementHistory_${this.dateStr()}_${window}.xlsx`);
-    this.snack.open('Exported to Excel', 'Close', { duration: 2500 });
+    this.toast.done('Exported to Excel');
   }
 
   loadGeofences(): void {
@@ -1083,7 +1085,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
     }
   }
 
-  startAddZone(): void { this.addingZone.set(true); this.snack.open('Click the map to place the zone', 'Close', { duration: 2500 }); }
+  startAddZone(): void { this.addingZone.set(true); this.toast.info('Click the map to place the zone'); }
 
   private zoneColor(type: string): string {
     switch (type) {
@@ -1151,17 +1153,17 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
 
   saveZone(): void {
     const z = this.draftZone(); if (!z) return;
-    if (!z.name.trim()) { this.snack.open('Enter a zone name', 'Close', { duration: 2500 }); return; }
+    if (!z.name.trim()) { this.toast.warn('Enter a zone name'); return; }
     const isEdit = !!z.id;
     const req = isEdit
       ? this.http.put<Geofence>(`${this.apiUrl}/logistics/controller/geofences/${z.id}`, z)
       : this.http.post<Geofence>(`${this.apiUrl}/logistics/controller/geofences`, z);
     req.subscribe({
       next: () => {
-        this.snack.open(isEdit ? 'Zone updated' : 'Zone saved', 'Close', { duration: 2000 });
+        this.toast.done(isEdit ? 'Zone updated' : 'Zone saved');
         this.cancelDraft(); this.loadGeofences();
       },
-      error: () => this.snack.open(isEdit ? 'Failed to update zone' : 'Failed to save zone', 'Close', { duration: 3000 })
+      error: () => this.toast.error(isEdit ? 'Failed to update zone' : 'Failed to save zone')
     });
   }
 
@@ -1170,12 +1172,17 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
     if (this.draftCircle) { this.draftCircle.setMap(null); this.draftCircle = null; }
   }
 
-  deleteZone(z: Geofence, ev: Event): void {
+  async deleteZone(z: Geofence, ev: Event): Promise<void> {
     ev.stopPropagation();
-    if (!confirm(`Delete zone "${z.name}"?`)) return;
+    if (!(await this.confirmDialog.ask({
+      title: `Delete zone "${z.name}"?`,
+      message: 'The geofence is removed from the map.',
+      confirmText: 'Delete zone',
+      danger: true
+    }))) return;
     this.http.delete(`${this.apiUrl}/logistics/controller/geofences/${z.id}`).subscribe({
-      next: () => { this.snack.open('Zone deleted', 'Close', { duration: 2000 }); this.loadGeofences(); },
-      error: () => this.snack.open('Failed to delete', 'Close', { duration: 3000 })
+      next: () => { this.toast.done('Zone deleted'); this.loadGeofences(); },
+      error: () => this.toast.error('Failed to delete')
     });
   }
 
@@ -1198,9 +1205,9 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
         this.fuelingPoints.set(points);
         this.renderFuelingPoints();
         this.fuelingPointsVisible.set(true);
-        this.snack.open(`${points.length} fuel stations loaded`, 'Close', { duration: 2000 });
+        this.toast.done(`${points.length} fuel stations loaded`);
       },
-      error: () => this.snack.open('Failed to load fuel stations', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to load fuel stations')
     });
   }
 
@@ -1275,9 +1282,9 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
         this.renderActiveLoadRoutes();
         this.activeLoadsVisible.set(true);
         const totalWaypoints = (routes || []).reduce((s, r) => s + (r.waypoints?.length || 0), 0);
-        this.snack.open(`${routes?.length || 0} active load routes (${totalWaypoints} waypoints)`, 'Close', { duration: 2500 });
+        this.toast.done(`${routes?.length || 0} active load routes (${totalWaypoints} waypoints)`);
       },
-      error: () => this.snack.open('Failed to load active load routes', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to load active load routes')
     });
   }
 
@@ -1353,9 +1360,9 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
         marker.addListener('click', () => {
           info.setContent(`<div style="color:#111;min-width:220px;font-family:sans-serif">
             <div style="font-weight:700;font-size:.95rem;margin-bottom:4px;">${route.loadNumber}</div>
-            <div style="font-size:.8rem;color:#555;margin-bottom:6px;">${route.customerName || ''}</div>
+            <div style="font-size:.8rem;color:var(--color-text-2);margin-bottom:6px;">${route.customerName || ''}</div>
             <div><strong>${w.type?.toUpperCase() || 'STOP'}</strong>: ${w.label}</div>
-            <div style="font-size:.75rem;margin-top:6px;color:#666;">
+            <div style="font-size:.75rem;margin-top:6px;color:var(--color-text-2);">
               Vehicle: ${route.vehicleReg || 'Unassigned'}<br>
               Driver: ${route.driverName || 'Unassigned'}<br>
               Status: ${route.status}
@@ -1392,7 +1399,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
       next: (v) => { this.cameraVehicles.set(v || []); this.cameraVehiclesLoading.set(false); },
       error: () => {
         this.cameraVehiclesLoading.set(false);
-        this.snack.open('Failed to load camera vehicles', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load camera vehicles');
       }
     });
   }
@@ -1420,7 +1427,7 @@ export class ControllerMonitoringComponent implements OnInit, AfterViewInit, OnD
 
   copyStreamUrl(url: string): void {
     navigator.clipboard.writeText(url).then(() => {
-      this.snack.open('Stream URL copied', 'Close', { duration: 2000 });
+      this.toast.done('Stream URL copied');
     });
   }
 

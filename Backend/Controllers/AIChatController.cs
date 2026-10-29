@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Services;
@@ -277,6 +278,7 @@ namespace ProjectTracker.API.Controllers
                 }
 
                 var fullResponse = new StringBuilder();
+                var actionsAlreadyHandled = false;
 
                 // Provider priority: LocalLLM -> Claude -> Rule-based fallback
                 var localLlmEnabled = _configuration.GetValue<bool>("LocalLlm:Enabled", true);
@@ -285,12 +287,41 @@ namespace ProjectTracker.API.Controllers
                 if (useLocalLlm)
                 {
                     _logger.LogInformation("Session chat: Using Local LLM for session {SessionId}, user {User}, page {Page}, content {ContentLen} chars", sessionId, userContext?.FullName ?? "unknown", pageContext ?? "none", pageContent?.Length ?? 0);
-                    await foreach (var token in _localLlmService.ChatStreamingWithSessionAsync(sessionId, userMessage, userContext, pageContext, pageContent, HttpContext.RequestAborted))
+                    await foreach (var ev in _localLlmService.ChatStreamingWithSessionRichAsync(sessionId, userMessage, userContext, pageContext, pageContent, HttpContext.RequestAborted))
                     {
-                        fullResponse.Append(token);
-                        await WriteSSEToken(token);
+                        if (ev.Kind == LlmStreamEventKind.Thinking) { await WriteSSEThinking(ev.Text); continue; }
+                        fullResponse.Append(ev.Text);
+                        await WriteSSEToken(ev.Text);
                     }
                     await WriteSSESessionId(sessionId);
+
+                    // ── Agentic tool loop ─────────────────────────────────────────
+                    // Execute any [ACTION] tags, feed the results back to Welly so he can
+                    // reason over them and answer naturally, repeat if he needs another step.
+                    if (userContext != null)
+                    {
+                        actionsAlreadyHandled = true;
+                        var think = LocalLlmService.ShouldThink(userMessage);
+                        var text = fullResponse.ToString();
+                        for (var iteration = 0; iteration < MaxToolIterations; iteration++)
+                        {
+                            var toolResults = await ExecuteAndStreamActions(text, userContext, summarized: true);
+                            if (toolResults == null) break;
+
+                            await WriteSSEStatus("Welly is reviewing the results…");
+                            await WriteSSEToken("\n\n"); // visual break between the action line and the final answer
+
+                            var followUp = new StringBuilder();
+                            await foreach (var ev in _localLlmService.ContinueWithToolResultsAsync(sessionId, toolResults, userContext, think, HttpContext.RequestAborted))
+                            {
+                                if (ev.Kind == LlmStreamEventKind.Thinking) { await WriteSSEThinking(ev.Text); continue; }
+                                followUp.Append(ev.Text);
+                                fullResponse.Append(ev.Text);
+                                await WriteSSEToken(ev.Text);
+                            }
+                            text = followUp.ToString();
+                        }
+                    }
                 }
                 else
                 {
@@ -331,8 +362,8 @@ namespace ProjectTracker.API.Controllers
                     }
                 }
 
-                // Process any AI-requested actions from the response
-                if (userContext != null)
+                // Process any AI-requested actions from the response (non-LocalLLM providers)
+                if (userContext != null && !actionsAlreadyHandled)
                 {
                     await ProcessAndStreamActions(fullResponse.ToString(), userContext);
                 }
@@ -2031,6 +2062,22 @@ Use ZAR (R) currency. Focus on actionable product insights.",
             await Response.Body.FlushAsync();
         }
 
+        /// <summary>Model reasoning tokens — shown in a collapsible "Welly thought…" panel, never part of the answer.</summary>
+        private async Task WriteSSEThinking(string text)
+        {
+            var data = JsonSerializer.Serialize(new { thinking = text });
+            await Response.WriteAsync($"data: {data}\n\n");
+            await Response.Body.FlushAsync();
+        }
+
+        /// <summary>Short progress note ("Checking fleet status…") shown as a status chip while Welly works.</summary>
+        private async Task WriteSSEStatus(string text)
+        {
+            var data = JsonSerializer.Serialize(new { status = text });
+            await Response.WriteAsync($"data: {data}\n\n");
+            await Response.Body.FlushAsync();
+        }
+
         private async Task WriteSSEMessage(string message)
         {
             var data = JsonSerializer.Serialize(new { message = message });
@@ -2088,6 +2135,88 @@ Use ZAR (R) currency. Focus on actionable product insights.",
                 return null;
             }
         }
+
+        private const int MaxToolIterations = 3;
+
+        private static readonly Dictionary<string, string> ActionStatusLabels = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SEARCH_WEB"] = "Searching the web…",
+            ["FLEET_STATUS"] = "Checking fleet status…",
+            ["TRACK_VEHICLE"] = "Locating vehicle…",
+            ["SYSTEM_OVERVIEW"] = "Gathering system overview…",
+            ["LOOKUP_ADDRESS"] = "Looking up address…",
+            ["TRIPSHEET_GET_WAREHOUSES"] = "Fetching warehouses…",
+            ["TRIPSHEET_GET_INVOICES"] = "Fetching pending invoices…",
+            ["TRIPSHEET_GET_DRIVERS"] = "Fetching drivers…",
+            ["TRIPSHEET_GET_VEHICLES"] = "Fetching vehicles…",
+            ["TRIPSHEET_PREVIEW"] = "Previewing route…",
+            ["TRIPSHEET_CREATE"] = "Creating tripsheet…",
+            ["CONTROLLER_NIGHT_WATCH"] = "Checking night watch…",
+            ["CONTROLLER_MOVEMENT_HISTORY"] = "Pulling movement history…",
+            ["CONTROLLER_GEOFENCES"] = "Loading geofences…",
+            ["CREATE_TICKET"] = "Logging ticket…",
+            ["CREATE_MEETING"] = "Scheduling meeting…",
+            ["SEND_EMAIL"] = "Sending email…",
+            ["ASSIGN_TODO"] = "Assigning task…",
+            ["CREATE_ANNOUNCEMENT"] = "Posting announcement…",
+            ["BACKUP_DATABASE"] = "Backing up database…",
+        };
+
+        private static readonly Regex ActionTagPattern = new(@"\[ACTION:(\w+)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// Execute action tags found in <paramref name="responseText"/>, stream each result to the
+        /// client as an action event, and return a text block of results for the tool loop.
+        /// Returns null when no actions were present.
+        /// </summary>
+        private async Task<string?> ExecuteAndStreamActions(string responseText, ChatUserContext userContext, bool summarized)
+        {
+            responseText = AIActionService.NormalizeActionSyntax(responseText);
+            if (string.IsNullOrEmpty(responseText) || !ActionTagPattern.IsMatch(responseText)) return null;
+
+            var firstType = ActionTagPattern.Match(responseText).Groups[1].Value.ToUpperInvariant();
+            await WriteSSEStatus(ActionStatusLabels.TryGetValue(firstType, out var label) ? label : "Working on it…");
+
+            List<AIActionResult> actions;
+            try
+            {
+                actions = await _actionService.ProcessActionsAsync(responseText, userContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing AI actions");
+                return null;
+            }
+            if (actions.Count == 0) return null;
+
+            var sb = new StringBuilder();
+            foreach (var action in actions)
+            {
+                var data = JsonSerializer.Serialize(new
+                {
+                    action = new
+                    {
+                        type = action.ActionType,
+                        success = action.Success,
+                        message = action.Message,
+                        entityId = action.EntityId,
+                        summarized
+                    }
+                });
+                await Response.WriteAsync($"data: {data}\n\n");
+                await Response.Body.FlushAsync();
+
+                sb.AppendLine($"### {action.ActionType} — {(action.Success ? "OK" : "FAILED")}");
+                if (action.EntityId.HasValue) sb.AppendLine($"EntityId: {action.EntityId}");
+                var msg = action.Message ?? string.Empty;
+                if (msg.Length > MaxToolResultChars) msg = msg.Substring(0, MaxToolResultChars) + "\n[truncated]";
+                sb.AppendLine(msg);
+                sb.AppendLine();
+            }
+            return sb.ToString();
+        }
+
+        private const int MaxToolResultChars = 6000;
 
         /// <summary>
         /// Process action tags in AI response and stream action results as SSE events

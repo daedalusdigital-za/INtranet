@@ -16,6 +16,7 @@ import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { AnnouncementService, AnnouncementListItem } from '../../services/announcement.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -34,13 +35,15 @@ import { environment } from '../../../environments/environment';
     MatInputModule,
     MatDialogModule,
     FormsModule,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent
   ],
   template: `
     <app-navbar></app-navbar>
 
     <div class="dashboard-container">
-      <h1>Welcome to Promed Intranet</h1>
+      <app-page-header [crumbs]="['Workspace']" title="Company news"
+                       subtitle="Announcements, attendance, birthdays and weather"></app-page-header>
 
       <!-- Information Widgets -->
       <div class="widgets-grid">
@@ -48,11 +51,11 @@ import { environment } from '../../../environments/environment';
         <!-- Company Announcements -->
         <mat-card class="widget announcement-widget">
           <mat-card-header>
-            <div class="widget-icon" style="background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);">
+            <div class="widget-icon" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);">
               <mat-icon>campaign</mat-icon>
             </div>
             <mat-card-title>Company Announcements</mat-card-title>
-            <mat-card-subtitle style="color: #666; margin-top: 4px;">Latest updates and news</mat-card-subtitle>
+            <mat-card-subtitle style="color: var(--color-text-2); margin-top: 4px;">Latest updates and news</mat-card-subtitle>
           </mat-card-header>
           <mat-card-content>
             <div class="announcements-list">
@@ -322,20 +325,8 @@ import { environment } from '../../../environments/environment';
       display: block;
       min-height: 100vh;
       position: relative;
-      /* Smooth, infinitely-looping animated gradient (pure CSS, no JS) */
-      background: linear-gradient(
-        -45deg,
-        #4facfe, #1e3c72, #4a1c8c, #a01a5c, #2b5876, #4facfe
-      );
-      background-size: 400% 400%;
-      animation: pageGradientShift 45s ease infinite;
+      background: var(--color-canvas);
       overflow-x: hidden;
-    }
-
-    @keyframes pageGradientShift {
-      0%   { background-position: 0% 50%; }
-      50%  { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
     }
 
     .spacer {
@@ -343,19 +334,10 @@ import { environment } from '../../../environments/environment';
     }
 
     .dashboard-container {
-      padding: 80px;
+      padding: var(--space-5) var(--space-6) var(--space-8);
       max-width: 1400px;
       margin: 0 auto;
-      min-height: calc(100vh - 64px);
       background: transparent;
-    }
-
-    h1 {
-      margin-bottom: 24px;
-      color: #ffffff;
-      font-size: 2.5rem;
-      font-weight: 600;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
 
@@ -367,7 +349,7 @@ import { environment } from '../../../environments/environment';
       right: 100px;
       width: 420px;
       max-height: 600px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
       z-index: 1000;
@@ -381,15 +363,15 @@ import { environment } from '../../../environments/environment';
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      border-bottom: 1px solid #e0e0e0;
-      background: #f5f5f5;
+      border-bottom: 1px solid var(--color-line);
+      background: var(--color-surface-2);
     }
 
     .notification-header h3 {
       margin: 0;
       font-size: 18px;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .notification-list {
@@ -404,7 +386,7 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #9e9e9e;
+      color: var(--color-text-3);
       text-align: center;
     }
 
@@ -420,17 +402,17 @@ import { environment } from '../../../environments/environment';
       display: flex;
       gap: 12px;
       padding: 16px 20px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--color-line);
       transition: background-color 0.2s;
       cursor: pointer;
     }
 
     .notification-item:hover {
-      background-color: #fafafa;
+      background-color: var(--color-canvas);
     }
 
     .notification-item.unread {
-      background-color: #e3f2fd;
+      background-color: var(--color-primary-soft);
     }
 
     .notification-item.unread:hover {
@@ -455,26 +437,26 @@ import { environment } from '../../../environments/environment';
     .notification-title {
       font-weight: 600;
       font-size: 14px;
-      color: #333;
+      color: var(--color-text);
       margin: 0 0 4px 0;
     }
 
     .notification-message {
       font-size: 13px;
-      color: #666;
+      color: var(--color-text-2);
       margin: 0 0 8px 0;
       line-height: 1.4;
     }
 
     .notification-time {
       font-size: 12px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .notification-footer {
       padding: 12px 20px;
-      border-top: 1px solid #e0e0e0;
-      background: #f5f5f5;
+      border-top: 1px solid var(--color-line);
+      background: var(--color-surface-2);
       text-align: center;
     }
 
@@ -485,7 +467,7 @@ import { environment } from '../../../environments/environment';
       right: 150px;
       width: 400px;
       max-height: 550px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
       z-index: 1001;
@@ -499,8 +481,8 @@ import { environment } from '../../../environments/environment';
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      border-bottom: 1px solid var(--color-line);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
     }
 
     .messages-header h3 {
@@ -522,7 +504,7 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #9e9e9e;
+      color: var(--color-text-3);
       text-align: center;
     }
 
@@ -542,13 +524,13 @@ import { environment } from '../../../environments/environment';
       display: flex;
       gap: 12px;
       padding: 14px 20px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--color-line);
       transition: background-color 0.2s;
       cursor: pointer;
     }
 
     .message-item:hover {
-      background-color: #f5f5f5;
+      background-color: var(--color-surface-2);
     }
 
     .message-item.unread {
@@ -563,7 +545,7 @@ import { environment } from '../../../environments/environment';
       width: 48px;
       height: 48px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -590,11 +572,11 @@ import { environment } from '../../../environments/environment';
     .message-sender {
       font-weight: 600;
       font-size: 14px;
-      color: #333;
+      color: var(--color-text);
     }
 
     .unread-badge {
-      background: #2563eb;
+      background: var(--color-primary);
       color: white;
       font-size: 11px;
       font-weight: 600;
@@ -604,7 +586,7 @@ import { environment } from '../../../environments/environment';
 
     .message-preview {
       font-size: 13px;
-      color: #666;
+      color: var(--color-text-2);
       margin: 0 0 4px 0;
       white-space: nowrap;
       overflow: hidden;
@@ -613,13 +595,13 @@ import { environment } from '../../../environments/environment';
 
     .message-time {
       font-size: 11px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .messages-footer {
       padding: 12px 20px;
-      border-top: 1px solid #e0e0e0;
-      background: #f5f5f5;
+      border-top: 1px solid var(--color-line);
+      background: var(--color-surface-2);
       text-align: center;
     }
 
@@ -644,7 +626,7 @@ import { environment } from '../../../environments/environment';
     }
 
     .widget {
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       overflow: hidden;
@@ -684,7 +666,7 @@ import { environment } from '../../../environments/environment';
     .widget ::ng-deep .mat-mdc-card-title {
       font-size: 1.3rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       margin: 0;
     }
 
@@ -695,7 +677,7 @@ import { environment } from '../../../environments/environment';
     /* Company Announcements Widget */
     .announcement-widget {
       grid-column: span 2;
-      background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+      background: linear-gradient(135deg, var(--color-surface) 0%, #f8f9ff 100%);
     }
 
     .announcement-widget mat-card-header {
@@ -712,7 +694,7 @@ import { environment } from '../../../environments/environment';
       display: flex;
       gap: 16px;
       padding: 20px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       border: 2px solid transparent;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -728,12 +710,12 @@ import { environment } from '../../../environments/environment';
       top: 0;
       bottom: 0;
       width: 5px;
-      background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       transition: width 0.3s;
     }
 
     .announcement-item.high-priority {
-      background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+      background: linear-gradient(135deg, var(--color-danger-soft) 0%, #ffe5e5 100%);
       border-color: rgba(255, 107, 107, 0.2);
     }
 
@@ -742,12 +724,12 @@ import { environment } from '../../../environments/environment';
     }
 
     .announcement-item.normal-priority {
-      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
       border-color: rgba(59, 130, 246, 0.2);
     }
 
     .announcement-item.normal-priority::before {
-      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary) 100%);
     }
 
     .announcement-item:hover {
@@ -767,7 +749,7 @@ import { environment } from '../../../environments/environment';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
     }
@@ -810,7 +792,7 @@ import { environment } from '../../../environments/environment';
 
     .announcement-header h4 {
       margin: 0;
-      color: #1a1a1a;
+      color: var(--color-text);
       font-size: 17px;
       font-weight: 700;
       line-height: 1.4;
@@ -819,7 +801,7 @@ import { environment } from '../../../environments/environment';
 
     .announcement-text {
       margin: 0;
-      color: #4a5568;
+      color: var(--color-text-2);
       font-size: 14px;
       line-height: 1.7;
       display: -webkit-box;
@@ -840,7 +822,7 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       gap: 6px;
       font-size: 13px;
-      color: #64748b;
+      color: var(--color-text-3);
       font-weight: 500;
       padding: 6px 12px;
       background: rgba(255, 255, 255, 0.7);
@@ -879,7 +861,7 @@ import { environment } from '../../../environments/environment';
     }
 
     .normal-chip {
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%) !important;
       color: white !important;
       box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
     }
@@ -934,7 +916,7 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       gap: 12px;
       padding: 8px;
-      background: #f8f9fa;
+      background: var(--color-canvas);
       border-radius: 8px;
       transition: all 0.2s;
     }
@@ -948,7 +930,7 @@ import { environment } from '../../../environments/environment';
       width: 50px;
       height: 50px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -976,7 +958,7 @@ import { environment } from '../../../environments/environment';
       margin: 0 0 4px 0;
       font-size: 15px;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .bird-time {
@@ -1012,7 +994,7 @@ import { environment } from '../../../environments/environment';
       height: 100px;
       margin: 0 auto 16px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1030,13 +1012,13 @@ import { environment } from '../../../environments/environment';
       margin: 0 0 8px 0;
       font-size: 20px;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     /* Hero Card (Rotating Welcome/Birthday) */
     .hero-card {
       grid-column: span 1;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       min-height: 220px;
       display: flex;
@@ -1114,7 +1096,7 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       justify-content: center;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-      border: 3px solid white;
+      border: 3px solid var(--color-surface);
     }
 
     .hero-photo.birthday-glow {
@@ -1300,7 +1282,7 @@ import { environment } from '../../../environments/environment';
     }
 
     .weather-indicators .indicator.active {
-      background: white;
+      background: var(--color-surface);
       transform: scale(1.3);
     }
 
@@ -2063,7 +2045,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
           <mat-icon>campaign</mat-icon>
           All Announcements
         </h2>
-        <button mat-icon-button (click)="dialogRef.close()">
+        <button aria-label="Close" mat-icon-button (click)="dialogRef.close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -2152,7 +2134,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
                       </div>
                     </div>
                     <div class="card-action">
-                      <button mat-icon-button color="primary" matTooltip="Read full announcement">
+                      <button aria-label="Read full announcement" mat-icon-button color="primary" matTooltip="Read full announcement">
                         <mat-icon>chevron_right</mat-icon>
                       </button>
                     </div>
@@ -2177,8 +2159,8 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      border-bottom: 1px solid var(--color-line);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
     }
@@ -2210,7 +2192,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     .announcement-card {
       cursor: pointer;
       transition: all 0.2s ease;
-      border-left: 4px solid #e0e0e0;
+      border-left: 4px solid var(--color-line);
     }
 
     .announcement-card:hover {
@@ -2219,12 +2201,12 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }
 
     .announcement-card.urgent {
-      border-left-color: #f44336;
+      border-left-color: var(--color-danger);
       background: linear-gradient(90deg, rgba(244,67,54,0.05) 0%, transparent 100%);
     }
 
     .announcement-card.high {
-      border-left-color: #ff9800;
+      border-left-color: var(--color-warn);
       background: linear-gradient(90deg, rgba(255,152,0,0.05) 0%, transparent 100%);
     }
 
@@ -2239,7 +2221,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2247,7 +2229,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }
 
     .card-icon.urgent {
-      background: linear-gradient(135deg, #ff5252 0%, #f44336 100%);
+      background: linear-gradient(135deg, #ff5252 0%, var(--color-danger) 100%);
       color: white;
     }
 
@@ -2273,12 +2255,12 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       margin: 0;
       font-size: 1rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .card-preview {
       margin: 0 0 12px 0;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 0.9rem;
       line-height: 1.5;
     }
@@ -2287,7 +2269,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       display: flex;
       gap: 16px;
       font-size: 0.8rem;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .card-meta span {
@@ -2313,17 +2295,17 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }
 
     .priority-chip.urgent {
-      background: #f44336 !important;
+      background: var(--color-danger) !important;
       color: white !important;
     }
 
     .priority-chip.high {
-      background: #ff9800 !important;
+      background: var(--color-warn) !important;
       color: white !important;
     }
 
     .priority-chip.normal {
-      background: #2196f3 !important;
+      background: var(--color-primary) !important;
       color: white !important;
     }
 
@@ -2339,7 +2321,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
 
     .back-button {
       margin-bottom: 16px;
-      color: #2563eb;
+      color: var(--color-primary);
     }
 
     .detail-header {
@@ -2352,14 +2334,14 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     .detail-header h3 {
       margin: 0;
       font-size: 1.5rem;
-      color: #333;
+      color: var(--color-text);
     }
 
     .detail-meta {
       display: flex;
       gap: 24px;
       padding: 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       margin-bottom: 24px;
     }
@@ -2368,7 +2350,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 0.9rem;
     }
 
@@ -2376,13 +2358,13 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #2563eb;
+      color: var(--color-primary);
     }
 
     .detail-content {
       font-size: 1rem;
       line-height: 1.8;
-      color: #333;
+      color: var(--color-text);
       white-space: pre-wrap;
     }
 
@@ -2392,7 +2374,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       align-items: center;
       justify-content: center;
       padding: 48px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .no-announcements mat-icon {

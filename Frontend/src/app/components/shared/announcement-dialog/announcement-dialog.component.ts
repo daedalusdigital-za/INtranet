@@ -37,7 +37,7 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
           <mat-icon class="header-icon">campaign</mat-icon>
           <h2>Create Announcement</h2>
         </div>
-        <button mat-icon-button (click)="onCancel()" class="close-btn">
+        <button aria-label="Close" mat-icon-button (click)="onCancel()" class="close-btn">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -148,7 +148,7 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
       justify-content: space-between;
       align-items: center;
       padding: 24px 24px 16px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
     }
 
     .header-content {
@@ -158,7 +158,7 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
     }
 
     .header-icon {
-      color: #1976d2;
+      color: var(--color-primary);
       font-size: 28px;
       width: 28px;
       height: 28px;
@@ -168,11 +168,11 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
       margin: 0;
       font-size: 20px;
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
     }
 
     .close-btn {
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .dialog-content {
@@ -208,19 +208,19 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
     }
 
     .priority-icon.low {
-      color: #4caf50;
+      color: var(--color-ok);
     }
 
     .priority-icon.normal {
-      color: #2196f3;
+      color: var(--color-primary);
     }
 
     .priority-icon.high {
-      color: #ff9800;
+      color: var(--color-warn);
     }
 
     .priority-icon.urgent {
-      color: #f44336;
+      color: var(--color-danger);
     }
 
     .dialog-actions {
@@ -228,7 +228,7 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
 
     .dialog-actions button mat-spinner {

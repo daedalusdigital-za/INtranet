@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, Inject, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, HostListener, Inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -11,7 +11,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -19,6 +18,10 @@ import { MatDividerModule } from '@angular/material/divider';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, DepartmentInfo, ShareUser } from '../../services/documents.service';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 @Component({
   selector: 'app-department-hub',
   standalone: true,
@@ -35,12 +38,13 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     MatProgressBarModule,
     MatMenuModule,
     MatTooltipModule,
-    MatSnackBarModule,
     MatSelectModule,
     MatCheckboxModule,
     MatProgressSpinnerModule,
     MatDividerModule,
-    NavbarComponent
+    NavbarComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -50,11 +54,11 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       <div class="header-section">
         <div class="header-top">
           <div class="breadcrumb-nav">
-            <button mat-icon-button class="back-btn" routerLink="/documents" matTooltip="Back to Documents">
+            <button aria-label="Back to Documents" mat-icon-button class="back-btn" routerLink="/documents" matTooltip="Back to Documents">
               <mat-icon>arrow_back</mat-icon>
             </button>
             @if (breadcrumbs.length > 0) {
-              <button mat-icon-button class="back-btn" (click)="navigateUp()" matTooltip="Up one level">
+              <button aria-label="Up one level" mat-icon-button class="back-btn" (click)="navigateUp()" matTooltip="Up one level">
                 <mat-icon>arrow_upward</mat-icon>
               </button>
             }
@@ -90,7 +94,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
                    (input)="onSearch()"
                    (keyup.escape)="clearSearch()">
             @if (searchQuery) {
-              <button mat-icon-button (click)="clearSearch()" class="clear-btn">
+              <button aria-label="Close" mat-icon-button (click)="clearSearch()" class="clear-btn">
                 <mat-icon>close</mat-icon>
               </button>
             }
@@ -98,27 +102,27 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
 
           <div class="toolbar-actions">
             <div class="view-toggle">
-              <button mat-icon-button [class.active]="viewMode === 'grid'" (click)="viewMode = 'grid'" matTooltip="Grid View">
+              <button aria-label="Grid View" mat-icon-button [class.active]="viewMode === 'grid'" (click)="viewMode = 'grid'" matTooltip="Grid View">
                 <mat-icon>grid_view</mat-icon>
               </button>
-              <button mat-icon-button [class.active]="viewMode === 'list'" (click)="viewMode = 'list'" matTooltip="List View">
+              <button aria-label="List View" mat-icon-button [class.active]="viewMode === 'list'" (click)="viewMode = 'list'" matTooltip="List View">
                 <mat-icon>view_list</mat-icon>
               </button>
             </div>
 
             <div class="action-buttons">
-              <button mat-raised-button class="upload-btn" (click)="fileInput.click()">
+              <button mat-flat-button color="primary" (click)="fileInput.click()">
                 <mat-icon>cloud_upload</mat-icon>
                 Upload Files
               </button>
               <input type="file" #fileInput hidden multiple (change)="onFileSelected($event)">
 
-              <button mat-raised-button class="folder-btn" (click)="showNewFolderDialog()">
+              <button mat-stroked-button (click)="showNewFolderDialog()">
                 <mat-icon>create_new_folder</mat-icon>
                 New Folder
               </button>
 
-              <button mat-icon-button [matMenuTriggerFor]="moreMenu" matTooltip="More Options">
+              <button aria-label="More Options" mat-icon-button [matMenuTriggerFor]="moreMenu" matTooltip="More Options">
                 <mat-icon>more_vert</mat-icon>
               </button>
               <mat-menu #moreMenu="matMenu">
@@ -182,7 +186,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
             <mat-label>Folder Name</mat-label>
             <input matInput [(ngModel)]="newFolderName" (keyup.enter)="createFolder()">
           </mat-form-field>
-          <button mat-raised-button color="primary" (click)="createFolder()">Create</button>
+          <button mat-flat-button color="primary" (click)="createFolder()">Create</button>
           <button mat-button (click)="showNewFolder = false">Cancel</button>
         </div>
       }
@@ -191,58 +195,32 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       <div class="files-container">
         <!-- Empty State -->
         @if (files.length === 0 && !isLoading) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <mat-icon>folder_open</mat-icon>
-            </div>
-            <h2>This folder is empty</h2>
-            <p>Upload files or create folders to get started</p>
-            <div class="empty-actions">
-              <button mat-raised-button class="upload-btn" (click)="fileInput.click()">
-                <mat-icon>cloud_upload</mat-icon>
-                Upload Files
-              </button>
-              <button mat-raised-button class="folder-btn" (click)="showNewFolderDialog()">
-                <mat-icon>create_new_folder</mat-icon>
-                New Folder
-              </button>
-            </div>
+          <div class="empty-panel">
+            @if (searchQuery) {
+              <app-empty-state icon="search_off" [title]="'Nothing matches ' + searchQuery"
+                message="No files or folders in this department match the search.">
+                <button mat-stroked-button (click)="clearSearch()">Clear the search</button>
+              </app-empty-state>
+            } @else {
+              <app-empty-state icon="folder_open" title="This folder is empty"
+                message="Upload files or create folders to get started">
+                <button mat-flat-button color="primary" (click)="fileInput.click()">
+                  <mat-icon>cloud_upload</mat-icon>
+                  Upload Files
+                </button>
+                <button mat-stroked-button (click)="showNewFolderDialog()">
+                  <mat-icon>create_new_folder</mat-icon>
+                  New Folder
+                </button>
+              </app-empty-state>
+            }
           </div>
         }
 
         <!-- Loading State -->
         @if (isLoading) {
-          <div class="loading-state">
-            <div class="loading-card">
-              <div class="lc-icon-wrap">
-                <mat-icon class="lc-icon pulse-icon">folder</mat-icon>
-              </div>
-              <h3>Loading {{ departmentName }} Files</h3>
-              <p class="lc-subtitle">Fetching documents and folder structure</p>
-              <div class="lc-progress-wrap">
-                <div class="lc-progress-track">
-                  <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
-                </div>
-                <div class="lc-progress-info">
-                  <span class="lc-progress-message">{{ loadingMessage }}</span>
-                  <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
-                </div>
-              </div>
-              <div class="lc-steps">
-                @for (step of loadingSteps; track step.label; let i = $index) {
-                  <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
-                    <div class="lc-step-dot">
-                      @if (loadingStage > i) {
-                        <mat-icon>check</mat-icon>
-                      } @else {
-                        <mat-icon>{{ step.icon }}</mat-icon>
-                      }
-                    </div>
-                    <span class="lc-step-label">{{ step.label }}</span>
-                  </div>
-                }
-              </div>
-            </div>
+          <div class="loading-panel">
+            <app-skeleton-rows [rows]="6"></app-skeleton-rows>
           </div>
         }
 
@@ -275,7 +253,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
                   </span>
                 </div>
 
-                <button mat-icon-button class="file-menu-btn" [matMenuTriggerFor]="fileMenu" 
+                <button aria-label="More actions" mat-icon-button class="file-menu-btn" [matMenuTriggerFor]="fileMenu" 
                         (click)="$event.stopPropagation()">
                   <mat-icon>more_vert</mat-icon>
                 </button>
@@ -352,7 +330,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
                 <div class="col-size">{{ file.isFolder ? '-' : formatSize(file.size) }}</div>
 
                 <div class="col-actions">
-                  <button mat-icon-button [matMenuTriggerFor]="listFileMenu" (click)="$event.stopPropagation()">
+                  <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="listFileMenu" (click)="$event.stopPropagation()">
                     <mat-icon>more_vert</mat-icon>
                   </button>
                   <mat-menu #listFileMenu="matMenu">
@@ -415,14 +393,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       padding: 80px 32px 32px;
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
@@ -445,20 +416,15 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     }
 
     .back-btn {
-      background: rgba(255, 255, 255, 0.1);
-      color: white;
-    }
-
-    .back-btn:hover {
-      background: rgba(255, 255, 255, 0.2);
+      color: var(--color-text-2);
     }
 
     .breadcrumb-trail {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: white;
-      font-size: 18px;
+      color: var(--color-text);
+      font-size: var(--text-xl);
     }
 
     .dept-name {
@@ -468,18 +434,22 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       font-weight: 600;
       cursor: pointer;
       padding: 8px 16px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-control);
+      background: var(--color-surface-2);
       transition: all 0.2s;
     }
 
+    .dept-name mat-icon {
+      color: var(--color-primary);
+    }
+
     .dept-name:hover {
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--color-surface-3);
     }
 
     .separator {
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 20px !important;
+      color: var(--color-text-3);
+      font-size: 20px;
     }
 
     .crumb {
@@ -490,7 +460,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     }
 
     .crumb:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--color-surface-2);
     }
 
     .header-stats {
@@ -503,10 +473,11 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 20px;
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
 
     .stat-chip mat-icon {
@@ -529,21 +500,23 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       display: flex;
       align-items: center;
       gap: 12px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 12px;
-      padding: 12px 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      padding: 8px 16px;
+      box-shadow: var(--shadow-sm);
     }
 
     .search-box mat-icon {
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .search-box input {
       flex: 1;
       border: none;
       outline: none;
-      font-size: 15px;
+      font-size: var(--text-md);
+      color: var(--color-text);
       background: transparent;
     }
 
@@ -565,18 +538,19 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
 
     .view-toggle {
       display: flex;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
       padding: 4px;
     }
 
     .view-toggle button {
-      color: rgba(255, 255, 255, 0.6);
+      color: var(--color-text-3);
     }
 
     .view-toggle button.active {
-      background: rgba(255, 255, 255, 0.2);
-      color: white;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
 
     .action-buttons {
@@ -584,44 +558,30 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       gap: 8px;
     }
 
-    .upload-btn {
-      background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%) !important;
-      color: white !important;
-      font-weight: 500 !important;
-    }
-
-    .folder-btn {
-      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%) !important;
-      color: white !important;
-      font-weight: 500 !important;
-    }
-
     .selection-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(33, 150, 243, 0.9);
-      padding: 12px 20px;
-      border-radius: 12px;
+      background: var(--color-primary-soft);
+      padding: 8px 20px;
+      border-radius: var(--radius-md);
       margin-top: 16px;
-      color: white;
+      color: var(--color-text);
     }
 
     .selection-count {
-      font-weight: 500;
-    }
-
-    .selection-actions button {
-      color: white;
+      font-weight: 600;
+      color: var(--color-primary);
     }
 
     .upload-progress-bar {
       max-width: 1600px;
       margin: 0 auto 16px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 12px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 16px 20px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--shadow-sm);
     }
 
     .upload-info {
@@ -629,11 +589,11 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       align-items: center;
       gap: 12px;
       margin-bottom: 12px;
-      color: #333;
+      color: var(--color-text);
     }
 
     .upload-info mat-icon {
-      color: #2196f3;
+      color: var(--color-primary);
     }
 
     .new-folder-card {
@@ -642,17 +602,18 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       display: flex;
       align-items: center;
       gap: 16px;
-      background: rgba(255, 255, 255, 0.95);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       padding: 16px 24px;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
     }
 
     .folder-icon {
       font-size: 36px;
       width: 36px;
       height: 36px;
-      color: #ffc107;
+      color: var(--color-cat-amber);
     }
 
     .folder-input {
@@ -668,94 +629,13 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       margin: 0 auto;
     }
 
-    .empty-state {
-      text-align: center;
-      padding: 80px 40px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 20px;
-      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
+    .empty-panel,
+    .loading-panel {
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
     }
-
-    .empty-icon mat-icon {
-      font-size: 100px;
-      width: 100px;
-      height: 100px;
-      color: #e0e0e0;
-    }
-
-    .empty-state h2 {
-      color: #333;
-      margin: 24px 0 8px;
-      font-weight: 600;
-    }
-
-    .empty-state p {
-      color: #666;
-      margin-bottom: 32px;
-    }
-
-    .empty-actions {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-    }
-
-    .loading-state {
-      display: flex; justify-content: center; padding: 60px 20px;
-    }
-    .loading-card {
-      background: rgba(255,255,255,0.97); border-radius: 20px;
-      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
-      max-width: 520px; width: 100%;
-    }
-    .loading-card h3 { color: #1a1a2e; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
-    .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(251,191,36,0.12));
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(245,158,11,0.15);
-    }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #f59e0b; }
-    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
-    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
-    .lc-progress-wrap { margin: 8px 0 24px; }
-    .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
-    .lc-progress-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #f59e0b, #fbbf24, #f97316);
-      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
-      transition: width 0.15s ease-out; position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4)); border-radius: 0 4px 4px 0;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
-    .lc-progress-message { color: #64748b; font-weight: 500; }
-    .lc-progress-pct { color: #f59e0b; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
-    .lc-step {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      flex: 1; padding-top: 16px; opacity: 0.35; transition: opacity 0.4s ease, transform 0.3s ease;
-    }
-    .lc-step.active { opacity: 1; transform: translateY(-2px); }
-    .lc-step.done { opacity: 0.65; }
-    .lc-step-dot {
-      width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
-    }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #f59e0b, #f97316); box-shadow: 0 2px 10px rgba(245,158,11,0.3); }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
-    .lc-step.done .lc-step-dot { background: #dcfce7; }
-    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #f59e0b; }
-    .lc-step.done .lc-step-label { color: #16a34a; }
 
     .files-grid {
       display: grid;
@@ -764,27 +644,27 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     }
 
     .file-card {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       padding: 20px;
       cursor: pointer;
       transition: all 0.3s ease;
       position: relative;
-      border: 2px solid transparent;
+      border: 2px solid var(--color-line);
     }
 
     .file-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
     }
 
     .file-card.selected {
-      border-color: #2196f3;
-      background: rgba(33, 150, 243, 0.1);
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
     }
 
     .file-card.folder {
-      border-left: 4px solid #ffc107;
+      border-left: 4px solid var(--color-cat-amber);
     }
 
     .file-checkbox {
@@ -807,8 +687,8 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 16px;
-      background: #f5f5f5;
+      border-radius: var(--radius-lg);
+      background: var(--color-surface-2);
     }
 
     .file-icon-wrapper mat-icon {
@@ -817,18 +697,18 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       height: 36px;
     }
 
-    .file-icon-wrapper.folder { background: #fff8e1; }
-    .file-icon-wrapper.folder mat-icon { color: #ffc107; }
-    .file-icon-wrapper.pdf { background: #ffebee; }
-    .file-icon-wrapper.pdf mat-icon { color: #e53935; }
-    .file-icon-wrapper.word { background: #e3f2fd; }
-    .file-icon-wrapper.word mat-icon { color: #1976d2; }
-    .file-icon-wrapper.excel { background: #e8f5e9; }
-    .file-icon-wrapper.excel mat-icon { color: #388e3c; }
-    .file-icon-wrapper.powerpoint { background: #fff3e0; }
-    .file-icon-wrapper.powerpoint mat-icon { color: #f57c00; }
-    .file-icon-wrapper.image { background: #f3e5f5; }
-    .file-icon-wrapper.image mat-icon { color: #7b1fa2; }
+    .file-icon-wrapper.folder { background: var(--color-cat-amber-soft); }
+    .file-icon-wrapper.folder mat-icon { color: var(--color-cat-amber); }
+    .file-icon-wrapper.pdf { background: var(--color-danger-soft); }
+    .file-icon-wrapper.pdf mat-icon { color: var(--color-danger); }
+    .file-icon-wrapper.word { background: var(--color-primary-soft); }
+    .file-icon-wrapper.word mat-icon { color: var(--color-primary); }
+    .file-icon-wrapper.excel { background: var(--color-ok-soft); }
+    .file-icon-wrapper.excel mat-icon { color: var(--color-ok); }
+    .file-icon-wrapper.powerpoint { background: var(--color-warn-soft); }
+    .file-icon-wrapper.powerpoint mat-icon { color: var(--color-warn); }
+    .file-icon-wrapper.image { background: var(--color-cat-purple-soft); }
+    .file-icon-wrapper.image mat-icon { color: var(--color-cat-purple); }
 
     .file-details {
       text-align: center;
@@ -837,7 +717,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     .file-name {
       display: block;
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -845,8 +725,8 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     }
 
     .file-meta {
-      font-size: 12px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
 
     .file-menu-btn {
@@ -862,21 +742,22 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     }
 
     .files-list {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
       overflow: hidden;
-      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.2);
     }
 
     .list-header {
       display: grid;
       grid-template-columns: 48px 1fr 150px 100px 48px;
       gap: 16px;
-      padding: 16px 20px;
-      background: #f5f5f5;
+      padding: 12px 20px;
+      background: var(--color-surface-2);
+      border-bottom: 1px solid var(--color-line);
       font-weight: 600;
-      color: #666;
-      font-size: 13px;
+      color: var(--color-text-3);
+      font-size: var(--text-xs);
       text-transform: uppercase;
     }
 
@@ -884,19 +765,19 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       display: grid;
       grid-template-columns: 48px 1fr 150px 100px 48px;
       gap: 16px;
-      padding: 16px 20px;
+      padding: var(--row-pad-y) 20px;
       align-items: center;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
       cursor: pointer;
       transition: background 0.2s;
     }
 
     .list-item:hover {
-      background: #f9f9f9;
+      background: var(--color-canvas);
     }
 
     .list-item.selected {
-      background: rgba(33, 150, 243, 0.1);
+      background: var(--color-primary-soft);
     }
 
     .list-item:last-child {
@@ -914,12 +795,12 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       flex-shrink: 0;
     }
 
-    .col-name mat-icon.folder { color: #ffc107; }
-    .col-name mat-icon.pdf { color: #e53935; }
-    .col-name mat-icon.word { color: #1976d2; }
-    .col-name mat-icon.excel { color: #388e3c; }
-    .col-name mat-icon.powerpoint { color: #f57c00; }
-    .col-name mat-icon.image { color: #7b1fa2; }
+    .col-name mat-icon.folder { color: var(--color-cat-amber); }
+    .col-name mat-icon.pdf { color: var(--color-danger); }
+    .col-name mat-icon.word { color: var(--color-primary); }
+    .col-name mat-icon.excel { color: var(--color-ok); }
+    .col-name mat-icon.powerpoint { color: var(--color-warn); }
+    .col-name mat-icon.image { color: var(--color-cat-purple); }
 
     .col-name span {
       overflow: hidden;
@@ -928,16 +809,17 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     }
 
     .col-modified, .col-size {
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
 
     .delete-option {
-      color: #e53935 !important;
+      --mat-menu-item-label-text-color: var(--color-danger);
+      --mat-menu-item-icon-color: var(--color-danger);
     }
 
     .delete-option mat-icon {
-      color: #e53935;
+      color: var(--color-danger);
     }
 
     .drop-zone-overlay {
@@ -946,7 +828,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(33, 150, 243, 0.9);
+      background: var(--color-scrim);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -955,7 +837,13 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
 
     .drop-zone-content {
       text-align: center;
-      color: white;
+      color: var(--color-text);
+      background: var(--color-surface);
+      border: 2px dashed var(--color-primary);
+      border-radius: var(--radius-lg);
+      padding: 48px 64px;
+      box-shadow: var(--shadow-lg);
+      pointer-events: none;
     }
 
     .drop-zone-content mat-icon {
@@ -963,10 +851,11 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
       width: 80px;
       height: 80px;
       margin-bottom: 16px;
+      color: var(--color-primary);
     }
 
     .drop-zone-content h2 {
-      font-size: 28px;
+      font-size: var(--text-3xl);
       font-weight: 500;
     }
 
@@ -1008,7 +897,7 @@ import { DocumentsService, DocumentFile, FolderInfo, DocumentPermissions, Depart
     }
   `]
 })
-export class DepartmentHubComponent implements OnInit, OnDestroy {
+export class DepartmentHubComponent implements OnInit {
   departmentName = '';
   breadcrumbs: string[] = [];
   files: DocumentFile[] = [];
@@ -1022,18 +911,6 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
   viewMode: 'grid' | 'list' = 'grid';
   isDraggingOver = false;
   permissions: DocumentPermissions | null = null;
-
-  // Loading progress
-  loadingProgress = 0;
-  loadingStage = 0;
-  loadingMessage = 'Initializing...';
-  private progressInterval: any;
-  readonly loadingSteps = [
-    { icon: 'lock', label: 'Authenticating', detail: 'Securing connection...' },
-    { icon: 'folder', label: 'Scanning', detail: 'Scanning folder structure...' },
-    { icon: 'file_copy', label: 'Loading Files', detail: 'Retrieving documents...' },
-    { icon: 'dashboard', label: 'Ready', detail: 'Organizing file view...' }
-  ];
 
   @ViewChild('fileInput') fileInput!: ElementRef;
 
@@ -1053,9 +930,10 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private router: Router,
     private documentsService: DocumentsService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private dialog: MatDialog,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -1071,10 +949,6 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
         this.isDraggingOver = true;
       }
     });
-  }
-
-  ngOnDestroy(): void {
-    clearInterval(this.progressInterval);
   }
 
   /**
@@ -1101,61 +975,19 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
 
   loadFiles(): void {
     this.isLoading = true;
-    this.startLoadingProgress();
     const subfolder = this.breadcrumbs.length > 0 ? this.breadcrumbs.join('/') : undefined;
     
     this.documentsService.getFiles(this.departmentName, subfolder).subscribe({
       next: (files) => {
-        this.finishLoadingProgress(() => {
-          this.files = files.map(f => ({ ...f, selected: false }));
-          this.isLoading = false;
-        });
+        this.files = files.map(f => ({ ...f, selected: false }));
+        this.isLoading = false;
       },
       error: (error) => {
         console.error('Error loading files:', error);
-        this.stopLoadingProgress();
-        this.snackBar.open('Failed to load files', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load files');
         this.isLoading = false;
       }
     });
-  }
-
-  private startLoadingProgress(): void {
-    this.loadingProgress = 0;
-    this.loadingStage = 0;
-    this.loadingMessage = this.loadingSteps[0].detail;
-    this.progressInterval = setInterval(() => {
-      const max = 88;
-      if (this.loadingProgress < max) {
-        const increment = Math.max(0.3, (max - this.loadingProgress) * 0.06);
-        this.loadingProgress = Math.min(max, this.loadingProgress + increment);
-      }
-      const newStage = this.loadingProgress < 20 ? 0 : this.loadingProgress < 45 ? 1 : this.loadingProgress < 70 ? 2 : 3;
-      if (newStage !== this.loadingStage) {
-        this.loadingStage = newStage;
-        this.loadingMessage = this.loadingSteps[newStage].detail;
-      }
-    }, 120);
-  }
-
-  private finishLoadingProgress(callback: () => void): void {
-    clearInterval(this.progressInterval);
-    this.loadingStage = 3;
-    this.loadingMessage = 'Almost there...';
-    const finish = setInterval(() => {
-      this.loadingProgress = Math.min(100, this.loadingProgress + 4);
-      if (this.loadingProgress >= 100) {
-        clearInterval(finish);
-        this.loadingMessage = 'Complete!';
-        setTimeout(() => callback(), 300);
-      }
-    }, 30);
-  }
-
-  private stopLoadingProgress(): void {
-    clearInterval(this.progressInterval);
-    this.loadingProgress = 0;
-    this.loadingStage = 0;
   }
 
   onSearch(): void {
@@ -1250,14 +1082,14 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
         this.uploadProgress = result.progress;
         if (result.file) {
           this.isUploading = false;
-          this.snackBar.open(`Uploaded ${file.name}`, 'Close', { duration: 3000 });
+          this.toast.done(`Uploaded ${file.name}`);
           this.loadFiles();
         }
       },
       error: (error) => {
         console.error('Upload error:', error);
         this.isUploading = false;
-        this.snackBar.open('Upload failed', 'Close', { duration: 3000 });
+        this.toast.error('Upload failed');
       }
     });
   }
@@ -1269,7 +1101,7 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
 
   createFolder(): void {
     if (!this.newFolderName.trim()) {
-      this.snackBar.open('Please enter a folder name', 'Close', { duration: 3000 });
+      this.toast.warn('Please enter a folder name');
       return;
     }
 
@@ -1278,12 +1110,12 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
     this.documentsService.createFolder(this.departmentName, this.newFolderName, parentPath).subscribe({
       next: () => {
         this.showNewFolder = false;
-        this.snackBar.open(`Folder "${this.newFolderName}" created`, 'Close', { duration: 3000 });
+        this.toast.done(`Folder "${this.newFolderName}" created`);
         this.loadFiles();
       },
       error: (error) => {
         console.error('Error creating folder:', error);
-        this.snackBar.open('Failed to create folder', 'Close', { duration: 3000 });
+        this.toast.error('Failed to create folder');
       }
     });
   }
@@ -1298,7 +1130,7 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
         a.click();
         window.URL.revokeObjectURL(url);
       },
-      error: () => this.snackBar.open('Download failed', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Download failed')
     });
   }
 
@@ -1329,10 +1161,10 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
       if (newName && newName !== file.name) {
         this.documentsService.renameFile(this.departmentName, file.path, newName).subscribe({
           next: () => {
-            this.snackBar.open('Renamed successfully', 'Close', { duration: 3000 });
+            this.toast.done('Renamed successfully');
             this.loadFiles();
           },
-          error: () => this.snackBar.open('Failed to rename', 'Close', { duration: 3000 })
+          error: () => this.toast.error('Failed to rename')
         });
       }
     });
@@ -1346,10 +1178,10 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
       if (destinationFolder !== undefined) {
         this.documentsService.moveFile(this.departmentName, file.path, destinationFolder).subscribe({
           next: () => {
-            this.snackBar.open('Moved successfully', 'Close', { duration: 3000 });
+            this.toast.done('Moved successfully');
             this.loadFiles();
           },
-          error: () => this.snackBar.open('Failed to move file', 'Close', { duration: 3000 })
+          error: () => this.toast.error('Failed to move file')
         });
       }
     });
@@ -1385,7 +1217,7 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
             next: () => {
               completed++;
               if (completed === selected.length) {
-                this.snackBar.open(`Moved ${completed} items`, 'Close', { duration: 3000 });
+                this.toast.done(`Moved ${completed} items`);
                 this.loadFiles();
               }
             }
@@ -1395,30 +1227,39 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteFile(file: DocumentFile): void {
-    if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
+  async deleteFile(file: DocumentFile): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete "${file.name}"?`,
+      confirmText: file.isFolder ? 'Delete folder' : 'Delete file',
+      danger: true
+    })) {
       this.documentsService.deleteFile(this.departmentName, file.path).subscribe({
         next: () => {
-          this.snackBar.open(`Deleted "${file.name}"`, 'Close', { duration: 3000 });
+          this.toast.done(`Deleted "${file.name}"`);
           this.loadFiles();
         },
-        error: () => this.snackBar.open('Failed to delete', 'Close', { duration: 3000 })
+        error: () => this.toast.error('Failed to delete')
       });
     }
   }
 
-  deleteSelectedFiles(): void {
+  async deleteSelectedFiles(): Promise<void> {
     const selected = this.selectedFiles;
     if (selected.length === 0) return;
 
-    if (confirm(`Are you sure you want to delete ${selected.length} item(s)?`)) {
+    if (await this.confirmDialog.ask({
+      title: `Delete ${selected.length} ${selected.length === 1 ? 'item' : 'items'}?`,
+      message: 'All selected files and folders are deleted.',
+      confirmText: 'Delete items',
+      danger: true
+    })) {
       let completed = 0;
       selected.forEach(file => {
         this.documentsService.deleteFile(this.departmentName, file.path).subscribe({
           next: () => {
             completed++;
             if (completed === selected.length) {
-              this.snackBar.open(`Deleted ${completed} items`, 'Close', { duration: 3000 });
+              this.toast.done(`Deleted ${completed} items`);
               this.loadFiles();
             }
           }
@@ -1447,7 +1288,7 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
 
       this.documentsService.moveFile(this.departmentName, sourcePath, destinationPath).subscribe({
         next: () => {
-          this.snackBar.open('Moved successfully', 'Close', { duration: 3000 });
+          this.toast.done('Moved successfully');
           this.loadFiles();
         }
       });
@@ -1492,13 +1333,13 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
           <span>{{ data.file.name }}</span>
         </div>
         <div class="header-actions">
-          <button mat-icon-button (click)="download()" matTooltip="Download">
+          <button aria-label="Download" mat-icon-button (click)="download()" matTooltip="Download">
             <mat-icon>download</mat-icon>
           </button>
-          <button mat-icon-button (click)="openInNewTab()" matTooltip="Open in new tab">
+          <button aria-label="Open in new tab" mat-icon-button (click)="openInNewTab()" matTooltip="Open in new tab">
             <mat-icon>open_in_new</mat-icon>
           </button>
-          <button mat-icon-button mat-dialog-close matTooltip="Close">
+          <button aria-label="Close" mat-icon-button mat-dialog-close matTooltip="Close">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -1516,7 +1357,7 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
         }
 
         @if (data.file.fileType === 'image' && !isLoading) {
-          <img [src]="safeUrl" class="image-viewer" (load)="isLoading = false">
+          <img [src]="safeUrl" [alt]="data.file.name" class="image-viewer" (load)="isLoading = false">
         }
 
         @if (isOfficeDoc && !isLoading) {
@@ -1525,7 +1366,7 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
             <h3>{{ data.file.name }}</h3>
             <p>Office documents require download to view</p>
             <div class="office-actions">
-              <button mat-raised-button color="primary" (click)="download()">
+              <button mat-flat-button color="primary" (click)="download()">
                 <mat-icon>download</mat-icon>
                 Download to View
               </button>
@@ -1541,24 +1382,24 @@ export class DepartmentHubComponent implements OnInit, OnDestroy {
   `,
   styles: [`
     .preview-dialog { display: flex; flex-direction: column; height: 100%; }
-    .preview-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #eee; background: #fafafa; }
+    .preview-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--color-line); background: var(--color-canvas); }
     .file-info { display: flex; align-items: center; gap: 12px; font-weight: 500; }
-    .file-info mat-icon.pdf { color: #e53935; }
-    .file-info mat-icon.word { color: #1976d2; }
-    .file-info mat-icon.excel { color: #388e3c; }
-    .file-info mat-icon.image { color: #7b1fa2; }
+    .file-info mat-icon.pdf { color: var(--color-danger); }
+    .file-info mat-icon.word { color: var(--color-primary); }
+    .file-info mat-icon.excel { color: var(--color-ok); }
+    .file-info mat-icon.image { color: var(--color-cat-purple); }
     .header-actions { display: flex; gap: 8px; }
-    .preview-content { flex: 1; overflow: auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center; }
-    .loading { text-align: center; color: #666; }
+    .preview-content { flex: 1; overflow: auto; background: var(--color-surface-2); display: flex; align-items: center; justify-content: center; }
+    .loading { text-align: center; color: var(--color-text-2); }
     .loading p { margin-top: 16px; }
     .pdf-viewer { width: 100%; height: 100%; border: none; }
     .image-viewer { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .office-notice { text-align: center; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); }
-    .office-notice mat-icon { font-size: 64px; width: 64px; height: 64px; color: #1976d2; }
-    .office-notice h3 { margin: 16px 0 8px; color: #333; }
-    .office-notice p { color: #666; margin-bottom: 24px; }
+    .office-notice { text-align: center; padding: 40px; background: var(--color-surface); border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
+    .office-notice mat-icon { font-size: 64px; width: 64px; height: 64px; color: var(--color-primary); }
+    .office-notice h3 { margin: 16px 0 8px; color: var(--color-text); }
+    .office-notice p { color: var(--color-text-2); margin-bottom: 24px; }
     .office-actions { display: flex; gap: 12px; justify-content: center; }
-    .text-viewer { width: 100%; height: 100%; margin: 0; padding: 24px; background: white; font-family: 'Consolas', monospace; font-size: 14px; overflow: auto; white-space: pre-wrap; word-wrap: break-word; }
+    .text-viewer { width: 100%; height: 100%; margin: 0; padding: 24px; background: var(--color-surface); color: var(--color-text); font-family: var(--font-mono); font-size: var(--text-md); overflow: auto; white-space: pre-wrap; word-wrap: break-word; }
   `]
 })
 export class DocumentPreviewDialogComponent implements OnInit {
@@ -1646,7 +1487,7 @@ export class DocumentPreviewDialogComponent implements OnInit {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" (click)="save()">Rename</button>
+      <button mat-flat-button color="primary" (click)="save()">Rename</button>
     </mat-dialog-actions>
   `,
   styles: [`h2 { display: flex; align-items: center; gap: 8px; }`]
@@ -1672,7 +1513,7 @@ export class RenameDialogComponent {
 @Component({
   selector: 'app-move-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatButtonModule, MatIconModule, SkeletonRowsComponent],
   template: `
     <h2 mat-dialog-title>
       <mat-icon>drive_file_move</mat-icon>
@@ -1682,9 +1523,7 @@ export class RenameDialogComponent {
       <p class="move-info">Select destination folder:</p>
       
       @if (isLoading) {
-        <div class="loading">
-          <mat-spinner diameter="32"></mat-spinner>
-        </div>
+        <app-skeleton-rows [rows]="3" [avatar]="false"></app-skeleton-rows>
       }
 
       @if (!isLoading) {
@@ -1700,7 +1539,7 @@ export class RenameDialogComponent {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" [disabled]="selectedFolder === undefined" (click)="move()">
+      <button mat-flat-button color="primary" [disabled]="selectedFolder === undefined" (click)="move()">
         <mat-icon>drive_file_move</mat-icon>
         Move Here
       </button>
@@ -1708,8 +1547,7 @@ export class RenameDialogComponent {
   `,
   styles: [`
     h2 { display: flex; align-items: center; gap: 8px; }
-    .move-info { color: #666; margin-bottom: 16px; }
-    .loading { display: flex; justify-content: center; padding: 24px; }
+    .move-info { color: var(--color-text-2); margin-bottom: 16px; }
   `]
 })
 export class MoveDialogComponent implements OnInit {
@@ -1746,7 +1584,7 @@ export class MoveDialogComponent implements OnInit {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule,
-    MatSelectModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule
+    MatSelectModule, MatButtonModule, MatIconModule, SkeletonRowsComponent
   ],
   template: `
     <h2 mat-dialog-title>
@@ -1785,7 +1623,7 @@ export class MoveDialogComponent implements OnInit {
           <input matInput [(ngModel)]="userSearch" (ngModelChange)="onUserSearch()" placeholder="Start typing...">
         </mat-form-field>
         @if (searchingUsers) {
-          <div class="loading"><mat-spinner diameter="24"></mat-spinner></div>
+          <div class="user-list"><app-skeleton-rows [rows]="3"></app-skeleton-rows></div>
         }
         @if (!searchingUsers && users.length > 0) {
           <div class="user-list">
@@ -1810,7 +1648,7 @@ export class MoveDialogComponent implements OnInit {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" [disabled]="!canShare() || sharing" (click)="share()">
+      <button mat-flat-button color="primary" [disabled]="!canShare() || sharing" (click)="share()">
         <mat-icon>share</mat-icon>
         Share
       </button>
@@ -1818,24 +1656,23 @@ export class MoveDialogComponent implements OnInit {
   `,
   styles: [`
     h2 { display: flex; align-items: center; gap: 8px; }
-    .share-info { color: #666; margin-bottom: 16px; font-size: 14px; line-height: 1.5; }
+    .share-info { color: var(--color-text-2); margin-bottom: 16px; font-size: var(--text-md); line-height: 1.5; }
     .mode-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
     .mode-toggle button {
       flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
-      padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff;
-      cursor: pointer; color: #555; font-weight: 500; transition: all 0.2s;
+      padding: 10px; border: 1px solid var(--color-line); border-radius: var(--radius-control); background: var(--color-surface);
+      cursor: pointer; color: var(--color-text-2); font-weight: 500; transition: all 0.2s;
     }
-    .mode-toggle button.active { background: #1e90ff; color: #fff; border-color: #1e90ff; }
-    .loading { display: flex; justify-content: center; padding: 12px; }
-    .user-list { max-height: 220px; overflow-y: auto; margin-bottom: 16px; border: 1px solid #eee; border-radius: 8px; }
-    .user-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f2f2f2; }
+    .mode-toggle button.active { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
+    .user-list { max-height: 220px; overflow-y: auto; margin-bottom: 16px; border: 1px solid var(--color-line); border-radius: var(--radius-control); }
+    .user-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--color-line); }
     .user-row:last-child { border-bottom: none; }
-    .user-row:hover { background: #f7f9fc; }
-    .user-row.selected { background: rgba(30,144,255,0.1); }
+    .user-row:hover { background: var(--color-surface-2); }
+    .user-row.selected { background: var(--color-primary-soft); }
     .user-meta { display: flex; flex-direction: column; flex: 1; }
-    .user-name { font-weight: 500; color: #333; }
-    .user-email { font-size: 12px; color: #888; }
-    .check { color: #1e90ff; }
+    .user-name { font-weight: 500; color: var(--color-text); }
+    .user-email { font-size: var(--text-xs); color: var(--color-text-3); }
+    .check { color: var(--color-primary); }
   `]
 })
 export class ShareDialogComponent implements OnInit {
@@ -1854,7 +1691,7 @@ export class ShareDialogComponent implements OnInit {
     public dialogRef: MatDialogRef<ShareDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { itemName: string; isFolder: boolean; department: string; sourcePath: string },
     private documentsService: DocumentsService,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -1899,12 +1736,12 @@ export class ShareDialogComponent implements OnInit {
     }).subscribe({
       next: (res: any) => {
         this.sharing = false;
-        this.snackBar.open(res?.message || 'Shared successfully', 'Close', { duration: 3000 });
+        this.toast.done(res?.message || 'Shared successfully');
         this.dialogRef.close(true);
       },
       error: () => {
         this.sharing = false;
-        this.snackBar.open('Failed to share', 'Close', { duration: 3000 });
+        this.toast.error('Failed to share');
       }
     });
   }

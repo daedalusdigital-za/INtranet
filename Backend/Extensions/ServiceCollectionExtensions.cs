@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IO.Compression;
 using System.Text;
 using ProjectTracker.API.Services;
+using ProjectTracker.API.Services.Logistics;
 
 namespace ProjectTracker.API.Extensions
 {
@@ -85,6 +86,23 @@ namespace ProjectTracker.API.Extensions
                             return Task.CompletedTask;
                         }
                     };
+                })
+                // Rocket Freight client portal. Same signing key, DIFFERENT audience: a portal
+                // token fails the default scheme above (wrong audience), so a client login can
+                // never reach the intranet APIs, and intranet tokens are refused by /api/portal.
+                .AddJwtBearer(PortalAuth.Scheme, options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidIssuer = config["JwtSettings:Issuer"],
+                        ValidAudience = PortalAuth.Audience(config),
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(PortalAuth.SigningKey(config))),
+                        ClockSkew = TimeSpan.FromMinutes(1)
+                    };
                 });
 
             // SECURITY: deny-by-default. Any endpoint (controller, hub, health check) without
@@ -123,13 +141,41 @@ namespace ProjectTracker.API.Extensions
             {
                 options.AddPolicy("AppCors", policy =>
                 {
-                    policy.WithOrigins(allowedOrigins)
+                    policy.SetIsOriginAllowed(origin => IsAllowedOrigin(origin, allowedOrigins))
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials();
                 });
             });
             return services;
+        }
+
+        /// <summary>
+        /// An origin is allowed if it is in the configured list, or if it is a
+        /// loopback / RFC1918 private-network address on any port (the intranet dev
+        /// server runs with --host 0.0.0.0 and is opened from many LAN addresses).
+        /// Public internet origins are still rejected.
+        /// </summary>
+        private static bool IsAllowedOrigin(string origin, string[] allowedOrigins)
+        {
+            if (string.IsNullOrWhiteSpace(origin)) return false;
+            if (allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase)) return true;
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+            if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) return false;
+
+            var host = uri.Host;
+            if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return true;
+            if (!System.Net.IPAddress.TryParse(host, out var ip))
+            {
+                // Plain single-label machine names (e.g. http://intranet-pc:4200) are LAN-only.
+                return !host.Contains('.');
+            }
+            if (System.Net.IPAddress.IsLoopback(ip)) return true;
+            if (ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
+            var b = ip.GetAddressBytes();
+            return b[0] == 10
+                || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
+                || (b[0] == 192 && b[1] == 168);
         }
 
         // ------------------------------------------------------------------
@@ -154,6 +200,17 @@ namespace ProjectTracker.API.Extensions
 
             // Electronic signatures (reusable across modules) + requisition-invoice workflow
             services.AddScoped<Services.Signatures.ISignatureService, Services.Signatures.SignatureService>();
+
+            // Client bookings & shipment lifecycle (status engine, waybills, notifications)
+            services.AddScoped<Services.Logistics.INumberSequenceService, Services.Logistics.NumberSequenceService>();
+            services.AddScoped<Services.Logistics.IShipmentLifecycleService, Services.Logistics.ShipmentLifecycleService>();
+            services.AddScoped<Services.Logistics.IShipmentNotificationService, Services.Logistics.ShipmentNotificationService>();
+            services.AddScoped<Services.Logistics.IWaybillService, Services.Logistics.WaybillService>();
+            // Booking intake shared by ops, CSV, API and the client portal (same validation everywhere)
+            services.AddScoped<Services.Logistics.IBookingIntakeService, Services.Logistics.BookingIntakeService>();
+            // Rocket Freight client portal tokens (separate audience, see AddAppAuthentication)
+            services.AddScoped<Services.Logistics.IPortalTokenService, Services.Logistics.PortalTokenService>();
+            services.AddSingleton<Services.Logistics.ISmsService, Services.Logistics.LoggingSmsService>();
             return services;
         }
 
@@ -224,6 +281,12 @@ namespace ProjectTracker.API.Extensions
             services.AddScoped<CustomerAddressCleanupService>();
             services.AddScoped<CustomerProvinceMapperService>();
             services.AddScoped<GeminiProvinceService>();
+
+            // Flows: automated business processes (engine, data sources, event bus, scheduler)
+            services.AddScoped<Services.Flows.IFlowEngine, Services.Flows.FlowEngine>();
+            services.AddScoped<Services.Flows.IFlowDataSources, Services.Flows.FlowDataSources>();
+            services.AddSingleton<Services.Flows.IFlowEventPublisher, Services.Flows.FlowEventPublisher>();
+            services.AddHostedService<Services.Flows.FlowSchedulerService>();
             return services;
         }
 

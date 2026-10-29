@@ -10,10 +10,13 @@ import { MatInputModule } from '@angular/material/input';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatSelectModule } from '@angular/material/select';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
+import { ConfirmService } from '../../../ui/confirm.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
+import { StatusChipComponent, ChipTone } from '../../../ui/status-chip/status-chip.component';
 
 interface Driver {
   id: number;
@@ -49,8 +52,10 @@ interface Driver {
     MatDatepickerModule,
     MatNativeDateModule,
     MatSelectModule,
-    MatProgressSpinnerModule,
-    MatTooltipModule
+    MatTooltipModule,
+    SkeletonRowsComponent,
+    EmptyStateComponent,
+    StatusChipComponent
   ],
   template: `
     <div class="drivers-dialog">
@@ -59,7 +64,7 @@ interface Driver {
           <mat-icon>local_shipping</mat-icon>
           Driver Management
         </h2>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -101,7 +106,7 @@ interface Driver {
         <div class="driver-details-panel" *ngIf="viewingDriver">
           <div class="details-header">
             <h3><mat-icon>person</mat-icon> Driver Details</h3>
-            <button mat-icon-button (click)="closeViewDriver()">
+            <button aria-label="Close" mat-icon-button (click)="closeViewDriver()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -113,7 +118,7 @@ interface Driver {
               </div>
               <div class="detail-item">
                 <span class="detail-label">Status</span>
-                <span class="status-badge" [class]="(viewingDriver.status || 'active').toLowerCase()">{{ viewingDriver.status || 'Active' }}</span>
+                <app-status-chip [status]="viewingDriver.status || 'Active'" [tone]="getStatusTone(viewingDriver.status || 'Active')"></app-status-chip>
               </div>
             </div>
             <div class="detail-row">
@@ -296,10 +301,7 @@ interface Driver {
           </div>
 
           <div class="table-container">
-            <div class="loading-spinner" *ngIf="isLoading">
-              <mat-spinner diameter="40"></mat-spinner>
-              <p>Loading drivers...</p>
-            </div>
+            <app-skeleton-rows *ngIf="isLoading" [rows]="6" [avatar]="false"></app-skeleton-rows>
 
             <table mat-table [dataSource]="drivers" class="drivers-table" *ngIf="!isLoading && drivers.length > 0">
               <!-- Rank Column -->
@@ -308,9 +310,7 @@ interface Driver {
                 <td mat-cell *matCellDef="let driver">
                   <span class="rank-badge" [class.medal]="getRank(driver) <= 3 && isActive(driver)" [attr.data-rank]="getRank(driver)"
                         [matTooltip]="isActive(driver) ? ('Ranked #' + getRank(driver) + ' by trips & distance') : 'Not ranked (inactive)'">
-                    <ng-container *ngIf="isActive(driver) && getRank(driver) === 1">🥇</ng-container>
-                    <ng-container *ngIf="isActive(driver) && getRank(driver) === 2">🥈</ng-container>
-                    <ng-container *ngIf="isActive(driver) && getRank(driver) === 3">🥉</ng-container>
+                    <ng-container *ngIf="isActive(driver) && getRank(driver) <= 3"><mat-icon aria-hidden="true">military_tech</mat-icon>{{ getRank(driver) }}</ng-container>
                     <ng-container *ngIf="!isActive(driver) || getRank(driver) > 3">{{ isActive(driver) ? getRank(driver) : '—' }}</ng-container>
                   </span>
                 </td>
@@ -360,9 +360,7 @@ interface Driver {
               <ng-container matColumnDef="status">
                 <th mat-header-cell *matHeaderCellDef>Status</th>
                 <td mat-cell *matCellDef="let driver">
-                  <span class="status-badge" [class]="driver.status?.toLowerCase()">
-                    {{ driver.status || 'Active' }}
-                  </span>
+                  <app-status-chip [status]="driver.status || 'Active'" [tone]="getStatusTone(driver.status)"></app-status-chip>
                 </td>
               </ng-container>
 
@@ -370,13 +368,13 @@ interface Driver {
               <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef>Actions</th>
                 <td mat-cell *matCellDef="let driver">
-                  <button mat-icon-button color="primary" (click)="editDriver(driver)" [disabled]="isLoading" matTooltip="Edit driver">
+                  <button aria-label="Edit driver" mat-icon-button color="primary" (click)="editDriver(driver)" [disabled]="isLoading" matTooltip="Edit driver">
                     <mat-icon>edit</mat-icon>
                   </button>
-                  <button mat-icon-button (click)="viewDriver(driver)" [disabled]="isLoading" matTooltip="View details">
+                  <button aria-label="View details" mat-icon-button (click)="viewDriver(driver)" [disabled]="isLoading" matTooltip="View details">
                     <mat-icon>visibility</mat-icon>
                   </button>
-                  <button mat-icon-button color="warn" (click)="deleteDriver(driver)" [disabled]="isLoading" matTooltip="Delete driver">
+                  <button aria-label="Delete driver" mat-icon-button color="warn" (click)="deleteDriver(driver)" [disabled]="isLoading" matTooltip="Delete driver">
                     <mat-icon>delete</mat-icon>
                   </button>
                 </td>
@@ -386,10 +384,14 @@ interface Driver {
               <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
             </table>
 
-            <div class="no-data" *ngIf="!isLoading && drivers.length === 0 && !errorMessage">
-              <mat-icon>info</mat-icon>
-              <p>No drivers found. Add your first driver above.</p>
-            </div>
+            <app-empty-state *ngIf="!isLoading && drivers.length === 0 && !errorMessage" icon="badge"
+                             title="No drivers yet"
+                             message="Add your first driver to start tracking their trips and distance.">
+              <button mat-stroked-button (click)="toggleAddForm()" *ngIf="!showAddForm && !editingDriver">
+                <mat-icon>add</mat-icon>
+                Add Driver
+              </button>
+            </app-empty-state>
 
             <div class="error-message" *ngIf="errorMessage">
               <mat-icon>error</mat-icon>
@@ -415,15 +417,20 @@ interface Driver {
       justify-content: space-between;
       align-items: center;
       padding: 0 24px;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+      border-bottom: 1px solid var(--color-line);
 
       h2 {
         display: flex;
         align-items: center;
         gap: 12px;
         margin: 0;
-        font-size: 24px;
-        font-weight: 500;
+        font-size: var(--text-2xl);
+        font-weight: 700;
+        color: var(--color-text);
+
+        mat-icon {
+          color: var(--color-primary);
+        }
       }
     }
 
@@ -444,15 +451,22 @@ interface Driver {
         align-items: center;
         gap: 12px;
         padding: 16px;
-        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-        border-radius: 12px;
-        color: white;
+        background: var(--color-surface);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-md);
+        color: var(--color-text);
 
         mat-icon {
-          font-size: 32px;
-          width: 32px;
-          height: 32px;
-          opacity: 0.9;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: none;
+          font-size: 22px;
+          width: 40px;
+          height: 40px;
+          border-radius: var(--radius-md);
+          background: var(--color-primary-soft);
+          color: var(--color-primary);
         }
 
         .stat-content {
@@ -460,37 +474,40 @@ interface Driver {
           flex-direction: column;
 
           .stat-value {
-            font-size: 24px;
+            font-size: var(--text-3xl);
             font-weight: 700;
             line-height: 1.2;
           }
 
           .stat-label {
-            font-size: 12px;
-            opacity: 0.9;
+            font-size: var(--text-xs);
+            color: var(--color-text-2);
           }
         }
 
-        &:nth-child(2) {
-          background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        &:nth-child(2) mat-icon {
+          background: var(--color-ok-soft);
+          color: var(--color-ok);
         }
 
-        &:nth-child(3) {
-          background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
+        &:nth-child(3) mat-icon {
+          background: var(--color-cat-purple-soft);
+          color: var(--color-cat-purple);
         }
 
-        &:nth-child(4) {
-          background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        &:nth-child(4) mat-icon {
+          background: var(--color-cat-teal-soft);
+          color: var(--color-cat-teal);
         }
       }
     }
 
     .driver-details-panel {
-      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
-      border-radius: 12px;
+      background: var(--color-surface-2);
+      border-radius: var(--radius-lg);
       padding: 24px;
       margin-bottom: 24px;
-      border: 1px solid rgba(0, 0, 0, 0.08);
+      border: 1px solid var(--color-line);
 
       .details-header {
         display: flex;
@@ -498,16 +515,20 @@ interface Driver {
         align-items: center;
         margin-bottom: 20px;
         padding-bottom: 16px;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        border-bottom: 1px solid var(--color-line);
 
         h3 {
           display: flex;
           align-items: center;
           gap: 8px;
           margin: 0;
-          font-size: 20px;
-          font-weight: 600;
-          color: #333;
+          font-size: var(--text-lg);
+          font-weight: 700;
+          color: var(--color-text);
+
+          mat-icon {
+            color: var(--color-primary);
+          }
         }
       }
 
@@ -522,17 +543,17 @@ interface Driver {
         .detail-item {
           .detail-label {
             display: block;
-            font-size: 12px;
-            color: rgba(0, 0, 0, 0.54);
+            font-size: var(--text-xs);
+            color: var(--color-text-3);
             margin-bottom: 4px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
           }
 
           .detail-value {
-            font-size: 16px;
+            font-size: var(--text-lg);
             font-weight: 500;
-            color: #333;
+            color: var(--color-text);
           }
         }
 
@@ -542,22 +563,23 @@ interface Driver {
           gap: 16px;
           margin-top: 24px;
           padding-top: 20px;
-          border-top: 1px solid rgba(0, 0, 0, 0.1);
+          border-top: 1px solid var(--color-line);
 
           .stat-item {
             display: flex;
             align-items: center;
             gap: 12px;
             padding: 16px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            background: var(--color-surface);
+            border: 1px solid var(--color-line);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
 
             mat-icon {
               font-size: 28px;
               width: 28px;
               height: 28px;
-              color: #2563eb;
+              color: var(--color-cat-purple);
             }
 
             .stat-info {
@@ -565,20 +587,20 @@ interface Driver {
               flex-direction: column;
 
               .stat-number {
-                font-size: 22px;
+                font-size: var(--text-2xl);
                 font-weight: 700;
-                color: #333;
+                color: var(--color-text);
               }
 
               .stat-text {
-                font-size: 11px;
-                color: rgba(0, 0, 0, 0.54);
+                font-size: var(--text-xs);
+                color: var(--color-text-3);
                 text-transform: uppercase;
               }
             }
 
-            &:nth-child(2) mat-icon { color: #11998e; }
-            &:nth-child(3) mat-icon { color: #f5576c; }
+            &:nth-child(2) mat-icon { color: var(--color-cat-teal); }
+            &:nth-child(3) mat-icon { color: var(--color-cat-pink); }
           }
         }
       }
@@ -589,7 +611,7 @@ interface Driver {
         gap: 12px;
         margin-top: 24px;
         padding-top: 16px;
-        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        border-top: 1px solid var(--color-line);
 
         button {
           display: flex;
@@ -600,7 +622,7 @@ interface Driver {
     }
 
     .add-driver-section {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       padding: 24px;
       margin-bottom: 32px;
@@ -608,8 +630,9 @@ interface Driver {
       h3 {
         margin-top: 0;
         margin-bottom: 20px;
-        font-size: 18px;
-        font-weight: 500;
+        font-size: var(--text-xl);
+        font-weight: 600;
+        color: var(--color-text);
       }
 
       .form-row {
@@ -646,8 +669,9 @@ interface Driver {
 
         h3 {
           margin: 0;
-          font-size: 18px;
-          font-weight: 500;
+          font-size: var(--text-xl);
+          font-weight: 600;
+          color: var(--color-text);
         }
 
         button {
@@ -658,7 +682,7 @@ interface Driver {
       }
 
       .table-container {
-        border: 1px solid rgba(0, 0, 0, 0.12);
+        border: 1px solid var(--color-line);
         border-radius: 8px;
         overflow: hidden;
 
@@ -666,43 +690,17 @@ interface Driver {
           width: 100%;
 
           th {
-            background: #f5f5f5;
+            background: var(--color-surface-2);
             font-weight: 600;
-            color: rgba(0, 0, 0, 0.87);
+            color: var(--color-text-2);
           }
 
           td, th {
-            padding: 12px 16px;
+            padding: var(--row-pad-y) 16px;
           }
 
-          .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-            background: #e0e0e0;
-            color: rgba(0, 0, 0, 0.6);
-
-            &.active {
-              background: #4caf50;
-              color: white;
-            }
-
-            &.inactive {
-              background: #9e9e9e;
-              color: white;
-            }
-
-            &.on.leave, &.on-leave {
-              background: #ff9800;
-              color: white;
-            }
-
-            &.suspended {
-              background: #f44336;
-              color: white;
-            }
+          td {
+            color: var(--color-text);
           }
 
           .stats-badge {
@@ -711,8 +709,9 @@ interface Driver {
             gap: 4px;
             padding: 4px 10px;
             border-radius: 16px;
-            font-size: 13px;
+            font-size: var(--text-sm);
             font-weight: 600;
+            font-variant-numeric: tabular-nums;
 
             mat-icon {
               font-size: 16px;
@@ -721,13 +720,13 @@ interface Driver {
             }
 
             &.trips {
-              background: rgba(103, 126, 234, 0.15);
-              color: #2563eb;
+              background: var(--color-cat-purple-soft);
+              color: var(--color-cat-purple);
             }
 
             &.km {
-              background: rgba(79, 172, 254, 0.15);
-              color: #4facfe;
+              background: var(--color-cat-teal-soft);
+              color: var(--color-cat-teal);
             }
           }
 
@@ -739,50 +738,23 @@ interface Driver {
             height: 30px;
             padding: 0 6px;
             border-radius: 50%;
-            font-size: 14px;
+            font-size: var(--text-md);
             font-weight: 700;
-            color: #6b7280;
-            background: #f1f5f9;
+            color: var(--color-text-3);
+            background: var(--color-surface-2);
           }
           .rank-badge.medal {
-            font-size: 20px;
-            background: transparent;
-            min-width: auto;
-          }
-        }
+            gap: 2px;
+            padding: 0 10px 0 6px;
+            border-radius: 999px;
+            color: var(--color-cat-amber);
+            background: var(--color-cat-amber-soft);
 
-        .no-data {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 48px;
-          color: rgba(0, 0, 0, 0.38);
-
-          mat-icon {
-            font-size: 48px;
-            width: 48px;
-            height: 48px;
-            margin-bottom: 16px;
-          }
-
-          p {
-            margin: 0;
-            font-size: 14px;
-          }
-        }
-
-        .loading-spinner {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 48px;
-          color: rgba(0, 0, 0, 0.54);
-
-          p {
-            margin-top: 16px;
-            font-size: 14px;
+            mat-icon {
+              font-size: 18px;
+              width: 18px;
+              height: 18px;
+            }
           }
         }
 
@@ -792,7 +764,7 @@ interface Driver {
           align-items: center;
           justify-content: center;
           padding: 48px;
-          color: #f44336;
+          color: var(--color-danger);
 
           mat-icon {
             font-size: 48px;
@@ -803,7 +775,7 @@ interface Driver {
 
           p {
             margin: 0;
-            font-size: 14px;
+            font-size: var(--text-md);
             text-align: center;
           }
         }
@@ -812,7 +784,7 @@ interface Driver {
 
     mat-dialog-actions {
       padding: 16px 24px;
-      border-top: 1px solid rgba(0, 0, 0, 0.12);
+      border-top: 1px solid var(--color-line);
     }
   `]
 })
@@ -820,6 +792,7 @@ export class DriversDialogComponent implements OnInit {
   private http = inject(HttpClient);
   private fb = inject(FormBuilder);
   private dialogRef = inject(MatDialogRef<DriversDialogComponent>);
+  private readonly confirmDialog = inject(ConfirmService);
 
   drivers: Driver[] = [];
   displayedColumns = ['rank', 'name', 'licenseNumber', 'licenseType', 'totalTrips', 'totalKm', 'status', 'actions'];
@@ -886,6 +859,15 @@ export class DriversDialogComponent implements OnInit {
 
   isActive(driver: Driver): boolean {
     return driver.status?.toLowerCase() === 'active';
+  }
+
+  getStatusTone(status: string | undefined): ChipTone {
+    switch ((status || '').toLowerCase().replace(/[\s_-]+/g, ' ')) {
+      case 'active': return 'ok';
+      case 'on leave': return 'warn';
+      case 'suspended': return 'danger';
+      default: return 'neutral';
+    }
   }
 
   // Rank among active drivers (1-based) by trips then km. Because the list is
@@ -1006,8 +988,13 @@ export class DriversDialogComponent implements OnInit {
     }
   }
 
-  deleteDriver(driver: Driver) {
-    if (confirm(`Are you sure you want to delete ${driver.firstName}?`)) {
+  async deleteDriver(driver: Driver) {
+    if (await this.confirmDialog.ask({
+      title: `Delete driver ${driver.firstName}?`,
+      message: 'The driver is deleted and removed from this list.',
+      confirmText: 'Delete driver',
+      danger: true
+    })) {
       this.isLoading = true;
       this.http.delete(`${environment.apiUrl}/logistics/drivers/${driver.id}`).subscribe({
         next: () => {

@@ -20,6 +20,8 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } 
 import { AuthService } from '../../services/auth.service';
 import { SupportTicketService, SupportTicket, TicketStatistics } from '../../services/support-ticket.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { ConfirmService } from '../../ui/confirm.service';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 
 @Component({
   selector: 'app-support-ticket',
@@ -43,55 +45,36 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     MatBadgeModule,
     MatMenuModule,
     FormsModule,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent
   ],
   template: `
     <app-navbar></app-navbar>
 
     <div class="support-container">
-      <!-- Ambient Background Effects -->
-      <div class="ambient-orb orb-1"></div>
-      <div class="ambient-orb orb-2"></div>
-      <div class="ambient-orb orb-3"></div>
-
-      <!-- Modern Header -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-left">
-            <div class="header-icon-wrapper">
-              <mat-icon>support_agent</mat-icon>
-              <div class="icon-ring"></div>
-            </div>
-            <div class="header-text">
-              <h1>Support Tickets</h1>
-              <p class="header-subtitle">Track, manage & resolve support requests</p>
-            </div>
-          </div>
-          <div class="header-actions">
-            <mat-form-field appearance="outline" class="search-field">
-              <mat-icon matPrefix>search</mat-icon>
-              <input matInput [(ngModel)]="searchQuery" placeholder="Search tickets..." (input)="filterTickets()">
-              @if (searchQuery) {
-                <button matSuffix mat-icon-button (click)="searchQuery = ''; filterTickets()">
-                  <mat-icon>close</mat-icon>
-                </button>
-              }
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="period-field">
-              <mat-select [(value)]="selectedDateRange" (selectionChange)="onDateRangeChange()">
-                <mat-option value="today">Today</mat-option>
-                <mat-option value="7days">7 Days</mat-option>
-                <mat-option value="30days">30 Days</mat-option>
-                <mat-option value="90days">90 Days</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <button mat-flat-button class="create-btn" (click)="openCreateTicketDialog()">
-              <mat-icon>add</mat-icon>
-              New Ticket
+      <app-page-header class="support-header" [crumbs]="['Oversight', 'Support']" title="Support"
+                       subtitle="Track and resolve support requests">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="search-field">
+          <mat-icon matPrefix>search</mat-icon>
+          <input matInput [(ngModel)]="searchQuery" placeholder="Search tickets" aria-label="Search tickets" (input)="filterTickets()">
+          @if (searchQuery) {
+            <button aria-label="Close" matSuffix mat-icon-button class="search-clear" (click)="searchQuery = ''; filterTickets()">
+              <mat-icon>close</mat-icon>
             </button>
-          </div>
-        </div>
-      </div>
+          }
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="period-field">
+          <mat-select [(value)]="selectedDateRange" (selectionChange)="onDateRangeChange()" aria-label="Statistics period">
+            <mat-option value="today">Today</mat-option>
+            <mat-option value="7days">7 days</mat-option>
+            <mat-option value="30days">30 days</mat-option>
+            <mat-option value="90days">90 days</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <button mat-flat-button color="primary" (click)="openCreateTicketDialog()">
+          <mat-icon>add</mat-icon>New ticket
+        </button>
+      </app-page-header>
 
       <!-- Statistics Strip -->
       <div class="stats-strip">
@@ -139,7 +122,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
             <div class="lc-icon-wrap">
               <mat-icon class="lc-icon pulse-icon">support_agent</mat-icon>
             </div>
-            <h3>Loading Support Tickets</h3>
+            <h3>Loading tickets</h3>
             <p class="lc-subtitle">Fetching tickets, responses and statistics</p>
             <div class="lc-progress-wrap">
               <div class="lc-progress-track">
@@ -218,13 +201,13 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
                     <span class="meta-item"><mat-icon>schedule</mat-icon>{{ ticket.submittedDate | date: 'MMM d, y' }}</span>
                   </div>
                   <div class="ticket-card-actions">
-                    <button mat-icon-button matTooltip="Add Comment" class="action-btn comment" (click)="openCommentDialog(ticket)">
+                    <button aria-label="Add Comment" mat-icon-button matTooltip="Add Comment" class="action-btn comment" (click)="openCommentDialog(ticket)">
                       <mat-icon>chat_bubble_outline</mat-icon>
                     </button>
-                    <button mat-icon-button matTooltip="Close Ticket" class="action-btn resolve" (click)="closeTicket(ticket)">
+                    <button aria-label="Close Ticket" mat-icon-button matTooltip="Close Ticket" class="action-btn resolve" (click)="closeTicket(ticket)">
                       <mat-icon>check_circle_outline</mat-icon>
                     </button>
-                    <button mat-icon-button matTooltip="Delete Ticket" class="action-btn delete" (click)="deleteTicket(ticket)">
+                    <button aria-label="Delete Ticket" mat-icon-button matTooltip="Delete Ticket" class="action-btn delete" (click)="deleteTicket(ticket)">
                       <mat-icon>delete_outline</mat-icon>
                     </button>
                   </div>
@@ -271,10 +254,10 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
                     <span class="meta-item"><mat-icon>event_available</mat-icon>{{ ticket.closedDate | date: 'MMM d, y' }}</span>
                   </div>
                   <div class="ticket-card-actions">
-                    <button mat-icon-button matTooltip="Reopen Ticket" class="action-btn reopen" (click)="reopenTicket(ticket)">
+                    <button aria-label="Reopen Ticket" mat-icon-button matTooltip="Reopen Ticket" class="action-btn reopen" (click)="reopenTicket(ticket)">
                       <mat-icon>refresh</mat-icon>
                     </button>
-                    <button mat-icon-button matTooltip="Delete Ticket" class="action-btn delete" (click)="deleteTicket(ticket)">
+                    <button aria-label="Delete Ticket" mat-icon-button matTooltip="Delete Ticket" class="action-btn delete" (click)="deleteTicket(ticket)">
                       <mat-icon>delete_outline</mat-icon>
                     </button>
                   </div>
@@ -287,338 +270,105 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     </div>
   `,
   styles: [`
-    /* === Page Container === */
+    /* === Page container === */
     :host {
       display: block;
-      background: #0a0a1a;
-      min-height: 100vh;
-      position: relative;
-      overflow-x: hidden;
     }
 
     .support-container {
-      padding: 88px 32px 40px;
-      min-height: calc(100vh - 64px);
-      background: transparent;
-      position: relative;
-      z-index: 1;
+      padding: var(--space-5) var(--space-6) var(--space-8);
+      background: var(--color-canvas);
     }
 
-    /* === Ambient Background Orbs === */
-    .ambient-orb {
-      position: fixed;
-      border-radius: 50%;
-      filter: blur(120px);
-      opacity: 0.35;
-      pointer-events: none;
-      z-index: 0;
-      animation: floatOrb 20s ease-in-out infinite;
+    /* === Page header === */
+    .support-header {
+      margin-bottom: var(--space-5);
     }
 
-    .orb-1 {
-      width: 500px;
-      height: 500px;
-      background: radial-gradient(circle, #6366f1, transparent 70%);
-      top: -100px;
-      right: -100px;
-      animation-delay: 0s;
-    }
-
-    .orb-2 {
-      width: 400px;
-      height: 400px;
-      background: radial-gradient(circle, #06b6d4, transparent 70%);
-      bottom: -50px;
-      left: -80px;
-      animation-delay: -7s;
-    }
-
-    .orb-3 {
-      width: 300px;
-      height: 300px;
-      background: radial-gradient(circle, #e94560, transparent 70%);
-      top: 40%;
-      left: 50%;
-      animation-delay: -14s;
-    }
-
-    @keyframes floatOrb {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      25% { transform: translate(30px, -20px) scale(1.05); }
-      50% { transform: translate(-20px, 30px) scale(0.95); }
-      75% { transform: translate(15px, 15px) scale(1.02); }
-    }
-
-    /* === Header === */
-    .page-header {
-      background: rgba(255, 255, 255, 0.04);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 20px;
-      padding: 28px 32px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .page-header::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5), rgba(6, 182, 212, 0.5), transparent);
-    }
-
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .header-icon-wrapper {
-      width: 56px;
-      height: 56px;
-      border-radius: 16px;
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
-      position: relative;
-      animation: iconPulse 3s ease-in-out infinite;
-    }
-
-    @keyframes iconPulse {
-      0%, 100% { box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4); }
-      50% { box-shadow: 0 8px 32px rgba(99, 102, 241, 0.6); }
-    }
-
-    .icon-ring {
-      position: absolute;
-      inset: -4px;
-      border-radius: 20px;
-      border: 2px solid rgba(99, 102, 241, 0.3);
-      animation: ringPulse 3s ease-in-out infinite;
-    }
-
-    @keyframes ringPulse {
-      0%, 100% { opacity: 0.5; transform: scale(1); }
-      50% { opacity: 0; transform: scale(1.15); }
-    }
-
-    .header-icon-wrapper mat-icon {
-      font-size: 30px;
-      width: 30px;
-      height: 30px;
-      color: white;
-    }
-
-    .header-text h1 {
-      margin: 0;
-      font-size: 28px;
-      font-weight: 800;
-      background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing: -0.5px;
-    }
-
-    .header-subtitle {
-      margin: 4px 0 0;
-      font-size: 14px;
-      color: rgba(255,255,255,0.45);
-      font-weight: 400;
-      letter-spacing: 0.2px;
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .search-field,
+    .period-field {
+      --mat-form-field-container-height: 36px;
+      --mat-form-field-container-vertical-padding: 6px;
+      --mat-form-field-container-text-size: var(--text-sm);
+      --mat-select-trigger-text-size: var(--text-sm);
+      --mdc-outlined-text-field-container-shape: var(--radius-control);
+      --mdc-outlined-text-field-outline-color: var(--color-line-strong);
+      border-radius: var(--radius-control);
+      background: var(--color-surface);
     }
 
     .search-field {
-      width: 280px;
-    }
-
-    .search-field ::ng-deep .mat-mdc-text-field-wrapper {
-      background: rgba(255,255,255,0.06) !important;
-      border-radius: 12px !important;
-    }
-
-    .search-field ::ng-deep .mdc-notched-outline__leading,
-    .search-field ::ng-deep .mdc-notched-outline__notch,
-    .search-field ::ng-deep .mdc-notched-outline__trailing {
-      border-color: rgba(255,255,255,0.1) !important;
-    }
-
-    .search-field:hover ::ng-deep .mdc-notched-outline__leading,
-    .search-field:hover ::ng-deep .mdc-notched-outline__notch,
-    .search-field:hover ::ng-deep .mdc-notched-outline__trailing {
-      border-color: rgba(99, 102, 241, 0.4) !important;
-    }
-
-    .search-field ::ng-deep input {
-      color: rgba(255,255,255,0.9) !important;
-    }
-
-    .search-field ::ng-deep input::placeholder {
-      color: rgba(255,255,255,0.35) !important;
-    }
-
-    .search-field ::ng-deep .mat-mdc-form-field-icon-prefix mat-icon,
-    .search-field ::ng-deep .mat-mdc-form-field-icon-suffix mat-icon {
-      color: rgba(255,255,255,0.35) !important;
-    }
-
-    .search-field ::ng-deep .mat-mdc-form-field-infix {
-      padding-top: 8px !important;
-      padding-bottom: 8px !important;
-      min-height: 40px !important;
+      width: 260px;
     }
 
     .period-field {
-      width: 130px;
+      width: 120px;
     }
 
-    .period-field ::ng-deep .mat-mdc-text-field-wrapper {
-      background: rgba(255,255,255,0.06) !important;
-      border-radius: 12px !important;
+    .search-clear {
+      --mdc-icon-button-state-layer-size: 28px;
+      --mdc-icon-button-icon-size: 18px;
     }
 
-    .period-field ::ng-deep .mdc-notched-outline__leading,
-    .period-field ::ng-deep .mdc-notched-outline__notch,
-    .period-field ::ng-deep .mdc-notched-outline__trailing {
-      border-color: rgba(255,255,255,0.1) !important;
+    .search-clear mat-icon {
+      width: 18px;
+      height: 18px;
+      font-size: var(--text-xl);
     }
 
-    .period-field ::ng-deep .mat-mdc-select-value-text {
-      color: rgba(255,255,255,0.9) !important;
-    }
-
-    .period-field ::ng-deep .mat-mdc-select-arrow {
-      color: rgba(255,255,255,0.35) !important;
-    }
-
-    .period-field ::ng-deep .mat-mdc-form-field-infix {
-      padding-top: 8px !important;
-      padding-bottom: 8px !important;
-      min-height: 40px !important;
-    }
-
-    .create-btn {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
-      color: white !important;
-      padding: 0 28px !important;
-      height: 44px;
-      border-radius: 12px !important;
-      font-weight: 600 !important;
-      font-size: 14px !important;
-      letter-spacing: 0.3px;
-      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35) !important;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-      border: 1px solid rgba(139, 92, 246, 0.3) !important;
-    }
-
-    .create-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 28px rgba(99, 102, 241, 0.5) !important;
-    }
-
-    .create-btn mat-icon {
-      margin-right: 6px;
-      font-size: 20px;
-    }
-
-    /* === Stats Strip === */
+    /* === Stats strip === */
     .stats-strip {
       display: flex;
-      gap: 14px;
-      margin-bottom: 28px;
+      gap: var(--space-3);
+      margin-bottom: var(--space-5);
       overflow-x: auto;
-      padding-bottom: 4px;
+      padding-bottom: var(--space-1);
     }
 
     .stat-pill {
       display: flex;
       align-items: center;
-      gap: 14px;
-      background: rgba(255, 255, 255, 0.04);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-radius: 16px;
-      padding: 16px 22px;
+      gap: var(--space-3);
       min-width: 160px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      padding: var(--space-4) var(--space-5);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       cursor: pointer;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .stat-pill::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 16px;
-      padding: 1px;
-      background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.1));
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      pointer-events: none;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
     }
 
     .stat-pill:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 28px rgba(0,0,0,0.3);
-      background: rgba(255, 255, 255, 0.07);
-      border-color: rgba(255, 255, 255, 0.12);
+      border-color: var(--color-line-strong);
     }
 
     .stat-pill.active {
-      background: rgba(99, 102, 241, 0.12);
-      border-color: rgba(99, 102, 241, 0.3);
-      box-shadow: 0 8px 28px rgba(99, 102, 241, 0.2);
+      background: var(--color-primary-soft);
+      border-color: var(--color-primary);
     }
 
     .pill-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
     }
 
     .pill-icon mat-icon {
-      font-size: 22px;
-      width: 22px;
-      height: 22px;
-      color: white;
+      width: 20px;
+      height: 20px;
+      font-size: var(--text-2xl);
     }
 
-    .pill-icon.total { background: linear-gradient(135deg, #6366f1, #8b5cf6); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
-    .pill-icon.open { background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
-    .pill-icon.closed { background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
-    .pill-icon.response { background: linear-gradient(135deg, #f59e0b, #eab308); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); }
-    .pill-icon.resolution { background: linear-gradient(135deg, #ec4899, #f43f5e); box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3); }
+    .pill-icon.open { background: var(--color-info-soft); color: var(--color-info); }
+    .pill-icon.closed { background: var(--color-ok-soft); color: var(--color-ok); }
+    .stat-pill.active .pill-icon { background: var(--color-surface); }
 
     .pill-info {
       display: flex;
@@ -626,332 +376,362 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .pill-value {
-      font-size: 22px;
+      font-size: var(--text-2xl);
       font-weight: 800;
-      color: #f1f5f9;
       line-height: 1.2;
+      color: var(--color-text);
       font-variant-numeric: tabular-nums;
     }
 
     .pill-label {
-      font-size: 11px;
-      color: rgba(255,255,255,0.4);
+      font-size: var(--text-xs);
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
+      color: var(--color-text-3);
     }
 
     /* === Loading === */
     .loading-state {
-      display: flex; justify-content: center; padding: 60px 20px;
+      display: flex;
+      justify-content: center;
+      padding: var(--space-8) var(--space-4);
     }
-    .loading-card {
-      background: rgba(255,255,255,0.05); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-      border: 1px solid rgba(255,255,255,0.08); border-radius: 24px;
-      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.3);
-      max-width: 520px; width: 100%;
-    }
-    .loading-card h3 { color: #f1f5f9; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: rgba(255,255,255,0.5); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
-    .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(6,182,212,0.15));
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(99,102,241,0.2);
-    }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #60a5fa; }
-    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
-    .lc-subtitle { color: rgba(255,255,255,0.4) !important; font-size: 13px !important; }
-    .lc-progress-wrap { margin: 8px 0 24px; }
-    .lc-progress-track { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; position: relative; }
-    .lc-progress-fill {
-      height: 100%; border-radius: 3px;
-      background: linear-gradient(90deg, #6366f1, #60a5fa, #06b6d4);
-      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
-      transition: width 0.15s ease-out; position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3)); border-radius: 0 3px 3px 0;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
-    .lc-progress-message { color: rgba(255,255,255,0.5); font-weight: 500; }
-    .lc-progress-pct { color: #60a5fa; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.06); }
-    .lc-step {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      flex: 1; padding-top: 16px; opacity: 0.3; transition: opacity 0.4s ease, transform 0.3s ease;
-    }
-    .lc-step.active { opacity: 1; transform: translateY(-2px); }
-    .lc-step.done { opacity: 0.6; }
-    .lc-step-dot {
-      width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.06);
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
-    }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: rgba(255,255,255,0.3); transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #6366f1, #06b6d4); box-shadow: 0 2px 12px rgba(99,102,241,0.4); }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
-    .lc-step.done .lc-step-dot { background: rgba(16,185,129,0.15); }
-    .lc-step.done .lc-step-dot mat-icon { color: #10b981; }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.3); white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #60a5fa; }
-    .lc-step.done .lc-step-label { color: #10b981; }
 
-    /* === Tab Bar === */
+    .loading-card {
+      width: 100%;
+      max-width: 520px;
+      padding: var(--space-8) var(--space-6);
+      text-align: center;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .loading-card h3 {
+      margin: var(--space-4) 0 var(--space-1);
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+
+    .lc-subtitle {
+      margin: 0 0 var(--space-5);
+      font-size: var(--text-sm);
+      line-height: 1.5;
+      color: var(--color-text-3);
+    }
+
+    .lc-icon-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      margin: 0 auto;
+      border-radius: 50%;
+      background: var(--color-primary-soft);
+    }
+
+    .lc-icon {
+      width: 32px;
+      height: 32px;
+      font-size: var(--text-4xl);
+      color: var(--color-primary);
+    }
+
+    .pulse-icon { animation: lcPulse 2s ease-in-out infinite; }
+    @keyframes lcPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+    .lc-progress-wrap { margin: var(--space-2) 0 var(--space-5); }
+
+    .lc-progress-track {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--color-surface-2);
+      overflow: hidden;
+    }
+
+    .lc-progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--color-primary);
+      transition: width 0.15s ease-out;
+    }
+
+    .lc-progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: var(--space-2);
+      font-size: var(--text-xs);
+    }
+
+    .lc-progress-message { color: var(--color-text-2); font-weight: 500; }
+    .lc-progress-pct { color: var(--color-primary); font-weight: 700; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+
+    .lc-steps {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-1);
+      padding-top: var(--space-1);
+      border-top: 1px solid var(--color-line);
+    }
+
+    .lc-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      padding-top: var(--space-4);
+    }
+
+    .lc-step-dot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--color-surface-2);
+      color: var(--color-text-3);
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .lc-step-dot mat-icon { width: 16px; height: 16px; font-size: var(--text-lg); }
+    .lc-step-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-3); white-space: nowrap; }
+    .lc-step.active .lc-step-dot { background: var(--color-primary); color: var(--color-on-primary); }
+    .lc-step.active .lc-step-label { color: var(--color-primary); }
+    .lc-step.done .lc-step-dot { background: var(--color-ok-soft); color: var(--color-ok); }
+    .lc-step.done .lc-step-label { color: var(--color-ok); }
+
+    /* === Tab bar (segmented control) === */
     .tab-bar {
       display: flex;
-      gap: 6px;
-      margin-bottom: 24px;
-      background: rgba(255, 255, 255, 0.04);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      padding: 5px;
-      border-radius: 14px;
+      gap: 2px;
       width: fit-content;
+      margin-bottom: var(--space-5);
+      padding: var(--space-1);
+      background: var(--color-surface-2);
+      border-radius: var(--radius-md);
     }
 
     .tab-btn {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 22px;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
       border: none;
+      border-radius: var(--radius-control);
       background: transparent;
-      border-radius: 10px;
-      font-size: 14px;
+      font-family: inherit;
+      font-size: var(--text-md);
       font-weight: 600;
-      color: rgba(255, 255, 255, 0.45);
+      color: var(--color-text-2);
       cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: background-color 0.15s ease, color 0.15s ease;
     }
 
     .tab-btn:hover {
-      background: rgba(255, 255, 255, 0.06);
-      color: rgba(255, 255, 255, 0.8);
+      color: var(--color-text);
     }
 
     .tab-btn.active {
-      background: rgba(99, 102, 241, 0.15);
-      color: #c7d2fe;
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+      background: var(--color-surface);
+      color: var(--color-text);
+      box-shadow: var(--shadow-sm);
     }
 
     .tab-btn mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
+      font-size: var(--text-xl);
     }
 
     .badge {
-      font-size: 11px;
-      font-weight: 700;
-      padding: 2px 9px;
-      border-radius: 10px;
       min-width: 20px;
+      padding: 1px var(--space-2);
+      border-radius: 999px;
+      font-size: var(--text-xs);
+      font-weight: 700;
       text-align: center;
+      font-variant-numeric: tabular-nums;
     }
 
-    .badge.open { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
-    .tab-btn.active .badge.open { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-    .badge.closed { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
-    .tab-btn.active .badge.closed { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    .badge.open { background: var(--color-info-soft); color: var(--color-info); }
+    .badge.closed { background: var(--color-ok-soft); color: var(--color-ok); }
 
-    /* === Tickets Grid === */
+    /* === Tickets grid === */
     .tickets-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-      gap: 18px;
-      animation: fadeInUp 0.4s ease-out;
+      gap: var(--space-4);
+      animation: ticketsFadeIn 0.2s ease-out;
     }
 
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
+    @keyframes ticketsFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
-    /* === Ticket Card === */
+    /* === Ticket card === */
     .ticket-card {
-      background: rgba(255, 255, 255, 0.04);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-radius: 16px;
-      padding: 22px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-left: 4px solid rgba(255,255,255,0.1);
-      transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      position: relative;
+      gap: var(--space-3);
+      padding: var(--space-5);
       overflow: hidden;
-    }
-
-    .ticket-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-left: 4px solid var(--color-line-strong);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.15s ease;
     }
 
     .ticket-card:hover {
-      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
-      transform: translateY(-4px);
-      background: rgba(255, 255, 255, 0.06);
-      border-color: rgba(255, 255, 255, 0.1);
+      box-shadow: var(--shadow-md);
     }
 
-    .ticket-card.border-low { border-left-color: #10b981; }
-    .ticket-card.border-low:hover { box-shadow: 0 12px 40px rgba(16, 185, 129, 0.15); }
-    .ticket-card.border-medium { border-left-color: #f59e0b; }
-    .ticket-card.border-medium:hover { box-shadow: 0 12px 40px rgba(245, 158, 11, 0.15); }
-    .ticket-card.border-high { border-left-color: #ef4444; }
-    .ticket-card.border-high:hover { box-shadow: 0 12px 40px rgba(239, 68, 68, 0.15); }
-    .ticket-card.border-critical { border-left-color: #dc2626; }
-    .ticket-card.border-critical:hover { box-shadow: 0 12px 40px rgba(220, 38, 38, 0.2); }
-    .ticket-card.closed-card { border-left-color: #6366f1; opacity: 0.85; }
-    .ticket-card.closed-card:hover { opacity: 1; box-shadow: 0 12px 40px rgba(99, 102, 241, 0.15); }
+    /* Left edge carries the priority (low stays neutral); closed tickets are green. */
+    .ticket-card.border-medium { border-left-color: var(--color-warn); }
+    .ticket-card.border-high,
+    .ticket-card.border-critical { border-left-color: var(--color-danger); }
+    .ticket-card.closed-card { border-left-color: var(--color-ok); }
 
     .ticket-card-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: var(--space-2);
     }
 
     .ticket-id-badge {
-      font-size: 12px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.4);
-      background: rgba(255,255,255,0.06);
-      padding: 4px 12px;
-      border-radius: 8px;
-      letter-spacing: 0.5px;
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
 
     .ticket-priority {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 5px;
-      font-size: 11px;
+      gap: var(--space-1);
+      padding: 2px 10px 2px var(--space-2);
+      border-radius: 999px;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+      font-size: var(--text-xs);
       font-weight: 700;
-      padding: 5px 12px;
-      border-radius: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
     }
 
     .ticket-priority mat-icon {
-      font-size: 14px;
       width: 14px;
       height: 14px;
+      font-size: var(--text-md);
     }
 
-    .ticket-priority.priority-low { background: rgba(16, 185, 129, 0.12); color: #6ee7b7; }
-    .ticket-priority.priority-medium { background: rgba(245, 158, 11, 0.12); color: #fcd34d; }
-    .ticket-priority.priority-high { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
-    .ticket-priority.priority-critical { background: rgba(220, 38, 38, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.2); }
-    .ticket-priority.resolved { background: rgba(99, 102, 241, 0.12); color: #a5b4fc; }
+    .ticket-priority.priority-medium { background: var(--color-warn-soft); color: var(--color-warn); }
+    .ticket-priority.priority-high { background: var(--color-danger-soft); color: var(--color-danger); }
+    .ticket-priority.priority-critical { background: var(--color-danger-soft); color: var(--color-danger); box-shadow: inset 0 0 0 1px var(--color-danger); }
+    .ticket-priority.resolved { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .ticket-title {
       margin: 0;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 700;
-      color: #f1f5f9;
       line-height: 1.4;
+      color: var(--color-text);
     }
 
     .ticket-desc {
       margin: 0;
-      font-size: 13px;
-      color: rgba(255,255,255,0.4);
-      line-height: 1.7;
+      font-size: var(--text-sm);
+      line-height: 1.6;
+      color: var(--color-text-2);
     }
 
     .ticket-tags {
       display: flex;
-      gap: 8px;
+      gap: var(--space-2);
       flex-wrap: wrap;
     }
 
     .tag {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      font-size: 11px;
+      gap: var(--space-1);
+      padding: 2px 10px 2px var(--space-2);
+      border-radius: 999px;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+      font-size: var(--text-xs);
       font-weight: 600;
-      padding: 4px 12px;
-      border-radius: 8px;
-      letter-spacing: 0.3px;
     }
 
     .tag mat-icon {
-      font-size: 13px;
-      width: 13px;
-      height: 13px;
+      width: 14px;
+      height: 14px;
+      font-size: var(--text-md);
     }
 
-    .tag.category { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
-    .tag.status.open { background: rgba(239, 68, 68, 0.1); color: #fca5a5; }
-    .tag.status.closed { background: rgba(16, 185, 129, 0.1); color: #6ee7b7; }
+    .tag.status.open { background: var(--color-info-soft); color: var(--color-info); }
+    .tag.status.closed { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .resolution-box {
       display: flex;
       align-items: flex-start;
-      gap: 10px;
-      background: rgba(16, 185, 129, 0.06);
-      border: 1px solid rgba(16, 185, 129, 0.15);
-      border-radius: 10px;
-      padding: 12px 16px;
-      font-size: 13px;
-      color: #6ee7b7;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
+      background: var(--color-ok-soft);
+      font-size: var(--text-sm);
       line-height: 1.6;
+      color: var(--color-text);
     }
 
     .resolution-box mat-icon {
-      font-size: 18px;
+      flex-shrink: 0;
       width: 18px;
       height: 18px;
-      color: #10b981;
       margin-top: 1px;
-      flex-shrink: 0;
+      font-size: var(--text-xl);
+      color: var(--color-ok);
     }
 
     .ticket-footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-top: 14px;
-      border-top: 1px solid rgba(255,255,255,0.06);
+      gap: var(--space-2);
       margin-top: auto;
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-line);
     }
 
     .ticket-meta-row {
       display: flex;
-      gap: 16px;
+      gap: var(--space-4);
       flex-wrap: wrap;
     }
 
     .meta-item {
       display: flex;
       align-items: center;
-      gap: 5px;
-      font-size: 12px;
-      color: rgba(255,255,255,0.3);
+      gap: var(--space-1);
+      font-size: var(--text-xs);
       font-weight: 500;
+      color: var(--color-text-3);
     }
 
     .meta-item mat-icon {
-      font-size: 15px;
-      width: 15px;
-      height: 15px;
+      width: 14px;
+      height: 14px;
+      font-size: var(--text-md);
     }
 
     .ticket-card-actions {
@@ -960,96 +740,78 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .action-btn {
-      width: 36px !important;
-      height: 36px !important;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-      border-radius: 10px !important;
+      --mdc-icon-button-state-layer-size: 36px;
+      --mdc-icon-button-icon-size: 18px;
     }
 
     .action-btn mat-icon {
-      font-size: 19px !important;
-      width: 19px !important;
-      height: 19px !important;
+      width: 18px;
+      height: 18px;
+      font-size: var(--text-xl);
     }
 
-    .action-btn.comment { color: #60a5fa !important; }
-    .action-btn.comment:hover { background: rgba(99, 102, 241, 0.12) !important; }
-    .action-btn.resolve { color: #34d399 !important; }
-    .action-btn.resolve:hover { background: rgba(16, 185, 129, 0.12) !important; }
-    .action-btn.reopen { color: #fbbf24 !important; }
-    .action-btn.reopen:hover { background: rgba(245, 158, 11, 0.12) !important; }
-    .action-btn.delete { color: #f87171 !important; }
-    .action-btn.delete:hover { background: rgba(239, 68, 68, 0.12) !important; }
+    .action-btn.comment { --mdc-icon-button-icon-color: var(--color-primary); --mat-icon-button-state-layer-color: var(--color-primary); }
+    .action-btn.resolve { --mdc-icon-button-icon-color: var(--color-ok); --mat-icon-button-state-layer-color: var(--color-ok); }
+    .action-btn.reopen { --mdc-icon-button-icon-color: var(--color-warn); --mat-icon-button-state-layer-color: var(--color-warn); }
+    .action-btn.delete { --mdc-icon-button-icon-color: var(--color-danger); --mat-icon-button-state-layer-color: var(--color-danger); }
 
-    /* === Empty State === */
+    /* === Empty state === */
     .empty-state {
       grid-column: 1 / -1;
+      padding: var(--space-8) var(--space-4);
       text-align: center;
-      padding: 60px 20px;
-      background: rgba(255, 255, 255, 0.03);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.06);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
     }
 
     .empty-icon {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.06);
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 16px;
+      width: 64px;
+      height: 64px;
+      margin: 0 auto var(--space-4);
+      border-radius: 50%;
+      background: var(--color-surface-2);
+      color: var(--color-text-3);
     }
 
     .empty-icon mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      color: rgba(255,255,255,0.2);
+      width: 32px;
+      height: 32px;
+      font-size: var(--text-4xl);
     }
 
     .empty-state h3 {
-      margin: 0 0 8px;
-      font-size: 18px;
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-xl);
       font-weight: 600;
-      color: rgba(255,255,255,0.7);
+      color: var(--color-text);
     }
 
     .empty-state p {
-      margin: 0 0 20px;
-      font-size: 14px;
-      color: rgba(255,255,255,0.35);
+      margin: 0 0 var(--space-5);
+      font-size: var(--text-md);
+      color: var(--color-text-2);
     }
 
-    .empty-action {
-      border-color: rgba(99, 102, 241, 0.5) !important;
-      color: #a5b4fc !important;
-    }
-
-    .empty-action:hover {
-      background: rgba(99, 102, 241, 0.1) !important;
+    .empty-state p:last-child {
+      margin-bottom: 0;
     }
 
     /* === Responsive === */
     @media (max-width: 1024px) {
-      .support-container { padding: 80px 16px 32px; }
-      .page-header { padding: 20px; }
-      .header-content { flex-direction: column; align-items: flex-start; }
-      .header-actions { width: 100%; flex-wrap: wrap; }
-      .search-field { width: 100%; flex: 1; }
+      .support-container { padding: var(--space-5) var(--space-4) var(--space-6); }
       .stats-strip { flex-wrap: wrap; }
       .tickets-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 600px) {
-      .stat-pill { min-width: 140px; padding: 12px 16px; }
-      .ticket-footer { flex-direction: column; gap: 10px; align-items: flex-start; }
-      .ambient-orb { display: none; }
+      .support-container { padding: var(--space-4) var(--space-4) var(--space-6); }
+      .stat-pill { min-width: 140px; padding: var(--space-3) var(--space-4); }
+      .ticket-footer { flex-direction: column; align-items: flex-start; }
     }
   `]
 })
@@ -1090,7 +852,8 @@ export class SupportTicketComponent implements OnInit {
     private router: Router,
     private dialog: MatDialog,
     private ticketService: SupportTicketService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private readonly confirmDialog: ConfirmService
   ) {
     this.currentUser = this.authService.currentUserValue;
   }
@@ -1357,8 +1120,12 @@ export class SupportTicketComponent implements OnInit {
     });
   }
 
-  deleteTicket(ticket: SupportTicket): void {
-    if (!confirm(`Delete ticket #${ticket.ticketId} "${ticket.title}"?`)) return;
+  async deleteTicket(ticket: SupportTicket): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete ticket #${ticket.ticketId} "${ticket.title}"?`,
+      confirmText: 'Delete ticket',
+      danger: true
+    }))) return;
 
     this.ticketService.deleteTicket(ticket.ticketId).subscribe({
       next: () => {
@@ -1458,14 +1225,14 @@ export class SupportTicketComponent implements OnInit {
     </div>
   `,
   styles: [`
-    .dialog-wrapper { padding: 0; background: #1a1a2e; border-radius: 16px; }
+    .dialog-wrapper { padding: 0; background: var(--color-text); border-radius: 16px; }
 
     .dialog-header {
       display: flex;
       align-items: center;
       gap: 14px;
       padding: 24px 24px 8px;
-      background: #1a1a2e;
+      background: var(--color-text);
       border-radius: 16px 16px 0 0;
     }
 
@@ -1473,7 +1240,7 @@ export class SupportTicketComponent implements OnInit {
       width: 44px;
       height: 44px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      background: linear-gradient(135deg, var(--color-primary), #8b5cf6);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1491,12 +1258,12 @@ export class SupportTicketComponent implements OnInit {
       margin: 0;
       font-size: 20px;
       font-weight: 700;
-      color: #f1f5f9;
+      color: var(--color-surface-2);
     }
 
     mat-dialog-content {
       padding: 16px 24px !important;
-      background: #1a1a2e;
+      background: var(--color-text);
     }
 
     .full-width { width: 100%; }
@@ -1524,11 +1291,11 @@ export class SupportTicketComponent implements OnInit {
     }
 
     :host ::ng-deep input, :host ::ng-deep textarea {
-      color: #f1f5f9 !important;
+      color: var(--color-surface-2) !important;
     }
 
     :host ::ng-deep .mat-mdc-select-value-text {
-      color: #f1f5f9 !important;
+      color: var(--color-surface-2) !important;
     }
 
     :host ::ng-deep .mat-mdc-form-field-icon-prefix mat-icon {
@@ -1539,12 +1306,12 @@ export class SupportTicketComponent implements OnInit {
       padding: 12px 24px 20px !important;
       margin: 0 !important;
       gap: 8px;
-      background: #1a1a2e;
+      background: var(--color-text);
       border-radius: 0 0 16px 16px;
     }
 
     :host ::ng-deep .mat-mdc-dialog-surface {
-      background: #1a1a2e !important;
+      background: var(--color-text) !important;
       border-radius: 16px !important;
       border: 1px solid rgba(255,255,255,0.08) !important;
     }
@@ -1559,7 +1326,7 @@ export class SupportTicketComponent implements OnInit {
     }
 
     .submit-btn {
-      background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+      background: linear-gradient(135deg, var(--color-primary), #8b5cf6) !important;
       color: white !important;
       padding: 0 24px !important;
       height: 40px;
@@ -1662,14 +1429,14 @@ export class CreateTicketDialogComponent {
     </div>
   `,
   styles: [`
-    .dialog-wrapper { padding: 0; background: #1a1a2e; border-radius: 16px; }
+    .dialog-wrapper { padding: 0; background: var(--color-text); border-radius: 16px; }
 
     .dialog-header {
       display: flex;
       align-items: center;
       gap: 14px;
       padding: 24px 24px 8px;
-      background: #1a1a2e;
+      background: var(--color-text);
       border-radius: 16px 16px 0 0;
     }
 
@@ -1677,7 +1444,7 @@ export class CreateTicketDialogComponent {
       width: 44px;
       height: 44px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #6366f1, #60a5fa);
+      background: linear-gradient(135deg, var(--color-primary), #60a5fa);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1692,10 +1459,10 @@ export class CreateTicketDialogComponent {
       color: white;
     }
 
-    h2 { margin: 0; font-size: 18px; font-weight: 700; color: #f1f5f9; }
+    h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--color-surface-2); }
     .dialog-sub { margin: 2px 0 0; font-size: 13px; color: rgba(255,255,255,0.35); }
 
-    mat-dialog-content { padding: 16px 24px !important; background: #1a1a2e; }
+    mat-dialog-content { padding: 16px 24px !important; background: var(--color-text); }
 
     .comments-list {
       margin-bottom: 16px;
@@ -1742,19 +1509,19 @@ export class CreateTicketDialogComponent {
     }
 
     :host ::ng-deep textarea {
-      color: #f1f5f9 !important;
+      color: var(--color-surface-2) !important;
     }
 
     mat-dialog-actions {
       padding: 12px 24px 20px !important;
       margin: 0 !important;
       gap: 8px;
-      background: #1a1a2e;
+      background: var(--color-text);
       border-radius: 0 0 16px 16px;
     }
 
     :host ::ng-deep .mat-mdc-dialog-surface {
-      background: #1a1a2e !important;
+      background: var(--color-text) !important;
       border-radius: 16px !important;
       border: 1px solid rgba(255,255,255,0.08) !important;
     }
@@ -1762,7 +1529,7 @@ export class CreateTicketDialogComponent {
     .cancel-btn { color: rgba(255,255,255,0.5) !important; }
     .cancel-btn:hover { background: rgba(255,255,255,0.05) !important; }
     .submit-btn {
-      background: linear-gradient(135deg, #6366f1, #60a5fa) !important;
+      background: linear-gradient(135deg, var(--color-primary), #60a5fa) !important;
       color: white !important;
       padding: 0 24px !important;
       height: 40px;

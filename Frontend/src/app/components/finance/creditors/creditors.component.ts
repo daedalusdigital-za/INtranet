@@ -163,7 +163,7 @@ interface BreakdownResp { total: number; groups: BreakdownGroup[]; }
     </div>
   `,
   styles: [`
-    :host { display:block; min-height:100vh; background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%); }
+    :host { display:block; min-height:100vh; background:linear-gradient(135deg,var(--color-danger) 0%,var(--color-danger) 100%); }
     .cr-container { max-width:1300px; margin:0 auto; padding:24px 20px 60px; }
     .cr-back { display:inline-flex; align-items:center; gap:6px; margin-bottom:16px; padding:8px 16px 8px 12px; border:none; border-radius:10px; background:rgba(255,255,255,.2); color:#fff; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
     .cr-back:hover { background:rgba(255,255,255,.32); }
@@ -175,44 +175,44 @@ interface BreakdownResp { total: number; groups: BreakdownGroup[]; }
     .cr-title h1 { margin:0; color:#fff; font-size:24px; font-weight:700; }
     .cr-title p { margin:4px 0 0; color:rgba(255,255,255,.85); font-size:14px; }
 
-    .cr-loading { background:#fff; border-radius:14px; padding:60px; display:flex; justify-content:center; }
+    .cr-loading { background:var(--color-surface); border-radius:14px; padding:60px; display:flex; justify-content:center; }
     .cr-hero { background:linear-gradient(135deg,#7f1d1d,#991b1b); border-radius:16px; padding:24px 28px; margin-bottom:20px; display:flex; flex-direction:column; gap:4px; }
     .cr-hero-label { color:rgba(255,255,255,.8); font-size:13px; text-transform:uppercase; letter-spacing:.05em; }
     .cr-hero-value { color:#fff; font-size:34px; font-weight:800; }
 
     .cr-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-bottom:24px; }
-    .cr-card { background:#fff; border-radius:14px; padding:18px; display:flex; align-items:center; gap:14px; cursor:pointer; transition:all .2s; box-shadow:0 2px 8px rgba(0,0,0,.1); }
+    .cr-card { background:var(--color-surface); border-radius:14px; padding:18px; display:flex; align-items:center; gap:14px; cursor:pointer; transition:all .2s; box-shadow:0 2px 8px rgba(0,0,0,.1); }
     .cr-card:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.15); }
     .cr-card > mat-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:24px; color:#fff; }
-    .cr-card.invoices > mat-icon { background:linear-gradient(135deg,#6366f1,#60a5fa); }
-    .cr-card.commitments > mat-icon { background:linear-gradient(135deg,#059669,#0d9488); }
-    .cr-card.requisitions > mat-icon { background:linear-gradient(135deg,#f59e0b,#d97706); }
+    .cr-card.invoices > mat-icon { background:linear-gradient(135deg,var(--color-primary),#60a5fa); }
+    .cr-card.commitments > mat-icon { background:linear-gradient(135deg,var(--color-ok),#0d9488); }
+    .cr-card.requisitions > mat-icon { background:linear-gradient(135deg,var(--color-warn),var(--color-warn)); }
     .cr-card.expenses > mat-icon { background:linear-gradient(135deg,#0ea5e9,#38bdf8); }
     .cr-card-body { display:flex; flex-direction:column; }
-    .cr-card-value { font-size:20px; font-weight:700; color:#111827; }
-    .cr-card-label { font-size:13px; color:#374151; font-weight:600; }
-    .cr-card-sub { font-size:12px; color:#9ca3af; }
+    .cr-card-value { font-size:20px; font-weight:700; color:var(--color-text); }
+    .cr-card-label { font-size:13px; color:var(--color-text-2); font-weight:600; }
+    .cr-card-sub { font-size:12px; color:var(--color-text-3); }
 
-    .cr-section { background:#fff; border-radius:14px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,.1); }
+    .cr-section { background:var(--color-surface); border-radius:14px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,.1); }
     .cr-breakdowns { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
-    .cr-break-row { display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid #f3f4f6; }
+    .cr-break-row { display:flex; align-items:center; gap:12px; padding:11px 4px; border-bottom:1px solid var(--color-surface-2); }
     .cr-break-row:last-child { border-bottom:none; }
-    .cr-break-name { font-weight:600; color:#111827; font-size:14px; flex:1; }
-    .cr-break-meta { font-size:12px; color:#9ca3af; }
-    .cr-break-amt { font-weight:700; color:#dc2626; font-size:14px; min-width:120px; text-align:right; }
+    .cr-break-name { font-weight:600; color:var(--color-text); font-size:14px; flex:1; }
+    .cr-break-meta { font-size:12px; color:var(--color-text-3); }
+    .cr-break-amt { font-weight:700; color:var(--color-danger); font-size:14px; min-width:120px; text-align:right; }
     @media (max-width:820px) { .cr-breakdowns { grid-template-columns:1fr; } }
     .cr-section-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
-    .cr-section-head h2 { display:flex; align-items:center; gap:8px; margin:0; font-size:17px; color:#111827; }
-    .cr-section-head h2 mat-icon { color:#dc2626; }
-    .cr-section-total { font-size:18px; font-weight:700; color:#dc2626; }
-    .cr-empty { padding:30px; text-align:center; color:#9ca3af; }
+    .cr-section-head h2 { display:flex; align-items:center; gap:8px; margin:0; font-size:17px; color:var(--color-text); }
+    .cr-section-head h2 mat-icon { color:var(--color-danger); }
+    .cr-section-total { font-size:18px; font-weight:700; color:var(--color-danger); }
+    .cr-empty { padding:30px; text-align:center; color:var(--color-text-3); }
     .cr-table-wrap { overflow-x:auto; }
     .cr-table { width:100%; border-collapse:collapse; }
-    .cr-table th { text-align:left; padding:12px 14px; font-size:12px; text-transform:uppercase; color:#9ca3af; background:#f9fafb; border-bottom:1px solid #eef2f7; }
-    .cr-table td { padding:12px 14px; font-size:14px; color:#374151; border-bottom:1px solid #f3f4f6; }
-    .cr-rf { font-weight:600; color:#111827; }
-    .cr-total { font-weight:700; color:#dc2626; }
-    .cr-reason { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#6b7280; }
+    .cr-table th { text-align:left; padding:12px 14px; font-size:12px; text-transform:uppercase; color:var(--color-text-3); background:var(--color-canvas); border-bottom:1px solid var(--color-line); }
+    .cr-table td { padding:12px 14px; font-size:14px; color:var(--color-text-2); border-bottom:1px solid var(--color-surface-2); }
+    .cr-rf { font-weight:600; color:var(--color-text); }
+    .cr-total { font-weight:700; color:var(--color-danger); }
+    .cr-reason { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--color-text-3); }
   `]
 })
 export class CreditorsComponent implements OnInit {

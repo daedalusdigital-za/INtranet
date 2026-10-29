@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../services/auth.service';
 import { DocumentsService, DepartmentInfo } from '../../services/documents.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 
 @Component({
   selector: 'app-documents',
@@ -27,58 +28,29 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     MatDialogModule,
     MatTooltipModule,
     MatProgressSpinnerModule,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent
   ],
   template: `
     <app-navbar></app-navbar>
 
     <div class="documents-container">
-      <!-- Modern Header -->
-      <div class="header-section">
-        <div class="header-content">
-          <div class="title-area">
-            <div class="icon-wrapper">
-              <mat-icon>folder_special</mat-icon>
-            </div>
-            <div class="title-text">
-              <h1>Portal Management</h1>
-              <p class="subtitle">Access departmental document hubs securely</p>
-            </div>
-          </div>
-          <div class="header-stats">
-            <div class="stat-card">
-              <mat-icon>business</mat-icon>
-              <div class="stat-info">
-                <span class="stat-value">{{ departments.length }}</span>
-                <span class="stat-label">Departments</span>
-              </div>
-            </div>
-            <div class="stat-card">
-              <mat-icon>description</mat-icon>
-              <div class="stat-info">
-                <span class="stat-value">{{ totalDocuments }}</span>
-                <span class="stat-label">Total Documents</span>
-              </div>
-            </div>
-          </div>
+      <app-page-header class="header-section" [crumbs]="['Workspace', 'Documents']" title="Documents"
+                       [subtitle]="departments.length + ' department libraries, ' + (totalDocuments | number) + ' documents'">
+        <div class="search-box">
+          <mat-icon aria-hidden="true">search</mat-icon>
+          <input type="text"
+                 placeholder="Search departments"
+                 aria-label="Search departments"
+                 [(ngModel)]="searchQuery"
+                 (input)="filterDepartments()">
+          @if (searchQuery) {
+            <button aria-label="Close" mat-icon-button (click)="clearSearch()" class="clear-btn">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
         </div>
-
-        <!-- Search Bar -->
-        <div class="search-section">
-          <div class="search-box">
-            <mat-icon>search</mat-icon>
-            <input type="text" 
-                   placeholder="Search departments..." 
-                   [(ngModel)]="searchQuery"
-                   (input)="filterDepartments()">
-            @if (searchQuery) {
-              <button mat-icon-button (click)="clearSearch()" class="clear-btn">
-                <mat-icon>close</mat-icon>
-              </button>
-            }
-          </div>
-        </div>
-      </div>
+      </app-page-header>
 
       <!-- Departments Grid -->
       <div class="departments-section">
@@ -155,155 +127,61 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
   styles: [`
     .documents-container {
       min-height: 100vh;
-      padding: 80px 32px 48px;
+      padding: var(--space-5) var(--space-6) var(--space-8);
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
-    /* Header Section */
+    /* Page header: same width as the departments grid below */
     .header-section {
       max-width: 1400px;
-      margin: 0 auto 40px;
-    }
-
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      flex-wrap: wrap;
-      gap: 24px;
-      margin-bottom: 24px;
-    }
-
-    .title-area {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .icon-wrapper {
-      width: 72px;
-      height: 72px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-    }
-
-    .icon-wrapper mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      color: white;
-    }
-
-    .title-text h1 {
-      margin: 0;
-      font-size: 32px;
-      font-weight: 700;
-      color: white;
-      letter-spacing: -0.5px;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .subtitle {
-      margin: 4px 0 0;
-      font-size: 16px;
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .header-stats {
-      display: flex;
-      gap: 16px;
-    }
-
-    .stat-card {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px 24px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-    }
-
-    .stat-card mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-      color: white;
-    }
-
-    .stat-info {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .stat-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: white;
-    }
-
-    .stat-label {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.8);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    /* Search Section */
-    .search-section {
-      display: flex;
-      justify-content: center;
+      margin: 0 auto var(--space-5);
     }
 
     .search-box {
       display: flex;
       align-items: center;
-      gap: 12px;
-      width: 100%;
-      max-width: 500px;
-      padding: 14px 20px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      gap: var(--space-2);
+      box-sizing: border-box;
+      width: 280px;
+      max-width: 100%;
+      height: 36px;
+      padding: 0 var(--space-1) 0 var(--space-3);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line-strong);
+      border-radius: var(--radius-control);
+    }
+
+    .search-box:focus-within {
+      border-color: var(--color-primary);
     }
 
     .search-box mat-icon {
-      color: #1e90ff;
-      font-size: 24px;
+      color: var(--color-text-3);
+      font-size: var(--text-xl);
+      width: 18px;
+      height: 18px;
     }
 
     .search-box input {
       flex: 1;
+      min-width: 0;
       border: none;
       outline: none;
-      font-size: 16px;
+      font: inherit;
+      font-size: var(--text-sm);
       background: transparent;
-      color: #333;
+      color: var(--color-text);
     }
 
     .search-box input::placeholder {
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .clear-btn {
-      width: 32px;
-      height: 32px;
+      --mdc-icon-button-state-layer-size: 28px;
+      --mdc-icon-button-icon-size: 18px;
     }
 
     /* Departments Grid */
@@ -363,7 +241,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       align-items: center;
       justify-content: center;
       border-radius: 20px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       box-shadow: 0 8px 24px rgba(30, 144, 255, 0.4);
       transition: all 0.4s;
     }
@@ -376,15 +254,15 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     /* Department-specific icon colors - blue theme variations */
     .icon-container[data-dept="it"] { background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%); box-shadow: 0 8px 24px rgba(0, 180, 219, 0.4); }
     .icon-container[data-dept="marketing"] { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4); }
-    .icon-container[data-dept="tender"] { background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); box-shadow: 0 8px 24px rgba(255, 167, 38, 0.4); }
+    .icon-container[data-dept="tender"] { background: linear-gradient(135deg, var(--color-warn) 0%, var(--color-warn) 100%); box-shadow: 0 8px 24px rgba(255, 167, 38, 0.4); }
     .icon-container[data-dept="projects"] { background: linear-gradient(135deg, #7c4dff 0%, #651fff 100%); box-shadow: 0 8px 24px rgba(124, 77, 255, 0.4); }
     .icon-container[data-dept="sales"] { background: linear-gradient(135deg, #26a69a 0%, #00897b 100%); box-shadow: 0 8px 24px rgba(38, 166, 154, 0.4); }
     .icon-container[data-dept="call center"] { background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%); box-shadow: 0 8px 24px rgba(66, 165, 245, 0.4); }
-    .icon-container[data-dept="production"] { background: linear-gradient(135deg, #ef5350 0%, #e53935 100%); box-shadow: 0 8px 24px rgba(239, 83, 80, 0.4); }
+    .icon-container[data-dept="production"] { background: linear-gradient(135deg, #ef5350 0%, var(--color-danger) 100%); box-shadow: 0 8px 24px rgba(239, 83, 80, 0.4); }
     .icon-container[data-dept="human resource"] { background: linear-gradient(135deg, #5c6bc0 0%, #3f51b5 100%); box-shadow: 0 8px 24px rgba(92, 107, 192, 0.4); }
     .icon-container[data-dept="stock"] { background: linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%); box-shadow: 0 8px 24px rgba(141, 110, 99, 0.4); }
     .icon-container[data-dept="logistics"] { background: linear-gradient(135deg, #29b6f6 0%, #039be5 100%); box-shadow: 0 8px 24px rgba(41, 182, 246, 0.4); }
-    .icon-container[data-dept="finance"] { background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%); box-shadow: 0 8px 24px rgba(102, 187, 106, 0.4); }
+    .icon-container[data-dept="finance"] { background: linear-gradient(135deg, var(--color-ok) 0%, var(--color-ok) 100%); box-shadow: 0 8px 24px rgba(102, 187, 106, 0.4); }
     .icon-container[data-dept="shared"] { background: linear-gradient(135deg, #26c6da 0%, #00acc1 100%); box-shadow: 0 8px 24px rgba(38, 198, 218, 0.4); }
     .icon-container[data-dept="managers"] { background: linear-gradient(135deg, #ab47bc 0%, #8e24aa 100%); box-shadow: 0 8px 24px rgba(171, 71, 188, 0.4); }
 
@@ -399,7 +277,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin: 0 0 12px;
       font-size: 20px;
       font-weight: 600;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     .document-count {
@@ -408,7 +286,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       justify-content: center;
       gap: 8px;
       margin-bottom: 20px;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 14px;
       min-height: 24px;
     }
@@ -417,13 +295,13 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #888;
+      color: var(--color-text-3);
     }
 
     .loading-skeleton {
       width: 100px;
       height: 18px;
-      background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+      background: linear-gradient(90deg, var(--color-line) 25%, var(--color-surface-2) 50%, var(--color-line) 75%);
       background-size: 200% 100%;
       animation: shimmer 1.5s infinite;
       border-radius: 4px;
@@ -441,7 +319,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .access-btn {
       width: 100%;
       padding: 10px 24px !important;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%) !important;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%) !important;
       color: white !important;
       font-weight: 500 !important;
       border-radius: 12px !important;
@@ -464,7 +342,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       left: 0;
       right: 0;
       height: 4px;
-      background: linear-gradient(90deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary) 100%);
       transform: scaleX(0);
       transition: transform 0.4s;
     }
@@ -477,7 +355,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .no-results {
       text-align: center;
       padding: 60px;
-      color: rgba(255, 255, 255, 0.9);
+      color: var(--color-text-3);
     }
 
     .no-results mat-icon {
@@ -490,7 +368,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .no-results h3 {
       margin: 0 0 8px;
-      color: white;
+      color: var(--color-text);
     }
 
     .no-results p {
@@ -500,31 +378,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     /* Responsive */
     @media (max-width: 768px) {
       .documents-container {
-        padding: 80px 16px 32px;
-      }
-
-      .header-content {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .title-area {
-        flex-direction: column;
-        align-items: flex-start;
-        text-align: left;
-      }
-
-      .title-text h1 {
-        font-size: 24px;
-      }
-
-      .header-stats {
-        width: 100%;
-      }
-
-      .stat-card {
-        flex: 1;
-        justify-content: center;
+        padding: var(--space-4) var(--space-4) var(--space-6);
       }
 
       .departments-grid {
@@ -728,7 +582,7 @@ export class DocumentsComponent implements OnInit {
     }
 
     .dialog-container {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       border-radius: 20px;
       padding: 32px;
       color: white;
@@ -896,13 +750,13 @@ export class DocumentsComponent implements OnInit {
 
     .btn-access {
       background: rgba(255, 255, 255, 0.95);
-      color: #1e90ff;
+      color: var(--color-primary);
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
 
     .btn-access:hover:not(:disabled) {
       transform: translateY(-2px);
-      background: white;
+      background: var(--color-surface);
       box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
     }
 
@@ -921,7 +775,7 @@ export class DocumentsComponent implements OnInit {
       width: 20px;
       height: 20px;
       border: 2px solid rgba(255, 255, 255, 0.3);
-      border-top-color: white;
+      border-top-color: var(--color-surface);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }

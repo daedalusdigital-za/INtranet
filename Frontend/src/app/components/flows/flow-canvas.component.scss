@@ -1,0 +1,70 @@
+:host { display: block; height: 100%; min-height: 0; }
+
+.fc-viewport {
+  position: relative; width: 100%; height: 100%; overflow: hidden; user-select: none; cursor: grab;
+  background: var(--color-surface-2, var(--color-surface-2)); border-radius: 10px; border: 1px solid var(--color-border, var(--color-line));
+  &:active { cursor: grabbing; }
+  &.linking { cursor: crosshair; }
+}
+.fc-grid { position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(circle, rgba(100, 116, 139, .28) 1px, transparent 1px); }
+.fc-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; width: 0; height: 0; }
+
+.fc-edges { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none;
+  marker path { fill: #94a3b8; }
+  .fc-edge { pointer-events: auto; cursor: pointer;
+    .hit { fill: none; stroke: transparent; stroke-width: 14px; }
+    .line { fill: none; stroke: #94a3b8; stroke-width: 2px; transition: stroke .12s; }
+    &:hover .line { stroke: #475569; }
+    &.sel .line { stroke: #7c3aed; stroke-width: 2.5px; }
+    &.done .line { stroke: #16a34a; }
+  }
+  .fc-edge-del { cursor: pointer; circle { fill: #fff; stroke: #b91c1c; stroke-width: 1.5px; } path { stroke: #b91c1c; stroke-width: 2px; } }
+  .fc-edge-temp { fill: none; stroke: #7c3aed; stroke-width: 2px; stroke-dasharray: 6 5; }
+}
+
+.fc-node {
+  position: absolute; background: var(--color-surface, var(--color-surface)); border: 1px solid var(--color-border, var(--color-line)); border-left: 4px solid var(--color-line-strong);
+  border-radius: 10px; box-shadow: 0 1px 3px rgba(15, 23, 42, .08); cursor: move; padding-bottom: 6px;
+  &.sel { box-shadow: 0 0 0 2px #7c3aed, 0 6px 16px rgba(15, 23, 42, .12); }
+  &.hover { box-shadow: 0 0 0 2px #16a34a; }
+  &[data-state="done"] { border-color: #86efac; }
+  &[data-state="current"], &[data-state="waiting"] { box-shadow: 0 0 0 2px #f59e0b; }
+  &[data-state="failed"] { box-shadow: 0 0 0 2px #dc2626; }
+}
+.fc-trigger { border-left-color: #16a34a; background: var(--color-ok-soft); cursor: pointer; .fc-head mat-icon { color: #16a34a; } }
+.fc-head { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px 0 12px;
+  mat-icon { font-size: 20px; width: 20px; height: 20px; flex: none; }
+  b { font-size: 13px; line-height: 1.1; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  small { display: block; font-size: 10.5px; color: var(--color-text-3); line-height: 1.1; }
+}
+.fc-title { flex: 1; min-width: 0; }
+.fc-state { &[data-state="done"] { color: #16a34a; } &[data-state="failed"] { color: #dc2626; } &[data-state="current"], &[data-state="waiting"] { color: #f59e0b; } }
+.fc-mini { border: 0; background: transparent; cursor: pointer; padding: 2px; border-radius: 6px; color: var(--color-text-3); display: grid; place-items: center;
+  mat-icon { font-size: 16px; width: 16px; height: 16px; } &:hover { background: var(--color-surface-2, var(--color-surface-2)); color: var(--color-text); } &.danger:hover { color: #b91c1c; } }
+.fc-meta { height: 22px; padding: 0 12px; font-size: 11.5px; color: var(--color-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 22px; }
+.fc-port-row { position: relative; height: 22px; display: flex; align-items: center; justify-content: flex-end; padding-right: 14px; font-size: 11px; color: var(--color-text-3); }
+
+.fc-port {
+  position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--color-surface); border: 2px solid #64748b; z-index: 2;
+  &.fc-out { right: -7px; top: 50%; transform: translateY(-50%); cursor: crosshair; &:hover { border-color: #7c3aed; background: var(--color-cat-purple-soft); transform: translateY(-50%) scale(1.25); } }
+  &.fc-in { left: -8px; top: 14px; border-color: var(--color-line-strong); pointer-events: none; }
+  &.dangling { border-color: #f59e0b; background: var(--color-warn-soft); }
+}
+.fc-trigger .fc-port.fc-out { top: 20px; }
+
+.fc-quick {
+  position: absolute; z-index: 5; background: var(--color-surface, var(--color-surface)); border: 1px solid var(--color-border, var(--color-line)); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 6px; display: grid; min-width: 200px; max-height: 320px; overflow: auto; cursor: default;
+  .fc-quick-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); padding: 4px 8px; }
+  button { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--color-text); text-align: left;
+    mat-icon { font-size: 18px; width: 18px; height: 18px; } &:hover { background: var(--color-surface-2, var(--color-surface-2)); } }
+}
+
+.fc-controls { position: absolute; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 2px; background: var(--color-surface, var(--color-surface)); border: 1px solid var(--color-border, var(--color-line)); border-radius: 10px; padding: 2px 8px 2px 2px; box-shadow: 0 1px 3px rgba(15,23,42,.08); cursor: default; }
+.fc-zoom { font-size: 11px; color: var(--color-text-3); min-width: 34px; text-align: right; }
+
+.fc-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 4px; color: var(--color-text-3); pointer-events: none;
+  mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: .5; } b { color: var(--color-text-2); } span { font-size: 12px; } }
+
+.readonly .fc-node { cursor: default; } .readonly .fc-port { cursor: default; pointer-events: none; }

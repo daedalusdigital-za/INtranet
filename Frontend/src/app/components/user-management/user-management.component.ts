@@ -13,7 +13,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -22,6 +21,11 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { ToastService } from '../../ui/toast.service';
+import { ConfirmService } from '../../ui/confirm.service';
 
 interface User {
   userId: number;
@@ -87,7 +91,6 @@ interface Permission {
     MatSelectModule,
     MatCheckboxModule,
     MatDialogModule,
-    MatSnackBarModule,
     MatChipsModule,
     MatTooltipModule,
     MatProgressSpinnerModule,
@@ -95,7 +98,10 @@ interface Permission {
     MatMenuModule,
     MatBadgeModule,
     MatSlideToggleModule,
-    NavbarComponent
+    NavbarComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent,
+    StatusChipComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -106,7 +112,7 @@ interface Permission {
           <h1><mat-icon>people</mat-icon> User Management</h1>
           <p>Manage user accounts, roles, and permissions</p>
         </div>
-        <button mat-raised-button color="primary" (click)="openCreateDialog()">
+        <button mat-flat-button color="primary" (click)="openCreateDialog()">
           <mat-icon>person_add</mat-icon>
           Add New User
         </button>
@@ -195,41 +201,10 @@ interface Permission {
       <!-- Users Table -->
       <mat-card class="users-table-card">
         @if (isLoading) {
-          <div class="loading-state">
-            <div class="loading-card">
-              <div class="lc-icon-wrap">
-                <mat-icon class="lc-icon pulse-icon">people</mat-icon>
-              </div>
-              <h3>Loading User Management</h3>
-              <p class="lc-subtitle">Fetching user accounts and permissions</p>
-              <div class="lc-progress-wrap">
-                <div class="lc-progress-track">
-                  <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
-                </div>
-                <div class="lc-progress-info">
-                  <span class="lc-progress-message">{{ loadingMessage }}</span>
-                  <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
-                </div>
-              </div>
-              <div class="lc-steps">
-                @for (step of loadingSteps; track step.label; let i = $index) {
-                  <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
-                    <div class="lc-step-dot">
-                      @if (loadingStage > i) {
-                        <mat-icon>check</mat-icon>
-                      } @else {
-                        <mat-icon>{{ step.icon }}</mat-icon>
-                      }
-                    </div>
-                    <span class="lc-step-label">{{ step.label }}</span>
-                  </div>
-                }
-              </div>
-            </div>
-          </div>
+          <app-skeleton-rows [rows]="6"></app-skeleton-rows>
         } @else {
           <div class="table-container">
-            <table class="users-table">
+            <table class="app-table users-table">
               <thead>
                 <tr>
                   <th>User</th>
@@ -268,24 +243,22 @@ interface Permission {
                     </td>
                     <td>{{ user.departmentName || 'Unassigned' }}</td>
                     <td>
-                      <span class="status-chip" [class.active]="user.isActive" [class.inactive]="!user.isActive">
-                        {{ user.isActive ? 'Active' : 'Inactive' }}
-                      </span>
+                      <app-status-chip [status]="user.isActive ? 'Active' : 'Inactive'" [tone]="user.isActive ? 'ok' : 'danger'"></app-status-chip>
                     </td>
                     <td>{{ formatDate(user.lastLoginAt) }}</td>
                     <td>
                       <div class="action-buttons">
-                        <button mat-icon-button matTooltip="Edit User" (click)="openEditDialog(user)">
+                        <button aria-label="Edit User" mat-icon-button matTooltip="Edit User" (click)="openEditDialog(user)">
                           <mat-icon>edit</mat-icon>
                         </button>
-                        <button mat-icon-button matTooltip="Reset Password" (click)="openResetPasswordDialog(user)">
+                        <button aria-label="Reset Password" mat-icon-button matTooltip="Reset Password" (click)="openResetPasswordDialog(user)">
                           <mat-icon>lock_reset</mat-icon>
                         </button>
-                        <button mat-icon-button [matTooltip]="user.isActive ? 'Deactivate' : 'Activate'" 
+                        <button [attr.aria-label]="user.isActive ? 'Deactivate' : 'Activate'" mat-icon-button [matTooltip]="user.isActive ? 'Deactivate' : 'Activate'" 
                                 (click)="toggleUserStatus(user)">
                           <mat-icon>{{ user.isActive ? 'block' : 'check_circle' }}</mat-icon>
                         </button>
-                        <button mat-icon-button matTooltip="Delete User" color="warn" (click)="confirmDelete(user)">
+                        <button aria-label="Delete User" mat-icon-button matTooltip="Delete User" color="warn" (click)="confirmDelete(user)">
                           <mat-icon>delete</mat-icon>
                         </button>
                       </div>
@@ -293,9 +266,18 @@ interface Permission {
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="7" class="empty-state">
-                      <mat-icon>search_off</mat-icon>
-                      <p>No users found matching your criteria</p>
+                    <td colspan="7">
+                      @if (users.length) {
+                        <app-empty-state icon="filter_alt_off" title="No users match these filters"
+                          message="Try another search, or clear the filters to see every user.">
+                          <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
+                        </app-empty-state>
+                      } @else {
+                        <app-empty-state icon="people" title="No user accounts yet"
+                          message="Add a user to give them access to the intranet.">
+                          <button mat-flat-button color="primary" (click)="openCreateDialog()">Add New User</button>
+                        </app-empty-state>
+                      }
                     </td>
                   </tr>
                 }
@@ -311,14 +293,7 @@ interface Permission {
       display: block;
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
@@ -336,9 +311,9 @@ interface Permission {
     }
 
     .header-content h1 {
-      color: white;
-      font-size: 2.5rem;
-      font-weight: 600;
+      color: var(--color-text);
+      font-size: var(--text-3xl);
+      font-weight: 700;
       margin: 0;
       display: flex;
       align-items: center;
@@ -346,21 +321,16 @@ interface Permission {
     }
 
     .header-content h1 mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+      color: var(--color-primary);
     }
 
     .header-content p {
-      color: rgba(255, 255, 255, 0.8);
-      margin: 8px 0 0 52px;
-    }
-
-    .page-header button {
-      height: 48px;
-      font-size: 16px;
-      border-radius: 12px;
-      padding: 0 24px;
+      color: var(--color-text-3);
+      font-size: var(--text-sm);
+      margin: 4px 0 0 40px;
     }
 
     /* Stats Row */
@@ -375,14 +345,14 @@ interface Permission {
       display: flex;
       align-items: center;
       padding: 20px;
-      border-radius: 16px;
-      background: white;
+      border-radius: var(--radius-lg);
+      background: var(--color-surface);
     }
 
     .stat-icon {
       width: 56px;
       height: 56px;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -393,13 +363,12 @@ interface Permission {
       font-size: 28px;
       width: 28px;
       height: 28px;
-      color: white;
     }
 
-    .stat-icon.total { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
-    .stat-icon.active { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-    .stat-icon.inactive { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
-    .stat-icon.admin { background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%); }
+    .stat-icon.total { background: var(--color-primary-soft); color: var(--color-primary); }
+    .stat-icon.active { background: var(--color-ok-soft); color: var(--color-ok); }
+    .stat-icon.inactive { background: var(--color-danger-soft); color: var(--color-danger); }
+    .stat-icon.admin { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
 
     .stat-content {
       display: flex;
@@ -407,20 +376,20 @@ interface Permission {
     }
 
     .stat-value {
-      font-size: 28px;
+      font-size: var(--text-3xl);
       font-weight: 700;
-      color: #1f2937;
+      color: var(--color-text);
     }
 
     .stat-label {
-      font-size: 14px;
-      color: #6b7280;
+      font-size: var(--text-md);
+      color: var(--color-text-3);
     }
 
     /* Filters Card */
     .filters-card {
       padding: 16px 24px;
-      border-radius: 16px;
+      border-radius: var(--radius-lg);
       margin-bottom: 24px;
     }
 
@@ -438,95 +407,12 @@ interface Permission {
 
     /* Users Table Card */
     .users-table-card {
-      border-radius: 16px;
+      border-radius: var(--radius-lg);
       overflow: hidden;
     }
 
-    .loading-state {
-      display: flex; justify-content: center; padding: 60px 20px;
-    }
-    .loading-card {
-      background: #fff; border-radius: 20px;
-      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.08);
-      max-width: 520px; width: 100%;
-    }
-    .loading-card h3 { color: #1a1a2e; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
-    .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12));
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(99,102,241,0.15);
-    }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #6366f1; }
-    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.08); }
-    }
-    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
-    .lc-progress-wrap { margin: 8px 0 24px; }
-    .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
-    .lc-progress-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #6366f1, #60a5fa, #8b5cf6);
-      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
-      transition: width 0.15s ease-out; position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4)); border-radius: 0 4px 4px 0;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
-    .lc-progress-message { color: #64748b; font-weight: 500; }
-    .lc-progress-pct { color: #6366f1; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
-    .lc-step {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      flex: 1; padding-top: 16px; opacity: 0.35; transition: opacity 0.4s ease, transform 0.3s ease;
-    }
-    .lc-step.active { opacity: 1; transform: translateY(-2px); }
-    .lc-step.done { opacity: 0.65; }
-    .lc-step-dot {
-      width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
-    }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #6366f1, #8b5cf6); box-shadow: 0 2px 10px rgba(99,102,241,0.3); }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
-    .lc-step.done .lc-step-dot { background: #dcfce7; }
-    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #6366f1; }
-    .lc-step.done .lc-step-label { color: #16a34a; }
-
     .table-container {
       overflow-x: auto;
-    }
-
-    .users-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    .users-table th {
-      background: #f8fafc;
-      padding: 16px;
-      text-align: left;
-      font-weight: 600;
-      color: #374151;
-      border-bottom: 2px solid #e5e7eb;
-    }
-
-    .users-table td {
-      padding: 16px;
-      border-bottom: 1px solid #f3f4f6;
-    }
-
-    .users-table tr:hover {
-      background: #f8fafc;
     }
 
     .users-table tr.inactive-row {
@@ -543,13 +429,13 @@ interface Permission {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: var(--color-primary-soft);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-primary);
       font-weight: 600;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .user-info {
@@ -559,7 +445,7 @@ interface Permission {
 
     .user-name {
       font-weight: 600;
-      color: #1f2937;
+      color: var(--color-text);
       display: flex;
       align-items: center;
       gap: 6px;
@@ -569,63 +455,47 @@ interface Permission {
       font-size: 16px;
       width: 16px;
       height: 16px;
-      color: #e65100;
+      color: var(--color-warn);
     }
 
     .user-title {
-      font-size: 13px;
-      color: #6b7280;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
     }
 
     .role-chip {
       display: inline-block;
       padding: 4px 12px;
       border-radius: 20px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
     }
 
     .role-chip.role-admin {
-      background: #fef3c7;
-      color: #92400e;
+      background: var(--color-cat-amber-soft);
+      color: var(--color-cat-amber);
     }
 
     .role-chip.role-manager {
-      background: #dbeafe;
-      color: #1e40af;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
 
     .role-chip.role-employee {
-      background: #d1fae5;
-      color: #065f46;
+      background: var(--color-cat-teal-soft);
+      color: var(--color-cat-teal);
     }
 
     .role-chip.role-hr {
-      background: #fce7f3;
-      color: #9d174d;
+      background: var(--color-cat-pink-soft);
+      color: var(--color-cat-pink);
     }
 
     .role-chip.role-it-support {
-      background: #e0e7ff;
-      color: #3730a3;
-    }
-
-    .status-chip {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .status-chip.active {
-      background: #d1fae5;
-      color: #065f46;
-    }
-
-    .status-chip.inactive {
-      background: #fee2e2;
-      color: #991b1b;
+      background: var(--color-cat-purple-soft);
+      color: var(--color-cat-purple);
     }
 
     .action-buttons {
@@ -640,19 +510,6 @@ interface Permission {
 
     .action-buttons mat-icon {
       font-size: 20px;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 60px !important;
-      color: #9ca3af;
-    }
-
-    .empty-state mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
     }
 
     @media (max-width: 1200px) {
@@ -693,22 +550,11 @@ export class UserManagementComponent implements OnInit {
   filterStatus = '';
   isLoading = false;
 
-  // Loading progress
-  loadingProgress = 0;
-  loadingStage = 0;
-  loadingMessage = 'Initializing...';
-  private progressInterval: any;
-  readonly loadingSteps = [
-    { icon: 'lock', label: 'Authenticating', detail: 'Securing connection...' },
-    { icon: 'people', label: 'Fetching Users', detail: 'Loading user accounts...' },
-    { icon: 'security', label: 'Permissions', detail: 'Checking roles & access...' },
-    { icon: 'dashboard', label: 'Ready', detail: 'Building user dashboard...' }
-  ];
-
   constructor(
     private http: HttpClient,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private toast: ToastService,
+    private confirm: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -730,61 +576,19 @@ export class UserManagementComponent implements OnInit {
 
   loadUsers(): void {
     this.isLoading = true;
-    this.startLoadingProgress();
     this.http.get<User[]>(`${environment.apiUrl}/users`, { headers: this.getHeaders() })
       .subscribe({
         next: (users) => {
-          this.finishLoadingProgress(() => {
-            this.users = users;
-            this.filterUsers();
-            this.isLoading = false;
-          });
+          this.users = users;
+          this.filterUsers();
+          this.isLoading = false;
         },
         error: (err) => {
           console.error('Error loading users:', err);
-          this.stopLoadingProgress();
-          this.snackBar.open('Failed to load users', 'Close', { duration: 3000 });
+          this.toast.error('Failed to load users');
           this.isLoading = false;
         }
       });
-  }
-
-  private startLoadingProgress(): void {
-    this.loadingProgress = 0;
-    this.loadingStage = 0;
-    this.loadingMessage = this.loadingSteps[0].detail;
-    this.progressInterval = setInterval(() => {
-      const max = 88;
-      if (this.loadingProgress < max) {
-        const increment = Math.max(0.3, (max - this.loadingProgress) * 0.06);
-        this.loadingProgress = Math.min(max, this.loadingProgress + increment);
-      }
-      const newStage = this.loadingProgress < 20 ? 0 : this.loadingProgress < 45 ? 1 : this.loadingProgress < 70 ? 2 : 3;
-      if (newStage !== this.loadingStage) {
-        this.loadingStage = newStage;
-        this.loadingMessage = this.loadingSteps[newStage].detail;
-      }
-    }, 120);
-  }
-
-  private finishLoadingProgress(callback: () => void): void {
-    clearInterval(this.progressInterval);
-    this.loadingStage = 3;
-    this.loadingMessage = 'Almost there...';
-    const finish = setInterval(() => {
-      this.loadingProgress = Math.min(100, this.loadingProgress + 4);
-      if (this.loadingProgress >= 100) {
-        clearInterval(finish);
-        this.loadingMessage = 'Complete!';
-        setTimeout(() => callback(), 300);
-      }
-    }, 30);
-  }
-
-  private stopLoadingProgress(): void {
-    clearInterval(this.progressInterval);
-    this.loadingProgress = 0;
-    this.loadingStage = 0;
   }
 
   loadDepartments(): void {
@@ -857,6 +661,14 @@ export class UserManagementComponent implements OnInit {
     this.filteredUsers = filtered;
   }
 
+  clearFilters(): void {
+    this.searchTerm = '';
+    this.filterRole = '';
+    this.filterDepartment = '';
+    this.filterStatus = '';
+    this.filterUsers();
+  }
+
   getActiveCount(): number {
     return this.users.filter(u => u.isActive).length;
   }
@@ -900,11 +712,11 @@ export class UserManagementComponent implements OnInit {
         this.http.post(`${environment.apiUrl}/users`, result, { headers: this.getHeaders() })
           .subscribe({
             next: () => {
-              this.snackBar.open('User created successfully', 'Close', { duration: 3000 });
+              this.toast.done('User created successfully');
               this.loadUsers();
             },
             error: (err) => {
-              this.snackBar.open(err.error?.message || 'Failed to create user', 'Close', { duration: 3000 });
+              this.toast.error(err.error?.message || 'Failed to create user');
             }
           });
       }
@@ -930,11 +742,11 @@ export class UserManagementComponent implements OnInit {
         this.http.put(`${environment.apiUrl}/users/${user.userId}`, result, { headers: this.getHeaders() })
           .subscribe({
             next: () => {
-              this.snackBar.open('User updated successfully', 'Close', { duration: 3000 });
+              this.toast.done('User updated successfully');
               this.loadUsers();
             },
             error: (err) => {
-              this.snackBar.open(err.error?.message || 'Failed to update user', 'Close', { duration: 3000 });
+              this.toast.error(err.error?.message || 'Failed to update user');
             }
           });
       }
@@ -952,10 +764,10 @@ export class UserManagementComponent implements OnInit {
         this.http.post(`${environment.apiUrl}/users/${user.userId}/reset-password`, { newPassword: result }, { headers: this.getHeaders() })
           .subscribe({
             next: () => {
-              this.snackBar.open('Password reset successfully', 'Close', { duration: 3000 });
+              this.toast.done('Password reset successfully');
             },
             error: (err) => {
-              this.snackBar.open(err.error?.message || 'Failed to reset password', 'Close', { duration: 3000 });
+              this.toast.error(err.error?.message || 'Failed to reset password');
             }
           });
       }
@@ -966,35 +778,33 @@ export class UserManagementComponent implements OnInit {
     this.http.post(`${environment.apiUrl}/users/${user.userId}/toggle-active`, {}, { headers: this.getHeaders() })
       .subscribe({
         next: () => {
-          this.snackBar.open(`User ${user.isActive ? 'deactivated' : 'activated'} successfully`, 'Close', { duration: 3000 });
+          this.toast.done(`User ${user.isActive ? 'deactivated' : 'activated'} successfully`);
           this.loadUsers();
         },
         error: (err) => {
-          this.snackBar.open(err.error?.message || 'Failed to toggle user status', 'Close', { duration: 3000 });
+          this.toast.error(err.error?.message || 'Failed to toggle user status');
         }
       });
   }
 
-  confirmDelete(user: User): void {
-    const dialogRef = this.dialog.open(ConfirmDeleteDialogComponent, {
-      width: '400px',
-      data: { user }
+  async confirmDelete(user: User): Promise<void> {
+    const ok = await this.confirm.ask({
+      title: `Delete ${user.name} ${user.surname}?`,
+      message: 'This action cannot be undone. All user data will be permanently removed.',
+      confirmText: 'Delete user',
+      danger: true
     });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.http.delete(`${environment.apiUrl}/users/${user.userId}`, { headers: this.getHeaders() })
-          .subscribe({
-            next: () => {
-              this.snackBar.open('User deleted successfully', 'Close', { duration: 3000 });
-              this.loadUsers();
-            },
-            error: (err) => {
-              this.snackBar.open(err.error?.message || 'Failed to delete user', 'Close', { duration: 3000 });
-            }
-          });
-      }
-    });
+    if (!ok) return;
+    this.http.delete(`${environment.apiUrl}/users/${user.userId}`, { headers: this.getHeaders() })
+      .subscribe({
+        next: () => {
+          this.toast.done('User deleted successfully');
+          this.loadUsers();
+        },
+        error: (err) => {
+          this.toast.error(err.error?.message || 'Failed to delete user');
+        }
+      });
   }
 }
 
@@ -1227,7 +1037,7 @@ export class UserManagementComponent implements OnInit {
     }
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" (click)="submit()">
+      <button mat-flat-button color="primary" (click)="submit()">
         {{ data.mode === 'create' ? 'Create User' : 'Save Changes' }}
       </button>
     </mat-dialog-actions>
@@ -1242,7 +1052,7 @@ export class UserManagementComponent implements OnInit {
       display: flex;
       align-items: center;
       gap: 12px;
-      color: #1e3a5f;
+      color: var(--color-text);
     }
 
     .form-row {
@@ -1268,11 +1078,10 @@ export class UserManagementComponent implements OnInit {
       gap: 8px;
       padding: 10px 16px;
       margin: 0 24px 8px;
-      background: #fef2f2;
-      border: 1px solid #fecaca;
-      border-radius: 8px;
-      color: #dc2626;
-      font-size: 13px;
+      background: var(--color-danger-soft);
+      border-radius: var(--radius-control);
+      color: var(--color-danger);
+      font-size: var(--text-sm);
       font-weight: 500;
     }
 
@@ -1280,20 +1089,19 @@ export class UserManagementComponent implements OnInit {
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #dc2626;
+      color: var(--color-danger);
     }
 
     .birthday-section {
       margin: 16px 0;
       padding: 16px;
-      background: #fce4ec;
-      border-radius: 8px;
-      border: 1px solid #f8bbd9;
+      background: var(--color-cat-pink-soft);
+      border-radius: var(--radius-control);
     }
 
     .birthday-section h4 {
       margin: 0 0 4px 0;
-      color: #c2185b;
+      color: var(--color-cat-pink);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -1308,14 +1116,13 @@ export class UserManagementComponent implements OnInit {
     .clockin-section {
       margin: 16px 0;
       padding: 16px;
-      background: #fff3e0;
-      border-radius: 8px;
-      border: 1px solid #ffe0b2;
+      background: var(--color-cat-amber-soft);
+      border-radius: var(--radius-control);
     }
 
     .clockin-section h4 {
       margin: 0 0 4px 0;
-      color: #e65100;
+      color: var(--color-cat-amber);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -1333,10 +1140,10 @@ export class UserManagementComponent implements OnInit {
       gap: 8px;
       margin-top: 8px;
       padding: 8px 12px;
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       border-radius: 4px;
-      color: #2e7d32;
-      font-size: 13px;
+      color: var(--color-ok);
+      font-size: var(--text-sm);
     }
 
     .linked-status mat-icon {
@@ -1351,18 +1158,18 @@ export class UserManagementComponent implements OnInit {
       gap: 14px;
       margin-top: 10px;
       padding: 10px 12px;
-      background: #fff;
-      border: 1px solid #ffe0b2;
-      border-radius: 8px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
     }
 
     .clockin-photo {
       width: 64px;
       height: 64px;
       object-fit: cover;
-      border-radius: 8px;
-      border: 2px solid #ffcc80;
-      background: #fafafa;
+      border-radius: var(--radius-control);
+      border: 2px solid var(--color-line-strong);
+      background: var(--color-canvas);
     }
 
     .clockin-photo-meta {
@@ -1372,9 +1179,9 @@ export class UserManagementComponent implements OnInit {
     }
 
     .clockin-photo-title {
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
-      color: #e65100;
+      color: var(--color-cat-amber);
     }
 
     .avatar-section {
@@ -1383,9 +1190,9 @@ export class UserManagementComponent implements OnInit {
       gap: 18px;
       margin: 4px 0 20px;
       padding: 16px;
-      background: #f5f7ff;
-      border: 1px solid #e0e3ff;
-      border-radius: 12px;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
     }
 
     .avatar-preview {
@@ -1396,8 +1203,8 @@ export class UserManagementComponent implements OnInit {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #e8eaf6;
-      border: 3px solid #c5cae9;
+      background: var(--color-surface-3);
+      border: 3px solid var(--color-line-strong);
       flex-shrink: 0;
     }
 
@@ -1411,7 +1218,7 @@ export class UserManagementComponent implements OnInit {
       font-size: 56px;
       width: 56px;
       height: 56px;
-      color: #9fa8da;
+      color: var(--color-text-3);
     }
 
     .avatar-actions {
@@ -1421,9 +1228,9 @@ export class UserManagementComponent implements OnInit {
     }
 
     .avatar-title {
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 700;
-      color: #303f9f;
+      color: var(--color-text);
     }
 
     .avatar-buttons {
@@ -1435,20 +1242,19 @@ export class UserManagementComponent implements OnInit {
     .companies-section {
       margin: 16px 0;
       padding: 16px;
-      background: #e8f5e9;
-      border-radius: 8px;
-      border: 1px solid #c8e6c9;
+      background: var(--color-cat-teal-soft);
+      border-radius: var(--radius-control);
     }
 
     .companies-section h4 {
       margin: 0 0 4px 0;
-      color: #2e7d32;
+      color: var(--color-cat-teal);
     }
 
     .section-hint {
       margin: 0 0 12px 0;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .companies-grid {
@@ -1464,13 +1270,13 @@ export class UserManagementComponent implements OnInit {
     .permissions-section {
       margin: 16px 0;
       padding: 16px;
-      background: #f8fafc;
-      border-radius: 8px;
+      background: var(--color-surface-2);
+      border-radius: var(--radius-control);
     }
 
     .permissions-section h4 {
       margin: 0 0 12px 0;
-      color: #374151;
+      color: var(--color-text-2);
     }
 
     .permissions-grid {
@@ -1481,8 +1287,8 @@ export class UserManagementComponent implements OnInit {
 
     .permission-category h5 {
       margin: 0 0 8px 0;
-      font-size: 13px;
-      color: #6b7280;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
       text-transform: uppercase;
     }
 
@@ -1510,7 +1316,7 @@ export class UserFormDialogComponent {
     private fb: FormBuilder,
     private dialogRef: MatDialogRef<UserFormDialogComponent>,
     private http: HttpClient,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     @Inject(MAT_DIALOG_DATA) public data: any
   ) {
     const user = data.user;
@@ -1580,11 +1386,11 @@ export class UserFormDialogComponent {
           this.applyingPhoto = false;
           user.hasProfilePicture = true;
           this.avatarPreview = null;
-          this.snackBar.open('Profile picture set from clock-in photo.', 'OK', { duration: 3000 });
+          this.toast.done('Profile picture set from clock-in photo.');
         },
         error: (err) => {
           this.applyingPhoto = false;
-          this.snackBar.open(err?.error?.message || 'Could not apply clock-in photo.', 'OK', { duration: 4000 });
+          this.toast.error(err?.error?.message || 'Could not apply clock-in photo.');
         }
       });
   }
@@ -1604,11 +1410,11 @@ export class UserFormDialogComponent {
 
     const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowed.includes(file.type)) {
-      this.snackBar.open('Please choose a JPEG, PNG, GIF or WebP image.', 'OK', { duration: 4000 });
+      this.toast.warn('Please choose a JPEG, PNG, GIF or WebP image.');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      this.snackBar.open('Image is too large (max 5MB).', 'OK', { duration: 4000 });
+      this.toast.warn('Image is too large (max 5MB).');
       return;
     }
 
@@ -1628,12 +1434,12 @@ export class UserFormDialogComponent {
         next: () => {
           this.uploadingAvatar = false;
           this.data.user.hasProfilePicture = true;
-          this.snackBar.open('Profile picture updated.', 'OK', { duration: 3000 });
+          this.toast.done('Profile picture updated.');
         },
         error: (err) => {
           this.uploadingAvatar = false;
           this.avatarPreview = null;
-          this.snackBar.open(err?.error?.message || 'Could not upload the picture.', 'OK', { duration: 4000 });
+          this.toast.error(err?.error?.message || 'Could not upload the picture.');
         }
       });
   }
@@ -1648,11 +1454,11 @@ export class UserFormDialogComponent {
           this.uploadingAvatar = false;
           this.data.user.hasProfilePicture = false;
           this.avatarPreview = null;
-          this.snackBar.open('Profile picture removed.', 'OK', { duration: 3000 });
+          this.toast.done('Profile picture removed.');
         },
         error: (err) => {
           this.uploadingAvatar = false;
-          this.snackBar.open(err?.error?.message || 'Could not remove the picture.', 'OK', { duration: 4000 });
+          this.toast.error(err?.error?.message || 'Could not remove the picture.');
         }
       });
   }
@@ -1742,7 +1548,7 @@ export class UserFormDialogComponent {
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>New Password</mat-label>
         <input matInput [(ngModel)]="newPassword" [type]="showNewPassword ? 'text' : 'password'" required>
-        <button mat-icon-button matSuffix type="button" (click)="showNewPassword = !showNewPassword">
+        <button [attr.aria-label]="showNewPassword ? 'Hide password' : 'Show password'" mat-icon-button matSuffix type="button" (click)="showNewPassword = !showNewPassword">
           <mat-icon>{{ showNewPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
         </button>
       </mat-form-field>
@@ -1750,7 +1556,7 @@ export class UserFormDialogComponent {
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Confirm Password</mat-label>
         <input matInput [(ngModel)]="confirmPassword" [type]="showConfirmPassword ? 'text' : 'password'" required>
-        <button mat-icon-button matSuffix type="button" (click)="showConfirmPassword = !showConfirmPassword">
+        <button [attr.aria-label]="showConfirmPassword ? 'Hide password' : 'Show password'" mat-icon-button matSuffix type="button" (click)="showConfirmPassword = !showConfirmPassword">
           <mat-icon>{{ showConfirmPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
         </button>
         @if (confirmPassword && newPassword !== confirmPassword) {
@@ -1760,7 +1566,7 @@ export class UserFormDialogComponent {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" 
+      <button mat-flat-button color="primary" 
               [disabled]="!newPassword || newPassword.length < 8 || newPassword !== confirmPassword"
               (click)="submit()">
         Reset Password
@@ -1776,7 +1582,7 @@ export class UserFormDialogComponent {
       display: flex;
       align-items: center;
       gap: 12px;
-      color: #1e3a5f;
+      color: var(--color-text);
     }
 
     .full-width {
@@ -1785,7 +1591,7 @@ export class UserFormDialogComponent {
 
     p {
       margin-bottom: 16px;
-      color: #6b7280;
+      color: var(--color-text-3);
     }
   `]
 })
@@ -1805,51 +1611,4 @@ export class ResetPasswordDialogComponent {
       this.dialogRef.close(this.newPassword);
     }
   }
-}
-
-// Confirm Delete Dialog Component
-@Component({
-  selector: 'confirm-delete-dialog',
-  standalone: true,
-  imports: [
-    CommonModule,
-    MatDialogModule,
-    MatButtonModule,
-    MatIconModule
-  ],
-  template: `
-    <h2 mat-dialog-title>
-      <mat-icon color="warn">warning</mat-icon>
-      Confirm Delete
-    </h2>
-    <mat-dialog-content>
-      <p>Are you sure you want to delete <strong>{{ data.user.name }} {{ data.user.surname }}</strong>?</p>
-      <p class="warning-text">This action cannot be undone. All user data will be permanently removed.</p>
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="warn" [mat-dialog-close]="true">
-        Delete User
-      </button>
-    </mat-dialog-actions>
-  `,
-  styles: [`
-    mat-dialog-content {
-      min-width: 350px;
-    }
-
-    h2[mat-dialog-title] {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .warning-text {
-      color: #dc2626;
-      font-size: 13px;
-    }
-  `]
-})
-export class ConfirmDeleteDialogComponent {
-  constructor(@Inject(MAT_DIALOG_DATA) public data: any) {}
 }

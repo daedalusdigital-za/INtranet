@@ -11,7 +11,6 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
@@ -23,6 +22,10 @@ import { Subscription } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
 import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } from '../../models/models';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { ToastService } from '../../ui/toast.service';
 
 @Component({
   selector: 'app-profile',
@@ -40,24 +43,26 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
     MatChipsModule,
     MatProgressSpinnerModule,
     MatProgressBarModule,
-    MatSnackBarModule,
     MatTabsModule,
     MatTableModule,
     MatPaginatorModule,
     MatDatepickerModule,
     MatNativeDateModule,
     MatSelectModule,
-    MatTooltipModule
+    MatTooltipModule,
+    PageHeaderComponent,
+    NavbarComponent,
+    SkeletonRowsComponent
   ],
   template: `
+    <app-navbar></app-navbar>
     <div class="profile-container">
-      <!-- Header with back button -->
-      <div class="profile-header">
-        <button mat-icon-button (click)="goBack()" class="back-button">
+      <app-page-header class="profile-header" [crumbs]="['Account']" title="Profile and password">
+        <button aria-label="Back" mat-stroked-button (click)="goBack()">
           <mat-icon>arrow_back</mat-icon>
+          Back
         </button>
-        <h1>My Profile</h1>
-      </div>
+      </app-page-header>
 
       <div class="profile-content" *ngIf="user">
         <!-- Tab Group -->
@@ -244,68 +249,26 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       </div>
 
       <!-- Loading State -->
-      <div class="loading-state" *ngIf="!user">
-        <div class="loading-card">
-          <div class="lc-icon-wrap">
-            <mat-icon class="lc-icon pulse-icon">person</mat-icon>
-          </div>
-          <h3>Loading Your Profile</h3>
-          <p class="lc-subtitle">Fetching account details and preferences</p>
-          <div class="lc-progress-wrap">
-            <div class="lc-progress-track">
-              <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
-            </div>
-            <div class="lc-progress-info">
-              <span class="lc-progress-message">{{ loadingMessage }}</span>
-              <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
-            </div>
-          </div>
-          <div class="lc-steps">
-            <div class="lc-step" *ngFor="let step of loadingSteps; let i = index" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
-              <div class="lc-step-dot">
-                <mat-icon *ngIf="loadingStage > i">check</mat-icon>
-                <mat-icon *ngIf="loadingStage <= i">{{ step.icon }}</mat-icon>
-              </div>
-              <span class="lc-step-label">{{ step.label }}</span>
-            </div>
-          </div>
-        </div>
+      <div class="profile-content" *ngIf="!user">
+        <mat-card class="profile-card">
+          <app-skeleton-rows [rows]="7" [avatar]="false"></app-skeleton-rows>
+        </mat-card>
       </div>
     </div>
   `,
   styles: [`
     .profile-container {
       min-height: 100vh;
-      padding: 20px;
+      padding: var(--space-5);
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
+    /* Page header: same width as the profile content below */
     .profile-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 24px;
-      color: white;
-    }
-
-    .profile-header h1 {
-      margin: 0;
-      font-size: 28px;
-      font-weight: 500;
-    }
-
-    .back-button {
-      background: rgba(255,255,255,0.2);
-      color: white;
+      max-width: 800px;
+      margin: 0 auto var(--space-5);
     }
 
     .profile-content {
@@ -317,8 +280,8 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
     }
 
     .profile-card, .actions-card {
-      border-radius: 16px;
-      padding: 24px;
+      border-radius: var(--radius-lg);
+      padding: var(--space-5);
     }
 
     .profile-photo-section {
@@ -333,12 +296,12 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       height: 150px;
       border-radius: 50%;
       overflow: hidden;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
       margin-bottom: 16px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      box-shadow: var(--shadow-md);
       position: relative;
       cursor: pointer;
     }
@@ -349,13 +312,13 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(0,0,0,0.45);
+      background: var(--color-scrim);
       opacity: 0;
       transition: opacity 0.2s ease;
     }
 
     .photo-overlay mat-icon {
-      color: #fff;
+      color: var(--color-on-dark);
       font-size: 40px;
       width: 40px;
       height: 40px;
@@ -395,7 +358,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       font-size: 100px;
       width: 100px;
       height: 100px;
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .change-photo-btn {
@@ -411,7 +374,7 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       justify-content: space-between;
       align-items: flex-start;
       padding: 16px 0;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
     }
 
     .info-row:last-child {
@@ -422,18 +385,18 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       display: flex;
       align-items: center;
       gap: 12px;
-      color: #666;
+      color: var(--color-text-2);
       font-weight: 500;
       min-width: 150px;
     }
 
     .info-label mat-icon {
-      color: #2563eb;
+      color: var(--color-primary);
     }
 
     .info-value {
-      color: #333;
-      font-size: 16px;
+      color: var(--color-text);
+      font-size: var(--text-lg);
       text-align: right;
       flex: 1;
     }
@@ -445,30 +408,20 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       gap: 8px;
     }
 
+    /* Chip colours go through Material's chip tokens; colouring the host directly left the
+       label white on a white chip. */
     .permission-chip {
-      background: #e3f2fd !important;
-      color: #1976d2 !important;
-      font-size: 12px;
+      --mdc-chip-elevated-container-color: var(--color-primary-soft);
+      --mdc-chip-label-text-color: var(--color-primary);
+      --mdc-chip-label-text-size: var(--text-xs);
     }
-
-    .role-admin {
-      background: #f44336 !important;
-      color: white !important;
-    }
-
-    .role-manager {
-      background: #ff9800 !important;
-      color: white !important;
-    }
-
-    .role-employee {
-      background: #4caf50 !important;
-      color: white !important;
-    }
+    .role-admin { --mdc-chip-elevated-container-color: var(--color-danger-soft); --mdc-chip-label-text-color: var(--color-danger); }
+    .role-manager { --mdc-chip-elevated-container-color: var(--color-warn-soft); --mdc-chip-label-text-color: var(--color-warn); }
+    .role-employee { --mdc-chip-elevated-container-color: var(--color-ok-soft); --mdc-chip-label-text-color: var(--color-ok); }
 
     .actions-card h3 {
       margin: 0 0 16px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .actions-list {
@@ -488,66 +441,9 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
     }
 
     .action-button.logout {
-      color: #f44336;
-      border-color: #f44336;
+      color: var(--color-danger);
+      border-color: var(--color-danger);
     }
-
-    .loading-state {
-      display: flex; justify-content: center; padding: 60px 20px; min-height: 50vh; align-items: center;
-    }
-    .loading-card {
-      background: rgba(255,255,255,0.97); border-radius: 20px;
-      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
-      max-width: 520px; width: 100%;
-    }
-    .loading-card h3 { color: #1a1a2e; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
-    .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(30,64,175,0.12));
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(37,99,235,0.15);
-    }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #2563eb; }
-    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
-    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
-    .lc-progress-wrap { margin: 8px 0 24px; }
-    .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
-    .lc-progress-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #2563eb, #60a5fa, #1e40af);
-      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
-      transition: width 0.15s ease-out; position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4)); border-radius: 0 4px 4px 0;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
-    .lc-progress-message { color: #64748b; font-weight: 500; }
-    .lc-progress-pct { color: #2563eb; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
-    .lc-step {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      flex: 1; padding-top: 16px; opacity: 0.35; transition: opacity 0.4s ease, transform 0.3s ease;
-    }
-    .lc-step.active { opacity: 1; transform: translateY(-2px); }
-    .lc-step.done { opacity: 0.65; }
-    .lc-step-dot {
-      width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
-    }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #2563eb, #1e40af); box-shadow: 0 2px 10px rgba(37,99,235,0.3); }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
-    .lc-step.done .lc-step-dot { background: #dcfce7; }
-    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #2563eb; }
-    .lc-step.done .lc-step-label { color: #16a34a; }
 
     @media (max-width: 600px) {
       .info-row {
@@ -565,18 +461,9 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       margin-left: 8px;
     }
 
-    .badge {
-      background: #2563eb;
-      color: white;
-      border-radius: 12px;
-      padding: 2px 8px;
-      font-size: 11px;
-      margin-left: 8px;
-    }
-
     mat-tab-group {
-      background: white;
-      border-radius: 16px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       overflow: hidden;
     }
 
@@ -584,259 +471,8 @@ import { User, CdrRecord, CdrQuery, CdrResponse, ExtensionStatus, Department } f
       padding: 24px;
     }
 
-    /* Call History Styles */
-    .call-history-card {
-      border-radius: 0;
-      box-shadow: none;
-      padding: 0;
-    }
-
-    .call-history-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    .call-history-header h2 {
-      margin: 0;
-      color: #333;
-    }
-
-    .call-stats {
-      display: flex;
-      gap: 24px;
-    }
-
-    .call-stats .stat {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: #666;
-      font-size: 14px;
-    }
-
-    .call-stats .stat mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .filters-row {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .date-field {
-      width: 180px;
-    }
-
-    .table-container {
-      overflow-x: auto;
-    }
-
-    .call-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    .call-table th,
-    .call-table td {
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid #eee;
-    }
-
-    .call-table th {
-      background: #f5f5f5;
-      font-weight: 600;
-      color: #333;
-    }
-
-    .call-table tr:hover {
-      background: #fafafa;
-    }
-
-    .call-table .no-data {
-      text-align: center;
-      color: #999;
-      padding: 40px;
-    }
-
-    .call-outbound mat-icon { color: #4caf50; }
-    .call-inbound mat-icon { color: #2196f3; }
-    .call-missed mat-icon { color: #f44336; }
-
-    .status-answered { background: #e8f5e9 !important; color: #2e7d32 !important; }
-    .status-noanswer, .status-busy { background: #ffebee !important; color: #c62828 !important; }
-    .status-failed { background: #fce4ec !important; color: #ad1457 !important; }
-
-    .loading-calls {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 40px;
-      color: #666;
-    }
-
-    /* Extension Styles */
-    .extension-card {
-      border-radius: 0;
-      box-shadow: none;
-      padding: 0;
-    }
-
-    .extension-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .extension-header h2 {
-      margin: 0;
-      color: #333;
-    }
-
-    .extension-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-      color: #2563eb;
-    }
-
-    .extension-details {
-      text-align: center;
-    }
-
-    .extension-number {
-      margin-bottom: 16px;
-    }
-
-    .extension-number .label {
-      display: block;
-      color: #666;
-      font-size: 14px;
-      margin-bottom: 8px;
-    }
-
-    .extension-number .value {
-      font-size: 48px;
-      font-weight: 600;
-      color: #2563eb;
-    }
-
-    .extension-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-weight: 500;
-      margin-bottom: 24px;
-    }
-
-    .extension-status.status-available {
-      background: #e8f5e9;
-      color: #2e7d32;
-    }
-
-    .extension-status.status-busy {
-      background: #fff3e0;
-      color: #ef6c00;
-    }
-
-    .extension-status.status-ringing {
-      background: #e3f2fd;
-      color: #1565c0;
-    }
-
-    .extension-status.status-offline {
-      background: #fafafa;
-      color: #757575;
-    }
-
-    .extension-info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      padding: 24px 0;
-      text-align: left;
-    }
-
-    .extension-info-grid .info-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-    }
-
-    .extension-info-grid .info-item mat-icon {
-      color: #2563eb;
-      margin-top: 2px;
-    }
-
-    .extension-info-grid .label {
-      display: block;
-      color: #666;
-      font-size: 12px;
-    }
-
-    .extension-info-grid .value {
-      display: block;
-      color: #333;
-      font-weight: 500;
-    }
-
-    .quick-actions {
-      padding-top: 24px;
-    }
-
-    .quick-actions h3 {
-      margin: 0 0 16px 0;
-      color: #333;
-      font-size: 16px;
-    }
-
-    .action-buttons {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .no-extension {
-      text-align: center;
-      padding: 60px 20px;
-      color: #666;
-    }
-
-    .no-extension mat-icon {
-      font-size: 80px;
-      width: 80px;
-      height: 80px;
-      color: #ccc;
-    }
-
-    .no-extension h3 {
-      margin: 16px 0 8px;
-      color: #333;
-    }
-
-    .loading-extension {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 60px;
-      color: #666;
-    }
-
     .not-set {
-      color: #999;
+      color: var(--color-text-3);
       font-style: italic;
     }
   `]
@@ -880,36 +516,21 @@ export class ProfileComponent implements OnInit, OnDestroy {
   myExtension: ExtensionStatus | null = null;
   loadingExtension = false;
 
-  // Loading progress
-  loadingProgress = 0;
-  loadingStage = 0;
-  loadingMessage = 'Initializing...';
-  private progressInterval: any;
-  readonly loadingSteps = [
-    { icon: 'lock', label: 'Authenticating', detail: 'Verifying credentials...' },
-    { icon: 'person', label: 'Profile', detail: 'Loading profile data...' },
-    { icon: 'badge', label: 'Details', detail: 'Fetching account details...' },
-    { icon: 'dashboard', label: 'Ready', detail: 'Preparing your profile...' }
-  ];
-  
   private subscriptions = new Subscription();
 
   constructor(
     private authService: AuthService,
     private apiService: ApiService,
     private router: Router,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
-    this.startLoadingProgress();
     this.user = this.authService.currentUserValue;
     if (!this.user) {
-      this.stopLoadingProgress();
       this.router.navigate(['/login']);
       return;
     }
-    this.finishLoadingProgress(() => {});
     
     this.loadCallHistory();
     this.loadExtension();
@@ -918,45 +539,6 @@ export class ProfileComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
-    this.stopLoadingProgress();
-  }
-
-  private startLoadingProgress(): void {
-    this.loadingProgress = 0;
-    this.loadingStage = 0;
-    this.loadingMessage = this.loadingSteps[0].detail;
-    this.progressInterval = setInterval(() => {
-      const max = 88;
-      if (this.loadingProgress < max) {
-        const increment = Math.max(0.3, (max - this.loadingProgress) * 0.06);
-        this.loadingProgress = Math.min(max, this.loadingProgress + increment);
-      }
-      const newStage = this.loadingProgress < 20 ? 0 : this.loadingProgress < 45 ? 1 : this.loadingProgress < 70 ? 2 : 3;
-      if (newStage !== this.loadingStage) {
-        this.loadingStage = newStage;
-        this.loadingMessage = this.loadingSteps[newStage].detail;
-      }
-    }, 120);
-  }
-
-  private finishLoadingProgress(callback: () => void): void {
-    clearInterval(this.progressInterval);
-    this.loadingStage = 3;
-    this.loadingMessage = 'Almost there...';
-    const finish = setInterval(() => {
-      this.loadingProgress = Math.min(100, this.loadingProgress + 4);
-      if (this.loadingProgress >= 100) {
-        clearInterval(finish);
-        this.loadingMessage = 'Complete!';
-        setTimeout(() => callback(), 300);
-      }
-    }, 30);
-  }
-
-  private stopLoadingProgress(): void {
-    clearInterval(this.progressInterval);
-    this.loadingProgress = 0;
-    this.loadingStage = 0;
   }
 
   loadCallHistory(): void {
@@ -1158,7 +740,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      this.snackBar.open('Please select an image file.', 'Close', { duration: 3000 });
+      this.toast.warn('Please select an image file.');
       return;
     }
 
@@ -1183,7 +765,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           this.uploadingPhoto = false;
-          this.snackBar.open('Could not process image.', 'Close', { duration: 3000 });
+          this.toast.error('Could not process image.');
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
@@ -1192,13 +774,13 @@ export class ProfileComponent implements OnInit, OnDestroy {
       };
       img.onerror = () => {
         this.uploadingPhoto = false;
-        this.snackBar.open('Could not read image.', 'Close', { duration: 3000 });
+        this.toast.error('Could not read image.');
       };
       img.src = reader.result as string;
     };
     reader.onerror = () => {
       this.uploadingPhoto = false;
-      this.snackBar.open('Could not read file.', 'Close', { duration: 3000 });
+      this.toast.error('Could not read file.');
     };
     reader.readAsDataURL(file);
 
@@ -1216,12 +798,12 @@ export class ProfileComponent implements OnInit, OnDestroy {
           }
           this.authService.refreshUserData(this.user!.userId);
           this.uploadingPhoto = false;
-          this.snackBar.open('Profile picture updated!', 'Close', { duration: 3000 });
+          this.toast.done('Profile picture updated.');
         },
         error: (err) => {
           console.error('Failed to update photo:', err);
           this.uploadingPhoto = false;
-          this.snackBar.open('Failed to update profile picture.', 'Close', { duration: 4000 });
+          this.toast.error('Failed to update profile picture.');
         }
       })
     );
@@ -1256,12 +838,12 @@ export class ProfileComponent implements OnInit, OnDestroy {
           this.authService.refreshUserData(this.user!.userId);
           this.savingDetails = false;
           this.editingDetails = false;
-          this.snackBar.open('Profile updated!', 'Close', { duration: 3000 });
+          this.toast.done('Profile updated.');
         },
         error: (err) => {
           console.error('Failed to update profile:', err);
           this.savingDetails = false;
-          this.snackBar.open('Failed to update profile.', 'Close', { duration: 4000 });
+          this.toast.error('Failed to update profile.');
         }
       })
     );
@@ -1278,15 +860,15 @@ export class ProfileComponent implements OnInit, OnDestroy {
   submitPasswordChange(): void {
     if (!this.user) return;
     if (!this.currentPassword || !this.newPassword) {
-      this.snackBar.open('Please fill in all password fields.', 'Close', { duration: 3000 });
+      this.toast.warn('Please fill in all password fields.');
       return;
     }
     if (this.newPassword.length < 8) {
-      this.snackBar.open('New password must be at least 8 characters.', 'Close', { duration: 3000 });
+      this.toast.warn('New password must be at least 8 characters.');
       return;
     }
     if (this.newPassword !== this.confirmPassword) {
-      this.snackBar.open('New passwords do not match.', 'Close', { duration: 3000 });
+      this.toast.warn('New passwords do not match.');
       return;
     }
     this.savingPassword = true;
@@ -1301,13 +883,13 @@ export class ProfileComponent implements OnInit, OnDestroy {
           this.currentPassword = '';
           this.newPassword = '';
           this.confirmPassword = '';
-          this.snackBar.open('Password changed successfully!', 'Close', { duration: 3000 });
+          this.toast.done('Password changed successfully.');
         },
         error: (err) => {
           console.error('Failed to change password:', err);
           this.savingPassword = false;
           const msg = err?.error?.message || 'Failed to change password.';
-          this.snackBar.open(msg, 'Close', { duration: 4000 });
+          this.toast.error(msg);
         }
       })
     );

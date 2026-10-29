@@ -28,7 +28,7 @@ import { PaperlessService, PaperlessUser, RecipientRole } from '../../../service
       <div class="dialog-header">
         <mat-icon class="header-icon">account_balance</mat-icon>
         <h2>Finance Request</h2>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -38,7 +38,7 @@ import { PaperlessService, PaperlessUser, RecipientRole } from '../../../service
 
         <div class="options-list">
           <div class="option-item" (click)="openPayment()">
-            <mat-icon class="option-icon" style="color:#2e7d32">payments</mat-icon>
+            <mat-icon class="option-icon" style="color:var(--color-ok)">payments</mat-icon>
             <div class="option-text">
               <span class="option-name">Payment</span>
               <span class="option-desc">Pay an invoice or submit a 3-quote comparison for approval</span>
@@ -47,7 +47,7 @@ import { PaperlessService, PaperlessUser, RecipientRole } from '../../../service
           </div>
 
           <div class="option-item" (click)="openQuotations()">
-            <mat-icon class="option-icon" style="color:#1565c0">request_quote</mat-icon>
+            <mat-icon class="option-icon" style="color:var(--color-primary-hover)">request_quote</mat-icon>
             <div class="option-text">
               <span class="option-name">Quotations</span>
               <span class="option-desc">Request or submit supplier quotations</span>
@@ -62,26 +62,26 @@ import { PaperlessService, PaperlessUser, RecipientRole } from '../../../service
     .fin-menu-dialog { padding: 0; min-width: 420px; }
     .dialog-header {
       display: flex; align-items: center; justify-content: center; gap: 12px;
-      padding: 18px 24px; background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);
+      padding: 18px 24px; background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white; margin: -24px -24px 0 -24px; position: relative;
     }
     .header-icon { font-size: 30px; width: 30px; height: 30px; }
     .dialog-header h2 { margin: 0; font-size: 1.4rem; text-align: center; }
     .close-btn { color: white; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
     .dialog-content { padding: 24px; }
-    .subtitle { text-align: center; color: #666; margin: 0 0 20px; }
+    .subtitle { text-align: center; color: var(--color-text-2); margin: 0 0 20px; }
     .options-list { display: flex; flex-direction: column; gap: 12px; }
     .option-item {
       display: flex; align-items: center; gap: 14px; padding: 16px;
-      border: 1px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all .2s;
+      border: 1px solid var(--color-line); border-radius: 12px; cursor: pointer; transition: all .2s;
     }
-    .option-item:hover { border-color: #2196f3; background: #e3f2fd; transform: translateY(-2px);
+    .option-item:hover { border-color: var(--color-primary); background: var(--color-primary-soft); transform: translateY(-2px);
       box-shadow: 0 6px 18px rgba(33,150,243,.15); }
     .option-icon { font-size: 32px; width: 32px; height: 32px; }
     .option-text { display: flex; flex-direction: column; flex: 1; }
-    .option-name { font-weight: 600; font-size: 1.05rem; color: #333; }
-    .option-desc { font-size: .85rem; color: #777; }
-    .arrow-icon { color: #bbb; }
+    .option-name { font-weight: 600; font-size: 1.05rem; color: var(--color-text); }
+    .option-desc { font-size: .85rem; color: var(--color-text-3); }
+    .arrow-icon { color: var(--color-text-3); }
   `]
 })
 export class FinanceMenuComponent {
@@ -126,7 +126,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
       <div class="dialog-header">
         <mat-icon class="header-icon">payments</mat-icon>
         <h2>Payment Request</h2>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -172,7 +172,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
                   <div class="file-chip">
                     <mat-icon>description</mat-icon>
                     <span class="fname">{{ invoiceFile.name }}</span>
-                    <button mat-icon-button (click)="invoiceFile = null"><mat-icon>close</mat-icon></button>
+                    <button aria-label="Close" mat-icon-button (click)="invoiceFile = null"><mat-icon>close</mat-icon></button>
                   </div>
                 }
               </div>
@@ -185,7 +185,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
                       <div class="file-chip">
                         <mat-icon>description</mat-icon>
                         <span class="fname">{{ quoteFiles[slot]!.name }}</span>
-                        <button mat-icon-button (click)="clearQuote(slot)"><mat-icon>close</mat-icon></button>
+                        <button aria-label="Close" mat-icon-button (click)="clearQuote(slot)"><mat-icon>close</mat-icon></button>
                       </div>
                     } @else {
                       <button mat-stroked-button type="button" (click)="pickQuote(slot)">
@@ -281,7 +281,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
                         <mat-chip [class]="'chip-' + p.role" (removed)="removeUser(p)">
                           <mat-icon>{{ p.role === 'signer' ? 'draw' : 'verified' }}</mat-icon>
                           {{ p.name }} · {{ p.role }}
-                          <button matChipRemove><mat-icon>cancel</mat-icon></button>
+                          <button aria-label="Close" matChipRemove><mat-icon>cancel</mat-icon></button>
                         </mat-chip>
                       }
                     </mat-chip-set>
@@ -310,11 +310,11 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
     </div>
   `,
   styles: [`
-    .pay-dialog { width: 100%; color: #1f2430; }
+    .pay-dialog { width: 100%; color: var(--color-text); }
     /* Ensure form inputs are always dark-on-light regardless of global theme */
-    .pay-dialog ::ng-deep .mat-mdc-form-field { color: #1f2430; }
+    .pay-dialog ::ng-deep .mat-mdc-form-field { color: var(--color-text); }
     .pay-dialog ::ng-deep input.mat-mdc-input-element,
-    .pay-dialog ::ng-deep textarea.mat-mdc-input-element { color: #1f2430 !important; caret-color: #1f2430; }
+    .pay-dialog ::ng-deep textarea.mat-mdc-input-element { color: var(--color-text) !important; caret-color: var(--color-text); }
     .pay-dialog ::ng-deep .mat-mdc-form-field-infix input::placeholder,
     .pay-dialog ::ng-deep .mat-mdc-form-field-infix textarea::placeholder { color: #9aa0ab !important; }
     .pay-dialog ::ng-deep .mdc-floating-label,
@@ -325,7 +325,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
     .pay-dialog ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__trailing { border-color: #c7ccd6; }
     .dialog-header {
       display: flex; align-items: center; justify-content: center; gap: 12px;
-      padding: 18px 24px; background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+      padding: 18px 24px; background: linear-gradient(135deg, var(--color-ok) 0%, #1b5e20 100%);
       color: white; margin: -24px -24px 0 -24px; position: relative;
     }
     .header-icon { font-size: 30px; width: 30px; height: 30px; }
@@ -334,32 +334,32 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
     .dialog-content { padding: 22px 2px 8px; }
     .full-width { width: 100%; }
 
-    .step { margin-bottom: 18px; padding: 16px; background: #fafafa; border-radius: 12px; border: 1px solid #e0e0e0; }
-    .step.completed { background: #e8f5e9; border-color: #a5d6a7; }
+    .step { margin-bottom: 18px; padding: 16px; background: var(--color-canvas); border-radius: 12px; border: 1px solid var(--color-line); }
+    .step.completed { background: var(--color-ok-soft); border-color: #a5d6a7; }
     .step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-    .step-number { width: 26px; height: 26px; border-radius: 50%; background: #e0e0e0; color: #666;
+    .step-number { width: 26px; height: 26px; border-radius: 50%; background: var(--color-line); color: var(--color-text-2);
       display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .8rem; }
-    .step-number.active { background: #2e7d32; color: white; }
-    .step.completed .step-number { background: #4caf50; color: white; }
-    .step-label { font-weight: 600; color: #333; }
+    .step-number.active { background: var(--color-ok); color: white; }
+    .step.completed .step-number { background: var(--color-ok); color: white; }
+    .step-label { font-weight: 600; color: var(--color-text); }
 
     .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .type-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px;
-      background: white; border: 1px solid #e0e0e0; border-radius: 12px; cursor: pointer; text-align: center; transition: all .2s; }
-    .type-card:hover { border-color: #2e7d32; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(46,125,50,.15); }
-    .type-card.selected { border: 2px solid #2e7d32; background: #f1f8e9; }
-    .type-card mat-icon { font-size: 32px; width: 32px; height: 32px; color: #2e7d32; }
-    .t-name { font-weight: 600; color: #333; }
-    .t-desc { font-size: .8rem; color: #777; }
+      background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 12px; cursor: pointer; text-align: center; transition: all .2s; }
+    .type-card:hover { border-color: var(--color-ok); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(46,125,50,.15); }
+    .type-card.selected { border: 2px solid var(--color-ok); background: #f1f8e9; }
+    .type-card mat-icon { font-size: 32px; width: 32px; height: 32px; color: var(--color-ok); }
+    .t-name { font-weight: 600; color: var(--color-text); }
+    .t-desc { font-size: .8rem; color: var(--color-text-3); }
 
     .upload-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .quotes-list { display: flex; flex-direction: column; gap: 10px; }
     .quote-slot { display: flex; align-items: center; gap: 12px; }
-    .q-label { font-weight: 600; color: #555; min-width: 64px; }
+    .q-label { font-weight: 600; color: var(--color-text-2); min-width: 64px; }
     .file-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px;
-      background: white; border: 1px solid #c8e6c9; border-radius: 20px; }
+      background: var(--color-surface); border: 1px solid #c8e6c9; border-radius: 20px; }
     .file-chip .fname { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
-    .file-chip mat-icon { color: #2e7d32; }
+    .file-chip mat-icon { color: var(--color-ok); }
     .file-chip button { width: 28px; height: 28px; line-height: 28px; }
 
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
@@ -372,20 +372,20 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
     .pl-sub { font-size: .82rem; color: #5b6b8c; margin-top: 2px; }
     .signers-block { margin-top: 14px; }
 
-    .results { background: white; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
-    .result-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+    .results { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+    .result-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--color-line); }
     .result-row:last-child { border-bottom: none; }
     .r-info { display: flex; flex-direction: column; }
-    .r-name { font-weight: 600; color: #333; font-size: .9rem; }
-    .r-email { font-size: .78rem; color: #888; }
+    .r-name { font-weight: 600; color: var(--color-text); font-size: .9rem; }
+    .r-email { font-size: .78rem; color: var(--color-text-3); }
     .r-actions { display: flex; gap: 8px; }
     .r-actions button { line-height: 30px; }
 
-    .picked-label { font-size: .85rem; color: #555; font-weight: 600; display: block; margin-bottom: 6px; }
-    .chip-signer { --mdc-chip-elevated-container-color: #e3f2fd; }
-    .chip-approver { --mdc-chip-elevated-container-color: #e8f5e9; }
+    .picked-label { font-size: .85rem; color: var(--color-text-2); font-weight: 600; display: block; margin-bottom: 6px; }
+    .chip-signer { --mdc-chip-elevated-container-color: var(--color-primary-soft); }
+    .chip-approver { --mdc-chip-elevated-container-color: var(--color-ok-soft); }
 
-    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 14px; border-top: 1px solid #eee; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 14px; border-top: 1px solid var(--color-line); }
     .dialog-actions button { display: flex; align-items: center; gap: 8px; }
   `]
 })
@@ -548,7 +548,7 @@ export class PaymentRequestDialogComponent {
       <div class="dialog-header">
         <mat-icon class="header-icon">request_quote</mat-icon>
         <h2>Quotation Request</h2>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -581,7 +581,7 @@ export class PaymentRequestDialogComponent {
                 <div class="file-chip">
                   <mat-icon>description</mat-icon>
                   <span class="fname">{{ f.name }}</span>
-                  <button mat-icon-button (click)="remove(i)"><mat-icon>close</mat-icon></button>
+                  <button aria-label="Close" mat-icon-button (click)="remove(i)"><mat-icon>close</mat-icon></button>
                 </div>
               }
             </div>
@@ -630,7 +630,7 @@ export class PaymentRequestDialogComponent {
                     <mat-chip (removed)="removeUser(p)">
                       <mat-icon>{{ p.role === 'signer' ? 'draw' : 'verified' }}</mat-icon>
                       {{ p.name }} · {{ p.role }}
-                      <button matChipRemove><mat-icon>cancel</mat-icon></button>
+                      <button aria-label="Close" matChipRemove><mat-icon>cancel</mat-icon></button>
                     </mat-chip>
                   }
                 </mat-chip-set>
@@ -654,10 +654,10 @@ export class PaymentRequestDialogComponent {
     </div>
   `,
   styles: [`
-    .quote-dialog { width: 100%; color: #1f2430; }
-    .quote-dialog ::ng-deep .mat-mdc-form-field { color: #1f2430; }
+    .quote-dialog { width: 100%; color: var(--color-text); }
+    .quote-dialog ::ng-deep .mat-mdc-form-field { color: var(--color-text); }
     .quote-dialog ::ng-deep input.mat-mdc-input-element,
-    .quote-dialog ::ng-deep textarea.mat-mdc-input-element { color: #1f2430 !important; caret-color: #1f2430; }
+    .quote-dialog ::ng-deep textarea.mat-mdc-input-element { color: var(--color-text) !important; caret-color: var(--color-text); }
     .quote-dialog ::ng-deep .mat-mdc-form-field-infix input::placeholder,
     .quote-dialog ::ng-deep .mat-mdc-form-field-infix textarea::placeholder { color: #9aa0ab !important; }
     .quote-dialog ::ng-deep .mdc-floating-label,
@@ -668,7 +668,7 @@ export class PaymentRequestDialogComponent {
     .quote-dialog ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__trailing { border-color: #c7ccd6; }
     .dialog-header {
       display: flex; align-items: center; justify-content: center; gap: 12px;
-      padding: 18px 24px; background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+      padding: 18px 24px; background: linear-gradient(135deg, var(--color-primary-hover) 0%, var(--color-primary-hover) 100%);
       color: white; margin: -24px -24px 0 -24px; position: relative;
     }
     .header-icon { font-size: 30px; width: 30px; height: 30px; }
@@ -677,26 +677,26 @@ export class PaymentRequestDialogComponent {
     .dialog-content { padding: 22px 2px 8px; }
     .full-width { width: 100%; }
     .uploaded { margin-bottom: 14px; }
-    .up-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 10px; color: #555; font-size: .9rem; }
+    .up-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 10px; color: var(--color-text-2); font-size: .9rem; }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; }
     .file-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px;
-      background: white; border: 1px solid #bbdefb; border-radius: 20px; }
+      background: var(--color-surface); border: 1px solid var(--color-primary-soft); border-radius: 20px; }
     .file-chip .fname { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
-    .file-chip mat-icon { color: #1565c0; }
+    .file-chip mat-icon { color: var(--color-primary-hover); }
     .file-chip button { width: 28px; height: 28px; line-height: 28px; }
     .paperless-step { padding: 14px; background: #eef4ff; border: 1px solid #c5d8ff; border-radius: 12px; margin-top: 8px; }
     .pl-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .pl-toggle-text { display: flex; flex-direction: column; }
     .pl-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #1a3f8f; }
     .pl-sub { font-size: .82rem; color: #5b6b8c; margin-top: 2px; }
-    .results { background: white; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; margin: 12px 0; }
-    .result-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+    .results { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; overflow: hidden; margin: 12px 0; }
+    .result-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--color-line); }
     .result-row:last-child { border-bottom: none; }
     .r-info { display: flex; flex-direction: column; }
-    .r-name { font-weight: 600; color: #333; font-size: .9rem; }
-    .r-email { font-size: .78rem; color: #888; }
+    .r-name { font-weight: 600; color: var(--color-text); font-size: .9rem; }
+    .r-email { font-size: .78rem; color: var(--color-text-3); }
     .r-actions { display: flex; gap: 8px; }
-    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 14px; border-top: 1px solid #eee; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 14px; border-top: 1px solid var(--color-line); }
     .dialog-actions button { display: flex; align-items: center; gap: 8px; }
   `]
 })

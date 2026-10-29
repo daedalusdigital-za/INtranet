@@ -44,9 +44,9 @@ namespace ProjectTracker.API.Controllers.HBA1C
                 _logger.LogInformation("Testing HBA1C API connection...");
                 
                 // Try a simple GET request
-                var result = await _api.GetAsync<dynamic>("api/Sales/GetDashboardStats");
+                var result = await _api.GetAsync<System.Text.Json.JsonElement?>("api/Sales/GetDashboardStats");
                 
-                if (result != null)
+                if (result.HasValue && result.Value.ValueKind != System.Text.Json.JsonValueKind.Undefined && result.Value.ValueKind != System.Text.Json.JsonValueKind.Null)
                 {
                     return Ok(new { 
                         status = "success", 

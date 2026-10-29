@@ -13,9 +13,12 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
+import { StatusChipComponent, ChipTone } from '../../../ui/status-chip/status-chip.component';
 
 interface Vehicle {
   id: number;
@@ -72,7 +75,9 @@ interface VehicleType {
     MatTooltipModule,
     MatSortModule,
     MatMenuModule,
-    MatSnackBarModule
+    SkeletonRowsComponent,
+    EmptyStateComponent,
+    StatusChipComponent
   ],
   template: `
     <div class="vehicles-dialog">
@@ -81,7 +86,7 @@ interface VehicleType {
           <mat-icon>directions_car</mat-icon>
           Fleet Vehicles
         </h2>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -139,10 +144,7 @@ interface VehicleType {
 
         <!-- Vehicles List -->
         <div class="vehicles-list">
-          <div class="loading-spinner" *ngIf="isLoading()">
-            <mat-spinner diameter="40"></mat-spinner>
-            <p>Loading vehicles...</p>
-          </div>
+          <app-skeleton-rows *ngIf="isLoading()" [rows]="6" [avatar]="false"></app-skeleton-rows>
 
           <div class="table-container" *ngIf="!isLoading()">
             <table mat-table [dataSource]="filteredVehicles()" matSort (matSortChange)="sortData($event)" class="vehicles-table">
@@ -181,9 +183,7 @@ interface VehicleType {
               <ng-container matColumnDef="status">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
                 <td mat-cell *matCellDef="let vehicle">
-                  <span class="status-chip" [ngClass]="getStatusClass(vehicle.status)">
-                    {{ vehicle.status || 'Unknown' }}
-                  </span>
+                  <app-status-chip [status]="vehicle.status || 'Unknown'" [tone]="getStatusTone(vehicle.status)"></app-status-chip>
                 </td>
               </ng-container>
 
@@ -221,7 +221,7 @@ interface VehicleType {
               <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef>Actions</th>
                 <td mat-cell *matCellDef="let vehicle">
-                  <button mat-icon-button [matMenuTriggerFor]="actionMenu" (click)="$event.stopPropagation()">
+                  <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="actionMenu" (click)="$event.stopPropagation()">
                     <mat-icon>more_vert</mat-icon>
                   </button>
                   <mat-menu #actionMenu="matMenu">
@@ -253,15 +253,17 @@ interface VehicleType {
               </ng-container>
 
               <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-              <tr mat-row *matRowDef="let row; columns: displayedColumns;" 
-                  [class.available-row]="row.status === 'Available'"
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;"
                   [class.maintenance-row]="row.status === 'Maintenance'"></tr>
             </table>
 
-            <div class="no-data-message" *ngIf="filteredVehicles().length === 0">
-              <mat-icon>directions_car_filled</mat-icon>
-              <p>No vehicles found matching your criteria</p>
-            </div>
+            <app-empty-state *ngIf="filteredVehicles().length === 0" icon="directions_car_filled"
+                             [title]="vehicles().length ? 'No vehicles match these filters' : 'No vehicles in the fleet'"
+                             [message]="vehicles().length ? 'Change the search, status or type to see more vehicles.' : 'Vehicles added to the fleet show up here.'">
+              @if (vehicles().length) {
+                <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
+              }
+            </app-empty-state>
           </div>
         </div>
 
@@ -273,7 +275,7 @@ interface VehicleType {
                 <mat-icon>edit</mat-icon>
                 Edit Vehicle: {{ editingVehicle.registrationNumber }}
               </h3>
-              <button mat-icon-button (click)="cancelEdit()">
+              <button aria-label="Close" mat-icon-button (click)="cancelEdit()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -337,7 +339,7 @@ interface VehicleType {
                 <mat-icon>person_add</mat-icon>
                 Assign Driver to: {{ assigningDriverTo.registrationNumber }}
               </h3>
-              <button mat-icon-button (click)="cancelAssign()">
+              <button aria-label="Close" mat-icon-button (click)="cancelAssign()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -379,7 +381,7 @@ interface VehicleType {
                 <mat-icon>warning</mat-icon>
                 Confirm Delete
               </h3>
-              <button mat-icon-button (click)="cancelDelete()">
+              <button aria-label="Close" mat-icon-button (click)="cancelDelete()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -420,8 +422,9 @@ interface VehicleType {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
 
       h2 {
@@ -429,17 +432,20 @@ interface VehicleType {
         display: flex;
         align-items: center;
         gap: 12px;
-        font-size: 1.5rem;
+        font-size: var(--text-2xl);
+        font-weight: 700;
+        color: var(--color-text);
 
         mat-icon {
-          font-size: 28px;
-          width: 28px;
-          height: 28px;
+          font-size: 24px;
+          width: 24px;
+          height: 24px;
+          color: var(--color-primary);
         }
       }
 
       button {
-        color: white;
+        color: var(--color-text-2);
       }
     }
 
@@ -471,8 +477,8 @@ interface VehicleType {
         gap: 6px;
         padding: 8px 16px;
         border-radius: 20px;
-        font-size: 0.9rem;
-        font-weight: 500;
+        font-size: var(--text-sm);
+        font-weight: 600;
 
         mat-icon {
           font-size: 18px;
@@ -481,45 +487,32 @@ interface VehicleType {
         }
 
         &.available {
-          background: #e8f5e9;
-          color: #2e7d32;
+          background: var(--color-ok-soft);
+          color: var(--color-ok);
         }
 
         &.in-use {
-          background: #fff3e0;
-          color: #ef6c00;
+          background: var(--color-warn-soft);
+          color: var(--color-warn);
         }
 
         &.maintenance {
-          background: #ffebee;
-          color: #c62828;
+          background: var(--color-danger-soft);
+          color: var(--color-danger);
         }
 
         &.total {
-          background: #e3f2fd;
-          color: #1565c0;
+          background: var(--color-primary-soft);
+          color: var(--color-primary);
         }
       }
     }
 
     .vehicles-list {
-      .loading-spinner {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 48px;
-        color: #666;
-
-        p {
-          margin-top: 16px;
-        }
-      }
-
       .table-container {
         max-height: 350px;
         overflow: auto;
-        border: 1px solid #e0e0e0;
+        border: 1px solid var(--color-line);
         border-radius: 8px;
       }
     }
@@ -528,36 +521,25 @@ interface VehicleType {
       width: 100%;
 
       th {
-        background: #f5f5f5;
+        background: var(--color-surface-2);
         font-weight: 600;
-        color: #333;
+        color: var(--color-text-2);
       }
 
       td {
-        padding: 12px 16px;
+        padding: var(--row-pad-y) 16px;
+        color: var(--color-text);
       }
 
       tr.mat-mdc-row {
         transition: background-color 0.2s;
 
         &:hover {
-          background: #f5f5f5;
-        }
-
-        &.available-row {
-          background: #f1f8e9;
-
-          &:hover {
-            background: #dcedc8;
-          }
+          background: var(--color-canvas);
         }
 
         &.maintenance-row {
-          background: #fff8e1;
-
-          &:hover {
-            background: #ffecb3;
-          }
+          background: var(--color-warn-soft);
         }
       }
     }
@@ -568,43 +550,10 @@ interface VehicleType {
       gap: 8px;
 
       .vehicle-icon {
-        color: #1976d2;
+        color: var(--color-primary);
         font-size: 20px;
         width: 20px;
         height: 20px;
-      }
-    }
-
-    .status-chip {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 0.85rem;
-      font-weight: 500;
-
-      &.status-available {
-        background: #e8f5e9;
-        color: #2e7d32;
-      }
-
-      &.status-in-use {
-        background: #fff3e0;
-        color: #ef6c00;
-      }
-
-      &.status-maintenance {
-        background: #ffebee;
-        color: #c62828;
-      }
-
-      &.status-offline {
-        background: #eceff1;
-        color: #546e7a;
-      }
-
-      &.status-unknown {
-        background: #f5f5f5;
-        color: #757575;
       }
     }
 
@@ -612,7 +561,7 @@ interface VehicleType {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: #1976d2;
+      color: var(--color-primary);
 
       mat-icon {
         font-size: 18px;
@@ -622,7 +571,7 @@ interface VehicleType {
     }
 
     .no-driver, .no-data {
-      color: #9e9e9e;
+      color: var(--color-text-3);
       font-style: italic;
     }
 
@@ -630,7 +579,7 @@ interface VehicleType {
       display: flex;
       align-items: center;
       gap: 4px;
-      color: #666;
+      color: var(--color-text-2);
       max-width: 180px;
       white-space: nowrap;
       overflow: hidden;
@@ -640,61 +589,36 @@ interface VehicleType {
         font-size: 16px;
         width: 16px;
         height: 16px;
-        color: #f44336;
+        color: var(--color-danger);
       }
     }
 
     .no-location {
-      color: #9e9e9e;
-    }
-
-    .no-data-message {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 48px;
-      color: #666;
-
-      mat-icon {
-        font-size: 64px;
-        width: 64px;
-        height: 64px;
-        margin-bottom: 16px;
-        opacity: 0.5;
-      }
-
-      p {
-        margin: 0;
-        font-size: 1.1rem;
-      }
+      color: var(--color-text-3);
     }
 
     .delete-action {
-      color: #c62828 !important;
+      color: var(--color-danger);
     }
 
     /* Edit Panel Styles */
     .edit-panel {
       margin-top: 16px;
-      border: 1px solid #1976d2;
+      border: 1px solid var(--color-primary);
       border-radius: 8px;
       overflow: hidden;
       animation: slideDown 0.2s ease-out;
 
-      &.assign-panel {
-        border-color: #2e7d32;
-
-        .edit-panel-header {
-          background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
-        }
-      }
-
       &.delete-panel {
-        border-color: #c62828;
+        border-color: var(--color-danger);
 
         .edit-panel-header {
-          background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
+          background: var(--color-danger-soft);
+          color: var(--color-danger);
+
+          h3 mat-icon {
+            color: var(--color-danger);
+          }
         }
       }
     }
@@ -715,25 +639,31 @@ interface VehicleType {
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-      color: white;
+      background: var(--color-surface-2);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
 
       h3 {
         margin: 0;
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 1.1rem;
+        font-size: var(--text-lg);
+        font-weight: 700;
+
+        mat-icon {
+          color: var(--color-primary);
+        }
       }
 
       button {
-        color: white;
+        color: var(--color-text-2);
       }
     }
 
     .edit-panel-content {
       padding: 16px;
-      background: #fafafa;
+      background: var(--color-canvas);
     }
 
     .edit-form-row {
@@ -760,7 +690,7 @@ interface VehicleType {
       gap: 12px;
       margin-top: 16px;
       padding-top: 16px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
 
       button {
         display: flex;
@@ -770,30 +700,31 @@ interface VehicleType {
     }
 
     .driver-phone {
-      color: #666;
+      color: var(--color-text-2);
       font-size: 0.9em;
     }
 
     .delete-warning {
-      font-size: 1.1rem;
+      font-size: var(--text-lg);
+      color: var(--color-text);
       margin-bottom: 8px;
     }
 
     .delete-note {
-      color: #666;
-      font-size: 0.9rem;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
 
     mat-dialog-actions {
       padding: 16px 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
   `]
 })
 export class VehiclesDialogComponent implements OnInit {
   private http = inject(HttpClient);
   private dialogRef = inject(MatDialogRef<VehiclesDialogComponent>);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private apiUrl = environment.apiUrl;
 
   vehicles = signal<Vehicle[]>([]);
@@ -857,7 +788,7 @@ export class VehiclesDialogComponent implements OnInit {
         this.isLoading.set(false);
         this.vehicles.set([]);
         this.filteredVehicles.set([]);
-        this.snackBar.open('Failed to load vehicles', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load vehicles');
       }
     });
   }
@@ -934,10 +865,21 @@ export class VehiclesDialogComponent implements OnInit {
     this.filteredVehicles.set(sorted);
   }
 
-  getStatusClass(status: string): string {
-    if (!status) return 'status-unknown';
-    const normalized = status.toLowerCase().replace(/\s+/g, '-');
-    return `status-${normalized}`;
+  clearFilters(): void {
+    this.searchTerm = '';
+    this.statusFilter = 'all';
+    this.typeFilter = 'all';
+    this.applyFilter();
+  }
+
+  getStatusTone(status: string): ChipTone {
+    if (!status) return 'neutral';
+    switch (status.toLowerCase().replace(/\s+/g, '-')) {
+      case 'available': return 'ok';
+      case 'in-use': return 'warn';
+      case 'maintenance': return 'danger';
+      default: return 'neutral';
+    }
   }
 
   truncateLocation(location: string): string {
@@ -977,14 +919,14 @@ export class VehiclesDialogComponent implements OnInit {
 
     this.http.put(`${this.apiUrl}/fleet/vehicles/${this.editingVehicle.id}`, payload).subscribe({
       next: () => {
-        this.snackBar.open('Vehicle updated successfully', 'Close', { duration: 3000 });
+        this.toast.done('Vehicle updated successfully');
         this.cancelEdit();
         this.loadVehicles();
         this.isSaving.set(false);
       },
       error: (err) => {
         console.error('Failed to update vehicle:', err);
-        this.snackBar.open('Failed to update vehicle', 'Close', { duration: 3000 });
+        this.toast.error('Failed to update vehicle');
         this.isSaving.set(false);
       }
     });
@@ -1017,14 +959,14 @@ export class VehiclesDialogComponent implements OnInit {
         const message = driverName 
           ? `Driver ${driverName.firstName} ${driverName.lastName} assigned`
           : 'Driver removed from vehicle';
-        this.snackBar.open(message, 'Close', { duration: 3000 });
+        this.toast.done(message);
         this.cancelAssign();
         this.loadVehicles();
         this.isSaving.set(false);
       },
       error: (err) => {
         console.error('Failed to assign driver:', err);
-        this.snackBar.open('Failed to assign driver', 'Close', { duration: 3000 });
+        this.toast.error('Failed to assign driver');
         this.isSaving.set(false);
       }
     });
@@ -1035,13 +977,13 @@ export class VehiclesDialogComponent implements OnInit {
     this.isSaving.set(true);
     this.http.put(`${this.apiUrl}/fleet/vehicles/${vehicle.id}`, { status: 'Maintenance' }).subscribe({
       next: () => {
-        this.snackBar.open(`${vehicle.registrationNumber} moved to maintenance`, 'Close', { duration: 3000 });
+        this.toast.done(`${vehicle.registrationNumber} moved to maintenance`);
         this.loadVehicles();
         this.isSaving.set(false);
       },
       error: (err) => {
         console.error('Failed to update status:', err);
-        this.snackBar.open('Failed to update vehicle status', 'Close', { duration: 3000 });
+        this.toast.error('Failed to update vehicle status');
         this.isSaving.set(false);
       }
     });
@@ -1052,13 +994,13 @@ export class VehiclesDialogComponent implements OnInit {
     this.isSaving.set(true);
     this.http.put(`${this.apiUrl}/fleet/vehicles/${vehicle.id}`, { status: 'Available' }).subscribe({
       next: () => {
-        this.snackBar.open(`${vehicle.registrationNumber} marked as available`, 'Close', { duration: 3000 });
+        this.toast.done(`${vehicle.registrationNumber} marked as available`);
         this.loadVehicles();
         this.isSaving.set(false);
       },
       error: (err) => {
         console.error('Failed to update status:', err);
-        this.snackBar.open('Failed to update vehicle status', 'Close', { duration: 3000 });
+        this.toast.error('Failed to update vehicle status');
         this.isSaving.set(false);
       }
     });
@@ -1081,14 +1023,14 @@ export class VehiclesDialogComponent implements OnInit {
     this.isSaving.set(true);
     this.http.delete(`${this.apiUrl}/fleet/vehicles/${this.deletingVehicle.id}`).subscribe({
       next: () => {
-        this.snackBar.open(`Vehicle ${this.deletingVehicle!.registrationNumber} deleted`, 'Close', { duration: 3000 });
+        this.toast.done(`Vehicle ${this.deletingVehicle!.registrationNumber} deleted`);
         this.cancelDelete();
         this.loadVehicles();
         this.isSaving.set(false);
       },
       error: (err) => {
         console.error('Failed to delete vehicle:', err);
-        this.snackBar.open('Failed to delete vehicle', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delete vehicle');
         this.isSaving.set(false);
       }
     });

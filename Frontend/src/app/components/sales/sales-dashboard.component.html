@@ -1,12 +1,45 @@
     <app-navbar></app-navbar>
     <div class="sales-dashboard">
+      <app-page-header class="sales-page-header" [crumbs]="['Operations', 'Sales']" [title]="currentSection()?.label ?? 'Sales'"
+                       [subtitle]="sectionSubtitle()">
+        <!-- The dialogs these open live in the loaded view, so the actions wait for it too. -->
+        @if (!initialLoading()) {
+          <button mat-stroked-button (click)="openAttentionDialog()"
+                  [matBadge]="attentionCount()" matBadgeColor="accent"
+                  [matBadgeHidden]="attentionCount() === 0">
+            <mat-icon>warning</mat-icon>Attention
+          </button>
+          <button mat-stroked-button (click)="promptImportPassword('sales')">
+            <mat-icon>upload_file</mat-icon>Import sales
+          </button>
+          <button mat-stroked-button [matMenuTriggerFor]="salesMoreMenu" aria-label="More actions">
+            <mat-icon>more_horiz</mat-icon>More
+          </button>
+          <button mat-flat-button color="primary" (click)="showDeliveryPasswordPrompt()">
+            <mat-icon>local_shipping</mat-icon>Request delivery
+          </button>
+        }
+        <app-sub-nav tabs [pages]="sections" base="/sales" [active]="section()" [queries]="sectionQuery()"
+                     [counts]="sectionCounts()" [panel]="salesPanel" label="Sales sections"></app-sub-nav>
+      </app-page-header>
+      <!-- Outside the header so the empty menu host doesn't take a slot in the actions row -->
+      <mat-menu #salesMoreMenu="matMenu" xPosition="before">
+        <button mat-menu-item (click)="promptImportPassword('customers')">
+          <mat-icon>group_add</mat-icon><span>Import customers</span>
+        </button>
+        <button mat-menu-item (click)="exportCustomers()" [disabled]="loadingCustomers() || customers().length === 0">
+          <mat-icon>file_download</mat-icon><span>Export customers</span>
+        </button>
+      </mat-menu>
+
+      <mat-tab-nav-panel #salesPanel>
       @if (initialLoading()) {
         <div class="loading-state">
           <div class="loading-card">
             <div class="lc-icon-wrap">
               <mat-icon class="lc-icon pulse-icon">point_of_sale</mat-icon>
             </div>
-            <h3>Loading Sales Dashboard</h3>
+            <h3>Loading sales</h3>
             <p class="lc-subtitle">Fetching customers, invoices, orders & analytics</p>
             <div class="lc-progress-wrap">
               <div class="lc-progress-track">
@@ -34,72 +67,12 @@
           </div>
         </div>
       } @else {
-      <!-- Modern Header -->
-      <div class="dashboard-header">
-        <div class="header-content-wrapper">
-          <div class="header-icon-wrapper">
-            <mat-icon>point_of_sale</mat-icon>
-          </div>
-          <div class="header-text-area">
-            <h1>Sales Dashboard</h1>
-            <p class="subtitle">Manage customers, invoices, and orders across all companies</p>
-          </div>
-        </div>
-        <div class="header-stats-row">
-          <div class="mini-stat">
-            <mat-icon>people</mat-icon>
-            <div class="mini-stat-info">
-              <span class="mini-value">{{ stats().totalCustomers }}</span>
-              <span class="mini-label">Customers</span>
-            </div>
-          </div>
-          <div class="mini-stat">
-            <mat-icon>receipt_long</mat-icon>
-            <div class="mini-stat-info">
-              <span class="mini-value">{{ stats().totalInvoices }}</span>
-              <span class="mini-label">Invoices</span>
-            </div>
-          </div>
-          <div class="mini-stat">
-            <mat-icon>shopping_cart</mat-icon>
-            <div class="mini-stat-info">
-              <span class="mini-value">{{ stats().incomingOrders }}</span>
-              <span class="mini-label">Orders</span>
-            </div>
-          </div>
-        </div>
-        <div class="header-actions">
-          <button class="action-btn attention" (click)="openAttentionDialog()" 
-                  [matBadge]="attentionCount()" matBadgeColor="accent"
-                  [matBadgeHidden]="attentionCount() === 0">
-            <mat-icon>warning</mat-icon>
-            <span>Attention</span>
-          </button>
-          <button class="action-btn primary" (click)="promptImportPassword('customers')">
-            <mat-icon>group_add</mat-icon>
-            <span>Import Customers</span>
-          </button>
-          <button class="action-btn" (click)="exportCustomers()" [disabled]="loadingCustomers() || customers().length === 0">
-            <mat-icon>file_download</mat-icon>
-            <span>Export Customers</span>
-          </button>
-          <button class="action-btn import" (click)="promptImportPassword('sales')">
-            <mat-icon>upload_file</mat-icon>
-            <span>Import Sales</span>
-          </button>
-          <button class="action-btn delivery" (click)="showDeliveryPasswordPrompt()">
-            <mat-icon>local_shipping</mat-icon>
-            <span>Request Delivery</span>
-          </button>
-        </div>
-      </div>
-
       <!-- Password Protection Dialog -->
       @if (showImportPasswordDialog) {
         <div class="dialog-overlay" (click)="closeImportPasswordDialog()">
           <div class="import-password-dialog" (click)="$event.stopPropagation()">
             <div class="password-dialog-header">
-              <div class="password-icon-circle" [style.background]="pendingImportType === 'customers' ? 'linear-gradient(135deg, #1e88e5 0%, #1565c0 100%)' : 'linear-gradient(135deg, #43a047 0%, #2e7d32 100%)'">
+              <div class="password-icon-circle">
                 <mat-icon>{{ pendingImportType === 'customers' ? 'group_add' : 'lock' }}</mat-icon>
               </div>
               <h2>Import Authentication</h2>
@@ -130,8 +103,8 @@
               }
             </div>
             <div class="password-dialog-actions">
-              <button class="dialog-btn cancel" (click)="closeImportPasswordDialog()">Cancel</button>
-              <button class="dialog-btn submit" (click)="verifyImportPassword()" [disabled]="importPasswordDigits().join('').length < 4">Verify</button>
+              <button mat-stroked-button (click)="closeImportPasswordDialog()">Cancel</button>
+              <button mat-flat-button color="primary" (click)="verifyImportPassword()" [disabled]="importPasswordDigits().join('').length < 4">Verify</button>
             </div>
           </div>
         </div>
@@ -142,7 +115,7 @@
         <div class="dialog-overlay" (click)="closeEmailPinDialog()">
           <div class="import-password-dialog" (click)="$event.stopPropagation()">
             <div class="password-dialog-header">
-              <div class="password-icon-circle" style="background: linear-gradient(135deg, #1a237e 0%, #3f51b5 100%); box-shadow: 0 8px 24px rgba(26, 35, 126, 0.3);">
+              <div class="password-icon-circle">
                 <mat-icon>mail_lock</mat-icon>
               </div>
               <h2>Email Protected</h2>
@@ -173,8 +146,8 @@
               }
             </div>
             <div class="password-dialog-actions">
-              <button class="dialog-btn cancel" (click)="closeEmailPinDialog()">Cancel</button>
-              <button class="dialog-btn submit" style="background: linear-gradient(135deg, #1a237e 0%, #3f51b5 100%); box-shadow: 0 4px 12px rgba(26, 35, 126, 0.3);" (click)="verifyEmailPin()" [disabled]="emailPinDigits().join('').length < 3">Unlock</button>
+              <button mat-stroked-button (click)="closeEmailPinDialog()">Cancel</button>
+              <button mat-flat-button color="primary" (click)="verifyEmailPin()" [disabled]="emailPinDigits().join('').length < 3">Unlock</button>
             </div>
           </div>
         </div>
@@ -190,7 +163,7 @@
               </div>
               <h2>Edit Invoice</h2>
               <p>Update invoice details below</p>
-              <button mat-icon-button class="edit-invoice-close" (click)="closeEditInvoiceDialog()">
+              <button aria-label="Close" mat-icon-button class="edit-invoice-close" (click)="closeEditInvoiceDialog()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -262,8 +235,8 @@
               </div>
             </div>
             <div class="edit-invoice-actions">
-              <button class="dialog-btn cancel" (click)="closeEditInvoiceDialog()">Cancel</button>
-              <button class="dialog-btn submit" (click)="saveEditedInvoice()" [disabled]="editInvoiceSaving">
+              <button mat-stroked-button (click)="closeEditInvoiceDialog()">Cancel</button>
+              <button mat-flat-button color="primary" (click)="saveEditedInvoice()" [disabled]="editInvoiceSaving">
                 @if (editInvoiceSaving) {
                   <mat-icon class="spin-icon">sync</mat-icon> Saving...
                 } @else {
@@ -311,7 +284,7 @@
               </div>
               <h2>Request Urgent Delivery</h2>
               <p>Select invoices that require logistics to deliver urgently</p>
-              <button mat-icon-button class="delivery-close-btn" (click)="closeDeliveryDialog()">
+              <button aria-label="Close" mat-icon-button class="delivery-close-btn" (click)="closeDeliveryDialog()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -323,10 +296,10 @@
                 <p>{{ deliverySuccessMsg }}</p>
                 <div class="delivery-success-ref">{{ deliverySuccessRef }}</div>
                 <div class="delivery-success-actions">
-                  <button class="dialog-btn submit delivery-submit" (click)="resetDeliveryForm()">
+                  <button mat-flat-button color="primary" (click)="resetDeliveryForm()">
                     <mat-icon>add</mat-icon> Submit Another
                   </button>
-                  <button class="dialog-btn cancel" (click)="closeDeliveryDialog()">
+                  <button mat-stroked-button (click)="closeDeliveryDialog()">
                     <mat-icon>close</mat-icon> Close
                   </button>
                 </div>
@@ -347,7 +320,7 @@
                     <mat-icon>search</mat-icon>
                     <input type="text" placeholder="Search by invoice #, customer name, product..." [(ngModel)]="deliveryInvoiceSearch" (input)="filterDeliveryInvoices()">
                     @if (deliveryInvoiceSearch) {
-                      <button mat-icon-button class="clear-search" (click)="deliveryInvoiceSearch = ''; filterDeliveryInvoices()">
+                      <button aria-label="Close" mat-icon-button class="clear-search" (click)="deliveryInvoiceSearch = ''; filterDeliveryInvoices()">
                         <mat-icon>close</mat-icon>
                       </button>
                     }
@@ -360,7 +333,7 @@
                         <div class="delivery-chip">
                           <span>{{ inv.transactionNumber }}</span>
                           <span class="chip-customer">{{ inv.customerName }}</span>
-                          <button mat-icon-button class="chip-remove" (click)="removeDeliveryInvoice(inv)">
+                          <button aria-label="Close" mat-icon-button class="chip-remove" (click)="removeDeliveryInvoice(inv)">
                             <mat-icon>close</mat-icon>
                           </button>
                         </div>
@@ -370,10 +343,9 @@
 
                   <div class="delivery-invoice-list">
                     @if (deliveryFilteredInvoices.length === 0) {
-                      <div class="delivery-no-results">
-                        <mat-icon>search_off</mat-icon>
-                        <span>{{ deliveryInvoiceSearch ? 'No invoices match your search' : 'Type to search invoices' }}</span>
-                      </div>
+                      <app-empty-state [compact]="true" icon="search_off"
+                                       [title]="deliveryInvoiceSearch ? 'No invoices match your search' : 'Type to search invoices'"
+                                       [message]="deliveryInvoiceSearch ? 'Try an invoice number, customer name or product.' : ''"></app-empty-state>
                     } @else {
                       @for (inv of deliveryFilteredInvoices; track inv.id) {
                         <div class="delivery-invoice-row" [class.selected]="isInvoiceSelected(inv)" (click)="toggleDeliveryInvoice(inv)">
@@ -405,7 +377,7 @@
                     <label>Priority <span class="req-star">*</span></label>
                     <select [(ngModel)]="deliveryForm.priority">
                       <option value="Normal">Normal</option>
-                      <option value="Urgent">🔴 Urgent</option>
+                      <option value="Urgent">Urgent</option>
                     </select>
                   </div>
                   <div class="delivery-field">
@@ -434,7 +406,7 @@
                       <strong>{{ deliverySelectedInvoices.length }} invoice(s)</strong> selected •
                       Total value: <strong>R{{ getDeliveryTotalValue() | number:'1.2-2' }}</strong>
                       @if (deliveryForm.priority === 'Urgent') {
-                        • <span class="urgent-tag">🔴 URGENT</span>
+                        • <span class="urgent-tag"><mat-icon>priority_high</mat-icon>Urgent</span>
                       }
                     </div>
                   </div>
@@ -442,8 +414,8 @@
               </div>
 
               <div class="delivery-actions">
-                <button class="dialog-btn cancel" (click)="closeDeliveryDialog()">Cancel</button>
-                <button class="dialog-btn submit delivery-submit" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || deliverySelectedInvoices.length === 0 || !deliveryForm.description">
+                <button mat-stroked-button (click)="closeDeliveryDialog()">Cancel</button>
+                <button mat-flat-button color="primary" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || deliverySelectedInvoices.length === 0 || !deliveryForm.description">
                   @if (deliverySaving) {
                     <mat-icon class="spin-icon">sync</mat-icon> Submitting...
                   } @else {
@@ -479,7 +451,7 @@
             <div class="import-result-header" [class.success]="customerImportResult.success" [class.error]="!customerImportResult.success">
               <mat-icon>{{ customerImportResult.success ? 'check_circle' : 'error' }}</mat-icon>
               <h3>Customer Import {{ customerImportResult.success ? 'Complete' : 'Failed' }}</h3>
-              <button mat-icon-button (click)="closeCustomerImportResult()">
+              <button aria-label="Close" mat-icon-button (click)="closeCustomerImportResult()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -520,6 +492,7 @@
         </div>
       }
 
+      @if (section() === 'orders') {
       <!-- Company Sales Comparison - Business Day Comparison -->
       <div class="company-sales-section">
         <div class="section-header-row">
@@ -531,7 +504,7 @@
         </div>
         <div class="company-cards-grid">
           @for (cs of companyCards(); track cs.company.code) {
-            <div class="modern-company-card" [style.--company-color]="cs.company.color" (click)="openCompanySalesDialog(cs.company)">
+            <div class="modern-company-card" [style.--company-color]="getCompanyColor(cs.company.code)" (click)="openCompanySalesDialog(cs.company)">
               <div class="company-card-header">
                 <div class="company-badge">
                   <img class="company-badge-logo" [src]="cs.company.logo" [alt]="cs.company.name" width="42" height="42" decoding="async" loading="lazy" />
@@ -628,19 +601,13 @@
           </div>
         </div>
       </div>
+      }
 
       <!-- Main Content Tabs -->
       <mat-card class="main-content">
-        <mat-tab-group animationDuration="200ms" [(selectedIndex)]="selectedTab" (selectedIndexChange)="onSalesTabChange($event)">
+        @switch (section()) {
           <!-- Incoming Order Emails Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>email</mat-icon>
-              <span>Incoming Orders</span>
-              @if (stats().incomingOrders > 0) {
-                <span class="tab-badge">{{ stats().incomingOrders }}</span>
-              }
-            </ng-template>
+          @case ('orders') {
             <div class="tab-content">
               <div class="section-header">
                 <h3>
@@ -669,26 +636,21 @@
                       }
                     </mat-select>
                   </mat-form-field>
-                  <button mat-icon-button (click)="loadOrders()" matTooltip="Refresh emails from IMAP">
+                  <button aria-label="Refresh emails from IMAP" mat-icon-button (click)="loadOrders()" matTooltip="Refresh emails from IMAP">
                     <mat-icon>refresh</mat-icon>
                   </button>
                 </div>
               </div>
 
               @if (loadingOrders()) {
-                <div class="loading-container">
-                  <mat-spinner diameter="40"></mat-spinner>
-                  <p style="margin-top: 12px; color: #666;">Connecting to mail server...</p>
-                </div>
+                <app-skeleton-rows [rows]="6" [avatar]="true"></app-skeleton-rows>
               } @else if (filteredEmails().length === 0) {
-                <div class="empty-state">
-                  <mat-icon>mark_email_read</mat-icon>
-                  <h3>No Order Emails Today</h3>
-                  <p>No emails with "{{ emailSearchKeyword() }}" in the subject were found for today</p>
-                  <button mat-raised-button color="primary" (click)="loadOrders()" style="margin-top: 12px;">
-                    <mat-icon>refresh</mat-icon> Check Again
+                <app-empty-state icon="mark_email_read" title="No order emails today"
+                                 [message]="'No emails with &quot;' + emailSearchKeyword() + '&quot; in the subject were found for today.'">
+                  <button mat-stroked-button (click)="loadOrders()">
+                    <mat-icon>refresh</mat-icon> Check again
                   </button>
-                </div>
+                </app-empty-state>
               } @else {
                 <div class="email-summary-bar">
                   <span class="email-count">
@@ -746,7 +708,7 @@
                           }
                         </div>
                         <div class="email-actions">
-                          <button mat-icon-button [matMenuTriggerFor]="emailMenu" matTooltip="More actions" (click)="$event.stopPropagation()">
+                          <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="emailMenu" matTooltip="More actions" (click)="$event.stopPropagation()">
                             <mat-icon>more_vert</mat-icon>
                           </button>
                           <mat-menu #emailMenu="matMenu">
@@ -771,14 +733,10 @@
                 </div>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- Customers Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>people</mat-icon>
-              <span>Customers</span>
-            </ng-template>
+          @case ('customers') {
             <div class="tab-content">
               <div class="section-header">
                 <h3>Customer Management</h3>
@@ -807,9 +765,21 @@
               </div>
 
               @if (loadingCustomers()) {
-                <div class="loading-container">
-                  <mat-spinner diameter="40"></mat-spinner>
-                </div>
+                <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows>
+              } @else if (allFilteredCustomers().length === 0) {
+                @if (customers().length > 0) {
+                  <app-empty-state icon="filter_alt_off" title="No customers match the filters"
+                                   message="Nobody matches this search and province.">
+                    <button mat-stroked-button (click)="customerSearch.set(''); customerProvinceFilter.set('all'); customerPageIndex.set(0)">Clear the filters</button>
+                  </app-empty-state>
+                } @else {
+                  <app-empty-state icon="people" title="No customers yet"
+                                   message="Import the customer list to see it here.">
+                    <button mat-stroked-button (click)="promptImportPassword('customers')">
+                      <mat-icon>group_add</mat-icon> Import customers
+                    </button>
+                  </app-empty-state>
+                }
               } @else {
                 <div class="table-container">
                   <table mat-table [dataSource]="filteredCustomers()" class="customers-table">
@@ -868,25 +838,23 @@
                     <ng-container matColumnDef="status">
                       <th mat-header-cell *matHeaderCellDef>Status</th>
                       <td mat-cell *matCellDef="let customer">
-                        <mat-chip [class]="'status-' + customer.status.toLowerCase()">
-                          {{ customer.status }}
-                        </mat-chip>
+                        <app-status-chip [status]="customer.status"></app-status-chip>
                       </td>
                     </ng-container>
 
                     <ng-container matColumnDef="actions">
                       <th mat-header-cell *matHeaderCellDef>Actions</th>
                       <td mat-cell *matCellDef="let customer">
-                        <button mat-icon-button matTooltip="Edit" (click)="editCustomer(customer)">
+                        <button aria-label="Edit" mat-icon-button matTooltip="Edit" (click)="editCustomer(customer)">
                           <mat-icon>edit</mat-icon>
                         </button>
-                        <button mat-icon-button matTooltip="View Invoices" (click)="viewCustomerInvoices(customer)">
+                        <button aria-label="View Invoices" mat-icon-button matTooltip="View Invoices" (click)="viewCustomerInvoices(customer)">
                           <mat-icon>receipt</mat-icon>
                         </button>
-                        <button mat-icon-button matTooltip="Geocode Address" (click)="geocodeCustomer(customer)">
+                        <button aria-label="Geocode Address" mat-icon-button matTooltip="Geocode Address" (click)="geocodeCustomer(customer)">
                           <mat-icon>location_on</mat-icon>
                         </button>
-                        <button mat-icon-button [matMenuTriggerFor]="customerMenu">
+                        <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="customerMenu">
                           <mat-icon>more_vert</mat-icon>
                         </button>
                         <mat-menu #customerMenu="matMenu">
@@ -919,14 +887,10 @@
                 </mat-paginator>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- Invoices Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>receipt_long</mat-icon>
-              <span>Invoices</span>
-            </ng-template>
+          @case ('invoices') {
             <div class="tab-content">
               <div class="section-header">
                 <h3>Invoice Management</h3>
@@ -949,16 +913,24 @@
                   <button mat-stroked-button (click)="importInvoices()" style="display:none">
                     <mat-icon>upload</mat-icon> Import
                   </button>
-                  <button mat-flat-button class="request-delivery-tab-btn" (click)="showDeliveryPasswordPrompt()">
+                  <button mat-flat-button color="primary" (click)="showDeliveryPasswordPrompt()">
                     <mat-icon>local_shipping</mat-icon> Request Delivery
                   </button>
                 </div>
               </div>
 
               @if (loadingInvoices()) {
-                <div class="loading-container">
-                  <mat-spinner diameter="40"></mat-spinner>
-                </div>
+                <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows>
+              } @else if (allFilteredInvoices().length === 0) {
+                @if (invoices().length > 0) {
+                  <app-empty-state icon="filter_alt_off" title="No invoices match the filters"
+                                   message="No invoice matches this search and status.">
+                    <button mat-stroked-button (click)="invoiceSearch.set(''); invoiceStatusFilter.set('all'); invoicePageIndex.set(0)">Clear the filters</button>
+                  </app-empty-state>
+                } @else {
+                  <app-empty-state icon="receipt_long" title="No invoices yet"
+                                   message="Invoices appear here once sales are imported."></app-empty-state>
+                }
               } @else {
                 <div class="table-container">
                   <table mat-table [dataSource]="filteredInvoices()" class="invoices-table">
@@ -1033,22 +1005,20 @@
                     <ng-container matColumnDef="status">
                       <th mat-header-cell *matHeaderCellDef>Status</th>
                       <td mat-cell *matCellDef="let inv">
-                        <mat-chip [class]="'status-' + inv.status.toLowerCase()">
-                          {{ inv.status }}
-                        </mat-chip>
+                        <app-status-chip [status]="inv.status"></app-status-chip>
                       </td>
                     </ng-container>
 
                     <ng-container matColumnDef="actions">
                       <th mat-header-cell *matHeaderCellDef>Actions</th>
                       <td mat-cell *matCellDef="let inv">
-                        <button mat-icon-button matTooltip="Edit" (click)="editInvoice(inv)">
+                        <button aria-label="Edit" mat-icon-button matTooltip="Edit" (click)="editInvoice(inv)">
                           <mat-icon>edit</mat-icon>
                         </button>
-                        <button mat-icon-button matTooltip="Request Delivery" (click)="showDeliveryPasswordPrompt(inv)" class="req-delivery-icon">
+                        <button aria-label="Request Delivery" mat-icon-button matTooltip="Request Delivery" (click)="showDeliveryPasswordPrompt(inv)" class="req-delivery-icon">
                           <mat-icon>local_shipping</mat-icon>
                         </button>
-                        <button mat-icon-button [matMenuTriggerFor]="invoiceMenu">
+                        <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="invoiceMenu">
                           <mat-icon>more_vert</mat-icon>
                         </button>
                         <mat-menu #invoiceMenu="matMenu">
@@ -1082,17 +1052,10 @@
                 </mat-paginator>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- Sales History Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>history</mat-icon>
-              <span>Sales History</span>
-              @if (salesHistoryTotalCount() > 0) {
-                <span class="tab-badge">{{ salesHistoryTotalCount() }}</span>
-              }
-            </ng-template>
+          @case ('history') {
             <div class="tab-content sales-history-tab">
               <!-- Company selector chips -->
               <div class="sh-company-bar">
@@ -1102,7 +1065,7 @@
                 </button>
                 @for (c of companies; track c.code) {
                   <button class="sh-company-chip sh-company-chip--logo" [class.active]="salesHistoryCompany() === c.code"
-                          [style.--chip-color]="c.color"
+                          [style.--chip-color]="getCompanyColor(c.code)"
                           (click)="salesHistoryCompany.set(c.code); onSalesHistoryFilterChange()">
                     <img class="sh-chip-logo" [src]="c.logo" [alt]="c.name" width="32" height="32" decoding="async" loading="lazy" />
                     <span class="sh-chip-label">{{ c.shortName }}</span>
@@ -1180,24 +1143,22 @@
                   <span>Reconciliation: <strong>{{ salesHistoryReconcile()!.matchedCount | number }}</strong> matched,
                     <strong>{{ salesHistoryReconcile()!.missingCount | number }}</strong> missing from live sales
                     (R {{ formatCurrencyFull(salesHistoryReconcile()!.missingAmount) }})</span>
-                  <button mat-icon-button (click)="salesHistoryReconcile.set(null)"><mat-icon>close</mat-icon></button>
+                  <button aria-label="Close" mat-icon-button (click)="salesHistoryReconcile.set(null)"><mat-icon>close</mat-icon></button>
                 </div>
               }
 
               @if (salesHistoryLoading()) {
-                <div class="loading-container">
-                  <mat-spinner diameter="40"></mat-spinner>
-                  <p>Loading sales history...</p>
-                </div>
+                <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows>
               } @else if (salesHistoryRecords().length === 0) {
-                <div class="empty-state">
-                  <mat-icon>history</mat-icon>
-                  <h3>No Sales History Found</h3>
-                  <p>Import a sales report to populate historical invoices, or adjust your filters.</p>
-                </div>
+                <app-empty-state icon="history" title="No sales history found"
+                                 message="Import a sales report to populate historical invoices, or adjust your filters.">
+                  @if (salesHistorySearch() || salesHistoryCompany() || salesHistoryDetailedOnly() || salesHistoryFromDate || salesHistoryToDate) {
+                    <button mat-stroked-button (click)="clearSalesHistoryFilters()">Clear the filters</button>
+                  }
+                </app-empty-state>
               } @else {
                 <div class="sh-table-wrap">
-                  <table class="sh-table">
+                  <table class="sh-table app-table">
                     <thead>
                       <tr>
                         <th class="sh-expand-col"></th>
@@ -1206,7 +1167,7 @@
                         <th>Invoice No</th>
                         <th>Order No</th>
                         <th>Company</th>
-                        <th class="right-align">Sales</th>
+                        <th class="num">Sales</th>
                         <th class="center-align">Live</th>
                       </tr>
                     </thead>
@@ -1222,12 +1183,12 @@
                           </td>
                           <td class="sh-nowrap">{{ row.invoiceDate | date:'dd MMM yyyy' }}</td>
                           <td class="sh-customer">{{ row.customerName }}</td>
-                          <td class="mono">{{ row.invoiceNumber }}
+                          <td class="ref">{{ row.invoiceNumber }}
                             @if (row.hasLineDetail) {
                               <span class="sh-products-pill"><mat-icon>inventory_2</mat-icon> products</span>
                             }
                           </td>
-                          <td class="mono sh-muted">{{ row.orderNumber || '—' }}</td>
+                          <td class="ref sh-muted">{{ row.orderNumber || '—' }}</td>
                           <td>
                             @if (getCompanyLogo(row.sourceCompany || '')) {
                               <img class="sh-company-logo" [src]="getCompanyLogo(row.sourceCompany || '')"
@@ -1242,7 +1203,7 @@
                               <span class="sh-muted">—</span>
                             }
                           </td>
-                          <td class="right-align sh-amount">R {{ formatCurrencyFull(row.salesAmount) }}</td>
+                          <td class="num sh-amount">R {{ formatCurrencyFull(row.salesAmount) }}</td>
                           <td class="center-align">
                             @if (row.isReconciled) {
                               <mat-icon class="ok-icon" matTooltip="Matched in live sales">check_circle</mat-icon>
@@ -1255,30 +1216,31 @@
                           <tr class="sh-detail-row">
                             <td colspan="8">
                               @if (salesHistoryLinesLoading()) {
-                                <div class="sh-detail-loading"><mat-spinner diameter="24"></mat-spinner> Loading product detail…</div>
+                                <app-skeleton-rows [rows]="3" [avatar]="false"></app-skeleton-rows>
                               } @else if (salesHistoryLines().length === 0) {
-                                <div class="sh-detail-empty">No product-level detail available for this invoice.</div>
+                                <app-empty-state [compact]="true" icon="inventory_2" title="No product detail"
+                                                 message="No product-level detail is available for this invoice."></app-empty-state>
                               } @else {
                                 <div class="sh-detail-title"><mat-icon>inventory_2</mat-icon> Product Breakdown — {{ row.invoiceNumber }}</div>
-                                <table class="sh-detail-table">
+                                <table class="sh-detail-table app-table">
                                   <thead>
                                     <tr>
                                       <th>Item Code</th>
                                       <th>Product Description</th>
-                                      <th class="right-align">Qty</th>
-                                      <th class="right-align">Unit Price</th>
-                                      <th class="right-align">Sales</th>
+                                      <th class="num">Qty</th>
+                                      <th class="num">Unit Price</th>
+                                      <th class="num">Sales</th>
                                       <th class="center-align">Source</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     @for (line of salesHistoryLines(); track line.id) {
                                       <tr>
-                                        <td class="mono">{{ line.itemCode || '—' }}</td>
+                                        <td class="ref">{{ line.itemCode || '—' }}</td>
                                         <td class="sh-desc">{{ line.description || '—' }}</td>
-                                        <td class="right-align">{{ line.quantity | number:'1.0-2' }}</td>
-                                        <td class="right-align">R {{ formatCurrencyFull(line.unitPrice) }}</td>
-                                        <td class="right-align sh-amount">R {{ formatCurrencyFull(line.salesAmount) }}</td>
+                                        <td class="num">{{ line.quantity | number:'1.0-2' }}</td>
+                                        <td class="num">R {{ formatCurrencyFull(line.unitPrice) }}</td>
+                                        <td class="num sh-amount">R {{ formatCurrencyFull(line.salesAmount) }}</td>
                                         <td class="center-align">
                                           <span class="sh-src-tag" [class.src-live]="line.source === 'Live Sales'">{{ line.source }}</span>
                                         </td>
@@ -1304,17 +1266,10 @@
                 </mat-paginator>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- Back Orders Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>assignment_return</mat-icon>
-              <span>Back Orders</span>
-              @if (backOrderTotalCount() > 0) {
-                <span class="tab-badge warning">{{ backOrderTotalCount() }}</span>
-              }
-            </ng-template>
+          @case ('back-orders') {
             <div class="tab-content">
               <div class="section-header">
                 <h3>Back Orders</h3>
@@ -1389,22 +1344,22 @@
               <!-- Company Sub-Tabs -->
               <div class="back-order-company-tabs">
                 <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'promed'" (click)="activeBackOrderTab.set('promed'); backOrderPage.set(0)">
-                  <span class="bo-tab-dot" style="background:#1a237e"></span>
+                  <span class="bo-tab-dot" style="background: var(--color-brand)"></span>
                   Promed
                   <span class="bo-tab-count">{{ promedBackOrders().length }}</span>
                 </button>
                 <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'access'" (click)="activeBackOrderTab.set('access'); backOrderPage.set(0)">
-                  <span class="bo-tab-dot" style="background:#00695c"></span>
+                  <span class="bo-tab-dot" style="background: var(--color-cat-teal)"></span>
                   Access
                   <span class="bo-tab-count">{{ accessBackOrders().length }}</span>
                 </button>
                 <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'pharmatech'" (click)="activeBackOrderTab.set('pharmatech'); backOrderPage.set(0)">
-                  <span class="bo-tab-dot" style="background:#c62828"></span>
+                  <span class="bo-tab-dot" style="background: var(--color-cat-pink)"></span>
                   Pharmatech
                   <span class="bo-tab-count">{{ pharmatechBackOrders().length }}</span>
                 </button>
                 <button class="bo-company-tab" [class.active]="activeBackOrderTab() === 'sebenzani'" (click)="activeBackOrderTab.set('sebenzani'); backOrderPage.set(0)">
-                  <span class="bo-tab-dot" style="background:#6a1b9a"></span>
+                  <span class="bo-tab-dot" style="background: var(--color-cat-purple)"></span>
                   Sebenzani
                   <span class="bo-tab-count">{{ sebenzaniBackOrders().length }}</span>
                 </button>
@@ -1413,14 +1368,15 @@
               <!-- Back Orders Table -->
               @if (activeBackOrderTab() === 'promed' || activeBackOrderTab() === 'access' || activeBackOrderTab() === 'pharmatech' || activeBackOrderTab() === 'sebenzani') {
                 @if (filteredBackOrders().length === 0) {
-                  <div class="empty-state">
-                    <mat-icon>inventory_2</mat-icon>
-                    <h3>No Back Orders Found</h3>
-                    <p>No back orders match your search criteria</p>
-                  </div>
+                  <app-empty-state icon="inventory_2" title="No back orders found"
+                                   message="No back orders match your search criteria.">
+                    @if (backOrderSearch() || backOrderStockFilter()) {
+                      <button mat-stroked-button (click)="backOrderSearch.set(''); backOrderStockFilter.set(''); backOrderPage.set(0)">Clear the filters</button>
+                    }
+                  </app-empty-state>
                 } @else {
                   <div class="back-order-table-wrapper">
-                    <table class="back-order-table">
+                    <table class="back-order-table app-table">
                       <thead>
                         <tr>
                           <th class="bo-col-order">Order No</th>
@@ -1431,10 +1387,10 @@
                           <th class="bo-col-item">Item Description</th>
                           <th class="bo-col-loc">Location</th>
                           <th class="bo-col-uom">UOM</th>
-                          <th class="bo-col-qty">Qty B/O</th>
+                          <th class="bo-col-qty num">Qty B/O</th>
                           <th class="bo-col-stock">Stock</th>
-                          <th class="bo-col-price">Unit Price</th>
-                          <th class="bo-col-ext">Ext Price</th>
+                          <th class="bo-col-price num">Unit Price</th>
+                          <th class="bo-col-ext num">Ext Price</th>
                           <th class="bo-col-contract">Contract</th>
                           <th class="bo-col-acct">Account Set</th>
                         </tr>
@@ -1442,7 +1398,7 @@
                       <tbody>
                         @for (bo of paginatedBackOrders(); track bo.orderNumber + bo.itemDesc) {
                           <tr>
-                            <td class="bo-col-order"><strong>{{ bo.orderNumber }}</strong></td>
+                            <td class="bo-col-order ref"><strong>{{ bo.orderNumber }}</strong></td>
                             <td class="bo-col-date">{{ bo.orderDate }}</td>
                             <td class="bo-col-custno">{{ bo.customerNo }}</td>
                             <td class="bo-col-custname">{{ bo.customerName }}</td>
@@ -1450,7 +1406,7 @@
                             <td class="bo-col-item">{{ bo.itemDesc }}</td>
                             <td class="bo-col-loc">{{ bo.location }}</td>
                             <td class="bo-col-uom">{{ bo.uom }}</td>
-                            <td class="bo-col-qty">{{ bo.qtyBackOrder }}</td>
+                            <td class="bo-col-qty num">{{ bo.qtyBackOrder }}</td>
                             <td class="bo-col-stock">
                               @if (backOrderStockLoaded()) {
                                 @let st = backOrderStockState(bo);
@@ -1463,8 +1419,8 @@
                                 </span>
                               }
                             </td>
-                            <td class="bo-col-price">R{{ bo.unitPrice | number:'1.2-2' }}</td>
-                            <td class="bo-col-ext">R{{ bo.extPrice | number:'1.2-2' }}</td>
+                            <td class="bo-col-price num">R{{ bo.unitPrice | number:'1.2-2' }}</td>
+                            <td class="bo-col-ext num">R{{ bo.extPrice | number:'1.2-2' }}</td>
                             <td class="bo-col-contract">{{ bo.contract }}</td>
                             <td class="bo-col-acct">{{ bo.accountSet }}</td>
                           </tr>
@@ -1475,11 +1431,11 @@
                   <div class="back-order-pagination">
                     <span class="bo-page-info">Showing {{ backOrderPageStart() + 1 }}-{{ backOrderPageEnd() }} of {{ filteredBackOrders().length }} items</span>
                     <div class="bo-page-controls">
-                      <button mat-icon-button [disabled]="backOrderPage() === 0" (click)="backOrderPage.set(backOrderPage() - 1)">
+                      <button aria-label="Previous" mat-icon-button [disabled]="backOrderPage() === 0" (click)="backOrderPage.set(backOrderPage() - 1)">
                         <mat-icon>chevron_left</mat-icon>
                       </button>
                       <span class="bo-page-number">Page {{ backOrderPage() + 1 }} of {{ backOrderTotalPages() }}</span>
-                      <button mat-icon-button [disabled]="backOrderPage() >= backOrderTotalPages() - 1" (click)="backOrderPage.set(backOrderPage() + 1)">
+                      <button aria-label="Next" mat-icon-button [disabled]="backOrderPage() >= backOrderTotalPages() - 1" (click)="backOrderPage.set(backOrderPage() + 1)">
                         <mat-icon>chevron_right</mat-icon>
                       </button>
                       <mat-form-field appearance="outline" class="bo-page-size-field">
@@ -1494,24 +1450,14 @@
                   </div>
                 }
               } @else {
-                <div class="empty-state">
-                  <mat-icon>inventory_2</mat-icon>
-                  <h3>No Back Orders</h3>
-                  <p>No back order data available for {{ activeBackOrderTab() | titlecase }} yet</p>
-                </div>
+                <app-empty-state icon="inventory_2" title="No back orders"
+                                 [message]="'No back order data available for ' + (activeBackOrderTab() | titlecase) + ' yet.'"></app-empty-state>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- POD Documents Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>verified</mat-icon>
-              <span>POD Documents</span>
-              @if (podTotalCount > 0) {
-                <span class="tab-badge">{{ podTotalCount }}</span>
-              }
-            </ng-template>
+          @case ('pods') {
             <div class="tab-content">
               <div class="pod-section">
                 <!-- POD Toolbar -->
@@ -1519,7 +1465,7 @@
                   <div class="pod-filters">
                     <mat-form-field appearance="outline" class="pod-filter-field">
                       <mat-label>Region</mat-label>
-                      <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="loadPodDocuments()">
+                      <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="podFilterChanged()">
                         <mat-option value="">All Regions</mat-option>
                         <mat-option value="GP">Gauteng (GP)</mat-option>
                         <mat-option value="KZN">KwaZulu-Natal (KZN)</mat-option>
@@ -1528,7 +1474,7 @@
 
                     <mat-form-field appearance="outline" class="pod-filter-field">
                       <mat-label>Month</mat-label>
-                      <mat-select [(ngModel)]="podMonthFilter" (selectionChange)="loadPodDocuments()">
+                      <mat-select [(ngModel)]="podMonthFilter" (selectionChange)="podFilterChanged()">
                         <mat-option value="">All Months</mat-option>
                         <mat-option value="1-2026">January 2026</mat-option>
                         <mat-option value="2-2026">February 2026</mat-option>
@@ -1538,7 +1484,7 @@
 
                     <mat-form-field appearance="outline" class="pod-filter-field pod-driver-field">
                       <mat-label>Driver</mat-label>
-                      <mat-select [(ngModel)]="podDriverFilter" (selectionChange)="loadPodDocuments()">
+                      <mat-select [(ngModel)]="podDriverFilter" (selectionChange)="podFilterChanged()">
                         <mat-option value="">All Drivers</mat-option>
                         @for (driver of podDriverList; track driver) {
                           <mat-option [value]="driver">{{ driver }}</mat-option>
@@ -1548,7 +1494,7 @@
 
                     <mat-form-field appearance="outline" class="pod-filter-field">
                       <mat-label>Link Status</mat-label>
-                      <mat-select [(ngModel)]="podLinkFilter" (selectionChange)="loadPodDocuments()">
+                      <mat-select [(ngModel)]="podLinkFilter" (selectionChange)="podFilterChanged()">
                         <mat-option value="">All</mat-option>
                         <mat-option value="linked">Linked</mat-option>
                         <mat-option value="not-linked">Not Linked</mat-option>
@@ -1564,10 +1510,10 @@
                       <mat-icon>upload_file</mat-icon> Upload POD
                     </button>
                     <div class="pod-view-toggle">
-                      <button mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
+                      <button aria-label="Grid View" mat-icon-button [class.active]="podViewMode === 'grid'" (click)="podViewMode = 'grid'" matTooltip="Grid View">
                         <mat-icon>grid_view</mat-icon>
                       </button>
-                      <button mat-icon-button [class.active]="podViewMode === 'list'" (click)="podViewMode = 'list'" matTooltip="List View">
+                      <button aria-label="List View" mat-icon-button [class.active]="podViewMode === 'list'" (click)="podViewMode = 'list'" matTooltip="List View">
                         <mat-icon>view_list</mat-icon>
                       </button>
                     </div>
@@ -1619,16 +1565,14 @@
 
                 <!-- Loading State -->
                 @if (podLoading) {
-                  <div class="loading-state">
-                    <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
-                    <p>Loading POD documents...</p>
-                  </div>
+                  <app-skeleton-rows [rows]="6" [avatar]="true"></app-skeleton-rows>
                 } @else if (podDocuments.length === 0) {
-                  <div class="empty-state">
-                    <mat-icon>verified</mat-icon>
-                    <h3>No POD Documents Found</h3>
-                    <p>Adjust your filters or upload new POD documents</p>
-                  </div>
+                  <app-empty-state icon="verified" title="No POD documents found"
+                                   message="Adjust your filters or upload new POD documents.">
+                    <button mat-stroked-button (click)="openSalesPodUploadDialog()">
+                      <mat-icon>upload_file</mat-icon> Upload POD
+                    </button>
+                  </app-empty-state>
                 } @else {
                   <!-- Grid View -->
                   @if (podViewMode === 'grid') {
@@ -1673,13 +1617,13 @@
                             <span class="pod-size">{{ formatPodFileSize(pod.fileSize) }}</span>
                           </div>
                           <div class="pod-card-actions">
-                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                            <button aria-label="View" mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
                               <mat-icon>visibility</mat-icon>
                             </button>
-                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                            <button aria-label="Download" mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
                               <mat-icon>download</mat-icon>
                             </button>
-                            <button mat-icon-button [matMenuTriggerFor]="podActionMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                            <button aria-label="Actions" mat-icon-button [matMenuTriggerFor]="podActionMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
                               <mat-icon>more_vert</mat-icon>
                             </button>
                             <mat-menu #podActionMenu="matMenu" class="modern-menu">
@@ -1762,13 +1706,13 @@
                         <ng-container matColumnDef="actions">
                           <th mat-header-cell *matHeaderCellDef>Actions</th>
                           <td mat-cell *matCellDef="let pod">
-                            <button mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
+                            <button aria-label="View" mat-icon-button color="primary" (click)="viewPodDocument(pod); $event.stopPropagation()" matTooltip="View">
                               <mat-icon>visibility</mat-icon>
                             </button>
-                            <button mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
+                            <button aria-label="Download" mat-icon-button (click)="downloadPodDocument(pod); $event.stopPropagation()" matTooltip="Download">
                               <mat-icon>download</mat-icon>
                             </button>
-                            <button mat-icon-button [matMenuTriggerFor]="podListMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
+                            <button aria-label="Actions" mat-icon-button [matMenuTriggerFor]="podListMenu" (click)="$event.stopPropagation()" matTooltip="Actions">
                               <mat-icon>more_vert</mat-icon>
                             </button>
                             <mat-menu #podListMenu="matMenu" class="modern-menu">
@@ -1810,11 +1754,11 @@
                     <div class="pod-pagination">
                       <span class="pod-page-info">Showing {{ (podCurrentPage - 1) * podPageSize + 1 }} - {{ Math.min(podCurrentPage * podPageSize, podTotalCount) }} of {{ podTotalCount }}</span>
                       <div class="pod-page-btns">
-                        <button mat-icon-button [disabled]="podCurrentPage <= 1" (click)="podCurrentPage = podCurrentPage - 1; loadPodDocuments()">
+                        <button aria-label="Previous" mat-icon-button [disabled]="podCurrentPage <= 1" (click)="podCurrentPage = podCurrentPage - 1; loadPodDocuments()">
                           <mat-icon>chevron_left</mat-icon>
                         </button>
                         <span class="page-num">Page {{ podCurrentPage }}</span>
-                        <button mat-icon-button [disabled]="podCurrentPage * podPageSize >= podTotalCount" (click)="podCurrentPage = podCurrentPage + 1; loadPodDocuments()">
+                        <button aria-label="Next" mat-icon-button [disabled]="podCurrentPage * podPageSize >= podTotalCount" (click)="podCurrentPage = podCurrentPage + 1; loadPodDocuments()">
                           <mat-icon>chevron_right</mat-icon>
                         </button>
                       </div>
@@ -1823,14 +1767,10 @@
                 }
               </div>
             </div>
-          </mat-tab>
+          }
 
           <!-- Trip Sheets Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>assignment</mat-icon>
-              <span>Trip Sheets</span>
-            </ng-template>
+          @case ('trip-sheets') {
             <div class="tab-content">
               <div class="section-header">
                 <h3>Trip Sheets</h3>
@@ -1855,15 +1795,24 @@
               </div>
 
               @if (loadingLogisticsTripsheets()) {
-                <div class="loading-container"><mat-spinner diameter="40"></mat-spinner></div>
+                <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows>
               } @else if (filteredLogisticsTripsheets().length === 0) {
-                <div class="empty-state">
-                  <mat-icon>local_shipping</mat-icon>
-                  <p>No logistics trip sheets found.</p>
-                </div>
+                @if (logisticsTripsheetSearch()) {
+                  <app-empty-state icon="filter_alt_off" title="No trip sheets match the search"
+                                   message="Try another load number, driver, vehicle or status.">
+                    <button mat-stroked-button (click)="logisticsTripsheetSearch.set('')">Clear the search</button>
+                  </app-empty-state>
+                } @else {
+                  <app-empty-state icon="local_shipping" title="No logistics trip sheets found"
+                                   message="Trip sheets created here or in Logistics are listed here.">
+                    <button mat-stroked-button (click)="openCreateTripSheet()">
+                      <mat-icon>add</mat-icon> Create Trip Sheet
+                    </button>
+                  </app-empty-state>
+                }
               } @else {
                 <div class="table-container">
-                  <table class="ts-table">
+                  <table class="ts-table app-table">
                     <thead>
                       <tr>
                         <th>Load #</th>
@@ -1871,8 +1820,8 @@
                         <th>Vehicle</th>
                         <th>Route</th>
                         <th>Warehouse</th>
-                        <th>Stops</th>
-                        <th>Distance</th>
+                        <th class="num">Stops</th>
+                        <th class="num">Distance</th>
                         <th>Date</th>
                         <th>Created By</th>
                         <th>Status</th>
@@ -1882,31 +1831,26 @@
                     <tbody>
                       @for (trip of filteredLogisticsTripsheets(); track trip.id) {
                         <tr>
-                          <td><strong>{{ trip.loadNumber || trip.tripNumber || '—' }}</strong></td>
+                          <td class="ref"><strong>{{ trip.loadNumber || trip.tripNumber || '—' }}</strong></td>
                           <td>{{ trip.driverName || 'Unassigned' }}</td>
                           <td>{{ trip.vehicleReg || '—' }}</td>
                           <td>
                             <span class="route-cell">
                               {{ trip.origin || '—' }}
-                              <mat-icon style="font-size: 14px; width: 14px; height: 14px; vertical-align: middle;">arrow_forward</mat-icon>
+                              <mat-icon style="font-size: var(--text-md); width: 14px; height: 14px; vertical-align: middle;">arrow_forward</mat-icon>
                               {{ trip.destination || '—' }}
                             </span>
                           </td>
                           <td>{{ trip.warehouseName || trip.warehouseCode || '—' }}</td>
-                          <td>{{ trip.totalStops ?? '—' }}</td>
-                          <td>{{ trip.totalDistance ? (trip.totalDistance | number:'1.0-0') + ' km' : '—' }}</td>
+                          <td class="num">{{ trip.totalStops ?? '—' }}</td>
+                          <td class="num">{{ trip.totalDistance ? (trip.totalDistance | number:'1.0-0') + ' km' : '—' }}</td>
                           <td>{{ trip.date ? (trip.date | date:'dd MMM yyyy') : '—' }}</td>
                           <td>{{ trip.createdByName || '—' }}</td>
                           <td>
-                            <span class="ts-status"
-                                  [class.approved]="trip.status === 'Completed' || trip.status === 'Delivered'"
-                                  [class.pending]="trip.status === 'In Progress' || trip.status === 'In Transit' || trip.status === 'Assigned'"
-                                  [class.to-sign]="trip.status === 'Pending' || trip.status === 'Available' || trip.status === 'Draft'">
-                              {{ trip.status || '—' }}
-                            </span>
+                            <app-status-chip [status]="trip.status || '—'" [tone]="tripsheetTone(trip.status)"></app-status-chip>
                           </td>
                           <td class="ts-actions">
-                            <button mat-icon-button matTooltip="View trip sheet" (click)="viewLogisticsTripsheet(trip)">
+                            <button aria-label="View trip sheet" mat-icon-button matTooltip="View trip sheet" (click)="viewLogisticsTripsheet(trip)">
                               <mat-icon>visibility</mat-icon>
                             </button>
                           </td>
@@ -1917,19 +1861,15 @@
                 </div>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- Tender Pricing Tab -->
-          <mat-tab>
-            <ng-template mat-tab-label>
-              <mat-icon>gavel</mat-icon>
-              <span>Tender Pricing</span>
-            </ng-template>
+          @case ('tender-pricing') {
             <div class="tab-content">
               <div class="section-header">
                 <h3>
                   <mat-icon style="vertical-align: middle; margin-right: 8px;">gavel</mat-icon>
-                  Tenders Won — Price List <span style="font-weight: 400; color: #64748b; font-size: 13px;">(prices incl. 15% VAT)</span>
+                  Tenders Won — Price List <span style="font-weight: 400; color: var(--color-text-3); font-size: var(--text-sm);">(prices incl. 15% VAT)</span>
                 </h3>
                 <div class="section-actions">
                   <mat-form-field appearance="outline" class="filter-field">
@@ -1968,13 +1908,13 @@
               </div>
 
               @if (filteredTenderItems().length === 0) {
-                <div class="empty-state">
-                  <mat-icon>gavel</mat-icon>
-                  <p>No tender items match your filters.</p>
-                </div>
+                <app-empty-state icon="filter_alt_off" title="No tender items match your filters"
+                                 message="Try another company, tender number or search.">
+                  <button mat-stroked-button (click)="setTenderCompany('all'); tenderSearch.set('')">Clear the filters</button>
+                </app-empty-state>
               } @else {
                 <div class="table-container">
-                  <table class="ts-table">
+                  <table class="ts-table app-table">
                     <thead>
                       <tr>
                         <th>Company</th>
@@ -1982,18 +1922,18 @@
                         <th>Item No.</th>
                         <th>Item Description</th>
                         <th>UOM / Pack Size</th>
-                        <th style="text-align: right;">Price (R, incl. VAT)</th>
+                        <th class="num">Price (R, incl. VAT)</th>
                       </tr>
                     </thead>
                     <tbody>
                       @for (item of filteredTenderItems(); track $index) {
                         <tr>
                           <td>{{ item.company }}</td>
-                          <td><strong>{{ item.tenderNo }}</strong></td>
-                          <td>{{ item.itemNo || '—' }}</td>
+                          <td class="ref"><strong>{{ item.tenderNo }}</strong></td>
+                          <td class="ref">{{ item.itemNo || '—' }}</td>
                           <td>{{ item.description }}</td>
                           <td>{{ item.uom || '—' }}</td>
-                          <td style="text-align: right;"><strong>R {{ item.price | number:'1.2-2' }}</strong></td>
+                          <td class="num"><strong>R {{ item.price | number:'1.2-2' }}</strong></td>
                         </tr>
                       }
                     </tbody>
@@ -2001,9 +1941,9 @@
                 </div>
               }
             </div>
-          </mat-tab>
+          }
 
-        </mat-tab-group>
+        }
       </mat-card>
 
 
@@ -2012,7 +1952,7 @@
         <div class="customer-sidebar">
           <div class="sidebar-header">
             <h3>Customer Details</h3>
-            <button mat-icon-button (click)="showCustomerSidebar = false">
+            <button aria-label="Close" mat-icon-button (click)="showCustomerSidebar = false">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -2086,7 +2026,7 @@
           <div class="attention-dialog" (click)="$event.stopPropagation()">
             <div class="attention-header">
               <h2><mat-icon>warning</mat-icon> Data Issues Requiring Attention</h2>
-              <button mat-icon-button (click)="closeAttentionDialog()">
+              <button aria-label="Close" mat-icon-button (click)="closeAttentionDialog()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -2102,16 +2042,13 @@
                 
                 <div class="attention-content">
                   @if (customersWithoutLocation().length === 0 && !showWellyCustomerReview) {
-                    <div class="empty-state">
-                      <mat-icon>check_circle</mat-icon>
-                      <h3>All Good!</h3>
-                      <p>All customers have location data set.</p>
-                    </div>
+                    <app-empty-state icon="check_circle" title="Every customer has a location"
+                                     message="All customers have location data set."></app-empty-state>
                   } @else if (showWellyCustomerReview) {
                     <!-- Welly Review Panel -->
                     <div class="welly-review-panel">
                       <div class="welly-review-header">
-                        <div class="welly-avatar">🤖</div>
+                        <div class="welly-avatar"><mat-icon>smart_toy</mat-icon></div>
                         <div>
                           <h3>Welly's Suggested Fixes</h3>
                           <p>Review each suggestion below. Toggle off any you don't want to apply.</p>
@@ -2177,13 +2114,13 @@
                     <div class="attention-desc-row">
                       <p class="attention-desc">These customers don't have GPS coordinates set. Click to edit and add location.</p>
                       <div class="attention-desc-buttons">
-                        <button mat-raised-button class="welly-fix-btn" (click)="wellyFixCustomerLocations()" 
+                        <button mat-flat-button color="primary" class="welly-fix-btn" (click)="wellyFixCustomerLocations()" 
                                 [disabled]="wellyCustomerFixLoading">
                           @if (wellyCustomerFixLoading) {
                             <mat-spinner diameter="18"></mat-spinner>
                             Welly is analyzing...
                           } @else {
-                            <span class="welly-btn-icon">🤖</span> Ask Welly to Fix
+                            <mat-icon>smart_toy</mat-icon> Ask Welly to Fix
                           }
                         </button>
                         <button mat-raised-button color="accent" (click)="geocodeAllCustomers()" [disabled]="isGeocoding">
@@ -2229,16 +2166,13 @@
                 
                 <div class="attention-content">
                   @if (invoicesWithoutProvince().length === 0 && !showWellyInvoiceReview) {
-                    <div class="empty-state">
-                      <mat-icon>check_circle</mat-icon>
-                      <h3>All Good!</h3>
-                      <p>All invoices have delivery province set.</p>
-                    </div>
+                    <app-empty-state icon="check_circle" title="Every invoice has a province"
+                                     message="All invoices have delivery province set."></app-empty-state>
                   } @else if (showWellyInvoiceReview) {
                     <!-- Welly Invoice Review Panel -->
                     <div class="welly-review-panel">
                       <div class="welly-review-header">
-                        <div class="welly-avatar">🤖</div>
+                        <div class="welly-avatar"><mat-icon>smart_toy</mat-icon></div>
                         <div>
                           <h3>Welly's Province Suggestions</h3>
                           <p>Review each suggestion. Toggle off any you don't want to apply.</p>
@@ -2304,13 +2238,13 @@
                   } @else {
                     <div class="attention-desc-row">
                       <p class="attention-desc">These invoices don't have a delivery province set. Select a province to assign.</p>
-                      <button mat-raised-button class="welly-fix-btn" (click)="wellyFixInvoiceProvinces()"
+                      <button mat-flat-button color="primary" class="welly-fix-btn" (click)="wellyFixInvoiceProvinces()"
                               [disabled]="wellyInvoiceFixLoading">
                         @if (wellyInvoiceFixLoading) {
                           <mat-spinner diameter="18"></mat-spinner>
                           Welly is analyzing...
                         } @else {
-                          <span class="welly-btn-icon">🤖</span> Ask Welly to Fix
+                          <mat-icon>smart_toy</mat-icon> Ask Welly to Fix
                         }
                       </button>
                     </div>
@@ -2360,7 +2294,7 @@
       @if (showCompanySalesDialog && selectedCompanyForDialog) {
         <div class="company-sales-overlay" (click)="closeCompanySalesDialog()">
           <div class="company-sales-dialog" (click)="$event.stopPropagation()">
-            <div class="dialog-header" [style.background]="selectedCompanyForDialog.color">
+            <div class="dialog-header" [style.--company-color]="getCompanyColor(selectedCompanyForDialog.code)">
               <div class="header-content">
                 <mat-icon>business</mat-icon>
                 <div class="header-text">
@@ -2368,7 +2302,7 @@
                   <span>Sales Analytics & History</span>
                 </div>
               </div>
-              <button mat-icon-button (click)="closeCompanySalesDialog()">
+              <button aria-label="Close" mat-icon-button (click)="closeCompanySalesDialog()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -2428,7 +2362,7 @@
                       <div class="chart-bar-wrapper" [matTooltip]="day.date + ': R' + formatCurrencyFull(day.total) + ' (' + day.count + ' orders)'">
                         <div class="chart-bar" 
                              [style.height.%]="getBarHeight(day.total)"
-                             [style.background]="selectedCompanyForDialog.color">
+                             [style.background]="getCompanyColor(selectedCompanyForDialog.code)">
                         </div>
                         <span class="chart-label">{{ day.label }}</span>
                       </div>
@@ -2487,10 +2421,8 @@
                   </table>
 
                   @if (companySalesTableData.length === 0) {
-                    <div class="no-data">
-                      <mat-icon>inbox</mat-icon>
-                      <p>No sales data found for {{ selectedCompanyForDialog.shortName }}</p>
-                    </div>
+                    <app-empty-state icon="inbox" [title]="'No sales data found for ' + selectedCompanyForDialog.shortName"
+                                     message="Sales for this company appear here once they are imported."></app-empty-state>
                   }
                 </div>
               </div>
@@ -2507,7 +2439,7 @@
                   <mat-icon>compare_arrows</mat-icon>
                   <h3>Company Comparison</h3>
                 </div>
-                <button mat-icon-button (click)="closeCompareDialog()">
+                <button aria-label="Close" mat-icon-button (click)="closeCompareDialog()">
                   <mat-icon>close</mat-icon>
                 </button>
               </div>
@@ -2515,7 +2447,7 @@
               <!-- Config Row -->
               <div class="compare-config">
                 <div class="compare-companies">
-                  <div class="compare-company-badge" [style.background]="selectedCompanyForDialog.color">
+                  <div class="compare-company-badge" [style.background]="getCompanyColor(selectedCompanyForDialog.code)">
                     {{ selectedCompanyForDialog.shortName }}
                   </div>
                   <mat-icon>vs</mat-icon>
@@ -2556,7 +2488,7 @@
                 <!-- Side-by-Side Summary -->
                 <div class="compare-summary">
                   <div class="compare-col">
-                    <div class="compare-col-header" [style.background]="selectedCompanyForDialog.color">
+                    <div class="compare-col-header" [style.background]="getCompanyColor(selectedCompanyForDialog.code)">
                       {{ selectedCompanyForDialog.shortName }}
                     </div>
                     <div class="compare-stat"><span class="label">Invoices</span><span class="val">{{ compareDataA.count }}</span></div>
@@ -2568,7 +2500,7 @@
                   </div>
                   <div class="compare-vs">VS</div>
                   <div class="compare-col">
-                    <div class="compare-col-header" [style.background]="getCompareCompany()?.color">
+                    <div class="compare-col-header" [style.background]="getCompanyColor(getCompareCompany()?.code ?? '')">
                       {{ getCompareCompany()?.shortName }}
                     </div>
                     <div class="compare-stat"><span class="label">Invoices</span><span class="val">{{ compareDataB.count }}</span></div>
@@ -2587,9 +2519,9 @@
                     @for (day of compareDailyData; track day.date) {
                       <div class="compare-chart-day">
                         <div class="compare-bars">
-                          <div class="compare-bar bar-a" [style.height.%]="getCompareBarHeight(day.totalA)" [style.background]="selectedCompanyForDialog.color"
+                          <div class="compare-bar bar-a" [style.height.%]="getCompareBarHeight(day.totalA)" [style.background]="getCompanyColor(selectedCompanyForDialog.code)"
                                [matTooltip]="selectedCompanyForDialog.shortName + ': R' + formatCurrencyFull(day.totalA)"></div>
-                          <div class="compare-bar bar-b" [style.height.%]="getCompareBarHeight(day.totalB)" [style.background]="getCompareCompany()?.color"
+                          <div class="compare-bar bar-b" [style.height.%]="getCompareBarHeight(day.totalB)" [style.background]="getCompanyColor(getCompareCompany()?.code ?? '')"
                                [matTooltip]="getCompareCompany()?.shortName + ': R' + formatCurrencyFull(day.totalB)"></div>
                         </div>
                         <span class="compare-chart-label">{{ day.label }}</span>
@@ -2597,8 +2529,8 @@
                     }
                   </div>
                   <div class="compare-legend">
-                    <span class="legend-item"><span class="legend-dot" [style.background]="selectedCompanyForDialog.color"></span> {{ selectedCompanyForDialog.shortName }}</span>
-                    <span class="legend-item"><span class="legend-dot" [style.background]="getCompareCompany()?.color"></span> {{ getCompareCompany()?.shortName }}</span>
+                    <span class="legend-item"><span class="legend-dot" [style.background]="getCompanyColor(selectedCompanyForDialog.code)"></span> {{ selectedCompanyForDialog.shortName }}</span>
+                    <span class="legend-item"><span class="legend-dot" [style.background]="getCompanyColor(getCompareCompany()?.code ?? '')"></span> {{ getCompareCompany()?.shortName }}</span>
                   </div>
                 </div>
 
@@ -2633,10 +2565,8 @@
                   </button>
                 </div>
               } @else {
-                <div class="compare-placeholder">
-                  <mat-icon>compare_arrows</mat-icon>
-                  <p>Select a company above to start comparing</p>
-                </div>
+                <app-empty-state icon="compare_arrows" title="Pick a company to compare with"
+                                 message="Select a company above to start comparing."></app-empty-state>
               }
             </div>
           </div>
@@ -2649,7 +2579,7 @@
               <div class="export-popup-header">
                 <mat-icon>{{ exportType === 'excel' ? 'table_chart' : 'picture_as_pdf' }}</mat-icon>
                 <h3>{{ exportType === 'excel' ? 'Export to Excel' : 'Generate PDF Report' }}</h3>
-                <button mat-icon-button (click)="closeExportDatePicker()">
+                <button aria-label="Close" mat-icon-button (click)="closeExportDatePicker()">
                   <mat-icon>close</mat-icon>
                 </button>
               </div>
@@ -2693,6 +2623,7 @@
         }
       }
       }
+      </mat-tab-nav-panel>
 
       <!-- POD Upload Password Dialog -->
       @if (showPodPasswordDialog) {
@@ -2732,7 +2663,7 @@
                   <span class="welly-pod-sub">{{ wellyPodCurrent.podNumber || ('POD' + wellyPodCurrent.id) }} · {{ wellyPodCurrent.deliveryDate | date:'dd MMM yyyy' }} · {{ wellyPodCurrent.region }}</span>
                 }
               </div>
-              <button mat-icon-button (click)="closeWellyPodPanel()" [disabled]="wellyPodScanning || wellyPodLinking">
+              <button aria-label="Close" mat-icon-button (click)="closeWellyPodPanel()" [disabled]="wellyPodScanning || wellyPodLinking">
                 <mat-icon>close</mat-icon>
               </button>
             </div>

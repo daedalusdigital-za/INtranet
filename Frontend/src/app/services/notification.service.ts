@@ -365,12 +365,10 @@ export class NotificationService {
   public updateUnreadCount(count: number): void {
     this.unreadCountSubject.next(count);
     
-    // Update document title
-    if (count > 0) {
-      document.title = `(${count}) Intranet - Messages`;
-    } else {
-      document.title = 'Intranet';
-    }
+    // Show the count in front of the page's own title, "(3) Trip sheets · Intranet"
+    // (AppTitleStrategy keeps the count when the page changes).
+    const pageTitle = document.title.replace(/^\(\d+\) /, '');
+    document.title = count > 0 ? `(${count}) ${pageTitle}` : pageTitle;
   }
 
   public incrementUnreadCount(): void {

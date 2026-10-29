@@ -3,11 +3,15 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MessageService, User } from '../../services/message.service';
 import { debounceTime, Subject } from 'rxjs';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-user-search-popup',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, SkeletonRowsComponent, EmptyStateComponent],
   templateUrl: './user-search-popup.component.html',
   styleUrls: ['./user-search-popup.component.scss']
 })
@@ -87,6 +91,10 @@ export class UserSearchPopupComponent implements OnInit {
     if ((event.target as HTMLElement).classList.contains('popup-backdrop')) {
       this.closePopup();
     }
+  }
+
+  get emptyTitle(): string {
+    return this.searchQuery ? `No one matches "${this.searchQuery}"` : 'No people to show';
   }
 
   getInitials(user: User): string {

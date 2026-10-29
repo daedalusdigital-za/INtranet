@@ -5,10 +5,13 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { ToastService } from '../../ui/toast.service';
 import { environment } from '../../../environments/environment';
+import { ConfirmService } from '../../ui/confirm.service';
 
 export interface HrEmployee {
   id: number;
@@ -71,7 +74,7 @@ interface HrCase {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatIconModule, MatButtonModule,
-    MatProgressSpinnerModule, MatTooltipModule, MatSnackBarModule
+    MatTooltipModule, MatProgressSpinnerModule, SkeletonRowsComponent, EmptyStateComponent
   ],
   template: `
   <div class="dir-root">
@@ -91,7 +94,7 @@ interface HrCase {
         <button mat-flat-button class="hbtn primary" (click)="newEmployee()">
           <mat-icon>person_add</mat-icon> Add Employee
         </button>
-        <button mat-icon-button class="close-btn" (click)="close()"><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()"><mat-icon>close</mat-icon></button>
       </div>
     </div>
 
@@ -102,7 +105,7 @@ interface HrCase {
           <mat-icon>search</mat-icon>
           <input type="text" placeholder="Search by name, employee no, ID, job title, phone, email…"
                  [(ngModel)]="search" (ngModelChange)="onSearchChange()">
-          @if (search) { <button mat-icon-button (click)="search=''; onSearchChange()"><mat-icon>close</mat-icon></button> }
+          @if (search) { <button aria-label="Close" mat-icon-button (click)="search=''; onSearchChange()"><mat-icon>close</mat-icon></button> }
         </div>
         <div class="site-chips">
           <button class="chip" [class.active]="siteFilter==='All'" (click)="setSite('All')">
@@ -317,8 +320,8 @@ interface HrCase {
                           }
                         </div>
                       </div>
-                      <button mat-icon-button (click)="downloadDoc(d)" matTooltip="Download"><mat-icon>download</mat-icon></button>
-                      <button mat-icon-button class="danger" (click)="deleteDoc(d)" matTooltip="Delete"><mat-icon>delete</mat-icon></button>
+                      <button aria-label="Download" mat-icon-button (click)="downloadDoc(d)" matTooltip="Download"><mat-icon>download</mat-icon></button>
+                      <button aria-label="Delete" mat-icon-button class="danger" (click)="deleteDoc(d)" matTooltip="Delete"><mat-icon>delete</mat-icon></button>
                     </div>
                   }
                 </div>
@@ -399,7 +402,7 @@ interface HrCase {
                           <button mat-stroked-button (click)="resolveCase(c, false)">Resolve</button>
                         }
                       }
-                      <button mat-icon-button class="danger" (click)="deleteCase(c)" matTooltip="Delete"><mat-icon>delete</mat-icon></button>
+                      <button aria-label="Delete" mat-icon-button class="danger" (click)="deleteCase(c)" matTooltip="Delete"><mat-icon>delete</mat-icon></button>
                     </div>
                   </div>
                 }
@@ -413,41 +416,41 @@ interface HrCase {
   `,
   styles: [`
     :host { display:block; }
-    .dir-root { display:flex; flex-direction:column; height:80vh; max-height:900px; background:#0f172a; color:#e2e8f0; }
+    .dir-root { display:flex; flex-direction:column; height:80vh; max-height:900px; background:var(--color-text); color:var(--color-line); }
     .dir-header { display:flex; align-items:center; justify-content:space-between; padding:18px 24px; border-bottom:1px solid rgba(255,255,255,0.08);
-      background:linear-gradient(135deg,#1e1b4b,#0f172a); }
+      background:linear-gradient(135deg,#1e1b4b,var(--color-text)); }
     .dir-title { display:flex; align-items:center; gap:14px; }
     .dir-title mat-icon { font-size:30px; width:30px; height:30px; color:#60a5fa; }
     .dir-title h2 { margin:0; font-size:20px; font-weight:800; }
-    .dir-sub { font-size:12px; color:#94a3b8; }
+    .dir-sub { font-size:12px; color:var(--color-text-3); }
     .dir-header-actions { display:flex; align-items:center; gap:10px; }
     .hbtn { font-size:13px !important; }
-    .hbtn.primary { background:#6366f1 !important; color:#fff !important; }
-    .close-btn { color:#94a3b8; }
+    .hbtn.primary { background:var(--color-primary) !important; color:#fff !important; }
+    .close-btn { color:var(--color-text-3); }
 
     .dir-controls { padding:16px 24px 8px; border-bottom:1px solid rgba(255,255,255,0.06); }
     .dir-search { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
       border-radius:12px; padding:8px 14px; margin-bottom:12px; }
-    .dir-search mat-icon { color:#94a3b8; }
-    .dir-search input { flex:1; background:transparent; border:none; outline:none; color:#e2e8f0; font-size:14px; }
+    .dir-search mat-icon { color:var(--color-text-3); }
+    .dir-search input { flex:1; background:transparent; border:none; outline:none; color:var(--color-line); font-size:14px; }
     .site-chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
     .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:12.5px; cursor:pointer;
-      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; transition:all .15s; }
+      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:var(--color-line-strong); transition:all .15s; }
     .chip:hover { background:rgba(255,255,255,0.1); }
-    .chip.active { background:#6366f1; border-color:#6366f1; color:#fff; }
+    .chip.active { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
     .chip-count { font-size:11px; background:rgba(0,0,0,0.25); padding:1px 7px; border-radius:10px; }
     .status-row { display:flex; align-items:center; gap:10px; }
-    .status-row select { background:rgba(255,255,255,0.06); color:#e2e8f0; border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:6px 10px; font-size:13px; }
-    .result-count { margin-left:auto; font-size:12px; color:#94a3b8; }
+    .status-row select { background:rgba(255,255,255,0.06); color:var(--color-line); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:6px 10px; font-size:13px; }
+    .result-count { margin-left:auto; font-size:12px; color:var(--color-text-3); }
 
     .dir-list { flex:1; overflow:auto; padding:12px 24px 24px; }
-    .dir-loading, .dir-empty, .docs-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:48px; color:#94a3b8; }
-    .dir-empty mat-icon, .docs-empty mat-icon { font-size:44px; width:44px; height:44px; color:#475569; }
+    .dir-loading, .dir-empty, .docs-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:48px; color:var(--color-text-3); }
+    .dir-empty mat-icon, .docs-empty mat-icon { font-size:44px; width:44px; height:44px; color:var(--color-text-2); }
 
     .emp-row { display:flex; align-items:center; gap:14px; padding:12px 14px; border-radius:12px; cursor:pointer;
       background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); margin-bottom:8px; transition:all .15s; }
     .emp-row:hover { background:rgba(255,255,255,0.09); transform:translateX(2px); }
-    .emp-avatar { width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff;
+    .emp-avatar { width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,var(--color-primary),var(--color-primary)); color:#fff;
       font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; position:relative; cursor:pointer; }
     .emp-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
     .emp-avatar.big { width:64px; height:64px; font-size:20px; }
@@ -455,12 +458,12 @@ interface HrCase {
       opacity:0; transition:opacity .2s; border-radius:50%; }
     .emp-avatar.big:hover .photo-overlay { opacity:1; }
     .emp-avatar .photo-overlay mat-icon { color:#fff; font-size:22px; }
-    .emp-avatar[data-status='Terminated'] { background:linear-gradient(135deg,#64748b,#475569); }
-    .emp-avatar[data-status='Suspended'] { background:linear-gradient(135deg,#f59e0b,#d97706); }
+    .emp-avatar[data-status='Terminated'] { background:linear-gradient(135deg,var(--color-text-3),var(--color-text-2)); }
+    .emp-avatar[data-status='Suspended'] { background:linear-gradient(135deg,var(--color-warn),var(--color-warn)); }
     .emp-main { flex:1; min-width:0; }
-    .emp-name { font-size:14.5px; font-weight:600; color:#f1f5f9; display:flex; align-items:center; gap:8px; }
+    .emp-name { font-size:14.5px; font-weight:600; color:var(--color-surface-2); display:flex; align-items:center; gap:8px; }
     .emp-type { font-size:10.5px; font-weight:600; color:#a5b4fc; background:rgba(129,140,248,0.15); padding:2px 8px; border-radius:10px; }
-    .emp-meta { font-size:12px; color:#94a3b8; display:flex; align-items:center; gap:6px; margin-top:2px; }
+    .emp-meta { font-size:12px; color:var(--color-text-3); display:flex; align-items:center; gap:6px; margin-top:2px; }
     .emp-meta .dot { opacity:.5; }
     .emp-side { display:flex; align-items:center; gap:8px; }
     .site-tag { font-size:11px; padding:3px 9px; border-radius:8px; background:rgba(56,189,248,0.15); color:#7dd3fc; }
@@ -469,10 +472,10 @@ interface HrCase {
     .status-tag[data-status='On Leave'] { background:rgba(139,92,246,0.15); color:#c4b5fd; }
     .status-tag[data-status='Serving Notice'] { background:rgba(245,158,11,0.15); color:#fcd34d; }
     .status-tag[data-status='Suspended'] { background:rgba(239,68,68,0.15); color:#fca5a5; }
-    .status-tag[data-status='Terminated'] { background:rgba(100,116,139,0.2); color:#cbd5e1; }
-    .doc-tag { display:inline-flex; align-items:center; gap:3px; font-size:11px; color:#94a3b8; }
+    .status-tag[data-status='Terminated'] { background:rgba(100,116,139,0.2); color:var(--color-line-strong); }
+    .doc-tag { display:inline-flex; align-items:center; gap:3px; font-size:11px; color:var(--color-text-3); }
     .doc-tag mat-icon { font-size:15px; width:15px; height:15px; }
-    .emp-go { color:#475569; }
+    .emp-go { color:var(--color-text-2); }
 
     /* Detail / edit */
     .detail-wrap { flex:1; overflow:auto; padding:16px 24px 28px; }
@@ -481,37 +484,37 @@ interface HrCase {
     @media (max-width:1000px){ .detail-grid { grid-template-columns:1fr; } }
     .detail-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:20px; }
     .dc-head { display:flex; align-items:center; gap:16px; margin-bottom:18px; }
-    .edit-inline { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:8px 10px; color:#f1f5f9; font-size:14px; }
+    .edit-inline { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:8px 10px; color:var(--color-surface-2); font-size:14px; }
     .edit-inline.name { font-size:16px; font-weight:700; margin-right:8px; width:150px; }
     .field-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
-    .field-grid label { display:flex; flex-direction:column; gap:5px; font-size:11.5px; color:#94a3b8; text-transform:uppercase; letter-spacing:.4px; }
+    .field-grid label { display:flex; flex-direction:column; gap:5px; font-size:11.5px; color:var(--color-text-3); text-transform:uppercase; letter-spacing:.4px; }
     .field-grid label.full { grid-column:1 / -1; }
     .field-grid input, .field-grid select { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px;
-      padding:8px 10px; color:#f1f5f9; font-size:13.5px; text-transform:none; letter-spacing:normal; }
+      padding:8px 10px; color:var(--color-surface-2); font-size:13.5px; text-transform:none; letter-spacing:normal; }
     .dc-actions { display:flex; align-items:center; gap:10px; margin-top:20px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.08); }
     .dc-actions .spacer { flex:1; }
     .danger { color:#fca5a5 !important; border-color:rgba(252,165,165,0.4) !important; }
 
     .docs-card { display:flex; flex-direction:column; }
-    .docs-head h3 { margin:0 0 14px; font-size:15px; display:flex; align-items:center; gap:8px; color:#e2e8f0; }
+    .docs-head h3 { margin:0 0 14px; font-size:15px; display:flex; align-items:center; gap:8px; color:var(--color-line); }
     .docs-head mat-icon { color:#60a5fa; }
-    .docs-hint, .docs-empty { color:#94a3b8; font-size:13px; display:flex; align-items:center; gap:8px; padding:16px; }
+    .docs-hint, .docs-empty { color:var(--color-text-3); font-size:13px; display:flex; align-items:center; gap:8px; padding:16px; }
     .upload-box { background:rgba(255,255,255,0.04); border:1px dashed rgba(255,255,255,0.15); border-radius:12px; padding:12px; margin-bottom:14px; }
     .up-row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
     .up-row:last-child { margin-bottom:0; }
-    .upload-box select, .upload-box input { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:7px 9px; color:#f1f5f9; font-size:12.5px; }
+    .upload-box select, .upload-box input { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:7px 9px; color:var(--color-surface-2); font-size:12.5px; }
     .up-title { flex:1; }
     .up-expiry { width:140px; }
     .file-btn { flex:1; display:flex; align-items:center; gap:8px; cursor:pointer; background:rgba(255,255,255,0.06);
-      border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:7px 10px; font-size:12.5px; color:#cbd5e1; overflow:hidden; }
+      border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:7px 10px; font-size:12.5px; color:var(--color-line-strong); overflow:hidden; }
     .file-btn span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .docs-list { display:flex; flex-direction:column; gap:8px; overflow:auto; }
     .doc-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.04); }
     .doc-ico { color:#a5b4fc; }
     .doc-info { flex:1; min-width:0; }
-    .doc-title { font-size:13px; font-weight:600; color:#f1f5f9; display:flex; align-items:center; gap:8px; }
+    .doc-title { font-size:13px; font-weight:600; color:var(--color-surface-2); display:flex; align-items:center; gap:8px; }
     .doc-cat { font-size:10px; font-weight:600; padding:1px 7px; border-radius:8px; background:rgba(129,140,248,0.15); color:#c7d2fe; text-transform:uppercase; }
-    .doc-meta { font-size:11px; color:#94a3b8; margin-top:2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .doc-meta { font-size:11px; color:var(--color-text-3); margin-top:2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .doc-expiry { display:inline-flex; align-items:center; gap:3px; color:#fcd34d; }
     .doc-expiry.expired { color:#fca5a5; }
     .doc-expiry mat-icon { font-size:13px; width:13px; height:13px; }
@@ -519,43 +522,44 @@ interface HrCase {
     /* Disciplinary */
     .disc-card { grid-column:1 / -1; }
     .disc-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
-    .disc-head h3 { margin:0; font-size:15px; display:flex; align-items:center; gap:8px; color:#e2e8f0; }
+    .disc-head h3 { margin:0; font-size:15px; display:flex; align-items:center; gap:8px; color:var(--color-line); }
     .disc-head mat-icon { color:#fca5a5; }
     .case-form { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:14px; margin-bottom:14px; }
     .case-form .cf-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:10px; }
-    .case-form label { display:flex; flex-direction:column; gap:5px; font-size:11.5px; color:#94a3b8; text-transform:uppercase; letter-spacing:.4px; margin-bottom:10px; }
+    .case-form label { display:flex; flex-direction:column; gap:5px; font-size:11.5px; color:var(--color-text-3); text-transform:uppercase; letter-spacing:.4px; margin-bottom:10px; }
     .case-form label.full { grid-column:1 / -1; }
     .case-form label.chk { flex-direction:row; align-items:center; gap:8px; text-transform:none; }
     .case-form input, .case-form select, .case-form textarea { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
-      border-radius:8px; padding:8px 10px; color:#f1f5f9; font-size:13.5px; text-transform:none; letter-spacing:normal; }
+      border-radius:8px; padding:8px 10px; color:var(--color-surface-2); font-size:13.5px; text-transform:none; letter-spacing:normal; }
     .cf-actions { display:flex; align-items:center; gap:10px; }
-    .cf-note { flex:1; display:flex; align-items:center; gap:4px; font-size:11.5px; color:#94a3b8; }
+    .cf-note { flex:1; display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--color-text-3); }
     .cf-note.warn { color:#fcd34d; }
     .cf-note mat-icon { font-size:15px; width:15px; height:15px; }
     .case-list { display:flex; flex-direction:column; gap:8px; }
-    .case-item { display:flex; align-items:flex-start; gap:12px; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.04); border-left:3px solid #64748b; }
-    .case-item[data-type='Suspension'] { border-left-color:#ef4444; }
-    .case-item[data-type='Final Written Warning'] { border-left-color:#f97316; }
+    .case-item { display:flex; align-items:flex-start; gap:12px; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.04); border-left:3px solid var(--color-text-3); }
+    .case-item[data-type='Suspension'] { border-left-color:var(--color-danger); }
+    .case-item[data-type='Final Written Warning'] { border-left-color:var(--color-warn); }
     .case-item[data-type='Written Warning'] { border-left-color:#eab308; }
     .case-item[data-type='Dismissal'] { border-left-color:#991b1b; }
-    .case-ico { color:#cbd5e1; margin-top:2px; }
+    .case-ico { color:var(--color-line-strong); margin-top:2px; }
     .case-info { flex:1; min-width:0; }
-    .case-title { font-size:13.5px; font-weight:600; color:#f1f5f9; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .case-type { font-size:10px; font-weight:600; padding:1px 7px; border-radius:8px; background:rgba(148,163,184,0.2); color:#cbd5e1; text-transform:uppercase; }
+    .case-title { font-size:13.5px; font-weight:600; color:var(--color-surface-2); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .case-type { font-size:10px; font-weight:600; padding:1px 7px; border-radius:8px; background:rgba(148,163,184,0.2); color:var(--color-line-strong); text-transform:uppercase; }
     .case-status { font-size:10px; font-weight:600; padding:1px 7px; border-radius:8px; }
     .case-status[data-status='Active'] { background:rgba(239,68,68,0.16); color:#fca5a5; }
     .case-status[data-status='Resolved'] { background:rgba(16,185,129,0.16); color:#6ee7b7; }
-    .case-status[data-status='Expired'] { background:rgba(148,163,184,0.2); color:#cbd5e1; }
-    .case-meta { font-size:11.5px; color:#94a3b8; margin-top:2px; }
-    .case-desc { font-size:12.5px; color:#cbd5e1; margin-top:5px; }
+    .case-status[data-status='Expired'] { background:rgba(148,163,184,0.2); color:var(--color-line-strong); }
+    .case-meta { font-size:11.5px; color:var(--color-text-3); margin-top:2px; }
+    .case-desc { font-size:12.5px; color:var(--color-line-strong); margin-top:5px; }
     .case-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
     .reinstate { color:#6ee7b7 !important; border-color:rgba(110,231,183,0.4) !important; }
   `]
 })
 export class EmployeeDirectoryComponent implements OnInit {
   private http = inject(HttpClient);
-  private snack = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private ref = inject(MatDialogRef<EmployeeDirectoryComponent>);
+  private readonly confirmDialog = inject(ConfirmService);
 
   sites: string[] = [];
   siteCounts: { site: string; count: number }[] = [];
@@ -674,9 +678,9 @@ export class EmployeeDirectoryComponent implements OnInit {
         next: () => {
           this.form.hasPhoto = true;
           this.photoTimestamp = Date.now();
-          this.snack.open('Photo updated.', 'OK', { duration: 2500 });
+          this.toast.done('Photo updated.');
         },
-        error: () => this.snack.open('Photo upload failed.', 'OK', { duration: 3000 })
+        error: () => this.toast.error('Photo upload failed.')
       });
     input.value = '';
   }
@@ -708,7 +712,7 @@ export class EmployeeDirectoryComponent implements OnInit {
           this.editing = true;
           this.loadCases(e.id);
         },
-        error: () => this.snack.open('Could not load employee.', 'OK', { duration: 3000 })
+        error: () => this.toast.error('Could not load employee.')
       });
   }
 
@@ -753,9 +757,9 @@ export class EmployeeDirectoryComponent implements OnInit {
           // reflect any status change (suspension/dismissal) on the form
           if (body.type === 'Suspension') this.form.status = 'Suspended';
           else if (body.type === 'Dismissal') this.form.status = 'Terminated';
-          this.snack.open('Case logged.', 'OK', { duration: 2500 });
+          this.toast.done('Case logged.');
         },
-        error: () => { this.savingCase = false; this.snack.open('Could not log case.', 'OK', { duration: 3000 }); }
+        error: () => { this.savingCase = false; this.toast.error('Could not log case.'); }
       });
   }
 
@@ -766,18 +770,22 @@ export class EmployeeDirectoryComponent implements OnInit {
         next: () => {
           c.status = 'Resolved';
           if (reinstate && this.form.status === 'Suspended') this.form.status = 'Active';
-          this.snack.open(reinstate ? 'Resolved & reinstated.' : 'Case resolved.', 'OK', { duration: 2500 });
+          this.toast.done(reinstate ? 'Resolved & reinstated.' : 'Case resolved.');
         },
-        error: () => this.snack.open('Update failed.', 'OK', { duration: 3000 })
+        error: () => this.toast.error('Update failed.')
       });
   }
 
-  deleteCase(c: HrCase): void {
-    if (!confirm(`Delete case "${c.title}"?`)) return;
+  async deleteCase(c: HrCase): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete case "${c.title}"?`,
+      confirmText: 'Delete case',
+      danger: true
+    }))) return;
     this.http.delete(`${environment.apiUrl}/hr-disciplinary/${c.id}`, { headers: this.headers() })
       .subscribe({
         next: () => { this.cases = this.cases.filter(x => x.id !== c.id); },
-        error: () => this.snack.open('Delete failed.', 'OK', { duration: 3000 })
+        error: () => this.toast.error('Delete failed.')
       });
   }
 
@@ -794,7 +802,7 @@ export class EmployeeDirectoryComponent implements OnInit {
 
   save(): void {
     if (!this.form.firstName?.trim() || !this.form.lastName?.trim()) {
-      this.snack.open('First and last name are required.', 'OK', { duration: 3000 }); return;
+      this.toast.warn('First and last name are required.'); return;
     }
     this.form.dateOfBirth = this.fromDateInput(this.dobStr);
     this.form.hireDate = this.fromDateInput(this.hireStr);
@@ -805,10 +813,10 @@ export class EmployeeDirectoryComponent implements OnInit {
       this.saving = false;
       this.form = { ...saved };
       this.selected = saved;
-      this.snack.open('Employee saved.', 'OK', { duration: 2500 });
+      this.toast.done('Employee saved.');
       this.loadSiteCounts();
     };
-    const fail = () => { this.saving = false; this.snack.open('Save failed.', 'OK', { duration: 3000 }); };
+    const fail = () => { this.saving = false; this.toast.error('Save failed.'); };
 
     if (this.form.id) {
       this.http.put<HrEmployee>(`${environment.apiUrl}/hr-employees/${this.form.id}`, this.form, { headers: this.headers() })
@@ -819,12 +827,19 @@ export class EmployeeDirectoryComponent implements OnInit {
     }
   }
 
-  remove(): void {
-    if (!this.form.id || !confirm('Delete this employee and all their documents?')) return;
+  async remove(): Promise<void> {
+    if (!this.form.id) return;
+    const name = `${this.form.firstName || ''} ${this.form.lastName || ''}`.trim();
+    if (!(await this.confirmDialog.ask({
+      title: name ? `Delete ${name}?` : 'Delete this employee?',
+      message: 'The employee and all their documents are deleted.',
+      confirmText: 'Delete employee',
+      danger: true
+    }))) return;
     this.http.delete(`${environment.apiUrl}/hr-employees/${this.form.id}`, { headers: this.headers() })
       .subscribe({
-        next: () => { this.snack.open('Employee deleted.', 'OK', { duration: 2500 }); this.backToList(); },
-        error: () => this.snack.open('Delete failed.', 'OK', { duration: 3000 })
+        next: () => { this.toast.done('Employee deleted.'); this.backToList(); },
+        error: () => this.toast.error('Delete failed.')
       });
   }
 
@@ -849,9 +864,9 @@ export class EmployeeDirectoryComponent implements OnInit {
           this.documents.unshift(d);
           this.pickedFile = null; this.uploadTitle = ''; this.uploadExpiry = '';
           this.uploading = false;
-          this.snack.open('Document uploaded.', 'OK', { duration: 2500 });
+          this.toast.done('Document uploaded.');
         },
-        error: () => { this.uploading = false; this.snack.open('Upload failed.', 'OK', { duration: 3000 }); }
+        error: () => { this.uploading = false; this.toast.error('Upload failed.'); }
       });
   }
 
@@ -864,16 +879,20 @@ export class EmployeeDirectoryComponent implements OnInit {
           a.href = url; a.download = d.originalFileName || d.title; a.click();
           URL.revokeObjectURL(url);
         },
-        error: () => this.snack.open('Download failed.', 'OK', { duration: 3000 })
+        error: () => this.toast.error('Download failed.')
       });
   }
 
-  deleteDoc(d: HrDocument): void {
-    if (!confirm(`Delete "${d.title}"?`)) return;
+  async deleteDoc(d: HrDocument): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete "${d.title}"?`,
+      confirmText: 'Delete document',
+      danger: true
+    }))) return;
     this.http.delete(`${environment.apiUrl}/hr-employees/documents/${d.id}`, { headers: this.headers() })
       .subscribe({
         next: () => { this.documents = this.documents.filter(x => x.id !== d.id); },
-        error: () => this.snack.open('Delete failed.', 'OK', { duration: 3000 })
+        error: () => this.toast.error('Delete failed.')
       });
   }
 
@@ -884,10 +903,10 @@ export class EmployeeDirectoryComponent implements OnInit {
       .subscribe({
         next: r => {
           this.importing = false;
-          this.snack.open(`Imported ${r.importedBiometric} main-office + ${r.importedDrivers} drivers (${r.skipped} already present).`, 'OK', { duration: 4500 });
+          this.toast.done(`Imported ${r.importedBiometric} main-office + ${r.importedDrivers} drivers (${r.skipped} already present).`);
           this.loadSiteCounts(); this.load();
         },
-        error: () => { this.importing = false; this.snack.open('Import failed.', 'OK', { duration: 3000 }); }
+        error: () => { this.importing = false; this.toast.error('Import failed.'); }
       });
   }
 

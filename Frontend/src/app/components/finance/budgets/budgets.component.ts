@@ -1,17 +1,28 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { FinanceService } from '../../../services/finance.service';
 import { Budget } from '../../../models/finance.model';
+import { ConfirmService } from '../../../ui/confirm.service';
+import { ToastService } from '../../../ui/toast.service';
+import { NavbarComponent } from '../../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../../ui/page-header/page-header.component';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
+import { ChipTone, StatusChipComponent } from '../../../ui/status-chip/status-chip.component';
+import { formatMoney } from '../../../ui/data-table/data-table.component';
+
+const STATUS_TONES: Record<string, ChipTone> = {
+  'Draft': 'neutral',
+  'Active': 'ok',
+  'Closed': 'neutral',
+  'OverBudget': 'danger'
+};
 
 @Component({
   selector: 'app-budgets',
@@ -19,15 +30,16 @@ import { Budget } from '../../../models/finance.model';
   imports: [
     CommonModule,
     RouterModule,
-    MatCardModule,
     MatButtonModule,
     MatIconModule,
     MatTableModule,
-    MatChipsModule,
     MatMenuModule,
     MatProgressBarModule,
-    MatDialogModule,
-    MatSnackBarModule
+    NavbarComponent,
+    PageHeaderComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent,
+    StatusChipComponent
   ],
   templateUrl: './budgets.component.html',
   styleUrls: ['./budgets.component.scss']
@@ -39,9 +51,18 @@ export class BudgetsComponent implements OnInit {
 
   constructor(
     private financeService: FinanceService,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private readonly confirmDialog: ConfirmService,
+    private readonly toast: ToastService
   ) {}
+
+  /** "R 1 200 000,00 budgeted · R 640 000,00 spent · 1 over budget" for the header. */
+  get summary(): string {
+    if (!this.budgets.length) return 'Fiscal year budgets and allocations';
+    const total = this.budgets.reduce((sum, b) => sum + (b.totalBudget || 0), 0);
+    const spent = this.budgets.reduce((sum, b) => sum + (b.spentAmount || 0), 0);
+    const over = this.budgets.filter(b => b.remainingAmount < 0).length;
+    return `${formatMoney(total)} budgeted · ${formatMoney(spent)} spent` + (over ? ` · ${over} over budget` : '');
+  }
 
   ngOnInit(): void {
     this.loadBudgets();
@@ -56,20 +77,14 @@ export class BudgetsComponent implements OnInit {
       },
       error: (error) => {
         console.error('Error loading budgets:', error);
-        this.snackBar.open('Failed to load budgets', 'Close', { duration: 3000 });
+        this.toast.error("Couldn't load budgets. Refresh the page to try again.");
         this.loading = false;
       }
     });
   }
 
-  getStatusColor(status: string): string {
-    const statusMap: { [key: string]: string } = {
-      'Draft': 'default',
-      'Active': 'primary',
-      'Closed': 'accent',
-      'OverBudget': 'warn'
-    };
-    return statusMap[status] || 'default';
+  getStatusTone(status: string): ChipTone | undefined {
+    return STATUS_TONES[status];
   }
 
   getProgressPercentage(budget: Budget): number {
@@ -82,16 +97,20 @@ export class BudgetsComponent implements OnInit {
     return 'primary';
   }
 
-  deleteBudget(budget: Budget): void {
-    if (confirm(`Are you sure you want to delete budget "${budget.name}"?`)) {
+  async deleteBudget(budget: Budget): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete budget "${budget.name}"?`,
+      confirmText: 'Delete budget',
+      danger: true
+    })) {
       this.financeService.deleteBudget(budget.id).subscribe({
         next: () => {
-          this.snackBar.open('Budget deleted successfully', 'Close', { duration: 3000 });
+          this.toast.done(`Budget "${budget.name}" deleted`);
           this.loadBudgets();
         },
         error: (error) => {
           console.error('Error deleting budget:', error);
-          this.snackBar.open('Failed to delete budget', 'Close', { duration: 3000 });
+          this.toast.error(`Couldn't delete "${budget.name}". Try again.`);
         }
       });
     }

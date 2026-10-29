@@ -53,6 +53,11 @@ import { OpenMapDialogComponent } from './open-map-dialog.component';
 import { LogisticsReportsComponent } from './logistics-reports.component';
 import { AssetTrackingService, ResolveResult } from '../../services/asset-tracking.service';
 import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord, DeliveryRequest, DeliveryRequestSummary } from './logistics.models';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 
 @Component({
   selector: 'app-upload-pod-dialog',
@@ -71,7 +76,7 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
     <div class="upload-pod-dialog">
       <div class="dialog-header">
         <h2><mat-icon>upload_file</mat-icon> Upload Proof of Delivery</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
       
       <div class="dialog-content">
@@ -98,7 +103,7 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
             <mat-icon color="primary">description</mat-icon>
             <p>{{ selectedFile.name }}</p>
             <span class="file-size">{{ formatFileSize(selectedFile.size) }}</span>
-            <button mat-icon-button (click)="removeFile($event)">
+            <button aria-label="Close" mat-icon-button (click)="removeFile($event)">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -143,18 +148,18 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
         justify-content: space-between;
         align-items: center;
         padding: 24px 24px 16px;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--color-line);
 
         h2 {
           display: flex;
           align-items: center;
           gap: 12px;
           margin: 0;
-          font-size: 20px;
+          font-size: var(--text-2xl);
           font-weight: 600;
 
           mat-icon {
-            color: #1976d2;
+            color: var(--color-primary);
           }
         }
       }
@@ -168,19 +173,19 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
 
           h3 {
             margin: 0 0 8px 0;
-            color: #1a237e;
-            font-size: 18px;
+            color: var(--color-brand);
+            font-size: var(--text-xl);
           }
 
           p {
             margin: 0;
-            color: #666;
-            font-size: 14px;
+            color: var(--color-text-2);
+            font-size: var(--text-md);
           }
         }
 
         .upload-area {
-          border: 2px dashed #ccc;
+          border: 2px dashed var(--color-line-strong);
           border-radius: 8px;
           padding: 40px;
           text-align: center;
@@ -189,8 +194,8 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
           margin-bottom: 24px;
 
           &:hover, &.drag-over {
-            border-color: #1976d2;
-            background-color: #f5f5f5;
+            border-color: var(--color-primary);
+            background-color: var(--color-surface-2);
           }
 
           mat-icon {
@@ -202,13 +207,13 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
 
           p {
             margin: 8px 0;
-            font-size: 16px;
-            color: #333;
+            font-size: var(--text-lg);
+            color: var(--color-text);
           }
 
           .file-types, .file-size {
-            font-size: 12px;
-            color: #999;
+            font-size: var(--text-xs);
+            color: var(--color-text-3);
           }
         }
 
@@ -221,7 +226,7 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
 
           p {
             margin: 0;
-            color: #666;
+            color: var(--color-text-2);
           }
         }
 
@@ -230,13 +235,13 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
           align-items: center;
           gap: 8px;
           padding: 12px;
-          background-color: #ffebee;
+          background-color: var(--color-danger-soft);
           border-radius: 4px;
-          color: #c62828;
+          color: var(--color-danger);
           margin-top: 16px;
 
           mat-icon {
-            font-size: 20px;
+            font-size: var(--text-2xl);
             width: 20px;
             height: 20px;
           }
@@ -248,7 +253,7 @@ import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord
         justify-content: flex-end;
         gap: 12px;
         padding: 16px 24px;
-        border-top: 1px solid #e0e0e0;
+        border-top: 1px solid var(--color-line);
       }
     }
   `]
@@ -376,7 +381,7 @@ export class UploadPODDialog {
     <div class="upload-pod-doc-dialog">
       <div class="dialog-header">
         <h2><mat-icon>upload_file</mat-icon> Upload POD Document</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
       
       <div class="dialog-content">
@@ -427,7 +432,7 @@ export class UploadPODDialog {
             <mat-icon color="primary">description</mat-icon>
             <p>{{ selectedFile.name }}</p>
             <span class="file-size">{{ formatFileSize(selectedFile.size) }}</span>
-            <button mat-icon-button (click)="removeFile($event)"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" mat-icon-button (click)="removeFile($event)"><mat-icon>close</mat-icon></button>
           }
         </div>
 
@@ -475,7 +480,7 @@ export class UploadPODDialog {
                         [matTooltip]="item.matched ? (item.customerName || 'Matches a known invoice') : 'Not found in the system — will not be linked'">
                     <mat-icon class="chip-state">{{ item.matched ? 'verified' : 'help_outline' }}</mat-icon>
                     {{ item.number }}
-                    <button class="chip-remove" (click)="removeInvoice(item)" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                    <button aria-label="Remove" class="chip-remove" (click)="removeInvoice(item)" matTooltip="Remove"><mat-icon>close</mat-icon></button>
                   </span>
                 }
                 @if (detected.length === 0) {
@@ -488,7 +493,7 @@ export class UploadPODDialog {
                   <mat-label>Add invoice number</mat-label>
                   <input matInput [(ngModel)]="newInvoiceInput" placeholder="e.g. IN123456"
                          (keyup.enter)="addInvoiceNumber()">
-                  <button matSuffix mat-icon-button (click)="addInvoiceNumber()" [disabled]="!newInvoiceInput.trim()">
+                  <button aria-label="Add" matSuffix mat-icon-button (click)="addInvoiceNumber()" [disabled]="!newInvoiceInput.trim()">
                     <mat-icon>add</mat-icon>
                   </button>
                 </mat-form-field>
@@ -544,9 +549,9 @@ export class UploadPODDialog {
     .upload-pod-doc-dialog {
       .dialog-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
-        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
-          mat-icon { color: #1976d2; }
+        padding: 20px 24px 12px; border-bottom: 1px solid var(--color-line);
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: var(--text-xl); font-weight: 600;
+          mat-icon { color: var(--color-primary); }
         }
       }
       .dialog-content {
@@ -557,57 +562,57 @@ export class UploadPODDialog {
         }
         .full-width { width: 100%; }
         .upload-area {
-          border: 2px dashed #ccc; border-radius: 8px; padding: 32px; text-align: center;
+          border: 2px dashed var(--color-line-strong); border-radius: 8px; padding: 32px; text-align: center;
           cursor: pointer; margin-bottom: 16px; transition: all 0.2s;
-          &:hover, &.drag-over { border-color: #1976d2; background: #f5f5f5; }
+          &:hover, &.drag-over { border-color: var(--color-primary); background: var(--color-surface-2); }
           mat-icon { font-size: 40px; width: 40px; height: 40px; margin-bottom: 8px; }
-          p { margin: 6px 0; font-size: 14px; color: #333; }
-          .file-types, .file-size { font-size: 12px; color: #999; }
+          p { margin: 6px 0; font-size: var(--text-md); color: var(--color-text); }
+          .file-types, .file-size { font-size: var(--text-xs); color: var(--color-text-3); }
         }
-        .upload-progress { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; p { margin: 0; color: #666; } }
-        .error-message { display: flex; align-items: center; gap: 8px; padding: 10px; background: #ffebee; border-radius: 4px; color: #c62828; margin-top: 8px;
-          mat-icon { font-size: 18px; width: 18px; height: 18px; }
+        .upload-progress { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; p { margin: 0; color: var(--color-text-2); } }
+        .error-message { display: flex; align-items: center; gap: 8px; padding: 10px; background: var(--color-danger-soft); border-radius: 4px; color: var(--color-danger); margin-top: 8px;
+          mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
         }
         .detect-phase {
-          .detect-uploaded { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #e8f5e9;
-            border-radius: 8px; color: #2e7d32; font-size: 13px; margin-bottom: 16px;
-            mat-icon { color: #2e7d32; }
+          .detect-uploaded { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--color-ok-soft);
+            border-radius: 8px; color: var(--color-ok); font-size: var(--text-sm); margin-bottom: 16px;
+            mat-icon { color: var(--color-ok); }
           }
           .detect-loading { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 12px;
-            p { margin: 0; color: #444; font-size: 14px; text-align: center; }
-            .detect-hint { font-size: 12px; color: #999; }
+            p { margin: 0; color: var(--color-text-2); font-size: var(--text-md); text-align: center; }
+            .detect-hint { font-size: var(--text-xs); color: var(--color-text-3); }
           }
-          .detect-status { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; font-size: 13px; color: #333;
-            mat-icon { color: #7b1fa2; font-size: 20px; width: 20px; height: 20px; }
-            &.none mat-icon { color: #f9a825; }
+          .detect-status { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; font-size: var(--text-sm); color: var(--color-text);
+            mat-icon { color: var(--color-cat-purple); font-size: var(--text-2xl); width: 20px; height: 20px; }
+            &.none mat-icon { color: var(--color-warn); }
           }
           .detect-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; min-height: 32px;
-            .detect-empty { color: #999; font-size: 13px; font-style: italic; }
+            .detect-empty { color: var(--color-text-3); font-size: var(--text-sm); font-style: italic; }
             .inv-chip {
               display: inline-flex; align-items: center; gap: 4px; padding: 4px 4px 4px 8px; border-radius: 16px;
-              font-size: 13px; font-family: monospace; font-weight: 600; border: 1px solid transparent;
+              font-size: var(--text-sm); font-family: monospace; font-weight: 600; border: 1px solid transparent;
               .chip-state { font-size: 15px; width: 15px; height: 15px; }
               .chip-remove { width: 20px; height: 20px; line-height: 20px; padding: 0;
-                mat-icon { font-size: 14px; width: 14px; height: 14px; }
+                mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
               }
-              &.matched { background: #e3f2fd; color: #1565c0; border-color: #90caf9;
-                .chip-state { color: #2e7d32; }
+              &.matched { background: var(--color-primary-soft); color: var(--color-primary-hover); border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+                .chip-state { color: var(--color-ok); }
               }
-              &.unmatched { background: #fff3e0; color: #e65100; border-color: #ffcc80;
-                .chip-state { color: #ef6c00; }
+              &.unmatched { background: var(--color-warn-soft); color: var(--color-warn); border-color: color-mix(in srgb, var(--color-warn) 35%, transparent);
+                .chip-state { color: var(--color-warn); }
               }
             }
           }
           .detect-add { margin-top: 4px; .full-width { width: 100%; } }
-          .detect-summary { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #666; margin-top: 4px;
-            mat-icon { font-size: 16px; width: 16px; height: 16px; color: #1976d2; }
+          .detect-summary { display: flex; align-items: center; gap: 8px; font-size: var(--text-xs); color: var(--color-text-2); margin-top: 4px;
+            mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-primary); }
           }
           .rescan-btn { margin-top: 12px; border-radius: 8px !important;
-            mat-icon { margin-right: 4px; font-size: 18px; width: 18px; height: 18px; }
+            mat-icon { margin-right: 4px; font-size: var(--text-xl); width: 18px; height: 18px; }
           }
         }
       }
-      .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+      .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid var(--color-line);
         mat-progress-spinner { display: inline-block; }
       }
     }
@@ -825,13 +830,16 @@ export class UploadPodDocumentDialog {
     MatFormFieldModule,
     MatInputModule,
     MatProgressSpinnerModule,
-    FormsModule
+    FormsModule,
+    EmptyStateComponent,
+    SkeletonRowsComponent,
+    StatusChipComponent
   ],
   template: `
     <div class="link-tripsheet-dialog">
       <div class="dialog-header">
         <h2><mat-icon>link</mat-icon> Link to Tripsheet</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
 
       <div class="dialog-content">
@@ -850,10 +858,7 @@ export class UploadPodDocumentDialog {
         </mat-form-field>
 
         @if (searching) {
-          <div class="search-loading">
-            <mat-progress-spinner mode="indeterminate" diameter="24"></mat-progress-spinner>
-            <span>Searching...</span>
-          </div>
+          <app-skeleton-rows [rows]="3" [avatar]="false"></app-skeleton-rows>
         }
 
         @if (searchResults.length > 0) {
@@ -862,7 +867,7 @@ export class UploadPodDocumentDialog {
               <div class="load-option" [class.selected]="selectedLoadId === load.id" (click)="selectLoad(load)">
                 <div class="load-option-main">
                   <span class="load-number">{{ load.loadNumber }}</span>
-                  <span class="load-status" [ngClass]="'status-' + load.status?.toLowerCase()">{{ load.status }}</span>
+                  <app-status-chip [status]="load.status"></app-status-chip>
                 </div>
                 <div class="load-option-detail">
                   @if (load.customerName) { <span>{{ load.customerName }}</span> }
@@ -873,10 +878,8 @@ export class UploadPodDocumentDialog {
             }
           </div>
         } @else if (searchTerm && !searching) {
-          <div class="no-results">
-            <mat-icon>search_off</mat-icon>
-            <span>No tripsheets found</span>
-          </div>
+          <app-empty-state icon="search_off" title="No tripsheets found" [compact]="true"
+                           message="Nothing matches that search. Try a load number or a customer name."></app-empty-state>
         }
       </div>
 
@@ -897,9 +900,9 @@ export class UploadPodDocumentDialog {
     .link-tripsheet-dialog {
       .dialog-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
-        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
-          mat-icon { color: #1976d2; }
+        padding: 20px 24px 12px; border-bottom: 1px solid var(--color-line);
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: var(--text-xl); font-weight: 600;
+          mat-icon { color: var(--color-primary); }
         }
       }
       .dialog-content {
@@ -907,42 +910,30 @@ export class UploadPodDocumentDialog {
         .full-width { width: 100%; }
       }
       .pod-info {
-        display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f8ff;
+        display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--color-surface-2);
         border-radius: 8px; margin-bottom: 16px;
-        mat-icon { color: #e53935; font-size: 28px; width: 28px; height: 28px; }
+        mat-icon { color: var(--color-danger); font-size: 28px; width: 28px; height: 28px; }
         div { display: flex; flex-direction: column; gap: 2px;
-          strong { font-size: 14px; color: #1a1a2e; }
-          span { font-size: 12px; color: #888; }
+          strong { font-size: var(--text-md); color: var(--color-text); }
+          span { font-size: var(--text-xs); color: var(--color-text-3); }
         }
-      }
-      .search-loading {
-        display: flex; align-items: center; gap: 8px; padding: 12px; color: #666;
       }
       .search-results {
         display: flex; flex-direction: column; gap: 4px;
       }
       .load-option {
-        padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid #e0e0e0;
+        padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid var(--color-line);
         transition: all 0.2s;
-        &:hover { border-color: #1976d2; background: #f5f8ff; }
-        &.selected { border-color: #1976d2; background: #e3f2fd; }
+        &:hover { border-color: var(--color-primary); background: var(--color-surface-2); }
+        &.selected { border-color: var(--color-primary); background: var(--color-primary-soft); }
         .load-option-main {
           display: flex; justify-content: space-between; align-items: center;
-          .load-number { font-weight: 600; font-size: 14px; color: #1a1a2e; }
-          .load-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
-            &.status-available { background: #e3f2fd; color: #1565c0; }
-            &.status-assigned { background: #fff3e0; color: #e65100; }
-            &.status-intransit { background: #f3e5f5; color: #7b1fa2; }
-            &.status-delivered { background: #e8f5e9; color: #2e7d32; }
-          }
+          .load-number { font-weight: 600; font-size: var(--text-md); color: var(--color-text); }
         }
-        .load-option-detail { font-size: 12px; color: #888; margin-top: 4px; }
-      }
-      .no-results {
-        display: flex; align-items: center; gap: 8px; padding: 16px; color: #999; justify-content: center;
+        .load-option-detail { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 4px; }
       }
       .dialog-actions {
-        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid var(--color-line);
         button mat-progress-spinner { display: inline-block; }
       }
     }
@@ -1027,7 +1018,7 @@ export class LinkTripsheetDialog {
     <div class="edit-pod-dialog">
       <div class="dialog-header">
         <h2><mat-icon>edit</mat-icon> Edit POD Details</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
 
       <div class="dialog-content">
@@ -1080,9 +1071,9 @@ export class LinkTripsheetDialog {
     .edit-pod-dialog {
       .dialog-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
-        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
-          mat-icon { color: #1976d2; }
+        padding: 20px 24px 12px; border-bottom: 1px solid var(--color-line);
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: var(--text-xl); font-weight: 600;
+          mat-icon { color: var(--color-primary); }
         }
       }
       .dialog-content {
@@ -1093,7 +1084,7 @@ export class LinkTripsheetDialog {
         }
       }
       .dialog-actions {
-        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid var(--color-line);
         button mat-progress-spinner { display: inline-block; }
       }
     }
@@ -1150,13 +1141,16 @@ export class EditPodDialog {
     MatFormFieldModule,
     MatInputModule,
     MatProgressSpinnerModule,
-    FormsModule
+    FormsModule,
+    EmptyStateComponent,
+    SkeletonRowsComponent,
+    StatusChipComponent
   ],
   template: `
     <div class="link-invoice-dialog">
       <div class="dialog-header">
         <h2><mat-icon>receipt</mat-icon> Link to Invoice(s)</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
 
       <div class="dialog-content">
@@ -1187,10 +1181,7 @@ export class EditPodDialog {
         </mat-form-field>
 
         @if (searching) {
-          <div class="search-loading">
-            <mat-progress-spinner mode="indeterminate" diameter="24"></mat-progress-spinner>
-            <span>Searching...</span>
-          </div>
+          <app-skeleton-rows [rows]="3" [avatar]="false"></app-skeleton-rows>
         }
 
         @if (searchResults.length > 0) {
@@ -1203,7 +1194,7 @@ export class EditPodDialog {
                 <div class="invoice-option-content">
                   <div class="invoice-option-main">
                     <span class="invoice-number">{{ inv.transactionNumber }}</span>
-                    <span class="invoice-status" [ngClass]="'status-' + inv.status?.toLowerCase()">{{ inv.status }}</span>
+                    <app-status-chip [status]="inv.status"></app-status-chip>
                   </div>
                   <div class="invoice-option-detail">
                     <span class="invoice-customer">{{ inv.customerName }}</span>
@@ -1219,10 +1210,8 @@ export class EditPodDialog {
             }
           </div>
         } @else if (searchTerm && !searching) {
-          <div class="no-results">
-            <mat-icon>search_off</mat-icon>
-            <span>No invoices found</span>
-          </div>
+          <app-empty-state icon="search_off" title="No invoices found" [compact]="true"
+                           message="Nothing matches that search. Try an invoice number or a customer name."></app-empty-state>
         }
       </div>
 
@@ -1243,9 +1232,9 @@ export class EditPodDialog {
     .link-invoice-dialog {
       .dialog-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
-        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
-          mat-icon { color: #283593; }
+        padding: 20px 24px 12px; border-bottom: 1px solid var(--color-line);
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: var(--text-xl); font-weight: 600;
+          mat-icon { color: var(--color-primary); }
         }
       }
       .dialog-content {
@@ -1253,65 +1242,53 @@ export class EditPodDialog {
         .full-width { width: 100%; }
       }
       .pod-info {
-        display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f8ff;
+        display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--color-surface-2);
         border-radius: 8px; margin-bottom: 12px;
-        mat-icon { color: #e53935; font-size: 28px; width: 28px; height: 28px; }
+        mat-icon { color: var(--color-danger); font-size: 28px; width: 28px; height: 28px; }
         div { display: flex; flex-direction: column; gap: 2px;
-          strong { font-size: 14px; color: #1a1a2e; }
-          span { font-size: 12px; color: #888; }
+          strong { font-size: var(--text-md); color: var(--color-text); }
+          span { font-size: var(--text-xs); color: var(--color-text-3); }
         }
       }
       .link-note {
-        display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #e8eaf6;
-        border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #283593;
-        mat-icon { font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
+        display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--color-primary-soft);
+        border-radius: 8px; margin-bottom: 16px; font-size: var(--text-sm); color: var(--color-primary);
+        mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; flex-shrink: 0; }
       }
       .selected-count {
-        display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #e8f5e9;
-        border-radius: 8px; margin-bottom: 12px; font-size: 13px; color: #2e7d32; font-weight: 600;
-        mat-icon { font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
-      }
-      .search-loading {
-        display: flex; align-items: center; gap: 8px; padding: 12px; color: #666;
+        display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--color-ok-soft);
+        border-radius: 8px; margin-bottom: 12px; font-size: var(--text-sm); color: var(--color-ok); font-weight: 600;
+        mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; flex-shrink: 0; }
       }
       .search-results {
         display: flex; flex-direction: column; gap: 4px;
       }
       .invoice-option {
         display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; 
-        cursor: pointer; border: 1px solid #e0e0e0; transition: all 0.2s;
-        &:hover { border-color: #283593; background: #f5f6ff; }
-        &.selected { border-color: #283593; background: #e8eaf6; 
-          .invoice-selection-checkbox mat-icon { color: #283593; }
+        cursor: pointer; border: 1px solid var(--color-line); transition: all 0.2s;
+        &:hover { border-color: var(--color-primary); background: var(--color-surface-2); }
+        &.selected { border-color: var(--color-primary); background: var(--color-primary-soft); 
+          .invoice-selection-checkbox mat-icon { color: var(--color-primary); }
         }
         .invoice-selection-checkbox {
-          mat-icon { font-size: 22px; width: 22px; height: 22px; color: #999; }
+          mat-icon { font-size: 22px; width: 22px; height: 22px; color: var(--color-text-3); }
         }
         .invoice-option-content {
           flex: 1;
           .invoice-option-main {
             display: flex; justify-content: space-between; align-items: center;
-            .invoice-number { font-weight: 600; font-size: 14px; color: #1a1a2e; }
-            .invoice-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
-              &.status-pending { background: #fff3e0; color: #e65100; }
-              &.status-assigned { background: #e3f2fd; color: #1565c0; }
-              &.status-inprogress { background: #f3e5f5; color: #7b1fa2; }
-              &.status-delivered { background: #e8f5e9; color: #2e7d32; }
-            }
+            .invoice-number { font-weight: 600; font-size: var(--text-md); color: var(--color-text); }
           }
           .invoice-option-detail {
             display: flex; justify-content: space-between; align-items: center; margin-top: 4px;
-            .invoice-customer { font-size: 13px; color: #333; }
-            .invoice-amount { font-size: 13px; font-weight: 600; color: #2e7d32; }
+            .invoice-customer { font-size: var(--text-sm); color: var(--color-text); }
+            .invoice-amount { font-size: var(--text-sm); font-weight: 600; color: var(--color-ok); }
           }
-          .invoice-option-sub { font-size: 11px; color: #999; margin-top: 2px; display: flex; gap: 8px; }
+          .invoice-option-sub { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 2px; display: flex; gap: 8px; }
         }
       }
-      .no-results {
-        display: flex; align-items: center; gap: 8px; padding: 16px; color: #999; justify-content: center;
-      }
       .dialog-actions {
-        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid var(--color-line);
         button mat-progress-spinner { display: inline-block; }
       }
     }
@@ -1407,7 +1384,8 @@ export class LinkInvoiceDialog {
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
-    MatDividerModule
+    MatDividerModule,
+    StatusChipComponent
   ],
   template: `
     <div class="invoice-details-dialog">
@@ -1416,7 +1394,7 @@ export class LinkInvoiceDialog {
           <mat-icon>receipt_long</mat-icon>
           Invoice Details
         </h2>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -1427,9 +1405,7 @@ export class LinkInvoiceDialog {
             <span class="label">Invoice #</span>
             <span class="value">{{ data.transactionNumber }}</span>
           </div>
-          <div class="invoice-status" [ngClass]="getStatusClass()">
-            {{ data.status }}
-          </div>
+          <app-status-chip [status]="data.status"></app-status-chip>
         </div>
 
         <mat-divider></mat-divider>
@@ -1599,8 +1575,9 @@ export class LinkInvoiceDialog {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #1976d2, #1565c0);
-      color: white;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
+      color: var(--color-text);
     }
 
     .dialog-header h2 {
@@ -1608,11 +1585,15 @@ export class LinkInvoiceDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 20px;
+      font-size: var(--text-2xl);
+    }
+
+    .dialog-header h2 mat-icon {
+      color: var(--color-primary);
     }
 
     .dialog-header button {
-      color: white;
+      color: var(--color-text-2);
     }
 
     .invoice-content {
@@ -1630,36 +1611,14 @@ export class LinkInvoiceDialog {
 
     .invoice-number .label {
       display: block;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .invoice-number .value {
-      font-size: 24px;
+      font-size: var(--text-3xl);
       font-weight: 600;
-      color: #1976d2;
-    }
-
-    .invoice-status {
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-weight: 500;
-      font-size: 14px;
-    }
-
-    .invoice-status.status-pending {
-      background: #fff3e0;
-      color: #f57c00;
-    }
-
-    .invoice-status.status-assigned {
-      background: #e3f2fd;
-      color: #1976d2;
-    }
-
-    .invoice-status.status-delivered {
-      background: #e8f5e9;
-      color: #388e3c;
+      color: var(--color-primary);
     }
 
     .detail-section {
@@ -1671,13 +1630,13 @@ export class LinkInvoiceDialog {
       align-items: center;
       gap: 8px;
       margin: 0 0 12px 0;
-      font-size: 14px;
-      color: #666;
+      font-size: var(--text-md);
+      color: var(--color-text-2);
       text-transform: uppercase;
     }
 
     .detail-section h3 mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -1698,14 +1657,14 @@ export class LinkInvoiceDialog {
     }
 
     .detail-item .label {
-      font-size: 12px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       margin-bottom: 2px;
     }
 
     .detail-item .value {
-      font-size: 14px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
       font-weight: 500;
     }
 
@@ -1716,7 +1675,7 @@ export class LinkInvoiceDialog {
     }
 
     .financial-item {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       padding: 12px 16px;
       border-radius: 8px;
       text-align: center;
@@ -1724,41 +1683,41 @@ export class LinkInvoiceDialog {
 
     .financial-item .label {
       display: block;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       margin-bottom: 4px;
     }
 
     .financial-item .value {
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 600;
     }
 
     .financial-item .value.sales {
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .financial-item .value.cost {
-      color: #f57c00;
+      color: var(--color-warn);
     }
 
     .financial-item .value.profit {
-      color: #388e3c;
+      color: var(--color-ok);
     }
 
     .financial-item .value.margin.positive {
-      color: #388e3c;
+      color: var(--color-ok);
     }
 
     .financial-item .value.margin.negative {
-      color: #d32f2f;
+      color: var(--color-danger);
     }
 
     .dialog-actions {
       padding: 16px 24px;
       display: flex;
       justify-content: flex-end;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     mat-divider {
@@ -1796,7 +1755,8 @@ export class InvoiceDetailsDialog {
     FormsModule,
     MatChipsModule,
     MatProgressSpinnerModule,
-    MatTooltipModule
+    MatTooltipModule,
+    EmptyStateComponent
   ],
   template: `
     <div class="map-dialog">
@@ -1815,7 +1775,7 @@ export class InvoiceDetailsDialog {
               }
             </mat-select>
           </mat-form-field>
-          <button mat-raised-button color="primary" 
+          <button mat-flat-button color="primary" 
                   (click)="findNearestTfnDepot()" 
                   [disabled]="!selectedVehicle || !selectedVehicle.latitude"
                   matTooltip="Find nearest TFN depot to selected vehicle"
@@ -1823,17 +1783,17 @@ export class InvoiceDetailsDialog {
             <mat-icon>local_shipping</mat-icon>
             Nearest TFN
           </button>
-          <button mat-raised-button color="accent"
+          <button mat-stroked-button
                   (click)="printMap()"
                   matTooltip="Print the current map view"
                   class="print-map-btn">
             <mat-icon>print</mat-icon>
             Print
           </button>
-          <button mat-icon-button (click)="refreshMap()" matTooltip="Refresh">
+          <button aria-label="Refresh" mat-icon-button (click)="refreshMap()" matTooltip="Refresh">
             <mat-icon>refresh</mat-icon>
           </button>
-          <button mat-icon-button mat-dialog-close matTooltip="Close">
+          <button aria-label="Close" mat-icon-button mat-dialog-close matTooltip="Close">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -1877,10 +1837,15 @@ export class InvoiceDetailsDialog {
               </div>
             }
             @if (filteredVehicles.length === 0) {
-              <div class="no-vehicles-found">
-                <mat-icon>search_off</mat-icon>
-                <span>No vehicles match “{{ vehicleSearch }}”</span>
-              </div>
+              @if (vehicleSearch) {
+                <app-empty-state icon="search_off" [title]="'No vehicles match “' + vehicleSearch + '”'" [compact]="true"
+                                 message="Check the registration, driver or location you typed.">
+                  <button mat-stroked-button (click)="vehicleSearch = ''">Clear the search</button>
+                </app-empty-state>
+              } @else {
+                <app-empty-state icon="local_shipping" title="No vehicles to show" [compact]="true"
+                                 message="No tracked vehicle has reported a position yet."></app-empty-state>
+              }
             }
           </div>
         </div>
@@ -1911,7 +1876,7 @@ export class InvoiceDetailsDialog {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #fff;
+      background: var(--color-surface);
     }
 
     .map-header {
@@ -1919,8 +1884,9 @@ export class InvoiceDetailsDialog {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-      color: white;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
+      color: var(--color-text);
     }
 
     .map-header h2 {
@@ -1928,8 +1894,12 @@ export class InvoiceDetailsDialog {
       align-items: center;
       gap: 12px;
       margin: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       font-weight: 500;
+    }
+
+    .map-header h2 mat-icon {
+      color: var(--color-primary);
     }
 
     .header-controls {
@@ -1942,36 +1912,22 @@ export class InvoiceDetailsDialog {
       width: 220px;
     }
 
-    .vehicle-select ::ng-deep .mat-mdc-text-field-wrapper {
-      background: rgba(255,255,255,0.9);
-      border-radius: 4px;
-    }
-
     .nearest-tfn-btn {
-      background: #ff9800 !important;
-      color: white !important;
-      font-size: 12px;
+      font-size: var(--text-xs);
       height: 36px;
       display: flex;
       align-items: center;
       gap: 4px;
     }
 
-    .nearest-tfn-btn:disabled {
-      background: rgba(255, 255, 255, 0.3) !important;
-      color: rgba(255, 255, 255, 0.5) !important;
-    }
-
     .nearest-tfn-btn mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       height: 18px;
       width: 18px;
     }
 
     .print-map-btn {
-      background: #1976d2 !important;
-      color: white !important;
-      font-size: 12px;
+      font-size: var(--text-xs);
       height: 36px;
       display: flex;
       align-items: center;
@@ -1979,13 +1935,13 @@ export class InvoiceDetailsDialog {
     }
 
     .print-map-btn mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       height: 18px;
       width: 18px;
     }
 
     .header-controls button {
-      color: white;
+      color: var(--color-text-2);
     }
 
     .map-content {
@@ -1996,8 +1952,8 @@ export class InvoiceDetailsDialog {
 
     .vehicle-sidebar {
       width: 300px;
-      background: #f5f5f5;
-      border-right: 1px solid #ddd;
+      background: var(--color-surface-2);
+      border-right: 1px solid var(--color-line);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -2006,10 +1962,10 @@ export class InvoiceDetailsDialog {
     .vehicle-sidebar h3 {
       padding: 16px;
       margin: 0;
-      background: #e3e3e3;
-      font-size: 14px;
+      background: var(--color-surface-3);
+      font-size: var(--text-md);
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .vehicle-search {
@@ -2017,29 +1973,24 @@ export class InvoiceDetailsDialog {
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: #fff;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
     }
     .vehicle-search mat-icon {
-      font-size: 18px; width: 18px; height: 18px; color: #90a4ae; flex-shrink: 0;
+      font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-text-3); flex-shrink: 0;
     }
     .vehicle-search input {
       flex: 1; border: none; outline: none; background: transparent;
-      font-size: 13px; color: #263238; min-width: 0;
+      font-size: var(--text-sm); color: var(--color-text); min-width: 0;
     }
-    .vehicle-search input::placeholder { color: #b0bec5; }
+    .vehicle-search input::placeholder { color: var(--color-text-3); }
     .vehicle-search .clear-search {
       border: none; background: transparent; cursor: pointer; padding: 0;
-      display: flex; align-items: center; color: #90a4ae;
+      display: flex; align-items: center; color: var(--color-text-3);
     }
-    .vehicle-search .clear-search mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    .vehicle-search .clear-search:hover { color: #546e7a; }
+    .vehicle-search .clear-search mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
+    .vehicle-search .clear-search:hover { color: var(--color-text-2); }
 
-    .no-vehicles-found {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 8px; padding: 32px 16px; color: #90a4ae; text-align: center; font-size: 13px;
-    }
-    .no-vehicles-found mat-icon { font-size: 32px; width: 32px; height: 32px; opacity: .6; }
 
     .vehicle-list {
       flex: 1;
@@ -2050,30 +2001,30 @@ export class InvoiceDetailsDialog {
       display: flex;
       gap: 12px;
       padding: 12px 16px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .sidebar-vehicle:hover {
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
     }
 
     .sidebar-vehicle.selected {
-      background: #bbdefb;
-      border-left: 4px solid #1976d2;
+      background: var(--color-primary-soft);
+      border-left: 4px solid var(--color-primary);
     }
 
     .sidebar-vehicle.moving .vehicle-icon {
-      color: #4caf50;
+      color: var(--color-ok);
     }
 
     .sidebar-vehicle.offline .vehicle-icon {
-      color: #f44336;
+      color: var(--color-danger);
     }
 
     .vehicle-icon {
-      color: #ff9800;
+      color: var(--color-warn);
     }
 
     .vehicle-icon mat-icon {
@@ -2091,18 +2042,18 @@ export class InvoiceDetailsDialog {
     }
 
     .vehicle-details strong {
-      font-size: 14px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
     }
 
     .vehicle-details .driver {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .vehicle-details .location {
-      font-size: 11px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2115,20 +2066,20 @@ export class InvoiceDetailsDialog {
     }
 
     .speed-chip {
-      font-size: 10px !important;
+      font-size: var(--text-xs) !important;
       min-height: 20px !important;
       padding: 0 8px !important;
     }
 
     .speed-chip.moving {
-      background: #e8f5e9 !important;
-      color: #2e7d32 !important;
+      background: var(--color-ok-soft) !important;
+      color: var(--color-ok) !important;
     }
 
     .map-container {
       flex: 1;
       position: relative;
-      background: #e0e0e0;
+      background: var(--color-line);
     }
 
     .map-loading {
@@ -2154,8 +2105,8 @@ export class InvoiceDetailsDialog {
       justify-content: space-between;
       align-items: center;
       padding: 12px 24px;
-      background: #f5f5f5;
-      border-top: 1px solid #ddd;
+      background: var(--color-surface-2);
+      border-top: 1px solid var(--color-line);
     }
 
     .legend {
@@ -2167,8 +2118,8 @@ export class InvoiceDetailsDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .dot {
@@ -2178,20 +2129,20 @@ export class InvoiceDetailsDialog {
     }
 
     .dot.moving {
-      background: #4caf50;
+      background: var(--color-ok);
     }
 
     .dot.stopped {
-      background: #ff9800;
+      background: var(--color-warn);
     }
 
     .dot.offline {
-      background: #f44336;
+      background: var(--color-danger);
     }
 
     .last-update {
-      font-size: 12px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
 
     @media (max-width: 768px) {
@@ -2233,7 +2184,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
   private lastDepotInfo: any = null;
 
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private readonly toast = inject(ToastService);
 
   constructor(
     public dialogRef: MatDialogRef<FleetMapDialogComponent>,
@@ -2423,7 +2374,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     const statusColor = vehicle.speed && vehicle.speed > 0 ? '#4caf50' : '#ff9800';
     const statusText = vehicle.speed && vehicle.speed > 0 ? 'Moving' : 'Stationary';
     const lastUpdateHtml = vehicle.lastUpdate 
-      ? '<p style="margin: 4px 0; font-size: 11px; color: #999;">Updated: ' + new Date(vehicle.lastUpdate).toLocaleTimeString() + '</p>' 
+      ? '<p style="margin: 4px 0; font-size: 11px; color: var(--color-text-3);">Updated: ' + new Date(vehicle.lastUpdate).toLocaleTimeString() + '</p>' 
       : '';
 
     const content = '<div style="padding: 12px; min-width: 200px;">' +
@@ -2431,7 +2382,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       '<p style="margin: 4px 0; font-size: 13px;"><strong>Driver:</strong> ' + (vehicle.currentDriver || 'Not assigned') + '</p>' +
       '<p style="margin: 4px 0; font-size: 13px;"><strong>Speed:</strong> ' + (vehicle.speed || 0) + ' km/h</p>' +
       '<p style="margin: 4px 0; font-size: 13px;"><strong>Status:</strong> <span style="color: ' + statusColor + ';">' + statusText + '</span></p>' +
-      '<p style="margin: 4px 0; font-size: 12px; color: #666;"><strong>Location:</strong> ' + (vehicle.lastLocation || 'Unknown') + '</p>' +
+      '<p style="margin: 4px 0; font-size: 12px; color: var(--color-text-2);"><strong>Location:</strong> ' + (vehicle.lastLocation || 'Unknown') + '</p>' +
       lastUpdateHtml +
       '<div style="margin-top: 12px;"><a href="https://www.google.com/maps/dir/?api=1&destination=' + vehicle.latitude + ',' + vehicle.longitude + '" target="_blank" style="color: #1976d2; text-decoration: none; font-size: 12px;">Get Directions  > </a></div>' +
       '</div>';
@@ -2469,7 +2420,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
 
   findNearestTfnDepot(): void {
     if (!this.selectedVehicle || !this.selectedVehicle.latitude || !this.selectedVehicle.longitude) {
-      this.snackBar.open('Please select a vehicle with valid coordinates', 'Close', { duration: 3000 });
+      this.toast.warn('Please select a vehicle with valid coordinates');
       return;
     }
 
@@ -2531,7 +2482,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
               // Update snackbar with real road distance/time
               const leg = result.routes?.[0]?.legs?.[0];
               if (leg) {
-                this.snackBar.open(`Nearest TFN: ${depot.name} — ${leg.distance?.text} by road (${leg.duration?.text})`, 'Close', { duration: 6000 });
+                this.toast.info(`Nearest TFN: ${depot.name} — ${leg.distance?.text} by road (${leg.duration?.text})`);
                 this.lastDepotInfo = { ...this.lastDepotInfo, roadDistance: leg.distance?.text, roadDuration: leg.duration?.text };
               }
               // Encode the route path for a printable static map
@@ -2584,12 +2535,12 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
           const infoContent = `
             <div style="padding: 12px; min-width: 220px;">
               <h3 style="margin: 0 0 8px 0; color: #e65100; font-size: 16px;">
-                <span style="font-size: 20px;">🏭</span> ${depot.name}
+                <span class="material-icons" style="font-size: 20px; vertical-align: -4px;">factory</span> ${depot.name}
               </h3>
               <p style="margin: 4px 0; font-size: 13px;"><strong>Code:</strong> ${depot.code || 'N/A'}</p>
               <p style="margin: 4px 0; font-size: 13px;"><strong>Distance:</strong> <span style="color: #1976d2; font-weight: bold;">${depot.distanceKm} km</span></p>
-              <p style="margin: 4px 0; font-size: 12px; color: #666;"><strong>Address:</strong> ${depot.address || ''}</p>
-              <p style="margin: 4px 0; font-size: 12px; color: #666;">${depot.city || ''}, ${depot.province || ''}</p>
+              <p style="margin: 4px 0; font-size: 12px; color: var(--color-text-2);"><strong>Address:</strong> ${depot.address || ''}</p>
+              <p style="margin: 4px 0; font-size: 12px; color: var(--color-text-2);">${depot.city || ''}, ${depot.province || ''}</p>
               ${depot.contactPerson ? '<p style="margin: 8px 0 4px 0; font-size: 12px;"><strong>Contact:</strong> ' + depot.contactPerson + '</p>' : ''}
               ${depot.contactPhone ? '<p style="margin: 4px 0; font-size: 12px;"><strong>Phone:</strong> <a href="tel:' + depot.contactPhone + '">' + depot.contactPhone + '</a></p>' : ''}
               <div style="margin-top: 12px;">
@@ -2604,11 +2555,11 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
           }
         }
 
-        this.snackBar.open(`Nearest TFN: ${depot.name} (${depot.distanceKm} km away)`, 'Close', { duration: 5000 });
+        this.toast.info(`Nearest TFN: ${depot.name} (${depot.distanceKm} km away)`);
       },
       error: (err) => {
         console.error('Error finding nearest depot:', err);
-        this.snackBar.open('Failed to find nearest TFN depot', 'Close', { duration: 3000 });
+        this.toast.error('Failed to find nearest TFN depot');
       }
     });
   }
@@ -2649,16 +2600,16 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
         <tr><td style="padding:4px 8px; font-weight:bold;">Straight-line Distance</td><td style="padding:4px 8px;">${d.distanceKm ?? '—'} km</td></tr>
         ${d.roadDistance ? `<tr><td style="padding:4px 8px; font-weight:bold;">Road Distance</td><td style="padding:4px 8px;">${d.roadDistance} (${d.roadDuration})</td></tr>` : ''}
         <tr><td style="padding:4px 8px; font-weight:bold;">Depot Address</td><td style="padding:4px 8px;">${[d.address, d.city, d.province].filter(Boolean).join(', ') || '—'}</td></tr>
-      </table>` : '<p style="font-size:13px; color:#666;">Tip: click <b>Nearest TFN</b> first to include the vehicle, depot and route on the printout.</p>';
+      </table>` : '<p style="font-size:13px; color:var(--color-text-2);">Tip: click <b>Nearest TFN</b> first to include the vehicle, depot and route on the printout.</p>';
 
     const mapBlock = mapImgDataUrl
-      ? `<img src="${mapImgDataUrl}" style="width:100%; max-width:800px; border:1px solid #ccc; border-radius:8px;" alt="Route map" />
-         <div style="font-size:11px; color:#888; margin-top:6px;">Blue = Vehicle &nbsp;•&nbsp; Orange = TFN Depot &nbsp;•&nbsp; Route follows roads</div>`
+      ? `<img src="${mapImgDataUrl}" style="width:100%; max-width:800px; border:1px solid var(--color-line-strong); border-radius:8px;" alt="Route map" />
+         <div style="font-size:11px; color:var(--color-text-3); margin-top:6px;">Blue = Vehicle &nbsp;•&nbsp; Orange = TFN Depot &nbsp;•&nbsp; Route follows roads</div>`
       : '<p style="color:#b00; font-size:13px;">Could not capture the map. Make sure the map is fully loaded and try again.</p>';
 
     const printWindow = window.open('', '_blank', 'width=960,height=820');
     if (!printWindow) {
-      this.snackBar.open('Unable to open print window (popup blocked?)', 'Close', { duration: 4000 });
+      this.toast.error('Unable to open print window (popup blocked?)');
       return;
     }
 
@@ -2667,9 +2618,9 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
         <head>
           <title>Fleet Route - ${now.toLocaleString()}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color:#111; }
+            body { font-family: Arial, sans-serif; margin: 24px; color:var(--color-text); }
             h1 { font-size: 20px; margin: 0 0 4px 0; color:#e65100; }
-            .meta { font-size: 12px; color:#666; margin-bottom: 16px; }
+            .meta { font-size: 12px; color:var(--color-text-2); margin-bottom: 16px; }
           </style>
         </head>
         <body>
@@ -2717,7 +2668,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
           <mat-icon>add_box</mat-icon>
           Create New Load
         </h2>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -2835,7 +2786,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
                         <span class="stop-commodities-count">
                           {{ stop.commodities.length }} item(s)
                         </span>
-                        <button mat-icon-button color="warn" (click)="removeStop(i, $event)" matTooltip="Remove stop">
+                        <button aria-label="Remove stop" mat-icon-button color="warn" (click)="removeStop(i, $event)" matTooltip="Remove stop">
                           <mat-icon>delete</mat-icon>
                         </button>
                       </mat-panel-description>
@@ -3044,7 +2995,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
     }
@@ -3054,7 +3005,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       align-items: center;
       gap: 12px;
       margin: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       font-weight: 500;
     }
 
@@ -3081,31 +3032,31 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     }
 
     .form-section {
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 8px;
       padding: 16px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
     }
 
     .section-header {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #1976d2;
+      color: var(--color-primary);
       font-weight: 500;
-      font-size: 15px;
+      font-size: var(--text-md);
       margin-bottom: 12px;
     }
 
     .section-header mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
 
     .add-stop-btn {
       margin-left: auto;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
 
     .form-grid {
@@ -3122,16 +3073,16 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       padding: 8px 12px;
       border-radius: 6px;
-      font-size: 13px;
-      color: #2e7d32;
+      font-size: var(--text-sm);
+      color: var(--color-ok);
       margin-top: 8px;
     }
 
     .warehouse-info mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -3141,7 +3092,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       flex-direction: column;
       align-items: center;
       padding: 32px;
-      color: #999;
+      color: var(--color-text-3);
       text-align: center;
     }
 
@@ -3150,7 +3101,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       width: 48px;
       height: 48px;
       margin-bottom: 8px;
-      color: #ccc;
+      color: var(--color-text-3);
     }
 
     .stops-accordion {
@@ -3164,17 +3115,17 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     }
 
     .stop-number {
-      background: #1976d2;
+      background: var(--color-primary);
       color: white;
       padding: 2px 10px;
       border-radius: 12px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 500;
     }
 
     .stop-address {
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
       max-width: 300px;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -3182,8 +3133,8 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     }
 
     .stop-commodities-count {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       margin-right: 8px;
     }
 
@@ -3203,8 +3154,8 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     }
 
     .stop-commodities-section {
-      background: #fff;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 6px;
       padding: 12px;
       margin-bottom: 12px;
@@ -3215,13 +3166,13 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       align-items: center;
       gap: 6px;
       font-weight: 500;
-      font-size: 13px;
-      color: #555;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
       margin-bottom: 12px;
     }
 
     .commodities-header mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -3239,19 +3190,19 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       justify-content: space-between;
       align-items: center;
       padding: 8px 12px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 6px;
       border: 1px solid transparent;
       transition: all 0.2s;
     }
 
     .commodity-item:hover {
-      background: #eeeeee;
+      background: var(--color-surface-2);
     }
 
     .commodity-item.selected {
-      background: #e3f2fd;
-      border-color: #1976d2;
+      background: var(--color-primary-soft);
+      border-color: var(--color-primary);
     }
 
     .commodity-info {
@@ -3260,12 +3211,12 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     }
 
     .commodity-info strong {
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
 
     .commodity-info small {
-      font-size: 11px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .qty-input {
@@ -3283,12 +3234,12 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     .selected-for-stop {
       margin-top: 12px;
       padding-top: 12px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
 
     .selected-for-stop strong {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .chips-row {
@@ -3299,7 +3250,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     }
 
     .chips-row mat-chip {
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
 
     .loading-inventory {
@@ -3307,8 +3258,8 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       align-items: center;
       gap: 8px;
       padding: 16px;
-      color: #666;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
 
     .no-inventory-msg {
@@ -3316,13 +3267,13 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       align-items: center;
       gap: 8px;
       padding: 16px;
-      color: #999;
-      font-size: 13px;
+      color: var(--color-text-3);
+      font-size: var(--text-sm);
     }
 
     .summary-section {
-      background: #e3f2fd;
-      border-color: #1976d2;
+      background: var(--color-primary-soft);
+      border-color: var(--color-primary);
     }
 
     .summary-grid {
@@ -3334,12 +3285,12 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
-      color: #1565c0;
+      font-size: var(--text-md);
+      color: var(--color-primary-hover);
     }
 
     .summary-item mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -3348,7 +3299,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     .distance-time-section {
       margin-top: 16px;
       padding-top: 16px;
-      border-top: 1px solid rgba(25, 118, 210, 0.3);
+      border-top: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     }
 
     .section-subheader {
@@ -3356,20 +3307,20 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       align-items: center;
       gap: 8px;
       font-weight: 500;
-      font-size: 14px;
-      color: #1565c0;
+      font-size: var(--text-md);
+      color: var(--color-primary-hover);
       margin-bottom: 12px;
     }
 
     .section-subheader mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
 
     .calculate-btn {
       margin-left: auto;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
 
     .calculate-btn mat-spinner {
@@ -3387,22 +3338,22 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       display: flex;
       align-items: center;
       gap: 10px;
-      background: white;
+      background: var(--color-surface);
       padding: 12px;
       border-radius: 8px;
-      border: 1px solid #bbdefb;
+      border: 1px solid var(--color-primary-soft);
     }
 
     .estimate-item mat-icon {
-      font-size: 24px;
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .estimate-item.total {
-      background: #1976d2;
-      border-color: #1565c0;
+      background: var(--color-primary);
+      border-color: var(--color-primary-hover);
     }
 
     .estimate-item.total mat-icon,
@@ -3417,22 +3368,22 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     }
 
     .estimate-value {
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 600;
-      color: #1565c0;
+      color: var(--color-primary-hover);
     }
 
     .estimate-label {
-      font-size: 11px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .route-breakdown {
       background: rgba(255, 255, 255, 0.7);
       padding: 8px 12px;
       border-radius: 6px;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .no-estimate {
@@ -3442,15 +3393,15 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       padding: 16px;
       background: rgba(255, 255, 255, 0.5);
       border-radius: 6px;
-      color: #666;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
 
     .no-estimate mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .full-width {
@@ -3875,19 +3826,19 @@ interface RouteEstimate {
     </h2>
     <mat-dialog-content style="min-width: 380px;">
       @if (invoices.length > 0) {
-        <div style="color:#666; font-size:13px; margin-bottom:8px;">
+        <div style="color:var(--color-text-2); font-size:13px; margin-bottom:8px;">
           {{ invoices.length }} invoice{{ invoices.length === 1 ? '' : 's' }} linked to this POD
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           @for (inv of invoices; track inv) {
-            <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:#f5f6fa; border-radius:8px;">
+            <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--color-surface-2); border-radius:8px;">
               <mat-icon style="color:#3f51b5; font-size:20px; width:20px; height:20px;">receipt</mat-icon>
               <span style="font-family:monospace; font-weight:600;">{{ inv }}</span>
             </div>
           }
         </div>
       } @else {
-        <div style="color:#888; padding:16px 0; text-align:center;">
+        <div style="color:var(--color-text-3); padding:16px 0; text-align:center;">
           <mat-icon style="font-size:32px; width:32px; height:32px; opacity:.4;">receipt</mat-icon>
           <div>No invoice numbers recorded on this POD.</div>
         </div>
@@ -3895,10 +3846,10 @@ interface RouteEstimate {
 
       @if (data.pod.loadId) {
         <mat-divider style="margin:16px 0;"></mat-divider>
-        <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:#e8f5e9; border-radius:8px;">
-          <mat-icon style="color:#2e7d32;">local_shipping</mat-icon>
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--color-ok-soft); border-radius:8px;">
+          <mat-icon style="color:var(--color-ok);">local_shipping</mat-icon>
           <div>
-            <div style="font-size:12px; color:#666;">Linked Tripsheet</div>
+            <div style="font-size:12px; color:var(--color-text-2);">Linked Tripsheet</div>
             <div style="font-weight:600; color:#1b5e20;">{{ data.pod.loadNumber || ('Load #' + data.pod.loadId) }}</div>
           </div>
         </div>
@@ -3944,13 +3895,13 @@ export class LogisticsPodInvoicesDialog {
           Trip Sheet
         </h2>
         <div class="header-actions">
-          <button mat-icon-button (click)="print()" matTooltip="Print">
+          <button aria-label="Print" mat-icon-button (click)="print()" matTooltip="Print">
             <mat-icon>print</mat-icon>
           </button>
-          <button mat-icon-button (click)="download()" matTooltip="Download PDF">
+          <button aria-label="Download PDF" mat-icon-button (click)="download()" matTooltip="Download PDF">
             <mat-icon>download</mat-icon>
           </button>
-          <button mat-icon-button mat-dialog-close matTooltip="Close">
+          <button aria-label="Close" mat-icon-button mat-dialog-close matTooltip="Close">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -4136,14 +4087,14 @@ export class LogisticsPodInvoicesDialog {
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      background: white;
+      background: var(--color-surface);
     }
     .dialog-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 10px 20px;
-      background: #1976d2;
+      background: var(--color-primary);
       color: white;
       flex-shrink: 0;
     }
@@ -4152,7 +4103,7 @@ export class LogisticsPodInvoicesDialog {
       align-items: center;
       gap: 8px;
       margin: 0;
-      font-size: 16px;
+      font-size: var(--text-lg);
     }
     .header-actions {
       display: flex;
@@ -4168,14 +4119,14 @@ export class LogisticsPodInvoicesDialog {
       align-items: center;
       justify-content: center;
       padding: 60px;
-      color: #666;
+      color: var(--color-text-2);
       flex: 1;
     }
     .error-content mat-icon {
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #f44336;
+      color: var(--color-danger);
     }
     
     .tripsheet-content {
@@ -4199,18 +4150,18 @@ export class LogisticsPodInvoicesDialog {
       align-items: center;
       margin-bottom: 12px;
       padding-bottom: 10px;
-      border-bottom: 1px solid #ccc;
+      border-bottom: 1px solid var(--color-line-strong);
     }
     .ts-title h1 {
       margin: 0;
-      font-size: 24px;
+      font-size: var(--text-3xl);
       font-weight: 700;
       letter-spacing: 2px;
     }
     .ts-number {
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 600;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .ts-meta-row {
       display: flex;
@@ -4223,18 +4174,18 @@ export class LogisticsPodInvoicesDialog {
       gap: 8px;
     }
     .meta-item label {
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 600;
-      color: #555;
+      color: var(--color-text-2);
       text-transform: uppercase;
     }
     .meta-value {
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 600;
-      color: #000;
+      color: var(--color-text);
     }
     .meta-value.value {
-      color: #2e7d32;
+      color: var(--color-ok);
     }
     
     /* Table Container */
@@ -4246,17 +4197,17 @@ export class LogisticsPodInvoicesDialog {
     .ts-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: var(--text-xs);
     }
     .ts-table thead {
-      background: #1976d2;
+      background: var(--color-primary);
       color: white;
     }
     .ts-table th {
       padding: 8px 6px;
       text-align: left;
       font-weight: 600;
-      font-size: 10px;
+      font-size: var(--text-xs);
       text-transform: uppercase;
       white-space: nowrap;
       border-right: 1px solid rgba(255,255,255,0.3);
@@ -4265,15 +4216,15 @@ export class LogisticsPodInvoicesDialog {
       border-right: none;
     }
     .ts-table tbody tr {
-      border-bottom: 1px solid #ddd;
+      border-bottom: 1px solid var(--color-line);
     }
     .ts-table tbody tr:nth-child(even) {
-      background: #f9f9f9;
+      background: var(--color-canvas);
     }
     .ts-table td {
       padding: 6px;
       vertical-align: middle;
-      border-right: 1px solid #eee;
+      border-right: 1px solid var(--color-line);
     }
     .ts-table td:last-child {
       border-right: none;
@@ -4292,13 +4243,13 @@ export class LogisticsPodInvoicesDialog {
     .col-end { width: 55px; text-align: center; }
     .col-km { width: 50px; text-align: right; }
     .col-value { width: 80px; text-align: right; font-weight: 500; }
-    .col-vat { width: 70px; text-align: right; color: #666; font-size: 11px; }
-    .col-total { width: 85px; text-align: right; font-weight: 600; color: #2e7d32; }
+    .col-vat { width: 70px; text-align: right; color: var(--color-text-2); font-size: var(--text-xs); }
+    .col-total { width: 85px; text-align: right; font-weight: 600; color: var(--color-ok); }
     
     /* Editable cells */
     td.editable {
-      background: #fffde7;
-      border: 1px dashed #ccc;
+      background: var(--color-warn-soft);
+      border: 1px dashed var(--color-line-strong);
     }
     
     /* Empty rows for manual entry */
@@ -4308,7 +4259,7 @@ export class LogisticsPodInvoicesDialog {
     
     /* Totals row */
     .ts-table tfoot {
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       font-weight: 600;
     }
     .totals-row td {
@@ -4318,11 +4269,11 @@ export class LogisticsPodInvoicesDialog {
     .totals-label {
       text-align: right;
       font-weight: 700;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
     .total-value {
-      color: #2e7d32;
-      font-size: 13px;
+      color: var(--color-ok);
+      font-size: var(--text-sm);
     }
     
     /* Footer Section */
@@ -4347,14 +4298,14 @@ export class LogisticsPodInvoicesDialog {
       gap: 8px;
     }
     .odo-field label {
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 600;
     }
     .odo-box {
       width: 80px;
       height: 24px;
       border: 1px solid #333;
-      background: #fafafa;
+      background: var(--color-canvas);
     }
     .fuel-section {
       display: flex;
@@ -4362,24 +4313,24 @@ export class LogisticsPodInvoicesDialog {
       gap: 10px;
     }
     .fuel-section label {
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 600;
     }
     .fuel-gauge {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
     .fuel-box {
-      font-size: 16px;
+      font-size: var(--text-lg);
     }
     
     .signatures-row {
       display: flex;
       gap: 40px;
       padding-top: 12px;
-      border-top: 1px dashed #ccc;
+      border-top: 1px dashed var(--color-line-strong);
     }
     .signature-block {
       flex: 1;
@@ -4391,15 +4342,15 @@ export class LogisticsPodInvoicesDialog {
       margin-bottom: 4px;
     }
     .signature-block span {
-      font-size: 10px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       text-transform: uppercase;
     }
     
     .ts-generated {
       text-align: right;
-      font-size: 9px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       margin-top: 8px;
     }
   `]
@@ -4548,23 +4499,23 @@ export class TripSheetPreviewDialog implements OnInit {
     .dialog-header {
       display: flex; align-items: center; gap: 12px;
       padding: 16px 24px; margin: -24px -24px 0 -24px;
-      background: #3949ab; color: white; border-radius: 4px 4px 0 0;
+      background: var(--color-primary); color: white; border-radius: 4px 4px 0 0;
     }
-    .dialog-header h2 { margin: 0; font-size: 18px; }
+    .dialog-header h2 { margin: 0; font-size: var(--text-xl); }
     .dialog-content { padding-top: 20px; }
-    .dialog-content > p { margin: 0 0 12px; color: #555; font-size: 14px; }
+    .dialog-content > p { margin: 0 0 12px; color: var(--color-text-2); font-size: var(--text-md); }
     .scope-option {
       display: flex; align-items: center; gap: 14px; width: 100%;
       text-align: left; padding: 14px 16px; margin-bottom: 10px;
-      border: 1px solid #d0d0d0; border-radius: 8px; background: #fafafa;
+      border: 1px solid var(--color-line-strong); border-radius: 8px; background: var(--color-canvas);
       cursor: pointer; transition: all .15s ease;
     }
-    .scope-option:hover:not(.disabled) { border-color: #3949ab; background: #eef1fb; }
+    .scope-option:hover:not(.disabled) { border-color: var(--color-primary); background: var(--color-primary-soft); }
     .scope-option.disabled { opacity: .5; cursor: not-allowed; }
-    .scope-option mat-icon { color: #3949ab; font-size: 26px; width: 26px; height: 26px; }
+    .scope-option mat-icon { color: var(--color-primary); font-size: 26px; width: 26px; height: 26px; }
     .scope-text { display: flex; flex-direction: column; }
-    .scope-title { font-weight: 600; font-size: 14px; color: #222; }
-    .scope-sub { font-size: 12px; color: #777; }
+    .scope-title { font-weight: 600; font-size: var(--text-md); color: var(--color-text); }
+    .scope-sub { font-size: var(--text-xs); color: var(--color-text-3); }
   `]
 })
 export class MaintenanceExportScopeDialog {
@@ -4665,28 +4616,28 @@ export class MaintenanceExportScopeDialog {
       border-radius: 4px 4px 0 0;
     }
     .dialog-header.success {
-      background: #4caf50;
+      background: var(--color-ok);
       color: white;
     }
     .dialog-header.error {
-      background: #f44336;
+      background: var(--color-danger);
       color: white;
     }
     .dialog-header mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
     }
     .dialog-header h2 {
       margin: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
     .dialog-content {
       padding-top: 20px;
     }
     .message {
-      font-size: 14px;
-      color: #666;
+      font-size: var(--text-md);
+      color: var(--color-text-2);
       margin-bottom: 20px;
     }
     .stats-grid {
@@ -4699,25 +4650,25 @@ export class MaintenanceExportScopeDialog {
       text-align: center;
       padding: 16px;
       border-radius: 8px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
     }
     .stat-box.vehicles {
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
     }
     .stat-box.drivers {
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
     }
     .stat-value {
-      font-size: 28px;
+      font-size: var(--text-3xl);
       font-weight: 600;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .stat-box.drivers .stat-value {
-      color: #4caf50;
+      color: var(--color-ok);
     }
     .stat-label {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       margin-top: 4px;
     }
     .total-info {
@@ -4725,10 +4676,10 @@ export class MaintenanceExportScopeDialog {
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #fff3e0;
+      background: var(--color-warn-soft);
       border-radius: 8px;
       margin-bottom: 16px;
-      color: #e65100;
+      color: var(--color-warn);
     }
     .sync-details {
       margin-top: 12px;
@@ -4736,7 +4687,7 @@ export class MaintenanceExportScopeDialog {
     .sync-details summary {
       cursor: pointer;
       font-weight: 500;
-      color: #1976d2;
+      color: var(--color-primary);
       margin-bottom: 8px;
     }
     .sync-list {
@@ -4746,11 +4697,11 @@ export class MaintenanceExportScopeDialog {
       max-height: 150px;
       overflow-y: auto;
       padding: 8px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 4px;
     }
     .sync-list mat-chip {
-      font-size: 11px;
+      font-size: var(--text-xs);
     }
   `]
 })
@@ -4934,27 +4885,27 @@ export class SyncResultDialogComponent {
       justify-content: center;
       padding: 60px 20px;
       text-align: center;
-      color: #666;
+      color: var(--color-text-2);
     }
     .loading-state mat-icon, .empty-state mat-icon {
       font-size: 64px;
       width: 64px;
       height: 64px;
       margin-bottom: 16px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .suggestions-summary {
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 16px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       border-radius: 8px;
       margin-bottom: 24px;
     }
     .suggestions-summary mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
     }
@@ -4964,11 +4915,11 @@ export class SyncResultDialogComponent {
       gap: 16px;
     }
     .trip-card {
-      border-left: 4px solid #1976d2;
+      border-left: 4px solid var(--color-primary);
     }
     .trip-card.selected {
-      border-left-color: #4caf50;
-      background: #f1f8e9;
+      border-left-color: var(--color-ok);
+      background: var(--color-ok-soft);
     }
     .trip-header {
       display: flex;
@@ -4984,18 +4935,18 @@ export class SyncResultDialogComponent {
     }
     .trip-title h3 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--text-xl);
     }
     mat-chip.priority-urgent {
-      background: #f44336 !important;
+      background: var(--color-danger) !important;
       color: white !important;
     }
     mat-chip.priority-high {
-      background: #ff9800 !important;
+      background: var(--color-warn) !important;
       color: white !important;
     }
     mat-chip.priority-normal {
-      background: #4caf50 !important;
+      background: var(--color-ok) !important;
       color: white !important;
     }
     .trip-stats {
@@ -5009,23 +4960,23 @@ export class SyncResultDialogComponent {
       align-items: center;
       gap: 12px;
       padding: 12px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
     }
     .stat mat-icon {
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .stat div {
       display: flex;
       flex-direction: column;
     }
     .stat strong {
-      font-size: 16px;
-      color: #333;
+      font-size: var(--text-lg);
+      color: var(--color-text);
     }
     .stat span {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .customers-list, .invoices-list {
       display: flex;
@@ -5039,23 +4990,23 @@ export class SyncResultDialogComponent {
       justify-content: space-between;
       align-items: center;
       padding: 12px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 4px;
-      border-left: 3px solid #2196f3;
+      border-left: 3px solid var(--color-primary);
     }
     .customer-code {
       margin-left: 8px;
       padding: 2px 8px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 12px;
-      font-size: 11px;
-      color: #1976d2;
+      font-size: var(--text-xs);
+      color: var(--color-primary);
     }
     .customer-details {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .invoice-item {
       display: grid;
@@ -5063,19 +5014,19 @@ export class SyncResultDialogComponent {
       gap: 12px;
       align-items: center;
       padding: 8px 12px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 4px;
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
     .invoice-number {
       font-weight: 600;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .customer-name {
-      color: #666;
+      color: var(--color-text-2);
     }
     .product {
-      color: #333;
+      color: var(--color-text);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -5085,19 +5036,19 @@ export class SyncResultDialogComponent {
       align-items: start;
       gap: 8px;
       padding: 12px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 8px;
       margin-top: 16px;
-      color: #1565c0;
-      font-size: 14px;
+      color: var(--color-primary-hover);
+      font-size: var(--text-md);
     }
     .trip-notes mat-icon {
-      color: #1976d2;
+      color: var(--color-primary);
       flex-shrink: 0;
     }
     mat-dialog-actions {
       padding: 16px 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
   `]
 })
@@ -5110,7 +5061,9 @@ export class SuggestedTripsDialog implements OnInit {
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string },
     private dialogRef: MatDialogRef<SuggestedTripsDialog>,
-    private http: HttpClient
+    private http: HttpClient,
+    private readonly confirmDialog: ConfirmService,
+    private readonly toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -5126,7 +5079,7 @@ export class SuggestedTripsDialog implements OnInit {
       },
       error: (err) => {
         console.error('Failed to load suggested trips:', err);
-        alert('Failed to load suggestions: ' + (err.error?.message || err.message));
+        this.toast.error('Failed to load suggestions: ' + (err.error?.message || err.message));
         this.loading = false;
       }
     });
@@ -5140,19 +5093,23 @@ export class SuggestedTripsDialog implements OnInit {
       notes: trip.notes
     }).subscribe({
       next: (result) => {
-        alert(`Trip ${result.loadNumber} created successfully with ${result.stops} stops!`);
+        this.toast.done(`Trip ${result.loadNumber} created with ${result.stops} stops.`);
         this.dialogRef.close(true);
       },
       error: (err) => {
         console.error('Failed to create trip:', err);
-        alert('Failed to create trip: ' + (err.error?.message || err.message));
+        this.toast.error('Failed to create trip: ' + (err.error?.message || err.message));
         this.selectedTrip = null;
       }
     });
   }
 
-  createAllTrips(): void {
-    if (!confirm(`Create all ${this.suggestedTrips.length} suggested trips?`)) {
+  async createAllTrips(): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Create all ${this.suggestedTrips.length} suggested trips?`,
+      message: 'Each suggestion becomes its own trip sheet with the invoices listed for it.',
+      confirmText: 'Create trips'
+    }))) {
       return;
     }
 
@@ -5168,7 +5125,7 @@ export class SuggestedTripsDialog implements OnInit {
           next: (result) => {
             completed++;
             if (completed === total) {
-              alert(`Successfully created all ${total} trips!`);
+              this.toast.done(`Created all ${total} trips.`);
               this.dialogRef.close(true);
             }
           },
@@ -5176,7 +5133,7 @@ export class SuggestedTripsDialog implements OnInit {
             console.error('Failed to create trip:', err);
             completed++;
             if (completed === total) {
-              alert(`Created ${completed} of ${total} trips. Some failed.`);
+              this.toast.error(`Created ${completed} of ${total} trips. Some failed.`);
               this.dialogRef.close(true);
             }
           }
@@ -5217,7 +5174,7 @@ export class SuggestedTripsDialog implements OnInit {
             <span class="header-sub">{{ data.orders.length }} total orders · Last synced just now</span>
           </div>
         </div>
-        <button mat-icon-button mat-dialog-close class="close-btn">
+        <button aria-label="Close" mat-icon-button mat-dialog-close class="close-btn">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -5268,7 +5225,7 @@ export class SuggestedTripsDialog implements OnInit {
             <mat-icon class="search-icon">search</mat-icon>
             <input class="search-input" [(ngModel)]="searchTerm" (input)="filterOrders()" placeholder="Search orders, vehicles, cards...">
             @if (searchTerm) {
-              <button class="clear-btn" (click)="searchTerm = ''; filterOrders()">
+              <button aria-label="Close" class="clear-btn" (click)="searchTerm = ''; filterOrders()">
                 <mat-icon>close</mat-icon>
               </button>
             }
@@ -5378,7 +5335,7 @@ export class SuggestedTripsDialog implements OnInit {
     .dialog-header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 24px 32px;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      background: linear-gradient(135deg, var(--color-text) 0%, #16213e 50%, #0f3460 100%);
       color: white; margin: -24px -24px 0 -24px; position: relative; overflow: hidden;
     }
     .dialog-header::before {
@@ -5397,34 +5354,34 @@ export class SuggestedTripsDialog implements OnInit {
       background: linear-gradient(135deg, #f5576c, #60a5fa); box-shadow: 0 4px 15px rgba(245,87,108,0.4);
     }
     .header-icon-wrap mat-icon { font-size: 26px; width: 26px; height: 26px; }
-    .header-text h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
-    .header-sub { font-size: 13px; opacity: 0.7; }
+    .header-text h2 { margin: 0; font-size: var(--text-2xl); font-weight: 600; letter-spacing: -0.3px; }
+    .header-sub { font-size: var(--text-sm); opacity: 0.7; }
     .close-btn { color: rgba(255,255,255,0.7); position: relative; z-index: 1; }
     .close-btn:hover { color: white; }
 
     /* ── Summary Strip ──────────────────────────────────────── */
     .summary-strip {
       display: flex; gap: 0; padding: 0; margin: 0 -24px;
-      background: #f8f9fc; border-bottom: 1px solid #eef0f5;
+      background: var(--color-surface-2); border-bottom: 1px solid var(--color-line);
     }
     .summary-stat {
       flex: 1; display: flex; align-items: center; gap: 12px; padding: 16px 20px;
-      border-right: 1px solid #eef0f5; transition: background 0.2s;
+      border-right: 1px solid var(--color-line); transition: background 0.2s;
     }
     .summary-stat:last-child { border-right: none; }
-    .summary-stat:hover { background: #f0f2f8; }
+    .summary-stat:hover { background: var(--color-surface-2); }
     .summary-icon {
       width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
     }
-    .summary-icon mat-icon { font-size: 20px; width: 20px; height: 20px; }
-    .summary-icon.total { background: #e8eaf6; color: #3f51b5; }
-    .summary-icon.complete { background: #e8f5e9; color: #2e7d32; }
-    .summary-icon.active { background: #e3f2fd; color: #1565c0; }
-    .summary-icon.pending { background: #fff3e0; color: #e65100; }
-    .summary-icon.fuel-icon { background: linear-gradient(135deg, #e0f7fa, #b2ebf2); color: #00838f; }
+    .summary-icon mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; }
+    .summary-icon.total { background: var(--color-primary-soft); color: var(--color-primary); }
+    .summary-icon.complete { background: var(--color-ok-soft); color: var(--color-ok); }
+    .summary-icon.active { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .summary-icon.pending { background: var(--color-warn-soft); color: var(--color-warn); }
+    .summary-icon.fuel-icon { background: linear-gradient(135deg, #e0f7fa, var(--color-primary-soft)); color: #00838f; }
     .summary-info { display: flex; flex-direction: column; }
-    .summary-value { font-size: 18px; font-weight: 700; color: #1a1a2e; }
-    .summary-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-value { font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
+    .summary-label { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.5px; }
 
     /* ── Content ────────────────────────────────────────────── */
     .dialog-content { padding: 20px 8px; max-height: 60vh; overflow-y: auto; overflow-x: hidden; }
@@ -5433,38 +5390,38 @@ export class SuggestedTripsDialog implements OnInit {
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 20px; }
     .search-wrap {
       display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px; max-width: 360px;
-      background: #f5f6fa; border: 2px solid transparent; border-radius: 12px;
+      background: var(--color-surface-2); border: 2px solid transparent; border-radius: 12px;
       padding: 0 14px; height: 44px; transition: all 0.2s;
     }
-    .search-wrap:focus-within { border-color: #f5576c; background: white; box-shadow: 0 0 0 4px rgba(245,87,108,0.1); }
-    .search-icon { color: #aaa; font-size: 20px; width: 20px; height: 20px; }
+    .search-wrap:focus-within { border-color: #f5576c; background: var(--color-surface); box-shadow: 0 0 0 4px rgba(245,87,108,0.1); }
+    .search-icon { color: var(--color-text-3); font-size: var(--text-2xl); width: 20px; height: 20px; }
     .search-input {
-      flex: 1; border: none; outline: none; background: transparent; font-size: 14px; color: #333;
+      flex: 1; border: none; outline: none; background: transparent; font-size: var(--text-md); color: var(--color-text);
     }
-    .search-input::placeholder { color: #bbb; }
+    .search-input::placeholder { color: var(--color-text-3); }
     .clear-btn {
-      background: none; border: none; cursor: pointer; padding: 2px; display: flex; color: #999;
+      background: none; border: none; cursor: pointer; padding: 2px; display: flex; color: var(--color-text-3);
     }
-    .clear-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .clear-btn mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
 
     .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
     .chip {
       display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px;
-      border: 1.5px solid #e0e0e0; background: white; cursor: pointer; font-size: 13px;
-      color: #666; transition: all 0.2s; font-weight: 500;
+      border: 1.5px solid var(--color-line); background: var(--color-surface); cursor: pointer; font-size: var(--text-sm);
+      color: var(--color-text-2); transition: all 0.2s; font-weight: 500;
     }
-    .chip:hover { border-color: #f5576c; color: #f5576c; }
+    .chip:hover { border-color: color-mix(in srgb, var(--color-danger) 35%, transparent); color: var(--color-danger); }
     .chip.active { background: linear-gradient(135deg, #f5576c, #60a5fa); color: white; border-color: transparent; box-shadow: 0 2px 8px rgba(245,87,108,0.3); }
     .chip.active .chip-count { background: rgba(255,255,255,0.25); color: white; }
     .chip-count {
-      font-size: 11px; background: #f0f0f0; padding: 1px 7px; border-radius: 10px;
-      font-weight: 600; color: #999;
+      font-size: var(--text-xs); background: var(--color-surface-2); padding: 1px 7px; border-radius: 10px;
+      font-weight: 600; color: var(--color-text-3);
     }
     .results-badge {
-      display: flex; align-items: center; gap: 4px; font-size: 13px; color: #999;
+      display: flex; align-items: center; gap: 4px; font-size: var(--text-sm); color: var(--color-text-3);
       margin-left: auto; white-space: nowrap;
     }
-    .results-badge mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .results-badge mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
 
     /* ── Orders Grid ────────────────────────────────────────── */
     .orders-grid {
@@ -5473,8 +5430,8 @@ export class SuggestedTripsDialog implements OnInit {
 
     /* ── Order Card ─────────────────────────────────────────── */
     .order-card {
-      background: white; border-radius: 16px; padding: 20px; cursor: pointer;
-      border: 1px solid #eef0f5; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      background: var(--color-surface); border-radius: 16px; padding: 20px; cursor: pointer;
+      border: 1px solid var(--color-line); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative; overflow: hidden;
     }
     .order-card::before {
@@ -5483,91 +5440,91 @@ export class SuggestedTripsDialog implements OnInit {
     }
     .order-card:hover {
       transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,0.08);
-      border-color: rgba(245,87,108,0.2);
+      border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
     }
     .order-card:hover::before { opacity: 1; }
-    .card-complete::before { background: linear-gradient(90deg, #2e7d32, #66bb6a); }
-    .card-active::before { background: linear-gradient(90deg, #1565c0, #42a5f5); }
+    .card-complete::before { background: linear-gradient(90deg, var(--color-ok), var(--color-ok)); }
+    .card-active::before { background: linear-gradient(90deg, var(--color-primary-hover), #42a5f5); }
 
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-    .card-order-id { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; color: #1a1a2e; }
-    .card-order-id mat-icon { font-size: 18px; width: 18px; height: 18px; color: #f5576c; }
+    .card-order-id { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: var(--text-md); color: var(--color-text); }
+    .card-order-id mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-danger); }
     .status-badge {
       display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px;
-      font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.3px;
     }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; }
-    .status-active { background: #e3f2fd; color: #1565c0; }
-    .status-active .status-dot { background: #1565c0; }
-    .status-complete { background: #e8f5e9; color: #2e7d32; }
-    .status-complete .status-dot { background: #2e7d32; }
-    .status-pending, .status-not-started { background: #fff3e0; color: #e65100; }
-    .status-pending .status-dot, .status-not-started .status-dot { background: #e65100; }
-    .status-expired { background: #ffebee; color: #c62828; }
-    .status-expired .status-dot { background: #c62828; }
-    .status-cancelled { background: #f5f5f5; color: #757575; }
-    .status-cancelled .status-dot { background: #757575; }
-    .status-planned { background: #ede7f6; color: #5e35b1; }
-    .status-planned .status-dot { background: #5e35b1; }
+    .status-active { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .status-active .status-dot { background: var(--color-primary-hover); }
+    .status-complete { background: var(--color-ok-soft); color: var(--color-ok); }
+    .status-complete .status-dot { background: var(--color-ok); }
+    .status-pending, .status-not-started { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-pending .status-dot, .status-not-started .status-dot { background: var(--color-warn); }
+    .status-expired { background: var(--color-danger-soft); color: var(--color-danger); }
+    .status-expired .status-dot { background: var(--color-danger); }
+    .status-cancelled { background: var(--color-surface-2); color: var(--color-text-3); }
+    .status-cancelled .status-dot { background: var(--color-text-3); }
+    .status-planned { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .status-planned .status-dot { background: var(--color-cat-purple); }
 
     /* Vehicle Row */
     .card-vehicle { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 8px; }
     .vehicle-plate {
       display: flex; align-items: center; gap: 8px; padding: 5px 12px;
-      background: #f5f6fa; border-radius: 8px; font-weight: 600; color: #333; font-size: 14px;
+      background: var(--color-surface-2); border-radius: 8px; font-weight: 600; color: var(--color-text); font-size: var(--text-md);
     }
-    .vehicle-plate mat-icon { font-size: 16px; width: 16px; height: 16px; color: #666; }
+    .vehicle-plate mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-text-2); }
     .virtual-card {
-      display: flex; align-items: center; gap: 4px; font-size: 12px; color: #999;
+      display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-text-3);
     }
-    .virtual-card mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .virtual-card mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
 
     /* Fuel Gauge */
     .fuel-gauge-section { margin-bottom: 14px; }
     .gauge-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .fuel-type-badge {
-      padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
-      background: linear-gradient(135deg, #fff8e1, #ffecb3); color: #f57f17; letter-spacing: 0.3px;
+      padding: 3px 10px; border-radius: 6px; font-size: var(--text-xs); font-weight: 600;
+      background: linear-gradient(135deg, var(--color-warn-soft), var(--color-warn-soft)); color: #f57f17; letter-spacing: 0.3px;
     }
-    .fuel-amount { font-size: 12px; color: #999; font-weight: 500; }
+    .fuel-amount { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 500; }
     .fuel-gauge-bar {
-      width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden;
+      width: 100%; height: 8px; background: var(--color-surface-2); border-radius: 4px; overflow: hidden;
     }
     .gauge-fill {
       height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
       min-width: 2px;
     }
-    .gauge-fill.low { background: linear-gradient(90deg, #e8f5e9, #66bb6a); }
-    .gauge-fill.mid { background: linear-gradient(90deg, #fff3e0, #ffa726); }
-    .gauge-fill.high { background: linear-gradient(90deg, #ffebee, #ef5350); }
+    .gauge-fill.low { background: linear-gradient(90deg, var(--color-ok-soft), var(--color-ok)); }
+    .gauge-fill.mid { background: linear-gradient(90deg, var(--color-warn-soft), var(--color-warn)); }
+    .gauge-fill.high { background: linear-gradient(90deg, var(--color-danger-soft), #ef5350); }
     .gauge-labels { display: flex; justify-content: space-between; margin-top: 4px; }
-    .used-label, .remaining-label { font-size: 11px; color: #aaa; font-weight: 500; }
-    .remaining-label { color: #66bb6a; }
+    .used-label, .remaining-label { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 500; }
+    .remaining-label { color: var(--color-ok); }
 
     /* Card Footer */
     .card-footer {
       display: flex; justify-content: space-between; align-items: center;
-      padding-top: 12px; border-top: 1px solid #f5f5f5;
+      padding-top: 12px; border-top: 1px solid var(--color-surface-2);
     }
-    .date-info { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999; }
-    .date-info mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .card-arrow { color: #ddd; font-size: 18px; width: 18px; height: 18px; transition: all 0.2s; }
-    .order-card:hover .card-arrow { color: #f5576c; transform: translateX(3px); }
+    .date-info { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--color-text-3); }
+    .date-info mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
+    .card-arrow { color: var(--color-text-3); font-size: var(--text-xl); width: 18px; height: 18px; transition: all 0.2s; }
+    .order-card:hover .card-arrow { color: var(--color-danger); transform: translateX(3px); }
 
     /* ── Empty State ────────────────────────────────────────── */
     .no-orders { grid-column: 1 / -1; text-align: center; padding: 60px 20px; }
     .empty-illustration {
       width: 80px; height: 80px; margin: 0 auto 16px; border-radius: 50%;
-      background: linear-gradient(135deg, #f5f6fa, #eef0f5); display: flex;
+      background: linear-gradient(135deg, var(--color-surface-2), #eef0f5); display: flex;
       align-items: center; justify-content: center;
     }
-    .empty-illustration mat-icon { font-size: 36px; width: 36px; height: 36px; color: #ccc; }
-    .no-orders h3 { margin: 0 0 8px; color: #333; font-size: 18px; }
-    .no-orders p { margin: 0; color: #999; font-size: 14px; }
+    .empty-illustration mat-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-text-3); }
+    .no-orders h3 { margin: 0 0 8px; color: var(--color-text); font-size: var(--text-xl); }
+    .no-orders p { margin: 0; color: var(--color-text-3); font-size: var(--text-md); }
 
     /* ── Dialog Footer ──────────────────────────────────────── */
-    mat-dialog-actions { padding: 14px 28px; border-top: 1px solid #eef0f5; }
-    .dialog-footer-info { font-size: 12px; color: #bbb; margin-right: auto; }
+    mat-dialog-actions { padding: 14px 28px; border-top: 1px solid var(--color-line); }
+    .dialog-footer-info { font-size: var(--text-xs); color: var(--color-text-3); margin-right: auto; }
 
     /* ── Responsive ─────────────────────────────────────────── */
     @media (max-width: 900px) {
@@ -5720,7 +5677,7 @@ export class TfnOrdersListDialog {
           <mat-icon>receipt_long</mat-icon>
           Order Details
         </h2>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -5873,7 +5830,7 @@ export class TfnOrdersListDialog {
       justify-content: space-between;
       align-items: center;
       padding: 20px 32px;
-      background: linear-gradient(135deg, #2563eb, #1e40af);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       color: white;
       margin: -24px -24px 0 -24px;
     }
@@ -5882,7 +5839,7 @@ export class TfnOrdersListDialog {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 22px;
+      font-size: var(--text-2xl);
       font-weight: 500;
     }
     .dialog-header button {
@@ -5903,19 +5860,19 @@ export class TfnOrdersListDialog {
     }
     .order-title h3 {
       margin: 0;
-      font-size: 24px;
-      color: #333;
+      font-size: var(--text-3xl);
+      color: var(--color-text);
     }
     .status {
       padding: 6px 16px;
       border-radius: 16px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 500;
     }
-    .status-active, .status-complete { background: #e8f5e9; color: #2e7d32; }
-    .status-pending, .status-not-started { background: #fff3e0; color: #e65100; }
-    .status-expired { background: #ffebee; color: #c62828; }
-    .status-cancelled { background: #f5f5f5; color: #757575; }
+    .status-active, .status-complete { background: var(--color-ok-soft); color: var(--color-ok); }
+    .status-pending, .status-not-started { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-expired { background: var(--color-danger-soft); color: var(--color-danger); }
+    .status-cancelled { background: var(--color-surface-2); color: var(--color-text-3); }
     .order-dates {
       display: flex;
       gap: 24px;
@@ -5924,11 +5881,11 @@ export class TfnOrdersListDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
     .date-item mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -5940,11 +5897,11 @@ export class TfnOrdersListDialog {
       align-items: center;
       gap: 8px;
       margin: 0 0 16px 0;
-      color: #333;
-      font-size: 16px;
+      color: var(--color-text);
+      font-size: var(--text-lg);
     }
     .section h4 mat-icon {
-      color: #2563eb;
+      color: var(--color-primary);
     }
     .info-grid {
       display: grid;
@@ -5957,17 +5914,17 @@ export class TfnOrdersListDialog {
       gap: 4px;
     }
     .info-item .label {
-      font-size: 12px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       text-transform: uppercase;
     }
     .info-item .value {
-      font-size: 15px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
       font-weight: 500;
     }
     .info-item .value.highlight {
-      color: #4caf50;
+      color: var(--color-ok);
       font-weight: 600;
     }
     .fuel-stats {
@@ -5991,29 +5948,29 @@ export class TfnOrdersListDialog {
       justify-content: center;
       color: white;
     }
-    .stat-circle.allocated { background: linear-gradient(135deg, #2563eb, #1e40af); }
+    .stat-circle.allocated { background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover)); }
     .stat-circle.used { background: linear-gradient(135deg, #60a5fa, #f5576c); }
     .stat-circle.remaining { background: linear-gradient(135deg, #11998e, #38ef7d); }
     .stat-circle .value {
-      font-size: 22px;
+      font-size: var(--text-2xl);
       font-weight: 600;
       line-height: 1;
     }
     .stat-circle .unit {
-      font-size: 12px;
+      font-size: var(--text-xs);
       opacity: 0.9;
     }
     .fuel-stat .label {
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
     .notes-text {
       margin: 0;
       padding: 12px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
       line-height: 1.5;
     }
     mat-divider {
@@ -6021,14 +5978,14 @@ export class TfnOrdersListDialog {
     }
     mat-dialog-actions {
       padding: 16px 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
     @media print {
       .dialog-header button, mat-dialog-actions {
         display: none !important;
       }
       .dialog-header {
-        background: #2563eb !important;
+        background: var(--color-primary) !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -6042,7 +5999,8 @@ export class TfnOrdersListDialog {
 export class TfnOrderDetailsDialog {
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: { order: any },
-    private dialogRef: MatDialogRef<TfnOrderDetailsDialog>
+    private dialogRef: MatDialogRef<TfnOrderDetailsDialog>,
+    private readonly toast: ToastService
   ) {}
 
   formatDate(dateStr: string): string {
@@ -6083,7 +6041,7 @@ export class TfnOrderDetailsDialog {
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('Please allow popups to print the order');
+      this.toast.warn('Please allow popups to print the order.');
       return;
     }
 
@@ -6110,7 +6068,7 @@ export class TfnOrderDetailsDialog {
             margin: 0 0 8px 0;
           }
           .print-header p {
-            color: #666;
+            color: var(--color-text-2);
             margin: 0;
           }
           .order-info {
@@ -6118,49 +6076,49 @@ export class TfnOrderDetailsDialog {
             justify-content: space-between;
             margin-bottom: 20px;
             padding: 15px;
-            background: #f5f5f5;
+            background: var(--color-surface-2);
             border-radius: 8px;
           }
           .order-number {
             font-size: 24px;
             font-weight: bold;
-            color: #333;
+            color: var(--color-text);
           }
           .order-status {
             padding: 8px 16px;
             border-radius: 20px;
-            background: #e8f5e9;
+            background: var(--color-ok-soft);
             color: #2e7d32;
             font-weight: 500;
           }
           .section {
             margin: 20px 0;
             padding: 15px;
-            border: 1px solid #e0e0e0;
+            border: 1px solid var(--color-line);
             border-radius: 8px;
           }
           .section h3 {
             margin: 0 0 15px 0;
             color: #2563eb;
             font-size: 16px;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid var(--color-line);
             padding-bottom: 8px;
           }
           .info-row {
             display: flex;
             justify-content: space-between;
             padding: 8px 0;
-            border-bottom: 1px dashed #eee;
+            border-bottom: 1px dashed var(--color-line);
           }
           .info-row:last-child {
             border-bottom: none;
           }
           .info-label {
-            color: #666;
+            color: var(--color-text-2);
           }
           .info-value {
             font-weight: 500;
-            color: #333;
+            color: var(--color-text);
           }
           .fuel-summary {
             display: flex;
@@ -6170,7 +6128,7 @@ export class TfnOrderDetailsDialog {
           }
           .fuel-item {
             padding: 15px 25px;
-            background: #f5f5f5;
+            background: var(--color-surface-2);
             border-radius: 8px;
           }
           .fuel-item .value {
@@ -6180,15 +6138,15 @@ export class TfnOrderDetailsDialog {
           }
           .fuel-item .label {
             font-size: 12px;
-            color: #666;
+            color: var(--color-text-2);
             text-transform: uppercase;
           }
           .print-footer {
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
+            border-top: 1px solid var(--color-line);
             text-align: center;
-            color: #999;
+            color: var(--color-text-3);
             font-size: 12px;
           }
         </style>
@@ -6312,7 +6270,7 @@ export class TfnOrderDetailsDialog {
           <mat-icon>move_to_inbox</mat-icon>
           Incoming Delivery Requests
         </h2>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -6460,20 +6418,20 @@ export class TfnOrderDetailsDialog {
                 </span>
 
                 @if (req.status === 'Pending') {
-                  <button mat-icon-button color="primary" (click)="updateStatus(req, 'Approved')" matTooltip="Approve">
+                  <button aria-label="Approve" mat-icon-button color="primary" (click)="updateStatus(req, 'Approved')" matTooltip="Approve">
                     <mat-icon>check_circle</mat-icon>
                   </button>
-                  <button mat-icon-button color="warn" (click)="updateStatus(req, 'Cancelled')" matTooltip="Cancel Request">
+                  <button aria-label="Cancel Request" mat-icon-button color="warn" (click)="updateStatus(req, 'Cancelled')" matTooltip="Cancel Request">
                     <mat-icon>cancel</mat-icon>
                   </button>
                 }
                 @if (req.status === 'Approved') {
-                  <button mat-icon-button color="accent" (click)="updateStatus(req, 'In Transit')" matTooltip="Mark In Transit">
+                  <button aria-label="Mark In Transit" mat-icon-button color="accent" (click)="updateStatus(req, 'In Transit')" matTooltip="Mark In Transit">
                     <mat-icon>local_shipping</mat-icon>
                   </button>
                 }
                 @if (req.status === 'In Transit') {
-                  <button mat-icon-button color="primary" (click)="updateStatus(req, 'Delivered')" matTooltip="Mark Delivered">
+                  <button aria-label="Mark Delivered" mat-icon-button color="primary" (click)="updateStatus(req, 'Delivered')" matTooltip="Mark Delivered">
                     <mat-icon>check_circle_outline</mat-icon>
                   </button>
                 }
@@ -6511,7 +6469,7 @@ export class TfnOrderDetailsDialog {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 22px;
+      font-size: var(--text-2xl);
     }
     .dialog-header button { color: white; }
     .dialog-content {
@@ -6531,18 +6489,18 @@ export class TfnOrderDetailsDialog {
       align-items: center;
       padding: 16px;
       border-radius: 12px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
     }
-    .summary-card .count { font-size: 28px; font-weight: 700; }
-    .summary-card .label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-    .summary-card.pending { background: #fff3e0; }
-    .summary-card.pending .count { color: #e65100; }
-    .summary-card.approved { background: #e8f5e9; }
-    .summary-card.approved .count { color: #2e7d32; }
-    .summary-card.in-transit { background: #e3f2fd; }
-    .summary-card.in-transit .count { color: #1565c0; }
-    .summary-card.delivered { background: #f3e5f5; }
-    .summary-card.delivered .count { color: #7b1fa2; }
+    .summary-card .count { font-size: var(--text-3xl); font-weight: 700; }
+    .summary-card .label { font-size: var(--text-xs); color: var(--color-text-2); text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-card.pending { background: var(--color-warn-soft); }
+    .summary-card.pending .count { color: var(--color-warn); }
+    .summary-card.approved { background: var(--color-ok-soft); }
+    .summary-card.approved .count { color: var(--color-ok); }
+    .summary-card.in-transit { background: var(--color-primary-soft); }
+    .summary-card.in-transit .count { color: var(--color-primary-hover); }
+    .summary-card.delivered { background: var(--color-cat-purple-soft); }
+    .summary-card.delivered .count { color: var(--color-cat-purple); }
     .toolbar {
       display: flex;
       gap: 16px;
@@ -6559,21 +6517,21 @@ export class TfnOrderDetailsDialog {
     }
     .request-card {
       padding: 16px 20px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 12px;
-      border-left: 4px solid #ccc;
+      border-left: 4px solid var(--color-line-strong);
       transition: all 0.2s;
     }
     .request-card:hover {
-      background: #f0f0f0;
+      background: var(--color-surface-2);
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     .request-card.urgent { border-left-width: 6px; }
-    .request-card.status-pending { border-left-color: #ff9800; }
-    .request-card.status-approved { border-left-color: #4caf50; }
-    .request-card.status-in-transit { border-left-color: #2196f3; }
-    .request-card.status-delivered { border-left-color: #9c27b0; }
-    .request-card.status-cancelled { border-left-color: #9e9e9e; opacity: 0.7; }
+    .request-card.status-pending { border-left-color: var(--color-warn); }
+    .request-card.status-approved { border-left-color: var(--color-ok); }
+    .request-card.status-in-transit { border-left-color: var(--color-primary); }
+    .request-card.status-delivered { border-left-color: var(--color-cat-purple); }
+    .request-card.status-cancelled { border-left-color: var(--color-line-strong); opacity: 0.7; }
     .request-header {
       display: flex;
       justify-content: space-between;
@@ -6587,8 +6545,8 @@ export class TfnOrderDetailsDialog {
     }
     .ref-number {
       font-weight: 600;
-      font-size: 14px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
       font-family: monospace;
     }
     .priority-badge {
@@ -6597,27 +6555,27 @@ export class TfnOrderDetailsDialog {
       gap: 4px;
       padding: 3px 10px;
       border-radius: 12px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 700;
       text-transform: uppercase;
     }
     .priority-badge.urgent {
-      background: #ffebee;
-      color: #c62828;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
     }
-    .priority-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .priority-badge mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
     .dept-badge {
       padding: 4px 12px;
       border-radius: 12px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
-      background: #e8eaf6;
-      color: #283593;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
-    .dept-badge.dept-condoms { background: #fce4ec; color: #880e4f; }
-    .dept-badge.dept-sanitary-pads { background: #f3e5f5; color: #6a1b9a; }
-    .dept-badge.dept-warehouse { background: #e8f5e9; color: #2e7d32; }
-    .dept-badge.dept-general { background: #e3f2fd; color: #1565c0; }
+    .dept-badge.dept-condoms { background: var(--color-cat-pink-soft); color: var(--color-cat-pink); }
+    .dept-badge.dept-sanitary-pads { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .dept-badge.dept-warehouse { background: var(--color-ok-soft); color: var(--color-ok); }
+    .dept-badge.dept-general { background: var(--color-primary-soft); color: var(--color-primary-hover); }
     .request-body {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -6632,17 +6590,17 @@ export class TfnOrderDetailsDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 13px;
-      color: #555;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
-    .info-row mat-icon { font-size: 16px; width: 16px; height: 16px; color: #888; }
-    .info-row.notes { font-style: italic; color: #888; }
+    .info-row mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-text-3); }
+    .info-row.notes { font-style: italic; color: var(--color-text-3); }
     .detail-chip {
       padding: 2px 8px;
-      background: #f0f0f0;
+      background: var(--color-surface-2);
       border-radius: 8px;
-      font-size: 11px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .request-meta {
       display: flex;
@@ -6654,34 +6612,34 @@ export class TfnOrderDetailsDialog {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
-    .meta-item mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .meta-item mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
     .request-actions {
       display: flex;
       align-items: center;
       gap: 8px;
       margin-top: 12px;
       padding-top: 12px;
-      border-top: 1px dashed #e0e0e0;
+      border-top: 1px dashed var(--color-line);
     }
     .status-badge {
       padding: 6px 14px;
       border-radius: 14px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 500;
       text-transform: uppercase;
     }
-    .status-pending { background: #fff3e0; color: #e65100; }
-    .status-approved { background: #e8f5e9; color: #2e7d32; }
-    .status-in-transit { background: #e3f2fd; color: #1565c0; }
-    .status-delivered { background: #f3e5f5; color: #7b1fa2; }
-    .status-cancelled { background: #f5f5f5; color: #757575; }
+    .status-pending { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-approved { background: var(--color-ok-soft); color: var(--color-ok); }
+    .status-in-transit { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .status-delivered { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .status-cancelled { background: var(--color-surface-2); color: var(--color-text-3); }
     .no-data {
       text-align: center;
       padding: 60px;
-      color: #999;
+      color: var(--color-text-3);
     }
     .no-data mat-icon {
       font-size: 56px;
@@ -6689,10 +6647,10 @@ export class TfnOrderDetailsDialog {
       height: 56px;
       margin-bottom: 16px;
     }
-    .no-data .hint { font-size: 13px; color: #bbb; }
+    .no-data .hint { font-size: var(--text-sm); color: var(--color-text-3); }
     mat-dialog-actions {
       padding: 16px 32px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
     @media (max-width: 768px) {
       .summary-cards { grid-template-columns: repeat(2, 1fr); }
@@ -6712,6 +6670,7 @@ export class IncomingRequestsDialog {
 
   private http = inject(HttpClient);
   private snackBar = inject(MatSnackBar);
+  private readonly confirmDialog = inject(ConfirmService);
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: { requests: DeliveryRequest[], apiUrl: string },
@@ -6750,9 +6709,22 @@ export class IncomingRequestsDialog {
     this.filteredRequests = filtered;
   }
 
-  updateStatus(req: DeliveryRequest, newStatus: string): void {
-    const action = newStatus === 'Cancelled' ? 'cancel' : 'update to ' + newStatus;
-    if (!confirm(`Are you sure you want to ${action} request ${req.referenceNumber}?`)) {
+  async updateStatus(req: DeliveryRequest, newStatus: string): Promise<void> {
+    const cancelling = newStatus === 'Cancelled';
+    const confirmed = await this.confirmDialog.ask(cancelling
+      ? {
+          title: `Cancel request ${req.referenceNumber}?`,
+          message: 'The delivery request is marked as Cancelled.',
+          confirmText: 'Cancel request',
+          cancelText: 'Keep request',
+          danger: true
+        }
+      : {
+          title: `Mark request ${req.referenceNumber} as ${newStatus}?`,
+          message: `The delivery request status changes to ${newStatus}.`,
+          confirmText: `Mark as ${newStatus}`
+        });
+    if (!confirmed) {
       return;
     }
 
@@ -6841,7 +6813,7 @@ interface CustomerAddressIssue {
           <mat-icon>local_post_office</mat-icon>
           Address Issues
         </h2>
-        <button mat-icon-button (click)="dialogRef.close()" class="close-btn">
+        <button aria-label="Close" mat-icon-button (click)="dialogRef.close()" class="close-btn">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -7004,7 +6976,7 @@ interface CustomerAddressIssue {
                     <mat-chip class="issue-chip gps">No GPS</mat-chip>
                   }
                 </div>
-                <button mat-icon-button (click)="toggleEdit(customer)" [matTooltip]="editingCustomerId === customer.id ? 'Cancel' : 'Edit Address'">
+                <button [attr.aria-label]="editingCustomerId === customer.id ? 'Cancel' : 'Edit Address'" mat-icon-button (click)="toggleEdit(customer)" [matTooltip]="editingCustomerId === customer.id ? 'Cancel' : 'Edit Address'">
                   <mat-icon>{{ editingCustomerId === customer.id ? 'close' : 'edit' }}</mat-icon>
                 </button>
               </div>
@@ -7115,8 +7087,8 @@ interface CustomerAddressIssue {
       align-items: center;
       justify-content: space-between;
       padding: 16px 24px;
-      border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      border-bottom: 1px solid var(--color-line);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
     }
     .dialog-header h2 {
@@ -7124,7 +7096,7 @@ interface CustomerAddressIssue {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
     .close-btn { color: white; }
     .toolbar {
@@ -7132,8 +7104,8 @@ interface CustomerAddressIssue {
       align-items: center;
       gap: 16px;
       padding: 12px 24px;
-      background: #f5f5f5;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--color-surface-2);
+      border-bottom: 1px solid var(--color-line);
     }
     .search-field { flex: 1; min-width: 250px; margin-bottom: -20px; }
     .total-count {
@@ -7141,15 +7113,15 @@ interface CustomerAddressIssue {
       align-items: center;
       gap: 6px;
       font-weight: 500;
-      color: #666;
-      background: white;
+      color: var(--color-text-2);
+      background: var(--color-surface);
       padding: 8px 16px;
       border-radius: 20px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
-    .total-count mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .total-count mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
     .issue-tabs {
-      background: #fafafa;
+      background: var(--color-canvas);
     }
     ::ng-deep .issue-tabs .mat-mdc-tab-labels {
       justify-content: center;
@@ -7168,14 +7140,14 @@ interface CustomerAddressIssue {
       height: 20px;
       padding: 0 6px;
       border-radius: 10px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 600;
       margin-left: 4px;
     }
-    .tab-badge.address { background: #ffebee; color: #c62828; }
-    .tab-badge.city { background: #fff3e0; color: #e65100; }
-    .tab-badge.province { background: #e3f2fd; color: #1565c0; }
-    .tab-badge.gps { background: #f3e5f5; color: #7b1fa2; }
+    .tab-badge.address { background: var(--color-danger-soft); color: var(--color-danger); }
+    .tab-badge.city { background: var(--color-warn-soft); color: var(--color-warn); }
+    .tab-badge.province { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .tab-badge.gps { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
     .content {
       flex: 1;
       overflow-y: auto;
@@ -7183,8 +7155,8 @@ interface CustomerAddressIssue {
     }
     .tab-info {
       margin-bottom: 12px;
-      color: #666;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
     .customers-list {
       display: flex;
@@ -7192,8 +7164,8 @@ interface CustomerAddressIssue {
       gap: 12px;
     }
     .customer-card {
-      background: white;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 8px;
       padding: 16px;
       transition: all 0.2s;
@@ -7202,7 +7174,7 @@ interface CustomerAddressIssue {
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .customer-card.editing {
-      border-color: #2563eb;
+      border-color: var(--color-primary);
       box-shadow: 0 2px 12px rgba(37, 99, 235, 0.2);
     }
     .customer-header {
@@ -7218,72 +7190,72 @@ interface CustomerAddressIssue {
     }
     .customer-code {
       font-weight: 600;
-      color: #2563eb;
-      background: #f0f2ff;
+      color: var(--color-primary);
+      background: var(--color-primary-soft);
       padding: 2px 8px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
     .customer-name {
       font-weight: 500;
-      font-size: 15px;
+      font-size: var(--text-md);
     }
     .short-name {
-      color: #888;
-      font-size: 13px;
+      color: var(--color-text-3);
+      font-size: var(--text-sm);
     }
     .issue-badges {
       display: flex;
       gap: 6px;
     }
     .issue-chip {
-      font-size: 11px !important;
+      font-size: var(--text-xs) !important;
       height: 22px !important;
       padding: 0 8px !important;
     }
-    .issue-chip.address { background: #ffebee !important; color: #c62828 !important; }
-    .issue-chip.city { background: #fff3e0 !important; color: #e65100 !important; }
-    .issue-chip.province { background: #e3f2fd !important; color: #1565c0 !important; }
-    .issue-chip.gps { background: #f3e5f5 !important; color: #7b1fa2 !important; }
+    .issue-chip.address { background: var(--color-danger-soft) !important; color: var(--color-danger) !important; }
+    .issue-chip.city { background: var(--color-warn-soft) !important; color: var(--color-warn) !important; }
+    .issue-chip.province { background: var(--color-primary-soft) !important; color: var(--color-primary-hover) !important; }
+    .issue-chip.gps { background: var(--color-cat-purple-soft) !important; color: var(--color-cat-purple) !important; }
     .current-address {
       margin-top: 12px;
       padding-top: 12px;
-      border-top: 1px dashed #e0e0e0;
+      border-top: 1px dashed var(--color-line);
     }
     .address-line {
       display: flex;
       align-items: flex-start;
       gap: 8px;
-      color: #333;
+      color: var(--color-text);
     }
     .address-line mat-icon {
-      color: #2563eb;
-      font-size: 18px;
+      color: var(--color-primary);
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
     .address-details {
       margin-left: 26px;
-      color: #666;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
     .gps-coords {
       display: flex;
       align-items: center;
       gap: 8px;
       margin-top: 4px;
-      color: #888;
-      font-size: 12px;
+      color: var(--color-text-3);
+      font-size: var(--text-xs);
     }
     .gps-coords mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
     }
     .edit-form {
       margin-top: 16px;
       padding-top: 16px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
     .form-row {
       display: grid;
@@ -7305,20 +7277,20 @@ interface CustomerAddressIssue {
       align-items: center;
       justify-content: center;
       padding: 48px;
-      color: #666;
+      color: var(--color-text-2);
     }
     .empty-state mat-icon {
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #4caf50;
+      color: var(--color-ok);
       margin-bottom: 16px;
     }
     .empty-state h3 { margin: 0 0 8px; }
-    .empty-state p { margin: 0; color: #888; }
+    .empty-state p { margin: 0; color: var(--color-text-3); }
     mat-dialog-actions {
       padding: 12px 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
     /* Welly Fix Styles */
     .tab-info {
@@ -7333,10 +7305,10 @@ interface CustomerAddressIssue {
       padding: 8px 20px;
       border: none;
       border-radius: 24px;
-      background: linear-gradient(135deg, #2563eb, #1e40af);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       color: white;
       font-weight: 600;
-      font-size: 13px;
+      font-size: var(--text-sm);
       cursor: pointer;
       transition: all 0.3s ease;
       box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
@@ -7350,8 +7322,8 @@ interface CustomerAddressIssue {
       cursor: not-allowed;
     }
     .welly-review-panel {
-      background: #f8f6ff;
-      border: 2px solid #2563eb;
+      background: var(--color-surface-2);
+      border: 2px solid var(--color-primary);
       border-radius: 12px;
       padding: 20px;
       margin-bottom: 16px;
@@ -7362,21 +7334,21 @@ interface CustomerAddressIssue {
       gap: 12px;
       margin-bottom: 16px;
       padding-bottom: 12px;
-      border-bottom: 1px solid #e0d8f5;
+      border-bottom: 1px solid color-mix(in srgb, var(--color-cat-purple) 35%, transparent);
     }
     .welly-avatar {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       line-height: 1;
     }
     .welly-review-header h3 {
       margin: 0 0 4px;
-      color: #4a3b8f;
-      font-size: 16px;
+      color: var(--color-cat-purple);
+      font-size: var(--text-lg);
     }
     .welly-review-header p {
       margin: 0;
-      color: #666;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
     .welly-review-actions-header {
       margin-left: auto;
@@ -7384,7 +7356,7 @@ interface CustomerAddressIssue {
       gap: 4px;
     }
     .welly-review-actions-header button {
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
     .welly-review-list {
       display: flex;
@@ -7399,14 +7371,14 @@ interface CustomerAddressIssue {
       align-items: flex-start;
       gap: 12px;
       padding: 12px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 8px;
-      border: 1px solid #e8e0f5;
+      border: 1px solid color-mix(in srgb, var(--color-cat-purple) 35%, transparent);
       transition: all 0.2s;
     }
     .welly-review-item.failed {
-      background: #fff8f8;
-      border-color: #fdd;
+      background: var(--color-danger-soft);
+      border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
     }
     .welly-review-item.rejected {
       opacity: 0.5;
@@ -7417,7 +7389,7 @@ interface CustomerAddressIssue {
       padding-top: 2px;
     }
     .fix-failed-icon {
-      color: #f44336;
+      color: var(--color-danger);
     }
     .welly-review-info {
       flex: 1;
@@ -7430,12 +7402,12 @@ interface CustomerAddressIssue {
       margin-bottom: 4px;
     }
     .welly-review-name strong {
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .welly-review-name .code {
-      font-size: 11px;
-      color: #2563eb;
-      background: #f0f2ff;
+      font-size: var(--text-xs);
+      color: var(--color-primary);
+      background: var(--color-primary-soft);
       padding: 1px 6px;
       border-radius: 4px;
     }
@@ -7443,15 +7415,15 @@ interface CustomerAddressIssue {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: #555;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
       margin-bottom: 6px;
     }
     .welly-review-suggestion mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
-      color: #2563eb;
+      color: var(--color-primary);
     }
     .welly-review-details {
       display: flex;
@@ -7463,28 +7435,28 @@ interface CustomerAddressIssue {
       align-items: center;
       padding: 2px 10px;
       border-radius: 12px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 600;
     }
     .welly-chip.province {
-      background: #e3f2fd;
-      color: #1565c0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-hover);
     }
     .welly-chip.city {
-      background: #fff3e0;
-      color: #e65100;
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
     }
     .welly-chip.postal {
-      background: #f3e5f5;
-      color: #7b1fa2;
+      background: var(--color-cat-purple-soft);
+      color: var(--color-cat-purple);
     }
     .welly-chip.gps {
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
     }
     .welly-review-error {
-      font-size: 12px;
-      color: #d32f2f;
+      font-size: var(--text-xs);
+      color: var(--color-danger);
       font-style: italic;
     }
     .welly-review-actions {
@@ -7492,7 +7464,7 @@ interface CustomerAddressIssue {
       justify-content: flex-end;
       gap: 12px;
       padding-top: 12px;
-      border-top: 1px solid #e0d8f5;
+      border-top: 1px solid color-mix(in srgb, var(--color-cat-purple) 35%, transparent);
     }
     @media (max-width: 768px) {
       .form-row.three-col, .form-row.two-col { grid-template-columns: 1fr; }
@@ -7787,7 +7759,7 @@ export class AddressIssuesDialog {
         <div class="depot-count">
           <span class="count">{{ filteredDepots.length }}</span> / {{ data.depots.length }} depots
         </div>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -7869,10 +7841,10 @@ export class AddressIssuesDialog {
         <div class="map-container">
           <div id="depotMap" class="depot-map"></div>
           <div class="zoom-controls">
-            <button mat-mini-fab color="primary" (click)="zoomIn()" matTooltip="Zoom In">
+            <button aria-label="Zoom In" mat-mini-fab color="primary" (click)="zoomIn()" matTooltip="Zoom In">
               <mat-icon>add</mat-icon>
             </button>
-            <button mat-mini-fab color="primary" (click)="zoomOut()" matTooltip="Zoom Out">
+            <button aria-label="Zoom Out" mat-mini-fab color="primary" (click)="zoomOut()" matTooltip="Zoom Out">
               <mat-icon>remove</mat-icon>
             </button>
           </div>
@@ -7943,7 +7915,7 @@ export class AddressIssuesDialog {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 22px;
+      font-size: var(--text-2xl);
       font-weight: 500;
       flex: 1;
     }
@@ -7951,7 +7923,7 @@ export class AddressIssuesDialog {
       padding: 8px 16px;
       background: rgba(255,255,255,0.2);
       border-radius: 20px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .depot-count .count {
       font-weight: 600;
@@ -7992,7 +7964,7 @@ export class AddressIssuesDialog {
     .depot-map {
       width: 100%;
       height: 100%;
-      background: #e5e3df;
+      background: var(--color-surface-3);
     }
     .zoom-controls {
       position: absolute;
@@ -8008,7 +7980,7 @@ export class AddressIssuesDialog {
     }
     .depot-list {
       margin-top: 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       overflow: hidden;
     }
@@ -8017,7 +7989,7 @@ export class AddressIssuesDialog {
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      background: #e0e0e0;
+      background: var(--color-line);
       font-weight: 500;
       cursor: pointer;
     }
@@ -8037,18 +8009,18 @@ export class AddressIssuesDialog {
       align-items: center;
       gap: 12px;
       padding: 10px 14px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 8px;
       cursor: pointer;
       transition: all 0.2s;
     }
     .depot-item:hover {
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       transform: translateX(4px);
     }
     .fuel-icon {
-      color: #11998e;
-      font-size: 20px;
+      color: var(--color-cat-teal);
+      font-size: var(--text-2xl);
     }
     .depot-info {
       display: flex;
@@ -8057,21 +8029,21 @@ export class AddressIssuesDialog {
     }
     .depot-name {
       font-weight: 500;
-      font-size: 13px;
-      color: #333;
+      font-size: var(--text-sm);
+      color: var(--color-text);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .depot-coords {
-      font-size: 11px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
     .more-depots {
       padding: 10px;
       text-align: center;
-      color: #666;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
       grid-column: 1 / -1;
     }
     .inline-spinner {
@@ -8088,8 +8060,8 @@ export class AddressIssuesDialog {
       box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
     }
     .active-loads-btn:disabled {
-      background: #e0e0e0 !important;
-      color: #999 !important;
+      background: var(--color-line) !important;
+      color: var(--color-text-3) !important;
     }
     .active-routes-bar {
       display: flex;
@@ -8106,7 +8078,7 @@ export class AddressIssuesDialog {
       align-items: center;
       gap: 16px;
       padding: 12px 16px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       border-radius: 8px;
       margin-bottom: 16px;
       flex-wrap: wrap;
@@ -8117,10 +8089,10 @@ export class AddressIssuesDialog {
       gap: 6px;
       color: white;
       font-weight: 500;
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
     .routes-label mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -8131,12 +8103,12 @@ export class AddressIssuesDialog {
     }
     .route-chips mat-chip {
       color: white !important;
-      font-size: 12px;
+      font-size: var(--text-xs);
       cursor: pointer;
       border: 2px solid transparent;
     }
     .route-chips mat-chip.selected {
-      border-color: white;
+      border-color: var(--color-surface);
       box-shadow: 0 0 8px rgba(255,255,255,0.5);
     }
     .nearest-depots {
@@ -8148,13 +8120,13 @@ export class AddressIssuesDialog {
     }
     .nearest-label {
       color: rgba(255,255,255,0.8);
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
     .nearest-item {
       background: rgba(255,255,255,0.2);
       padding: 4px 10px;
       border-radius: 12px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       color: white;
       cursor: pointer;
       transition: background 0.2s;
@@ -8166,7 +8138,7 @@ export class AddressIssuesDialog {
       position: absolute;
       bottom: 16px;
       left: 16px;
-      background: white;
+      background: var(--color-surface);
       padding: 16px;
       border-radius: 12px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.2);
@@ -8175,27 +8147,27 @@ export class AddressIssuesDialog {
     }
     .route-info-panel h4 {
       margin: 0 0 12px 0;
-      color: #2563eb;
-      font-size: 16px;
+      color: var(--color-primary);
+      font-size: var(--text-lg);
     }
     .route-info-panel p {
       margin: 4px 0;
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
     .route-info-panel button {
       margin-top: 12px;
       width: 100%;
     }
     .depot-item.nearest {
-      background: #fff3e0;
-      border-left: 3px solid #ff9800;
+      background: var(--color-warn-soft);
+      border-left: 3px solid var(--color-warn);
     }
     .depot-item.nearest:hover {
-      background: #ffe0b2;
+      background: var(--color-warn-soft);
     }
     .nearest-badge {
-      color: #ff9800;
+      color: var(--color-warn);
       margin-left: auto;
     }
   `]
@@ -8366,7 +8338,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
   private createInfoContent(depot: any): string {
     let html = '<div style="padding: 8px; min-width: 220px;">';
     html += '<h4 style="margin: 0 0 10px 0; color: #11998e; font-size: 15px; border-bottom: 2px solid #11998e; padding-bottom: 6px;">' + depot.name + '</h4>';
-    html += '<p style="margin: 4px 0; font-size: 12px; color: #666;">';
+    html += '<p style="margin: 4px 0; font-size: 12px; color: var(--color-text-2);">';
     html += '<strong>Coordinates:</strong> ' + depot.latitude.toFixed(4) + ', ' + depot.longitude.toFixed(4);
     html += '</p>';
     if (depot.address) {
@@ -8375,7 +8347,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     if (depot.city) {
       html += '<p style="margin: 4px 0; font-size: 12px;"><strong>City:</strong> ' + depot.city + '</p>';
     }
-    html += '<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;">';
+    html += '<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--color-line);">';
     html += '<a href="https://www.google.com/maps/dir/?api=1&destination=' + depot.latitude + ',' + depot.longitude + '" target="_blank" style="color: #11998e; text-decoration: none; font-size: 12px; font-weight: 500;">Get Directions  > </a>';
     html += '</div></div>';
     return html;
@@ -8485,10 +8457,10 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     if (warehouse.address) {
       html += '<p style="margin: 6px 0; font-size: 13px;"><strong>Address:</strong> ' + warehouse.address + '</p>';
     }
-    html += '<p style="margin: 6px 0; font-size: 12px; color: #666;">';
+    html += '<p style="margin: 6px 0; font-size: 12px; color: var(--color-text-2);">';
     html += '<strong>Coordinates:</strong> ' + warehouse.latitude.toFixed(4) + ', ' + warehouse.longitude.toFixed(4);
     html += '</p>';
-    html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee;">';
+    html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-line);">';
     html += '<a href="https://www.google.com/maps/dir/?api=1&destination=' + warehouse.latitude + ',' + warehouse.longitude + '" target="_blank" style="color: #1565c0; text-decoration: none; font-size: 12px; font-weight: 500;">Get Directions  > </a>';
     html += '</div></div>';
     return html;
@@ -8965,7 +8937,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
     <div class="add-delivery-note-dialog">
       <div class="dialog-header">
         <h2><mat-icon>note_add</mat-icon> Add Delivery Note</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
 
       <div class="dialog-content">
@@ -9016,9 +8988,9 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
       width: 500px;
       .dialog-header {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 20px 24px 12px; border-bottom: 1px solid #e0e0e0;
-        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 600;
-          mat-icon { color: #ff9800; }
+        padding: 20px 24px 12px; border-bottom: 1px solid var(--color-line);
+        h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: var(--text-xl); font-weight: 600;
+          mat-icon { color: var(--color-warn); }
         }
       }
       .dialog-content {
@@ -9029,7 +9001,7 @@ export class TfnDepotsMapDialog implements AfterViewInit, OnDestroy {
         }
       }
       .dialog-actions {
-        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid #e0e0e0;
+        display: flex; justify-content: flex-end; gap: 12px; padding: 12px 24px; border-top: 1px solid var(--color-line);
       }
     }
   `]
@@ -9114,7 +9086,7 @@ export class AddDeliveryNoteDialog {
             <mat-chip class="distance-chip">{{ totalDistance | number:'1.0-0' }} km</mat-chip>
           }
         </div>
-        <button mat-icon-button (click)="onCloseDialog()">
+        <button aria-label="Close" mat-icon-button (click)="onCloseDialog()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -9191,7 +9163,7 @@ export class AddDeliveryNoteDialog {
                           <span class="part-delivery-label">Part</span>
                         </mat-checkbox>
                       </div>
-                      <button mat-icon-button class="add-btn" (click)="addStopWithPartDelivery(invoice); $event.stopPropagation()" matTooltip="Add to trip sheet">
+                      <button aria-label="Add to trip sheet" mat-icon-button class="add-btn" (click)="addStopWithPartDelivery(invoice); $event.stopPropagation()" matTooltip="Add to trip sheet">
                         <mat-icon class="add-icon">add_circle</mat-icon>
                       </button>
                     </div>
@@ -9258,7 +9230,7 @@ export class AddDeliveryNoteDialog {
                           R {{ stop.salesAmount | number:'1.2-2' }}
                         </div>
                       }
-                      <button mat-icon-button (click)="removeStop(i)" matTooltip="Remove stop">
+                      <button aria-label="Remove stop" mat-icon-button (click)="removeStop(i)" matTooltip="Remove stop">
                         <mat-icon>remove_circle</mat-icon>
                       </button>
                     </div>
@@ -9348,7 +9320,7 @@ export class AddDeliveryNoteDialog {
                         <div class="stops-list" cdkDropList (cdkDropListDropped)="dropGroupedStop($event)">
                           @for (group of groupedStops; track $index; let i = $index) {
                             <div class="stop-item" cdkDrag cdkDragLockAxis="y" [class.missing-coords]="!isStopResolved(group)" [class.collapsed]="group.isCollapsed && isStopResolved(group)" [class.verified]="isStopVerified(group)">
-                              <button class="stop-drag-grip" cdkDragHandle matTooltip="Drag to reorder">
+                              <button aria-label="Drag to reorder" class="stop-drag-grip" cdkDragHandle matTooltip="Drag to reorder">
                                 <mat-icon>drag_indicator</mat-icon>
                               </button>
                               <div class="stop-drag-preview" *cdkDragPreview>
@@ -9455,7 +9427,7 @@ export class AddDeliveryNoteDialog {
                                         <mat-icon>my_location</mat-icon>
                                       }
                                     </button>
-                                    <button mat-icon-button color="accent" (click)="saveAddressForCustomer(group)"
+                                    <button aria-label="Save this address for future use" mat-icon-button color="accent" (click)="saveAddressForCustomer(group)"
                                             [disabled]="!group.deliveryAddress || !group.latitude"
                                             matTooltip="Save this address for future use">
                                       <mat-icon>bookmark_add</mat-icon>
@@ -9522,7 +9494,7 @@ export class AddDeliveryNoteDialog {
                   <div class="distance-matrix-container">
                     <div class="matrix-header">
                       <h4><mat-icon>grid_on</mat-icon> Distance Matrix (km / min)</h4>
-                      <button mat-icon-button (click)="toggleDistanceMatrix()" matTooltip="Hide matrix">
+                      <button aria-label="Hide matrix" mat-icon-button (click)="toggleDistanceMatrix()" matTooltip="Hide matrix">
                         <mat-icon>close</mat-icon>
                       </button>
                     </div>
@@ -9651,7 +9623,7 @@ export class AddDeliveryNoteDialog {
                         <button mat-stroked-button color="primary" (click)="loadTfnDepots()" matTooltip="Show TFN depot locations on the map">
                           <mat-icon>store</mat-icon> TFN Depots
                         </button>
-                        <button mat-icon-button (click)="refreshMap()" matTooltip="Refresh map">
+                        <button aria-label="Refresh map" mat-icon-button (click)="refreshMap()" matTooltip="Refresh map">
                           <mat-icon>refresh</mat-icon>
                         </button>
                       </div>
@@ -9833,7 +9805,7 @@ export class AddDeliveryNoteDialog {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       gap: 16px;
@@ -9843,7 +9815,7 @@ export class AddDeliveryNoteDialog {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 22px;
+      font-size: var(--text-2xl);
       font-weight: 500;
     }
     .header-info {
@@ -9858,19 +9830,19 @@ export class AddDeliveryNoteDialog {
       color: white !important;
     }
     .header-info .draft-badge {
-      background: #1976d2 !important;
+      background: var(--color-primary) !important;
       color: white !important;
       display: flex;
       align-items: center;
       gap: 6px;
     }
     .header-info .draft-badge mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
     .header-info .saving-badge {
-      background: #2196f3 !important;
+      background: var(--color-primary) !important;
       color: white !important;
       display: flex;
       align-items: center;
@@ -9925,7 +9897,7 @@ export class AddDeliveryNoteDialog {
       flex-direction: column;
     }
     .route-left-panel .route-config h3 {
-      font-size: 14px;
+      font-size: var(--text-md);
       margin-bottom: 12px;
     }
     .route-right-panel .route-map-preview {
@@ -9945,7 +9917,7 @@ export class AddDeliveryNoteDialog {
       margin-bottom: 12px;
     }
     .config-grid-compact mat-form-field {
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
     .config-grid-compact mat-form-field ::ng-deep .mat-mdc-form-field-infix {
       padding-top: 8px;
@@ -9956,7 +9928,7 @@ export class AddDeliveryNoteDialog {
     }
     .source-panel, .stops-panel {
       flex: 1;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 12px;
       display: flex;
       flex-direction: column;
@@ -9968,16 +9940,16 @@ export class AddDeliveryNoteDialog {
       justify-content: space-between;
       align-items: center;
       padding: 16px;
-      background: white;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
     }
     .panel-header h3 {
       margin: 0;
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 16px;
-      color: #333;
+      font-size: var(--text-lg);
+      color: var(--color-text);
     }
     .panel-actions {
       display: flex;
@@ -10001,14 +9973,14 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: #fff3e0;
+      background: var(--color-warn-soft);
       border-radius: 6px;
       margin-bottom: 8px;
-      font-size: 12px;
-      color: #e65100;
+      font-size: var(--text-xs);
+      color: var(--color-warn);
     }
     .scroll-hint mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -10017,7 +9989,7 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 8px;
       margin-bottom: 8px;
       cursor: pointer;
@@ -10025,11 +9997,11 @@ export class AddDeliveryNoteDialog {
       border: 2px solid transparent;
     }
     .invoice-item:hover {
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
     }
     .invoice-item.selected {
-      border-color: #2563eb;
-      background: #ede7f6;
+      border-color: var(--color-primary);
+      background: var(--color-cat-purple-soft);
     }
     .invoice-info {
       display: flex;
@@ -10039,33 +10011,33 @@ export class AddDeliveryNoteDialog {
     }
     .invoice-number {
       font-weight: 600;
-      color: #333;
-      font-size: 13px;
+      color: var(--color-text);
+      font-size: var(--text-sm);
     }
     .customer-name {
-      font-size: 14px;
-      color: #1976d2;
+      font-size: var(--text-md);
+      color: var(--color-primary);
     }
     .province-badge {
-      font-size: 10px;
+      font-size: var(--text-xs);
       padding: 2px 8px;
       border-radius: 10px;
       font-weight: 500;
       display: inline-block;
       width: fit-content;
       text-transform: uppercase;
-      background: #e0e0e0;
-      color: #555;
+      background: var(--color-line);
+      color: var(--color-text-2);
     }
-    .province-gp, .province-gauteng { background: #e3f2fd; color: #1565c0; }
-    .province-kzn, .province-kwazulu-natal { background: #fff3e0; color: #ef6c00; }
-    .province-wc, .province-western-cape { background: #e8f5e9; color: #2e7d32; }
-    .province-ec, .province-eastern-cape { background: #fce4ec; color: #c2185b; }
-    .province-mp, .province-mpumalanga { background: #f3e5f5; color: #7b1fa2; }
-    .province-lp, .province-limpopo { background: #e0f2f1; color: #00695c; }
-    .province-fs, .province-free-state { background: #fff8e1; color: #f9a825; }
-    .province-nw, .province-north-west { background: #efebe9; color: #5d4037; }
-    .province-nc, .province-northern-cape { background: #fbe9e7; color: #d84315; }
+    .province-gp, .province-gauteng { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .province-kzn, .province-kwazulu-natal { background: var(--color-warn-soft); color: var(--color-warn); }
+    .province-wc, .province-western-cape { background: var(--color-ok-soft); color: var(--color-ok); }
+    .province-ec, .province-eastern-cape { background: var(--color-cat-pink-soft); color: var(--color-cat-pink); }
+    .province-mp, .province-mpumalanga { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .province-lp, .province-limpopo { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); }
+    .province-fs, .province-free-state { background: var(--color-warn-soft); color: var(--color-warn); }
+    .province-nw, .province-north-west { background: var(--color-surface-3); color: var(--color-cat-amber); }
+    .province-nc, .province-northern-cape { background: var(--color-danger-soft); color: var(--color-danger); }
     .filter-controls {
       display: flex;
       gap: 12px;
@@ -10079,13 +10051,13 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 12px;
       padding: 16px;
-      background: #e3f2fd;
-      color: #1565c0;
-      font-size: 13px;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-hover);
+      font-size: var(--text-sm);
     }
     .city {
-      font-size: 11px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
     .invoice-details {
       flex: 1;
@@ -10095,15 +10067,15 @@ export class AddDeliveryNoteDialog {
       gap: 2px;
     }
     .product {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .amount {
       font-weight: 600;
-      color: #4caf50;
+      color: var(--color-ok);
     }
     .add-icon {
-      color: #2563eb;
+      color: var(--color-primary);
       opacity: 0;
       transition: opacity 0.2s;
     }
@@ -10115,26 +10087,26 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 8px;
       margin-bottom: 8px;
-      border-left: 4px solid #2563eb;
+      border-left: 4px solid var(--color-primary);
     }
     .stop-drag-handle {
       cursor: move;
-      color: #999;
+      color: var(--color-text-3);
     }
     .stop-sequence {
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: #2563eb;
+      background: var(--color-primary);
       color: white;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 600;
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
     .stop-info {
       flex: 1;
@@ -10143,19 +10115,19 @@ export class AddDeliveryNoteDialog {
     }
     .stop-customer {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
     .stop-address {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .stop-invoice {
-      font-size: 11px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
     .stop-value {
       font-weight: 600;
-      color: #4caf50;
+      color: var(--color-ok);
     }
     
     /* Part Delivery Styles */
@@ -10168,68 +10140,68 @@ export class AddDeliveryNoteDialog {
       transform: scale(0.9);
     }
     .part-delivery-label {
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 500;
-      color: #f57c00;
+      color: var(--color-warn);
     }
     .invoice-item.part-delivery-marked {
-      border-color: #ff9800;
-      background: #fff8e1;
+      border-color: var(--color-warn);
+      background: var(--color-warn-soft);
     }
     .invoice-item.part-delivery-marked:hover {
-      background: #ffecb3;
+      background: var(--color-warn-soft);
     }
     .add-btn {
       margin-left: 4px;
     }
     .add-btn .add-icon {
       opacity: 1 !important;
-      color: #2563eb;
+      color: var(--color-primary);
     }
     .invoice-item .quantity {
-      font-size: 11px;
-      color: #1976d2;
+      font-size: var(--text-xs);
+      color: var(--color-primary);
       font-weight: 500;
     }
     .stop-item.part-delivery {
-      border-left-color: #ff9800;
-      background: #fffde7;
+      border-left-color: var(--color-warn);
+      background: var(--color-warn-soft);
     }
     .part-delivery-badge {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 10px;
+      font-size: var(--text-xs);
       padding: 2px 8px;
       border-radius: 12px;
-      background: #ff9800;
+      background: var(--color-warn);
       color: white;
       font-weight: 600;
       margin-top: 4px;
     }
     .part-delivery-badge mat-icon {
-      font-size: 12px;
+      font-size: var(--text-xs);
       width: 12px;
       height: 12px;
     }
     .stop-item.delivery-note {
-      border-left-color: #4caf50;
-      background: #e8f5e9;
+      border-left-color: var(--color-ok);
+      background: var(--color-ok-soft);
     }
     .delivery-note-badge {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 10px;
+      font-size: var(--text-xs);
       padding: 2px 8px;
       border-radius: 12px;
-      background: #4caf50;
+      background: var(--color-ok);
       color: white;
       font-weight: 600;
       margin-top: 4px;
     }
     .delivery-note-badge mat-icon {
-      font-size: 12px;
+      font-size: var(--text-xs);
       width: 12px;
       height: 12px;
     }
@@ -10245,13 +10217,13 @@ export class AddDeliveryNoteDialog {
       text-align: center;
     }
     .qty-field .mat-mdc-form-field-hint {
-      font-size: 10px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
     .empty-list, .empty-stops {
       text-align: center;
       padding: 40px 20px;
-      color: #999;
+      color: var(--color-text-3);
     }
     .empty-list mat-icon, .empty-stops mat-icon {
       font-size: 48px;
@@ -10263,14 +10235,14 @@ export class AddDeliveryNoteDialog {
       display: flex;
       justify-content: space-between;
       padding: 16px 0;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
       margin-top: 16px;
     }
     .route-config {
-      background: #fff;
+      background: var(--color-surface);
       border-radius: 12px;
       padding: 20px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       margin-bottom: 20px;
     }
     .route-config h3 {
@@ -10278,17 +10250,17 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 8px;
       margin: 0 0 16px 0;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .config-loading {
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 16px;
-      background: #fff3e0;
+      background: var(--color-warn-soft);
       border-radius: 8px;
       margin-bottom: 16px;
-      color: #e65100;
+      color: var(--color-warn);
     }
     .config-grid {
       display: grid;
@@ -10306,7 +10278,7 @@ export class AddDeliveryNoteDialog {
       margin-bottom: 16px;
     }
     .optimize-section button {
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
     .inline-spinner {
       display: inline-block;
@@ -10317,13 +10289,13 @@ export class AddDeliveryNoteDialog {
       flex-wrap: wrap;
       gap: 12px;
       padding: 12px;
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       border-radius: 8px;
       margin-bottom: 16px;
     }
     .route-summary .summary-item {
       min-width: fit-content;
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
     .summary-item {
       display: flex;
@@ -10331,21 +10303,21 @@ export class AddDeliveryNoteDialog {
       gap: 8px;
     }
     .summary-item mat-icon {
-      color: #4caf50;
+      color: var(--color-ok);
     }
     .summary-item .label {
-      color: #666;
+      color: var(--color-text-2);
     }
     .summary-item .value {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
     .full-width {
       width: 100%;
     }
     .route-map-preview {
       margin-bottom: 24px;
-      background: #f8f9fa;
+      background: var(--color-canvas);
       border-radius: 12px;
       padding: 16px;
     }
@@ -10368,17 +10340,17 @@ export class AddDeliveryNoteDialog {
     .route-map {
       height: 350px;
       border-radius: 12px;
-      background: #e5e3df;
-      border: 1px solid #ddd;
+      background: var(--color-surface-3);
+      border: 1px solid var(--color-line);
     }
     .map-legend {
       display: flex;
       gap: 16px;
       margin-top: 12px;
       padding: 8px 12px;
-      background: #fff;
+      background: var(--color-surface);
       border-radius: 8px;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
     .legend-item {
       display: flex;
@@ -10389,17 +10361,17 @@ export class AddDeliveryNoteDialog {
       width: 14px;
       height: 14px;
       border-radius: 50%;
-      border: 2px solid white;
+      border: 2px solid var(--color-surface);
       box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
     .legend-item .marker.warehouse {
-      background: #4caf50;
+      background: var(--color-ok);
     }
     .legend-item .marker.stop {
-      background: #2563eb;
+      background: var(--color-primary);
     }
     .legend-item .marker.depot {
-      background: #ff9800;
+      background: var(--color-warn);
     }
     .map-warning {
       display: flex;
@@ -10407,22 +10379,22 @@ export class AddDeliveryNoteDialog {
       gap: 8px;
       margin-top: 12px;
       padding: 10px 14px;
-      background: #fff3cd;
-      color: #856404;
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
       border-radius: 8px;
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
     .map-warning mat-icon {
-      color: #e65100;
-      font-size: 20px;
+      color: var(--color-warn);
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
 
     /* Stops Address Section */
     .stops-address-section {
-      background: #ffffff;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 12px;
       padding: 16px;
       margin-top: 20px;
@@ -10440,8 +10412,8 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 8px;
       margin: 0;
-      font-size: 16px;
-      color: #333;
+      font-size: var(--text-lg);
+      color: var(--color-text);
     }
     .stops-address-section .header-actions {
       display: flex;
@@ -10452,11 +10424,11 @@ export class AddDeliveryNoteDialog {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
-    .coord-status mat-icon.success { color: #4caf50; }
-    .coord-status mat-icon.warning { color: #ff9800; }
+    .coord-status mat-icon.success { color: var(--color-ok); }
+    .coord-status mat-icon.warning { color: var(--color-warn); }
 
     /* Assignments (driver/vehicle/date) above the route preview map */
     .trip-assign-grid {
@@ -10471,8 +10443,8 @@ export class AddDeliveryNoteDialog {
     .stops-address-section.under-config {
       margin-top: 16px;
       padding: 12px;
-      background: #f8fafc;
-      border: 1px solid #e5e9f0;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
     }
     .stops-address-section.under-config .header-actions { flex-wrap: wrap; }
     /* Keep the relocated stops list scrollable within the config panel */
@@ -10485,17 +10457,17 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 6px;
       margin: 0 0 10px;
-      font-size: 12px;
-      color: #64748b;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
-    .drag-hint mat-icon { font-size: 18px; width: 18px; height: 18px; color: #94a3b8; }
+    .drag-hint mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-text-3); }
 
     /* Drag handle + drag states for the Google-style itinerary */
     .stop-drag-grip {
       align-self: center;
       border: none;
       background: transparent;
-      color: #94a3b8;
+      color: var(--color-text-3);
       cursor: grab;
       padding: 2px;
       display: flex;
@@ -10503,22 +10475,22 @@ export class AddDeliveryNoteDialog {
       justify-content: center;
       flex-shrink: 0;
     }
-    .stop-drag-grip:hover { color: #475569; }
+    .stop-drag-grip:hover { color: var(--color-text-2); }
     .stop-drag-grip:active { cursor: grabbing; }
     .stop-item.cdk-drag-preview,
     .stop-drag-preview {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: #1976d2;
+      background: var(--color-primary);
       color: #fff;
       padding: 10px 16px;
       border-radius: 10px;
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: var(--text-sm);
       box-shadow: 0 12px 28px rgba(25,118,210,.35);
     }
-    .stop-drag-preview mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .stop-drag-preview mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; }
     .stop-item.cdk-drag-placeholder { opacity: .35; }
     .stops-list.cdk-drop-list-dragging .stop-item:not(.cdk-drag-placeholder) {
       transition: transform .2s cubic-bezier(0,0,.2,1);
@@ -10527,7 +10499,7 @@ export class AddDeliveryNoteDialog {
     .stops-list {
       max-height: 400px;
       overflow-y: auto;
-      border: 1px solid #eee;
+      border: 1px solid var(--color-line);
       border-radius: 8px;
     }
     .stop-item {
@@ -10535,46 +10507,46 @@ export class AddDeliveryNoteDialog {
       align-items: flex-start;
       gap: 12px;
       padding: 14px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--color-line);
       transition: all 0.2s;
     }
     .stop-item:last-child { border-bottom: none; }
-    .stop-item:hover { background: #f9f9f9; }
+    .stop-item:hover { background: var(--color-canvas); }
     .stop-item.missing-coords {
-      background: #fff8e1;
-      border-left: 3px solid #ff9800;
+      background: var(--color-warn-soft);
+      border-left: 3px solid var(--color-warn);
     }
     .stop-item.collapsed {
       padding: 10px 14px;
-      background: #f8fdf8;
-      border-left: 3px solid #4caf50;
+      background: var(--color-surface-2);
+      border-left: 3px solid var(--color-ok);
     }
     /* Admin-verified address (Admin Settings → Client Locations): purple instead of green */
-    .stop-item.verified { border-left: 3px solid #7c3aed; }
-    .stop-item.verified.collapsed { background: #faf5ff; border-left-color: #7c3aed; }
-    .stop-header .coord-icon.verified { color: #7c3aed; }
-    .collapsed-info.verified { color: #7c3aed; }
-    .collapsed-verified-tag { font-style: normal; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: #ede9fe; color: #5b21b6; padding: 1px 7px; border-radius: 999px; margin-left: 4px; }
+    .stop-item.verified { border-left: 3px solid var(--color-cat-purple); }
+    .stop-item.verified.collapsed { background: var(--color-surface-2); border-left-color: var(--color-cat-purple); }
+    .stop-header .coord-icon.verified { color: var(--color-cat-purple); }
+    .collapsed-info.verified { color: var(--color-cat-purple); }
+    .collapsed-verified-tag { font-style: normal; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); padding: 1px 7px; border-radius: 999px; margin-left: 4px; }
     .address-verified-banner {
       display: flex; align-items: center; gap: 8px;
-      background: #f5f3ff; border: 1px solid #c4b5fd; color: #5b21b6;
-      border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 12.5px;
+      background: var(--color-cat-purple-soft); border: 1px solid color-mix(in srgb, var(--color-cat-purple) 35%, transparent); color: var(--color-cat-purple);
+      border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: var(--text-xs);
     }
-    .address-verified-banner mat-icon { font-size: 20px; width: 20px; height: 20px; color: #7c3aed; }
-    .saved-addr-option.is-verified .addr-label { color: #5b21b6; }
-    .addr-verified-ico { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; color: #7c3aed; margin-right: 2px; }
-    .addr-verified-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; background: #ede9fe; color: #5b21b6; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+    .address-verified-banner mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; color: var(--color-cat-purple); }
+    .saved-addr-option.is-verified .addr-label { color: var(--color-cat-purple); }
+    .addr-verified-ico { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; color: var(--color-cat-purple); margin-right: 2px; }
+    .addr-verified-tag { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
     .stop-number {
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb, #1e40af);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       color: white;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: bold;
-      font-size: 13px;
+      font-size: var(--text-sm);
       flex-shrink: 0;
     }
     .stop-details {
@@ -10598,19 +10570,19 @@ export class AddDeliveryNoteDialog {
     }
     .stop-header .customer-name {
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
     }
     .stop-header .invoice-number {
-      font-size: 12px;
-      color: #888;
-      background: #f0f0f0;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+      background: var(--color-surface-2);
       padding: 2px 8px;
       border-radius: 4px;
     }
     .stop-header .invoice-count {
-      font-size: 11px;
-      background: #e3f2fd !important;
-      color: #1976d2 !important;
+      font-size: var(--text-xs);
+      background: var(--color-primary-soft) !important;
+      color: var(--color-primary) !important;
     }
     .stop-header .stop-status {
       display: flex;
@@ -10618,14 +10590,14 @@ export class AddDeliveryNoteDialog {
       gap: 4px;
     }
     .stop-header .coord-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
-    .stop-header .coord-icon.success { color: #4caf50; }
-    .stop-header .coord-icon.warning { color: #ff9800; }
+    .stop-header .coord-icon.success { color: var(--color-ok); }
+    .stop-header .coord-icon.warning { color: var(--color-warn); }
     .stop-header .collapse-icon {
-      color: #999;
+      color: var(--color-text-3);
       transition: transform 0.2s;
     }
     
@@ -10646,25 +10618,25 @@ export class AddDeliveryNoteDialog {
     }
     .saved-addr-option .addr-label {
       font-weight: 500;
-      font-size: 13px;
-      color: #333;
+      font-size: var(--text-sm);
+      color: var(--color-text);
     }
     .saved-addr-option .addr-text {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       max-width: 350px;
     }
     .saved-addr-option .addr-usage {
-      font-size: 11px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       font-style: italic;
     }
     .or-divider {
-      color: #999;
-      font-size: 12px;
+      color: var(--color-text-3);
+      font-size: var(--text-xs);
       font-weight: 500;
       text-transform: uppercase;
     }
@@ -10685,106 +10657,106 @@ export class AddDeliveryNoteDialog {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       margin-top: 6px;
     }
     .address-warning-banner {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: #fff3e0;
-      border: 1px solid #ffb74d;
-      color: #e65100;
+      background: var(--color-warn-soft);
+      border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent);
+      color: var(--color-warn);
       border-radius: 6px;
       padding: 8px 12px;
       margin: 8px 0;
-      font-size: 12.5px;
+      font-size: var(--text-xs);
     }
     .address-warning-banner mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
-      color: #f57c00;
+      color: var(--color-warn);
     }
     .address-warning-banner.missing {
-      background: #ffebee;
-      border-color: #ef9a9a;
-      color: #c62828;
+      background: var(--color-danger-soft);
+      border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+      color: var(--color-danger);
     }
-    .address-warning-banner.missing mat-icon { color: #e53935; }
+    .address-warning-banner.missing mat-icon { color: var(--color-danger); }
     .address-info-banner {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: #e3f2fd;
-      border: 1px solid #90caf9;
-      color: #1565c0;
+      background: var(--color-primary-soft);
+      border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+      color: var(--color-primary-hover);
       border-radius: 6px;
       padding: 8px 12px;
       margin: 8px 0;
-      font-size: 12.5px;
+      font-size: var(--text-xs);
     }
     .address-info-banner mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .route-block-reason {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: #ffebee;
-      border: 1px solid #ef9a9a;
-      color: #c62828;
+      background: var(--color-danger-soft);
+      border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+      color: var(--color-danger);
       border-radius: 6px;
       padding: 10px 14px;
       margin: 12px 0 4px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 500;
     }
     .route-block-reason mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
-      color: #e53935;
+      color: var(--color-danger);
     }
     .stop-location-info mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
-      color: #888;
+      color: var(--color-text-3);
     }
     
     .collapsed-info {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 13px;
-      color: #4caf50;
+      font-size: var(--text-sm);
+      color: var(--color-ok);
       margin-top: 4px;
     }
     .collapsed-info mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
     .collapsed-info span {
-      color: #666;
-      font-size: 12px;
+      color: var(--color-text-2);
+      font-size: var(--text-xs);
     }
     
     .grouped-invoices {
       margin-top: 12px;
       padding: 10px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
     }
     .grouped-invoices .invoices-label {
       display: block;
-      font-size: 11px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       margin-bottom: 8px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -10795,24 +10767,24 @@ export class AddDeliveryNoteDialog {
       gap: 6px;
     }
     .grouped-invoices .invoice-chips mat-chip {
-      font-size: 11px;
+      font-size: var(--text-xs);
       min-height: 24px;
       padding: 0 10px;
     }
     
     .stop-value {
       font-weight: 600;
-      color: #4caf50;
+      color: var(--color-ok);
       white-space: nowrap;
       padding-top: 4px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .stops-actions {
       display: flex;
       gap: 12px;
       margin-top: 16px;
       padding-top: 12px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
     
     .review-step {
@@ -10831,7 +10803,7 @@ export class AddDeliveryNoteDialog {
       margin-bottom: 24px;
     }
     .review-card {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       padding: 16px;
       border-radius: 12px;
     }
@@ -10840,21 +10812,21 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 8px;
       margin: 0 0 12px 0;
-      color: #2563eb;
-      font-size: 14px;
+      color: var(--color-primary);
+      font-size: var(--text-md);
     }
     .review-card .main-value {
       font-weight: 600;
-      font-size: 16px;
+      font-size: var(--text-lg);
       margin: 0;
     }
     .review-card .sub-value {
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
       margin: 4px 0 0 0;
     }
     .stops-summary {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       padding: 16px;
       border-radius: 12px;
     }
@@ -10871,16 +10843,16 @@ export class AddDeliveryNoteDialog {
     .stops-table th, .stops-table td {
       padding: 10px 12px;
       text-align: left;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
     }
     .stops-table th {
-      background: #e0e0e0;
+      background: var(--color-line);
       font-weight: 600;
-      font-size: 12px;
+      font-size: var(--text-xs);
       text-transform: uppercase;
     }
     .stops-table tr:hover {
-      background: #f0f0f0;
+      background: var(--color-surface-2);
     }
     .final-actions {
       justify-content: space-between;
@@ -10905,28 +10877,28 @@ export class AddDeliveryNoteDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .optimization-message.success {
-      background: #e8f5e9;
-      color: #2e7d32;
-      border: 1px solid #a5d6a7;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
+      border: 1px solid color-mix(in srgb, var(--color-ok) 35%, transparent);
     }
     .optimization-message.error {
-      background: #ffebee;
-      color: #c62828;
-      border: 1px solid #ef9a9a;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
+      border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
     }
     .optimization-message.pending {
-      background: #e3f2fd;
-      color: #1565c0;
-      border: 1px solid #90caf9;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-hover);
+      border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
     }
     mat-checkbox.mat-mdc-checkbox {
       margin-left: 8px;
     }
     mat-checkbox .checkbox-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       height: 18px;
       width: 18px;
       margin-right: 4px;
@@ -10934,20 +10906,20 @@ export class AddDeliveryNoteDialog {
     }
     .fuel-estimate {
       padding: 8px 12px;
-      background: #fff3e0;
+      background: var(--color-warn-soft);
       border-radius: 8px;
-      border: 1px solid #ffcc80;
-      color: #e65100;
-      font-size: 13px;
+      border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent);
+      color: var(--color-warn);
+      font-size: var(--text-sm);
       display: flex;
       align-items: center;
       gap: 6px;
     }
     .distance-matrix-container {
       margin-top: 16px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 8px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       overflow: hidden;
     }
     .matrix-header {
@@ -10955,7 +10927,7 @@ export class AddDeliveryNoteDialog {
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      background: #2563eb;
+      background: var(--color-primary);
       color: white;
     }
     .matrix-header h4 {
@@ -10963,7 +10935,7 @@ export class AddDeliveryNoteDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .matrix-header button {
       color: white;
@@ -10976,23 +10948,23 @@ export class AddDeliveryNoteDialog {
     .distance-matrix {
       width: 100%;
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: var(--text-xs);
     }
     .distance-matrix th, .distance-matrix td {
       padding: 6px 8px;
       text-align: center;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       min-width: 60px;
     }
     .distance-matrix thead th {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       font-weight: 600;
       position: sticky;
       top: 0;
       z-index: 1;
     }
     .distance-matrix .label-cell {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       font-weight: 600;
       position: sticky;
       left: 0;
@@ -11009,30 +10981,30 @@ export class AddDeliveryNoteDialog {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      background: white;
+      background: var(--color-surface);
     }
     .distance-matrix .matrix-cell.diagonal {
-      background: #e0e0e0;
+      background: var(--color-line);
     }
     .distance-matrix .matrix-cell .distance {
       font-weight: 600;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .distance-matrix .matrix-cell .duration {
-      font-size: 10px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .distance-matrix .diagonal-marker {
-      color: #999;
+      color: var(--color-text-3);
     }
     .matrix-legend {
       display: flex;
       gap: 24px;
       padding: 8px 16px;
-      background: #f5f5f5;
-      font-size: 11px;
-      color: #666;
-      border-top: 1px solid #e0e0e0;
+      background: var(--color-surface-2);
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
+      border-top: 1px solid var(--color-line);
     }
     @media (max-width: 1200px) {
       .config-grid, .review-grid {
@@ -11087,7 +11059,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   
   // Google Maps loader (API key is served by the backend, not hardcoded)
   private readonly mapsLoader = inject(GoogleMapsLoaderService);
-  
+  private readonly confirmDialog = inject(ConfirmService);
+
   // Optimization state
   advancedOptimizing = false;
   optimizationMessage = '';
@@ -11335,12 +11308,15 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   // Auto-save draft removed - was causing duplicate tripsheet creation due to race conditions
   
   // Handle dialog close - just close without creating draft loads
-  onCloseDialog(): void {
+  async onCloseDialog(): Promise<void> {
     if (this.selectedStops.length > 0 && !this.data.isEditMode) {
-      const confirmClose = confirm(
-        'You have stops selected that haven\'t been saved as a tripsheet yet.\n\n' +
-        'Click OK to close and discard, or Cancel to go back.'
-      );
+      const confirmClose = await this.confirmDialog.ask({
+        title: 'Close without saving the tripsheet?',
+        message: `You have ${this.selectedStops.length} stop(s) selected that haven't been saved as a tripsheet yet. Closing discards them.`,
+        confirmText: 'Close and discard',
+        cancelText: 'Go back',
+        danger: true
+      });
       if (!confirmClose) return;
     }
     this.dialogRef.close();
@@ -13971,42 +13947,42 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         <style>
           @page { size: landscape; margin: 8mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.3; padding: 10px; background: white; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.3; padding: 10px; background: var(--color-surface); }
           .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 3px solid #033142; margin-bottom: 10px; }
           .header-left { display: flex; align-items: center; gap: 12px; }
-          .logo { font-size: 21px; font-weight: bold; color: #033142; }
+          .logo { font-size: 21px; font-weight: bold; color: var(--color-brand); }
           .trip-badge { background: #033142; color: white; padding: 5px 15px; border-radius: 15px; font-size: 15px; font-weight: bold; }
-          .company { text-align: right; font-size: 14px; font-weight: bold; color: #333; }
-          .info-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%); border-radius: 5px; border: 1px solid #ddd; }
-          .info-item { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: white; border-radius: 4px; border: 1px solid #e0e0e0; font-size: 11px; }
-          .info-item strong { color: #333; }
-          .info-sub { color: #666; font-size: 10px; }
+          .company { text-align: right; font-size: 14px; font-weight: bold; color: var(--color-text); }
+          .info-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%); border-radius: 5px; border: 1px solid var(--color-line); }
+          .info-item { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--color-surface); border-radius: 4px; border: 1px solid var(--color-line); font-size: 11px; }
+          .info-item strong { color: var(--color-text); }
+          .info-sub { color: var(--color-text-2); font-size: 10px; }
           .route-map-section { margin: 8px 0; text-align: center; page-break-inside: avoid; }
-          .route-map-section h4 { font-size: 12px; color: #033142; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+          .route-map-section h4 { font-size: 12px; color: var(--color-brand); margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 5px; }
           .route-map-section img { max-width: 100%; height: auto; border: 2px solid #033142; border-radius: 5px; }
           table { width: 100%; border-collapse: collapse; font-size: 11px; }
           th { background: #033142; color: white; padding: 6px 4px; text-align: left; font-weight: 600; font-size: 11px; white-space: nowrap; }
           th.center, td.center { text-align: center; }
           th.right, td.right { text-align: right; }
-          td { padding: 5px 4px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
-          tr:nth-child(even) { background: #f9f9f9; }
+          td { padding: 5px 4px; border-bottom: 1px solid var(--color-line); vertical-align: middle; }
+          tr:nth-child(even) { background: var(--color-surface-2); }
           .stop-num { background: #033142; color: white; width: 21px; height: 21px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; }
-          .customer { font-weight: 600; color: #333; font-size: 11px; }
-          .address { color: #666; font-size: 10px; max-width: 150px; }
+          .customer { font-weight: 600; color: var(--color-text); font-size: 11px; }
+          .address { color: var(--color-text-2); font-size: 10px; max-width: 150px; }
           .product { font-size: 10px; }
           .checkbox { width: 17px; height: 17px; border: 2px solid #033142; border-radius: 2px; display: inline-block; }
           .totals td { background: #e0ecf0; font-weight: bold; border-top: 2px solid #033142; }
           .bottom-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
-          .section-box { border: 1px solid #ddd; border-radius: 5px; padding: 8px; }
-          .section-box h4 { font-size: 12px; color: #033142; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0; }
+          .section-box { border: 1px solid var(--color-line); border-radius: 5px; padding: 8px; }
+          .section-box h4 { font-size: 12px; color: var(--color-brand); margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--color-line); }
           .km-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 6px; }
-          .km-field label { display: block; font-size: 10px; color: #666; margin-bottom: 2px; }
-          .input-box { border: 1px solid #ccc; border-radius: 3px; height: 21px; background: white; }
+          .km-field label { display: block; font-size: 10px; color: var(--color-text-2); margin-bottom: 2px; }
+          .input-box { border: 1px solid var(--color-line-strong); border-radius: 3px; height: 21px; background: var(--color-surface); }
           .sig-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
           .sig-box { text-align: center; }
           .sig-line { border-bottom: 1px solid #333; height: 28px; margin-bottom: 3px; }
-          .sig-label { font-size: 10px; color: #666; text-transform: uppercase; }
-          .footer { margin-top: 8px; text-align: center; font-size: 10px; color: #999; padding-top: 6px; border-top: 1px solid #eee; }
+          .sig-label { font-size: 10px; color: var(--color-text-2); text-transform: uppercase; }
+          .footer { margin-top: 8px; text-align: center; font-size: 10px; color: var(--color-text-3); padding-top: 6px; border-top: 1px solid var(--color-line); }
         </style>
       </head>
       <body>
@@ -14092,7 +14068,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     <div class="tripsheet-type-dialog">
       <div class="dialog-header">
         <h2><mat-icon>add_road</mat-icon> Create Trip Sheet</h2>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -14163,8 +14139,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       justify-content: space-between;
       align-items: center;
       padding: 20px 24px;
-      border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #1976d2, #1565c0);
+      border-bottom: 1px solid var(--color-line);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       color: white;
       margin: -24px -24px 0;
     }
@@ -14173,7 +14149,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 22px;
+      font-size: var(--text-2xl);
     }
     .dialog-header button {
       color: white;
@@ -14183,9 +14159,9 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     }
     .subtitle {
       text-align: center;
-      color: #666;
+      color: var(--color-text-2);
       margin: 0 0 28px;
-      font-size: 15px;
+      font-size: var(--text-md);
     }
     .type-grid {
       display: grid;
@@ -14193,7 +14169,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       gap: 20px;
     }
     .type-card {
-      border: 2px solid #e0e0e0;
+      border: 2px solid var(--color-line);
       border-radius: 16px;
       padding: 32px 24px;
       text-align: center;
@@ -14206,8 +14182,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       justify-content: center;
     }
     .type-card:hover {
-      border-color: #1976d2;
-      background: #f5f9ff;
+      border-color: var(--color-primary);
+      background: var(--color-surface-2);
       transform: translateY(-3px);
       box-shadow: 0 6px 16px rgba(25, 118, 210, 0.2);
     }
@@ -14227,13 +14203,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       color: white;
     }
     .type-icon.import {
-      background: linear-gradient(135deg, #4caf50, #43a047);
+      background: linear-gradient(135deg, var(--color-ok), var(--color-ok));
     }
     .type-icon.automatic {
-      background: linear-gradient(135deg, #2196f3, #1976d2);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
     }
     .type-icon.manual {
-      background: linear-gradient(135deg, #ff9800, #f57c00);
+      background: linear-gradient(135deg, var(--color-warn), var(--color-warn));
     }
     .type-icon.transfer {
       background: linear-gradient(135deg, #9c27b0, #7b1fa2);
@@ -14242,34 +14218,34 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       background: linear-gradient(135deg, #00bcd4, #0097a7);
     }
     .type-icon.suggests {
-      background: linear-gradient(135deg, #ff6f00, #e65100);
+      background: linear-gradient(135deg, #ff6f00, var(--color-warn));
     }
     .suggests-card {
-      border-color: #ffe0b2;
-      background: linear-gradient(135deg, #fff3e0, #fff);
+      border-color: color-mix(in srgb, var(--color-warn) 35%, transparent);
+      background: linear-gradient(135deg, var(--color-warn-soft), var(--color-surface));
     }
     .suggests-card:hover {
-      border-color: #ff6f00 !important;
-      background: linear-gradient(135deg, #ffe0b2, #fff3e0) !important;
+      border-color: var(--color-warn) !important;
+      background: linear-gradient(135deg, var(--color-warn-soft), var(--color-warn-soft)) !important;
       box-shadow: 0 6px 16px rgba(255, 111, 0, 0.3) !important;
     }
     .suggests-badge {
-      background: linear-gradient(135deg, #ff6f00, #e65100) !important;
+      background: linear-gradient(135deg, #ff6f00, var(--color-warn)) !important;
     }
     .welly-card {
-      border-color: #b2ebf2;
-      background: linear-gradient(135deg, #e0f7fa, #fff);
+      border-color: color-mix(in srgb, var(--color-cat-teal) 35%, transparent);
+      background: linear-gradient(135deg, #e0f7fa, var(--color-surface));
     }
     .welly-card:hover {
-      border-color: #00bcd4 !important;
-      background: linear-gradient(135deg, #b2ebf2, #e0f7fa) !important;
+      border-color: var(--color-cat-teal) !important;
+      background: linear-gradient(135deg, var(--color-primary-soft), #e0f7fa) !important;
       box-shadow: 0 6px 16px rgba(0, 188, 212, 0.3) !important;
     }
     .ai-badge {
       display: inline-block;
       background: linear-gradient(135deg, #00bcd4, #0097a7);
       color: white;
-      font-size: 10px;
+      font-size: var(--text-xs);
       font-weight: 600;
       padding: 2px 10px;
       border-radius: 12px;
@@ -14279,13 +14255,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     }
     .type-card h3 {
       margin: 0 0 8px;
-      font-size: 16px;
-      color: #333;
+      font-size: var(--text-lg);
+      color: var(--color-text);
     }
     .type-card p {
       margin: 0;
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
       line-height: 1.4;
     }
   `]
@@ -14326,7 +14302,7 @@ export class TripsheetTypeDialog {
       <div class="dialog-header">
         <h2><mat-icon>edit_note</mat-icon> Manual Trip Sheet</h2>
         <span class="subtitle">Create a trip sheet without linking to system invoices</span>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -14456,7 +14432,7 @@ export class TripsheetTypeDialog {
                     <input matInput type="number" [(ngModel)]="item.value" min="0" step="0.01">
                   </mat-form-field>
                 </div>
-                <button mat-icon-button color="warn" (click)="removeLineItem(i)" matTooltip="Remove item">
+                <button aria-label="Remove item" mat-icon-button color="warn" (click)="removeLineItem(i)" matTooltip="Remove item">
                   <mat-icon>delete</mat-icon>
                 </button>
               </div>
@@ -14521,8 +14497,8 @@ export class TripsheetTypeDialog {
       align-items: center;
       gap: 16px;
       padding: 16px 24px;
-      border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #ff9800, #f57c00);
+      border-bottom: 1px solid var(--color-line);
+      background: linear-gradient(135deg, var(--color-warn), var(--color-warn));
       color: white;
       margin: -24px -24px 0;
     }
@@ -14531,11 +14507,11 @@ export class TripsheetTypeDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
     .dialog-header .subtitle {
       flex: 1;
-      font-size: 13px;
+      font-size: var(--text-sm);
       opacity: 0.9;
     }
     .dialog-header button {
@@ -14554,7 +14530,7 @@ export class TripsheetTypeDialog {
       align-items: center;
       gap: 8px;
       margin: 0 0 16px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .config-grid {
       display: grid;
@@ -14580,14 +14556,14 @@ export class TripsheetTypeDialog {
       align-items: flex-start;
       gap: 12px;
       padding: 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
     }
     .item-number {
       width: 32px;
       height: 32px;
-      background: #1976d2;
+      background: var(--color-primary);
       color: white;
       border-radius: 50%;
       display: flex;
@@ -14609,7 +14585,7 @@ export class TripsheetTypeDialog {
     .empty-items {
       text-align: center;
       padding: 48px;
-      color: #999;
+      color: var(--color-text-3);
     }
     .empty-items mat-icon {
       font-size: 48px;
@@ -14621,7 +14597,7 @@ export class TripsheetTypeDialog {
       display: flex;
       gap: 32px;
       padding: 16px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 8px;
       margin-bottom: 16px;
     }
@@ -14631,11 +14607,11 @@ export class TripsheetTypeDialog {
       gap: 8px;
     }
     .summary-item .label {
-      color: #666;
+      color: var(--color-text-2);
     }
     .summary-item .value {
       font-weight: 600;
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .full-width {
       width: 100%;
@@ -14645,9 +14621,9 @@ export class TripsheetTypeDialog {
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
       margin: 0 -24px -24px;
-      background: #fafafa;
+      background: var(--color-canvas);
     }
     .inline-spinner {
       display: inline-block;
@@ -14914,7 +14890,7 @@ export class ManualTripsheetDialog {
       <div class="dialog-header">
         <h2><mat-icon>swap_horiz</mat-icon> Internal Stock Transfer</h2>
         <span class="subtitle">Move stock between warehouses</span>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -15074,7 +15050,7 @@ export class ManualTripsheetDialog {
                     </mat-select>
                   </mat-form-field>
                 </div>
-                <button mat-icon-button color="warn" (click)="removeTransferItem(i)" matTooltip="Remove item">
+                <button aria-label="Remove item" mat-icon-button color="warn" (click)="removeTransferItem(i)" matTooltip="Remove item">
                   <mat-icon>delete</mat-icon>
                 </button>
               </div>
@@ -15120,7 +15096,7 @@ export class ManualTripsheetDialog {
       align-items: center;
       gap: 16px;
       padding: 16px 24px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
       background: linear-gradient(135deg, #9c27b0, #7b1fa2);
       color: white;
       margin: -24px -24px 0;
@@ -15130,11 +15106,11 @@ export class ManualTripsheetDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
     .dialog-header .subtitle {
       flex: 1;
-      font-size: 13px;
+      font-size: var(--text-sm);
       opacity: 0.9;
     }
     .dialog-header button {
@@ -15151,7 +15127,7 @@ export class ManualTripsheetDialog {
       justify-content: center;
       gap: 24px;
       padding: 24px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 12px;
       margin-bottom: 24px;
     }
@@ -15176,10 +15152,10 @@ export class ManualTripsheetDialog {
       color: white;
     }
     .point-icon.from {
-      background: linear-gradient(135deg, #f44336, #d32f2f);
+      background: linear-gradient(135deg, var(--color-danger), var(--color-danger));
     }
     .point-icon.to {
-      background: linear-gradient(135deg, #4caf50, #388e3c);
+      background: linear-gradient(135deg, var(--color-ok), var(--color-ok));
     }
     .route-arrow {
       display: flex;
@@ -15187,10 +15163,10 @@ export class ManualTripsheetDialog {
       padding: 0 16px;
     }
     .route-arrow mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
-      color: #9c27b0;
+      color: var(--color-cat-purple);
     }
     .route-point mat-form-field {
       width: 250px;
@@ -15203,7 +15179,7 @@ export class ManualTripsheetDialog {
       align-items: center;
       gap: 8px;
       margin: 0 0 16px;
-      color: #9c27b0;
+      color: var(--color-cat-purple);
     }
     .assignment-grid {
       display: grid;
@@ -15229,14 +15205,14 @@ export class ManualTripsheetDialog {
       align-items: flex-start;
       gap: 12px;
       padding: 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
     }
     .item-number {
       width: 32px;
       height: 32px;
-      background: #9c27b0;
+      background: var(--color-cat-purple);
       color: white;
       border-radius: 50%;
       display: flex;
@@ -15258,7 +15234,7 @@ export class ManualTripsheetDialog {
     .empty-items {
       text-align: center;
       padding: 48px;
-      color: #999;
+      color: var(--color-text-3);
     }
     .empty-items mat-icon {
       font-size: 48px;
@@ -15274,9 +15250,9 @@ export class ManualTripsheetDialog {
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
       margin: 0 -24px -24px;
-      background: #fafafa;
+      background: var(--color-canvas);
     }
     .inline-spinner {
       display: inline-block;
@@ -15540,7 +15516,7 @@ export class InternalTransferDialog {
                 <mat-icon class="file-icon">description</mat-icon>
                 <p class="file-name">{{ selectedFile.name }}</p>
                 <p class="file-size">{{ formatFileSize(selectedFile.size) }}</p>
-                <button mat-icon-button class="remove-file" (click)="removeFile($event)">
+                <button aria-label="Close" mat-icon-button class="remove-file" (click)="removeFile($event)">
                   <mat-icon>close</mat-icon>
                 </button>
               }
@@ -15598,7 +15574,7 @@ export class InternalTransferDialog {
             <div class="preview-summary">
               <h3>Import Preview: {{ previewResponse.fileName }}</h3>
               @if (data.padMode) {
-                <div class="manual-tripsheet-notice" style="background:#e8f5e9; border-color:#4caf50;">
+                <div class="manual-tripsheet-notice" style="background:var(--color-ok-soft); border-color:var(--color-ok);">
                   <mat-icon>receipt_long</mat-icon>
                   <span><strong>DN Trip Sheet</strong> &mdash;
                     @if (previewResponse.matchedCount > 0 || previewResponse.partialMatchCount > 0) {
@@ -15753,7 +15729,7 @@ export class InternalTransferDialog {
       margin-bottom: 16px;
     }
     .drop-zone {
-      border: 2px dashed #ccc;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 8px;
       padding: 40px 20px;
       text-align: center;
@@ -15762,54 +15738,54 @@ export class InternalTransferDialog {
       position: relative;
     }
     .drop-zone:hover, .drop-zone.drag-over {
-      border-color: #1976d2;
-      background: #e3f2fd;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
     }
     .upload-section.has-file .drop-zone {
       border-style: solid;
-      border-color: #4caf50;
-      background: #e8f5e9;
+      border-color: var(--color-ok);
+      background: var(--color-ok-soft);
     }
     .upload-icon {
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #9e9e9e;
+      color: var(--color-text-3);
     }
     .drop-zone:hover .upload-icon, .drop-zone.drag-over .upload-icon {
-      color: #1976d2;
+      color: var(--color-primary);
     }
     .upload-text {
       margin: 8px 0 4px;
-      font-size: 16px;
-      color: #333;
+      font-size: var(--text-lg);
+      color: var(--color-text);
     }
     .upload-hint {
       margin: 0;
-      font-size: 14px;
-      color: #666;
+      font-size: var(--text-md);
+      color: var(--color-text-2);
     }
     .file-types {
       margin-top: 12px;
-      font-size: 12px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
     .file-icon {
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #4caf50;
+      color: var(--color-ok);
     }
     .file-name {
       margin: 8px 0 4px;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
     }
     .file-size {
       margin: 0;
-      font-size: 14px;
-      color: #666;
+      font-size: var(--text-md);
+      color: var(--color-text-2);
     }
     .remove-file {
       position: absolute;
@@ -15818,7 +15794,7 @@ export class InternalTransferDialog {
     }
     .uploading-text {
       text-align: center;
-      color: #666;
+      color: var(--color-text-2);
       margin-top: 8px;
     }
     .error-message {
@@ -15826,13 +15802,13 @@ export class InternalTransferDialog {
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #ffebee;
-      color: #c62828;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
       border-radius: 4px;
       margin: 16px 0;
     }
     .info-section {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       padding: 16px;
     }
@@ -15841,13 +15817,13 @@ export class InternalTransferDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
-      color: #1976d2;
+      font-size: var(--text-md);
+      color: var(--color-primary);
     }
     .info-text {
       margin: 0 0 12px;
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
     .column-list {
       display: grid;
@@ -15858,22 +15834,22 @@ export class InternalTransferDialog {
       display: flex;
       flex-direction: column;
       padding: 8px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 4px;
-      border-left: 3px solid #e0e0e0;
+      border-left: 3px solid var(--color-line);
     }
     .column-item.required {
-      border-left-color: #f44336;
+      border-left-color: var(--color-danger);
     }
     .column-name {
       font-family: monospace;
       font-weight: 600;
-      font-size: 12px;
-      color: #333;
+      font-size: var(--text-xs);
+      color: var(--color-text);
     }
     .column-desc {
-      font-size: 11px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     
     /* Preview styles */
@@ -15885,27 +15861,27 @@ export class InternalTransferDialog {
     }
     .preview-summary h3 {
       margin: 0 0 8px;
-      font-size: 16px;
+      font-size: var(--text-lg);
     }
     .manual-tripsheet-notice {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-      border: 1px solid #2196f3;
+      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
+      border: 1px solid var(--color-primary);
       border-radius: 8px;
       margin-bottom: 12px;
-      color: #1565c0;
+      color: var(--color-primary-hover);
     }
     .manual-tripsheet-notice mat-icon {
-      color: #1976d2;
-      font-size: 24px;
+      color: var(--color-primary);
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
     }
     .manual-tripsheet-notice span {
-      font-size: 13px;
+      font-size: var(--text-sm);
       line-height: 1.4;
     }
     .summary-badges {
@@ -15916,57 +15892,57 @@ export class InternalTransferDialog {
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       padding: 4px 8px;
       border-radius: 4px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
     }
     .badge mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
-    .badge.matched mat-icon { color: #4caf50; }
-    .badge.partial mat-icon { color: #ff9800; }
-    .badge.unmatched mat-icon { color: #2196f3; }
-    .badge.error mat-icon { color: #f44336; }
+    .badge.matched mat-icon { color: var(--color-ok); }
+    .badge.partial mat-icon { color: var(--color-warn); }
+    .badge.unmatched mat-icon { color: var(--color-primary); }
+    .badge.error mat-icon { color: var(--color-danger); }
     
     .unmatched-row {
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
     }
     
     .preview-table-container {
       max-height: 400px;
       overflow-y: auto;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       border-radius: 4px;
       margin-bottom: 16px;
     }
     .preview-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
     .preview-table th, .preview-table td {
       padding: 8px 12px;
       text-align: left;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
     }
     .preview-table th {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       font-weight: 600;
       position: sticky;
       top: 0;
       z-index: 1;
     }
     .preview-table tr.error-row {
-      background: #ffebee;
+      background: var(--color-danger-soft);
     }
     .preview-table tr.matched-row {
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
     }
     .preview-table tr.partial-row {
-      background: #fff3e0;
+      background: var(--color-warn-soft);
     }
     .status-col {
       width: 50px;
@@ -15976,14 +15952,14 @@ export class InternalTransferDialog {
       width: 150px;
     }
     .status-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
-    .status-icon.matched { color: #4caf50; }
-    .status-icon.partial { color: #ff9800; }
-    .status-icon.unmatched { color: #2196f3; }
-    .status-icon.error { color: #f44336; }
+    .status-icon.matched { color: var(--color-ok); }
+    .status-icon.partial { color: var(--color-warn); }
+    .status-icon.unmatched { color: var(--color-primary); }
+    .status-icon.error { color: var(--color-danger); }
     
     .invoice-cell {
       font-family: monospace;
@@ -15994,8 +15970,8 @@ export class InternalTransferDialog {
     }
     .address-cell {
       max-width: 250px;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .amount-cell {
       font-family: monospace;
@@ -16003,47 +15979,47 @@ export class InternalTransferDialog {
     }
     .match-badge {
       display: inline-block;
-      font-size: 10px;
+      font-size: var(--text-xs);
       padding: 2px 6px;
-      background: #e3f2fd;
-      color: #1976d2;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       border-radius: 4px;
       margin-left: 4px;
     }
     .match-select {
       width: 100%;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
     .match-select ::ng-deep .mat-mdc-form-field-infix {
       padding: 4px 0 !important;
       min-height: 32px;
     }
     .confidence {
-      font-size: 12px;
-      color: #4caf50;
+      font-size: var(--text-xs);
+      color: var(--color-ok);
       font-weight: 600;
     }
     .message-row td {
       padding: 4px 12px !important;
-      background: #fafafa;
+      background: var(--color-canvas);
     }
     .validation-error, .validation-warning {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       margin-right: 12px;
     }
     .validation-error {
-      color: #c62828;
+      color: var(--color-danger);
     }
     .validation-error mat-icon, .validation-warning mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
     }
     .validation-warning {
-      color: #f57c00;
+      color: var(--color-warn);
     }
     
     /* Success styles */
@@ -16055,14 +16031,14 @@ export class InternalTransferDialog {
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #4caf50;
+      color: var(--color-ok);
     }
     .success-section h3 {
       margin: 16px 0 8px;
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
     .success-message {
-      color: #666;
+      color: var(--color-text-2);
       margin-bottom: 24px;
     }
     .result-stats {
@@ -16075,32 +16051,32 @@ export class InternalTransferDialog {
     }
     .stat-value {
       display: block;
-      font-size: 32px;
+      font-size: var(--text-4xl);
       font-weight: 600;
-      color: #4caf50;
+      color: var(--color-ok);
     }
     .stat.error .stat-value {
-      color: #f44336;
+      color: var(--color-danger);
     }
     .stat-label {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .error-list {
       margin-top: 24px;
       text-align: left;
-      background: #ffebee;
+      background: var(--color-danger-soft);
       padding: 12px;
       border-radius: 4px;
     }
     .error-list h4 {
       margin: 0 0 8px;
-      color: #c62828;
+      color: var(--color-danger);
     }
     .error-item {
       margin: 4px 0;
-      font-size: 12px;
-      color: #c62828;
+      font-size: var(--text-xs);
+      color: var(--color-danger);
     }
     
     h2 {
@@ -16109,7 +16085,7 @@ export class InternalTransferDialog {
       gap: 8px;
     }
     h2 mat-icon {
-      color: #4caf50;
+      color: var(--color-ok);
     }
 
     /* Assignment section styles */
@@ -16121,13 +16097,13 @@ export class InternalTransferDialog {
       align-items: center;
       gap: 8px;
       margin: 0 0 8px;
-      font-size: 18px;
-      color: #1976d2;
+      font-size: var(--text-xl);
+      color: var(--color-primary);
     }
     .assignment-info {
       margin: 0 0 16px;
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
     .assignment-form {
       display: grid;
@@ -16143,38 +16119,38 @@ export class InternalTransferDialog {
     }
     .available-badge {
       display: inline-block;
-      font-size: 10px;
+      font-size: var(--text-xs);
       padding: 2px 6px;
-      background: #e8f5e9;
-      color: #4caf50;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
       border-radius: 10px;
       margin-left: 8px;
     }
     .summary-card {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       padding: 16px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
     }
     .summary-card h4 {
       margin: 0 0 12px;
-      font-size: 14px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
     }
     .summary-row {
       display: flex;
       justify-content: space-between;
       padding: 6px 0;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
     }
     .summary-row:last-child {
       border-bottom: none;
     }
     .summary-row span {
-      color: #666;
+      color: var(--color-text-2);
     }
     .summary-row strong {
-      color: #1976d2;
+      color: var(--color-primary);
     }
   `]
 })
@@ -16514,7 +16490,7 @@ export class ImportTripsheetDialog {
       gap: 8px;
     }
     h2 mat-icon {
-      color: #ff9800;
+      color: var(--color-warn);
     }
   `]
 })
@@ -16770,26 +16746,26 @@ export class AddMaintenanceDialog implements OnInit {
       align-items: center;
       gap: 8px;
     }
-    h2 mat-icon { color: #1976d2; }
+    h2 mat-icon { color: var(--color-primary); }
     .integration-info {
       padding: 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       margin-top: 16px;
     }
     .integration-info h4 {
       margin: 0 0 12px 0;
-      color: #666;
+      color: var(--color-text-2);
     }
     .integration-row {
       display: flex;
       justify-content: space-between;
       padding: 8px 0;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
     }
     .integration-row:last-child { border-bottom: none; }
-    .label { font-weight: 500; color: #666; }
-    .linked { color: #4caf50; font-weight: 500; }
+    .label { font-weight: 500; color: var(--color-text-2); }
+    .linked { color: var(--color-ok); font-weight: 500; }
   `]
 })
 export class VehicleDialogComponent {
@@ -16904,17 +16880,17 @@ export class VehicleDialogComponent {
       align-items: center;
       gap: 8px;
     }
-    h2 mat-icon { color: #1976d2; }
+    h2 mat-icon { color: var(--color-primary); }
     .current-driver {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #fff3e0;
+      background: var(--color-warn-soft);
       border-radius: 8px;
       margin-top: 8px;
     }
-    .current-driver mat-icon { color: #ff9800; }
+    .current-driver mat-icon { color: var(--color-warn); }
   `]
 })
 export class AssignDriverDialogComponent implements OnInit {
@@ -17026,7 +17002,7 @@ export class AssignDriverDialogComponent implements OnInit {
       align-items: center;
       gap: 8px;
     }
-    h2 mat-icon { color: #1976d2; }
+    h2 mat-icon { color: var(--color-primary); }
     .loading {
       display: flex;
       flex-direction: column;
@@ -17037,13 +17013,13 @@ export class AssignDriverDialogComponent implements OnInit {
     .manual-entry {
       margin-top: 16px;
       padding-top: 16px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
     .manual-entry span {
       display: block;
       margin-bottom: 8px;
-      color: #666;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
   `]
 })
@@ -17184,7 +17160,7 @@ export class LinkVehicleDialogComponent implements OnInit {
       padding: 16px 0;
     }
     .tripsheet-info {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       padding: 12px;
       border-radius: 8px;
       margin-bottom: 8px;
@@ -17196,13 +17172,13 @@ export class LinkVehicleDialogComponent implements OnInit {
       width: 100%;
     }
     .on-duty {
-      color: #4caf50;
-      font-size: 12px;
+      color: var(--color-ok);
+      font-size: var(--text-xs);
       margin-left: 8px;
     }
     .available {
-      color: #2196f3;
-      font-size: 12px;
+      color: var(--color-primary);
+      font-size: var(--text-xs);
       margin-left: 8px;
     }
     mat-dialog-title {
@@ -17310,7 +17286,7 @@ export class AssignTripsheetDialog {
               {{ formData.proofOfWorkFile?.name || 'Choose File' }}
             </button>
             @if (formData.proofOfWorkFile) {
-              <button mat-icon-button color="warn" (click)="clearProofOfWork()" 
+              <button aria-label="Remove file" mat-icon-button color="warn" (click)="clearProofOfWork()" 
                       matTooltip="Remove file">
                 <mat-icon>close</mat-icon>
               </button>
@@ -17329,7 +17305,7 @@ export class AssignTripsheetDialog {
               {{ formData.proofOfPaymentFile?.name || 'Choose File' }}
             </button>
             @if (formData.proofOfPaymentFile) {
-              <button mat-icon-button color="warn" (click)="clearProofOfPayment()" 
+              <button aria-label="Remove file" mat-icon-button color="warn" (click)="clearProofOfPayment()" 
                       matTooltip="Remove file">
                 <mat-icon>close</mat-icon>
               </button>
@@ -17355,14 +17331,14 @@ export class AssignTripsheetDialog {
       padding: 8px 0;
     }
     .maintenance-info {
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       padding: 12px;
       border-radius: 8px;
-      border-left: 4px solid #2196f3;
+      border-left: 4px solid var(--color-primary);
     }
     .maintenance-info p {
       margin: 4px 0;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .full-width {
       width: 100%;
@@ -17375,8 +17351,8 @@ export class AssignTripsheetDialog {
       align-items: center;
       gap: 8px;
       margin: 8px 0 16px 0;
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
       font-weight: 500;
     }
     .file-upload {
@@ -17385,7 +17361,7 @@ export class AssignTripsheetDialog {
       gap: 12px;
       margin-bottom: 16px;
       padding: 12px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
     }
     .file-label {
@@ -17393,14 +17369,14 @@ export class AssignTripsheetDialog {
       align-items: center;
       gap: 8px;
       flex: 1;
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
     .file-label mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
-      color: #ff9800;
+      color: var(--color-warn);
     }
     input[type="file"] {
       display: none;
@@ -17414,7 +17390,7 @@ export class AssignTripsheetDialog {
       gap: 8px;
     }
     mat-dialog-title mat-icon {
-      color: #4caf50;
+      color: var(--color-ok);
     }
   `]
 })
@@ -17543,7 +17519,7 @@ export class CompleteMaintenanceDialog {
   `,
   styles: [`
     .load-info {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       padding: 12px;
       border-radius: 4px;
       margin-bottom: 20px;
@@ -17563,19 +17539,19 @@ export class CompleteMaintenanceDialog {
       align-items: center;
       gap: 8px;
       padding: 8px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 4px;
       font-size: 0.9rem;
-      color: #1565c0;
+      color: var(--color-primary-hover);
     }
 
     .status-desc mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
 
-    .status-desc.warn { background: #fff8e1; color: #e65100; }
+    .status-desc.warn { background: var(--color-warn-soft); color: var(--color-warn); }
 
     mat-dialog-content {
       min-width: 400px;
@@ -17799,7 +17775,7 @@ export class UpdateLoadStatusDialog {
                   <span *ngIf="att.uploadedBy">&bull; {{ att.uploadedBy }}</span>
                 </div>
               </div>
-              <button mat-icon-button color="primary" (click)="downloadAttachment(att)" matTooltip="Download">
+              <button aria-label="Download" mat-icon-button color="primary" (click)="downloadAttachment(att)" matTooltip="Download">
                 <mat-icon>download</mat-icon>
               </button>
             </div>
@@ -17834,7 +17810,7 @@ export class UpdateLoadStatusDialog {
       display: flex;
       align-items: center;
       gap: 12px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .details-section {
@@ -17844,46 +17820,46 @@ export class UpdateLoadStatusDialog {
     .detail-row {
       display: flex;
       padding: 10px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--color-line);
       align-items: center;
     }
 
     .detail-label {
       font-weight: 600;
-      color: #666;
+      color: var(--color-text-2);
       width: 200px;
       flex-shrink: 0;
     }
 
     .detail-value {
-      color: #333;
+      color: var(--color-text);
       flex: 1;
     }
 
     .status-chip, .priority-chip, .stop-type-chip, .stop-status-chip {
-      font-size: 12px;
+      font-size: var(--text-xs);
       height: 24px;
       font-weight: 600;
     }
 
-    .status-available { background-color: #90caf9; color: #0d47a1; }
-    .status-assigned { background-color: #fff59d; color: #f57f17; }
-    .status-intransit { background-color: #ffcc80; color: #e65100; }
-    .status-delivered { background-color: #a5d6a7; color: #1b5e20; }
-    .status-cancelled { background-color: #ef9a9a; color: #b71c1c; }
+    .status-available { background-color: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .status-assigned { background-color: var(--color-warn-soft); color: var(--color-warn); }
+    .status-intransit { background-color: var(--color-warn-soft); color: var(--color-warn); }
+    .status-delivered { background-color: var(--color-ok-soft); color: var(--color-ok); }
+    .status-cancelled { background-color: var(--color-danger-soft); color: var(--color-danger); }
 
-    .priority-low { background-color: #e0e0e0; color: #424242; }
-    .priority-normal { background-color: #90caf9; color: #0d47a1; }
-    .priority-high { background-color: #ffab91; color: #bf360c; }
-    .priority-urgent { background-color: #ef5350; color: #fff; }
+    .priority-low { background-color: var(--color-line); color: var(--color-text-2); }
+    .priority-normal { background-color: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .priority-high { background-color: var(--color-danger-soft); color: var(--color-danger); }
+    .priority-urgent { background-color: var(--color-danger); color: #fff; }
 
     .stops-section {
       padding: 20px;
     }
 
     .stop-card {
-      background: #f9f9f9;
-      border: 1px solid #e0e0e0;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 16px;
@@ -17900,9 +17876,9 @@ export class UpdateLoadStatusDialog {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 600;
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .stop-details .detail-row {
@@ -17912,7 +17888,7 @@ export class UpdateLoadStatusDialog {
 
     .stop-details .detail-label {
       width: 120px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .commodities-section {
@@ -17922,16 +17898,16 @@ export class UpdateLoadStatusDialog {
 
     .commodities-section h4 {
       margin: 12px 0 8px 0;
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
 
     .commodity-item {
-      background: white;
+      background: var(--color-surface);
       padding: 10px;
       margin: 8px 0;
       border-radius: 4px;
-      border-left: 3px solid #1976d2;
+      border-left: 3px solid var(--color-primary);
     }
 
     .commodity-row {
@@ -17944,8 +17920,8 @@ export class UpdateLoadStatusDialog {
     .commodity-details {
       display: flex;
       gap: 20px;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .timeline-section {
@@ -17957,7 +17933,7 @@ export class UpdateLoadStatusDialog {
       align-items: flex-start;
       gap: 16px;
       padding: 16px 0;
-      border-left: 2px solid #e0e0e0;
+      border-left: 2px solid var(--color-line);
       padding-left: 20px;
       margin-left: 12px;
       position: relative;
@@ -17968,9 +17944,9 @@ export class UpdateLoadStatusDialog {
     }
 
     .timeline-icon {
-      color: #1976d2;
-      background: white;
-      border: 2px solid #1976d2;
+      color: var(--color-primary);
+      background: var(--color-surface);
+      border: 2px solid var(--color-primary);
       border-radius: 50%;
       padding: 8px;
       position: absolute;
@@ -17983,13 +17959,13 @@ export class UpdateLoadStatusDialog {
 
     .timeline-title {
       font-weight: 600;
-      font-size: 16px;
-      color: #333;
+      font-size: var(--text-lg);
+      color: var(--color-text);
     }
 
     .timeline-date {
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
       margin-top: 4px;
     }
 
@@ -17999,7 +17975,7 @@ export class UpdateLoadStatusDialog {
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .empty-state mat-icon {
@@ -18022,23 +17998,23 @@ export class UpdateLoadStatusDialog {
       align-items: center;
       gap: 14px;
       padding: 12px 16px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       border-radius: 8px;
       margin-bottom: 10px;
-      background: #fafafa;
+      background: var(--color-canvas);
     }
 
-    .attachment-icon { color: #c62828; }
-    .attachment-icon.excel { color: #2e7d32; }
+    .attachment-icon { color: var(--color-danger); }
+    .attachment-icon.excel { color: var(--color-ok); }
 
     .attachment-info { flex: 1; min-width: 0; }
-    .attachment-name { font-weight: 600; color: #333; word-break: break-all; }
-    .attachment-meta { font-size: 12px; color: #777; margin-top: 2px; }
+    .attachment-name { font-weight: 600; color: var(--color-text); word-break: break-all; }
+    .attachment-meta { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 2px; }
     .attachment-category {
       font-weight: 600;
-      color: #1976d2;
+      color: var(--color-primary);
     }
-    .empty-hint { font-size: 12px; color: #aaa; margin-top: 4px; }
+    .empty-hint { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 4px; }
   `]
 })
 export class ViewLoadDetailsDialog {
@@ -18330,7 +18306,7 @@ export class ViewLoadDetailsDialog {
       gap: 8px;
       margin: 0;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
     }
 
@@ -18339,7 +18315,7 @@ export class ViewLoadDetailsDialog {
       flex-wrap: wrap;
       gap: 24px;
       padding: 10px 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       margin-bottom: 12px;
       flex-shrink: 0;
@@ -18353,8 +18329,8 @@ export class ViewLoadDetailsDialog {
     }
 
     .info-item strong {
-      color: #666;
-      font-size: 12px;
+      color: var(--color-text-2);
+      font-size: var(--text-xs);
       text-transform: uppercase;
     }
 
@@ -18382,15 +18358,15 @@ export class ViewLoadDetailsDialog {
 
     .stops-legend {
       padding: 16px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .stops-legend h3 {
       margin: 0 0 16px 0;
-      color: #333;
-      font-size: 16px;
+      color: var(--color-text);
+      font-size: var(--text-lg);
     }
 
     .stop-item {
@@ -18398,9 +18374,9 @@ export class ViewLoadDetailsDialog {
       gap: 16px;
       padding: 12px;
       margin-bottom: 8px;
-      background: #f9f9f9;
+      background: var(--color-canvas);
       border-radius: 8px;
-      border-left: 4px solid #2563eb;
+      border-left: 4px solid var(--color-primary);
     }
 
     .stop-number {
@@ -18409,7 +18385,7 @@ export class ViewLoadDetailsDialog {
       justify-content: center;
       width: 32px;
       height: 32px;
-      background: #2563eb;
+      background: var(--color-primary);
       color: white;
       border-radius: 50%;
       font-weight: bold;
@@ -18425,12 +18401,12 @@ export class ViewLoadDetailsDialog {
     .stop-details strong {
       display: block;
       margin-bottom: 4px;
-      color: #333;
+      color: var(--color-text);
     }
 
     .stop-details > div {
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
       margin-bottom: 4px;
     }
 
@@ -18444,10 +18420,10 @@ export class ViewLoadDetailsDialog {
     .commodity-chip {
       display: inline-block;
       padding: 4px 12px;
-      background: #e3f2fd;
-      color: #1976d2;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       border-radius: 12px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 500;
     }
 
@@ -18455,28 +18431,28 @@ export class ViewLoadDetailsDialog {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
-      color: #666;
-      background: #fff8e1;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
+      background: var(--color-warn-soft);
       border-radius: 6px;
       padding: 8px 12px;
       margin: 0 0 12px 0;
     }
-    .group-note mat-icon { font-size: 18px; width: 18px; height: 18px; color: #f9a825; }
+    .group-note mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-warn); }
 
     .invoice-line {
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 13px;
-      color: #1976d2 !important;
+      font-size: var(--text-sm);
+      color: var(--color-primary) !important;
       font-weight: 500;
     }
     .invoice-line mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
     .stop-notes {
-      font-size: 12px;
-      color: #888 !important;
+      font-size: var(--text-xs);
+      color: var(--color-text-3) !important;
       white-space: pre-wrap;
       margin-top: 4px;
     }
@@ -18486,14 +18462,14 @@ export class ViewLoadDetailsDialog {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+      background: linear-gradient(135deg, var(--color-ok-soft) 0%, var(--color-ok-soft) 100%);
       border-radius: 8px;
-      border-left: 4px solid #4caf50;
+      border-left: 4px solid var(--color-ok);
       flex-shrink: 0;
     }
 
     .tracking-banner mat-icon {
-      color: #4caf50;
+      color: var(--color-ok);
       font-size: 28px;
       width: 28px;
       height: 28px;
@@ -18506,13 +18482,13 @@ export class ViewLoadDetailsDialog {
     }
 
     .tracking-details strong {
-      color: #2e7d32;
-      font-size: 14px;
+      color: var(--color-ok);
+      font-size: var(--text-md);
     }
 
     .tracking-details span {
-      color: #555;
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
 
     mat-dialog-actions {
@@ -18872,7 +18848,7 @@ export class ViewRouteMapDialog implements OnInit {
             <span class="header-subtitle">Fleet dispatch overview and analytics</span>
           </div>
         </div>
-        <button mat-icon-button mat-dialog-close class="close-btn">
+        <button aria-label="Close" mat-icon-button mat-dialog-close class="close-btn">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -18893,7 +18869,7 @@ export class ViewRouteMapDialog implements OnInit {
             <mat-icon>file_download</mat-icon>
             <span>Export Excel</span>
           </button>
-          <button mat-flat-button class="refresh-btn" (click)="loadReport()" [disabled]="loading">
+          <button aria-label="Refresh" mat-flat-button class="refresh-btn" (click)="loadReport()" [disabled]="loading">
             <mat-icon>refresh</mat-icon>
           </button>
         </div>
@@ -19025,7 +19001,7 @@ export class ViewRouteMapDialog implements OnInit {
       flex-direction: column;
       height: 100%;
       min-width: 1200px;
-      background: #f8fafc;
+      background: var(--color-canvas);
     }
 
     /* Header Styles */
@@ -19034,7 +19010,7 @@ export class ViewRouteMapDialog implements OnInit {
       justify-content: space-between;
       align-items: center;
       padding: 20px 28px;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+      background: linear-gradient(135deg, var(--color-text) 0%, var(--color-text) 50%, var(--color-text-2) 100%);
       color: white;
       position: relative;
       overflow: hidden;
@@ -19061,7 +19037,7 @@ export class ViewRouteMapDialog implements OnInit {
     .header-icon {
       width: 52px;
       height: 52px;
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
       border-radius: 14px;
       display: flex;
       align-items: center;
@@ -19077,13 +19053,13 @@ export class ViewRouteMapDialog implements OnInit {
 
     .header-text h2 {
       margin: 0;
-      font-size: 24px;
+      font-size: var(--text-3xl);
       font-weight: 600;
       letter-spacing: -0.5px;
     }
 
     .header-subtitle {
-      font-size: 13px;
+      font-size: var(--text-sm);
       color: rgba(255,255,255,0.7);
       margin-top: 2px;
       display: block;
@@ -19105,7 +19081,7 @@ export class ViewRouteMapDialog implements OnInit {
       flex: 1;
       padding: 28px;
       overflow-y: auto;
-      background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+      background: linear-gradient(180deg, var(--color-surface-2) 0%, var(--color-line) 100%);
     }
 
     /* Controls Bar */
@@ -19115,7 +19091,7 @@ export class ViewRouteMapDialog implements OnInit {
       gap: 12px;
       margin-bottom: 28px;
       padding: 16px 20px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
     }
@@ -19127,8 +19103,8 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .control-icon {
-      color: #64748b;
-      font-size: 22px;
+      color: var(--color-text-3);
+      font-size: var(--text-2xl);
     }
 
     .report-controls mat-form-field {
@@ -19140,7 +19116,7 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .export-btn {
-      background: linear-gradient(135deg, #10b981, #059669) !important;
+      background: linear-gradient(135deg, var(--color-ok), var(--color-ok)) !important;
       color: white !important;
       padding: 0 20px;
       height: 42px;
@@ -19158,8 +19134,8 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .refresh-btn {
-      background: #f1f5f9 !important;
-      color: #475569 !important;
+      background: var(--color-surface-2) !important;
+      color: var(--color-text-2) !important;
       min-width: 42px !important;
       width: 42px;
       height: 42px;
@@ -19168,7 +19144,7 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .refresh-btn:hover {
-      background: #e2e8f0 !important;
+      background: var(--color-line) !important;
     }
 
     /* Loading State */
@@ -19178,7 +19154,7 @@ export class ViewRouteMapDialog implements OnInit {
       align-items: center;
       justify-content: center;
       padding: 80px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
@@ -19189,8 +19165,8 @@ export class ViewRouteMapDialog implements OnInit {
 
     .loading-state p {
       margin-top: 20px;
-      color: #64748b;
-      font-size: 15px;
+      color: var(--color-text-3);
+      font-size: var(--text-md);
       font-weight: 500;
     }
 
@@ -19203,7 +19179,7 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .summary-card {
-      background: white;
+      background: var(--color-surface);
       padding: 24px;
       border-radius: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
@@ -19237,18 +19213,18 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .summary-card.daily .card-icon {
-      background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-      color: #2563eb;
+      background: linear-gradient(135deg, var(--color-primary-soft), var(--color-primary-soft));
+      color: var(--color-primary);
     }
 
     .summary-card.monthly .card-icon {
-      background: linear-gradient(135deg, #fae8ff, #f5d0fe);
-      color: #a855f7;
+      background: linear-gradient(135deg, var(--color-cat-purple-soft), var(--color-cat-purple-soft));
+      color: var(--color-cat-purple);
     }
 
     .summary-card.vehicles .card-icon {
-      background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-      color: #059669;
+      background: linear-gradient(135deg, var(--color-ok-soft), var(--color-ok-soft));
+      color: var(--color-ok);
     }
 
     .card-content {
@@ -19258,29 +19234,29 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .card-label {
-      font-size: 13px;
-      color: #64748b;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .card-value {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       font-weight: 700;
-      color: #0f172a;
+      color: var(--color-text);
       line-height: 1.2;
       margin: 6px 0;
     }
 
     .card-date {
-      font-size: 12px;
-      color: #94a3b8;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
 
     /* Provinces Section */
     .provinces-section {
-      background: white;
+      background: var(--color-surface);
       padding: 24px;
       border-radius: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
@@ -19295,22 +19271,22 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .section-header mat-icon {
-      color: #3b82f6;
-      font-size: 24px;
+      color: var(--color-primary);
+      font-size: var(--text-3xl);
     }
 
     .section-header h3 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 600;
-      color: #0f172a;
+      color: var(--color-text);
     }
 
     .record-count {
       margin-left: auto;
-      font-size: 13px;
-      color: #64748b;
-      background: #f1f5f9;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
+      background: var(--color-surface-2);
       padding: 4px 12px;
       border-radius: 20px;
     }
@@ -19322,25 +19298,25 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .province-card {
-      background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+      background: linear-gradient(135deg, var(--color-canvas), var(--color-surface-2));
       padding: 18px 20px;
       border-radius: 14px;
       display: flex;
       align-items: center;
       gap: 14px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--color-line);
       transition: all 0.2s;
     }
 
     .province-card:hover {
-      border-color: #3b82f6;
-      background: linear-gradient(135deg, #eff6ff, #dbeafe);
+      border-color: var(--color-primary);
+      background: linear-gradient(135deg, var(--color-primary-soft), var(--color-primary-soft));
     }
 
     .province-icon {
       width: 40px;
       height: 40px;
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -19349,7 +19325,7 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .province-icon mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -19361,19 +19337,19 @@ export class ViewRouteMapDialog implements OnInit {
 
     .province-name {
       font-weight: 600;
-      color: #334155;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
 
     .province-value {
       font-weight: 700;
-      color: #0f172a;
-      font-size: 18px;
+      color: var(--color-text);
+      font-size: var(--text-xl);
     }
 
     /* Table Section */
     .table-section {
-      background: white;
+      background: var(--color-surface);
       border-radius: 20px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
       overflow: hidden;
@@ -19381,7 +19357,7 @@ export class ViewRouteMapDialog implements OnInit {
 
     .table-section .section-header {
       padding: 20px 24px;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--color-line);
       margin-bottom: 0;
     }
 
@@ -19392,81 +19368,81 @@ export class ViewRouteMapDialog implements OnInit {
     .vehicles-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
 
     .vehicles-table thead {
-      background: #f8fafc;
+      background: var(--color-canvas);
     }
 
     .vehicles-table th {
       padding: 14px 16px;
       text-align: left;
       font-weight: 600;
-      font-size: 11px;
+      font-size: var(--text-xs);
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: #64748b;
-      border-bottom: 2px solid #e2e8f0;
+      color: var(--color-text-3);
+      border-bottom: 2px solid var(--color-line);
       white-space: nowrap;
     }
 
     .vehicles-table tbody tr {
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--color-surface-2);
       transition: background 0.15s;
     }
 
     .vehicles-table tbody tr:hover {
-      background: #f8fafc;
+      background: var(--color-canvas);
     }
 
     .vehicles-table td {
       padding: 14px 16px;
       vertical-align: middle;
-      color: #334155;
+      color: var(--color-text-2);
     }
 
     .province-badge {
-      background: linear-gradient(135deg, #eff6ff, #dbeafe);
-      color: #1d4ed8;
+      background: linear-gradient(135deg, var(--color-primary-soft), var(--color-primary-soft));
+      color: var(--color-primary-hover);
       padding: 4px 10px;
       border-radius: 6px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 600;
       white-space: nowrap;
     }
 
     .vehicle-type {
-      background: #f1f5f9;
-      color: #475569;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
       padding: 4px 10px;
       border-radius: 6px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 500;
     }
 
     .mono {
       font-family: 'SF Mono', 'Consolas', monospace;
-      font-size: 12px;
-      color: #0f172a;
+      font-size: var(--text-xs);
+      color: var(--color-text);
       font-weight: 500;
     }
 
     .date-cell {
-      color: #64748b;
+      color: var(--color-text-3);
       white-space: nowrap;
     }
 
     .vehicles-table td.currency {
       font-weight: 600;
-      color: #059669;
+      color: var(--color-ok);
       text-align: right;
       white-space: nowrap;
       font-family: 'SF Mono', 'Consolas', monospace;
     }
 
     .vehicles-table td.currency.mtd {
-      color: #7c3aed;
+      color: var(--color-cat-purple);
     }
 
     .vehicles-table td.center {
@@ -19478,7 +19454,7 @@ export class ViewRouteMapDialog implements OnInit {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: #64748b;
+      color: var(--color-text-3);
     }
 
     .notes-cell {
@@ -19486,15 +19462,15 @@ export class ViewRouteMapDialog implements OnInit {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: #94a3b8;
+      color: var(--color-text-3);
       font-style: italic;
     }
 
     /* Dialog Actions */
     mat-dialog-actions {
       padding: 16px 28px;
-      background: white;
-      border-top: 1px solid #e2e8f0;
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-line);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -19504,12 +19480,12 @@ export class ViewRouteMapDialog implements OnInit {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 12px;
-      color: #94a3b8;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
 
     .footer-info mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -19592,7 +19568,7 @@ export class LogisticsReportsDialog implements OnInit {
             LIVE
           </span>
         </h2>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -19761,7 +19737,7 @@ export class LogisticsReportsDialog implements OnInit {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-size: 22px;
+      font-size: var(--text-2xl);
     }
     
     .dialog-header button { color: white; }
@@ -19773,13 +19749,13 @@ export class LogisticsReportsDialog implements OnInit {
       background: rgba(255,255,255,0.2);
       padding: 4px 12px;
       border-radius: 12px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
       margin-left: 12px;
     }
     
     .live-dot {
-      font-size: 12px !important;
+      font-size: var(--text-xs) !important;
       width: 12px !important;
       height: 12px !important;
       animation: pulse-live 1.5s infinite;
@@ -19802,7 +19778,7 @@ export class LogisticsReportsDialog implements OnInit {
       flex-wrap: wrap;
       margin-bottom: 24px;
       padding-bottom: 24px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
     }
     
     .vehicle-select {
@@ -19819,7 +19795,7 @@ export class LogisticsReportsDialog implements OnInit {
     
     .camera-label {
       font-weight: 500;
-      color: #666;
+      color: var(--color-text-2);
       margin-right: 8px;
     }
     
@@ -19828,12 +19804,12 @@ export class LogisticsReportsDialog implements OnInit {
     }
     
     mat-chip-option.selected {
-      background: #ff416c !important;
+      background: var(--color-danger) !important;
       color: white !important;
     }
     
     mat-chip-option mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       margin-right: 4px;
     }
     
@@ -19877,15 +19853,15 @@ export class LogisticsReportsDialog implements OnInit {
     }
     
     .camera-name mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
     
     .stream-header .live-indicator {
       display: flex;
       align-items: center;
       gap: 4px;
-      color: #ff4444;
-      font-size: 12px;
+      color: var(--color-danger);
+      font-size: var(--text-xs);
       font-weight: 600;
     }
     
@@ -19926,7 +19902,7 @@ export class LogisticsReportsDialog implements OnInit {
       align-items: center;
       justify-content: center;
       height: 100%;
-      color: #666;
+      color: var(--color-text-2);
     }
     
     .no-stream mat-icon {
@@ -19946,7 +19922,7 @@ export class LogisticsReportsDialog implements OnInit {
       justify-content: center;
       padding: 60px;
       text-align: center;
-      color: #666;
+      color: var(--color-text-2);
     }
     
     .loading-container mat-spinner {
@@ -19957,7 +19933,7 @@ export class LogisticsReportsDialog implements OnInit {
       font-size: 56px;
       width: 56px;
       height: 56px;
-      color: #f44336;
+      color: var(--color-danger);
       margin-bottom: 16px;
     }
     
@@ -19969,13 +19945,13 @@ export class LogisticsReportsDialog implements OnInit {
       font-size: 80px;
       width: 80px;
       height: 80px;
-      color: #ff416c;
+      color: var(--color-danger);
       margin-bottom: 16px;
     }
     
     .placeholder h3 {
       margin: 0 0 8px 0;
-      color: #333;
+      color: var(--color-text);
     }
     
     .placeholder p {
@@ -19995,14 +19971,14 @@ export class LogisticsReportsDialog implements OnInit {
     }
     
     .feature mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
-      color: #ff416c;
+      color: var(--color-danger);
     }
     
     .feature span {
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 500;
     }
     
@@ -20010,13 +19986,13 @@ export class LogisticsReportsDialog implements OnInit {
       font-size: 56px;
       width: 56px;
       height: 56px;
-      color: #ff9800;
+      color: var(--color-warn);
       margin-bottom: 16px;
     }
     
     mat-dialog-actions {
       padding: 16px 32px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
     
     @media (max-width: 768px) {
@@ -20219,7 +20195,7 @@ export class LiveStreamingDialog implements OnInit {
               <mat-option [value]="vehicle.id">
                 {{ vehicle.registrationNumber }} - {{ vehicle.type || vehicle.vehicleTypeName }}
                 @if (vehicle.currentDriver || vehicle.currentDriverName) {
-                  <span style="color: #666; font-size: 0.85em;"> ({{ vehicle.currentDriver || vehicle.currentDriverName }})</span>
+                  <span style="color: var(--color-text-2); font-size: 0.85em;"> ({{ vehicle.currentDriver || vehicle.currentDriverName }})</span>
                 }
               </mat-option>
             }
@@ -20316,8 +20292,8 @@ export class ReassignLoadDialog {
     <mat-dialog-content style="min-height: 220px; padding-top: 16px;">
       <div style="display: flex; flex-direction: column; gap: 16px;">
         <!-- Current schedule info -->
-        <div style="background: #f5f5f5; border-radius: 8px; padding: 12px; margin-bottom: 4px;">
-          <div style="font-size: 12px; color: #666; font-weight: 500; margin-bottom: 6px;">CURRENT SCHEDULE</div>
+        <div style="background: var(--color-surface-2); border-radius: 8px; padding: 12px; margin-bottom: 4px;">
+          <div style="font-size: 12px; color: var(--color-text-2); font-weight: 500; margin-bottom: 6px;">CURRENT SCHEDULE</div>
           <div style="display: flex; gap: 20px; font-size: 13px;">
             <div><strong>Pickup:</strong> {{ data.currentPickupDate ? (data.currentPickupDate | date:'dd MMM yyyy') : 'Not set' }}
               {{ data.currentPickupTime ? formatTime(data.currentPickupTime) : '' }}</div>
@@ -20678,10 +20654,10 @@ export class ReassignProvinceDialog {
   `,
   styles: [`
     .vs-title {
-      display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px;
+      display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-2xl);
     }
     .vs-total {
-      margin-left: auto; font-size: 13px; color: #888; font-weight: 400;
+      margin-left: auto; font-size: var(--text-sm); color: var(--color-text-3); font-weight: 400;
     }
     .vs-content {
       padding: 0 4px !important; max-height: 70vh;
@@ -20694,62 +20670,62 @@ export class ReassignProvinceDialog {
     }
     .vs-chip {
       display: flex; align-items: center; gap: 4px; padding: 6px 12px;
-      border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer;
+      border-radius: 20px; font-size: var(--text-xs); font-weight: 500; cursor: pointer;
       transition: all 0.2s; border: 1px solid transparent;
     }
     .vs-chip:hover { transform: scale(1.05); }
-    .vs-chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    .vs-chip.available { background: #e8f5e9; color: #2e7d32; }
-    .vs-chip.maintenance { background: #fff3e0; color: #e65100; }
-    .vs-chip.assigned { background: #e3f2fd; color: #1565c0; }
-    .vs-chip.decommissioned { background: #fce4ec; color: #c62828; }
-    .vs-chip.unavailable { background: #f3e5f5; color: #6a1b9a; }
-    .vs-chip.clear { background: #eceff1; color: #455a64; }
+    .vs-chip mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
+    .vs-chip.available { background: var(--color-ok-soft); color: var(--color-ok); }
+    .vs-chip.maintenance { background: var(--color-warn-soft); color: var(--color-warn); }
+    .vs-chip.assigned { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .vs-chip.decommissioned { background: var(--color-cat-pink-soft); color: var(--color-danger); }
+    .vs-chip.unavailable { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .vs-chip.clear { background: var(--color-surface-2); color: var(--color-text-2); }
 
     .vs-list {
       display: flex; flex-direction: column; gap: 4px;
     }
     .vs-vehicle-row {
       display: flex; align-items: center; gap: 12px; padding: 10px 12px;
-      border-radius: 8px; background: #fafafa; transition: all 0.2s;
+      border-radius: 8px; background: var(--color-canvas); transition: all 0.2s;
       border-left: 4px solid transparent;
     }
-    .vs-vehicle-row:hover { background: #f0f0f0; }
-    .vs-vehicle-row.status-available { border-left-color: #4caf50; }
-    .vs-vehicle-row.status-maintenance { border-left-color: #ff9800; }
-    .vs-vehicle-row.status-inuse { border-left-color: #2196f3; }
-    .vs-vehicle-row.status-decommissioned { border-left-color: #f44336; }
-    .vs-vehicle-row.status-unavailable { border-left-color: #9c27b0; }
+    .vs-vehicle-row:hover { background: var(--color-surface-2); }
+    .vs-vehicle-row.status-available { border-left-color: var(--color-ok); }
+    .vs-vehicle-row.status-maintenance { border-left-color: var(--color-warn); }
+    .vs-vehicle-row.status-inuse { border-left-color: var(--color-primary); }
+    .vs-vehicle-row.status-decommissioned { border-left-color: var(--color-danger); }
+    .vs-vehicle-row.status-unavailable { border-left-color: var(--color-cat-purple); }
 
     .vs-status-indicator {
       width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
     }
-    .bg-available { background: #4caf50; }
-    .bg-maintenance { background: #ff9800; }
-    .bg-inuse { background: #2196f3; }
-    .bg-decommissioned { background: #f44336; }
-    .bg-unavailable { background: #9c27b0; }
+    .bg-available { background: var(--color-ok); }
+    .bg-maintenance { background: var(--color-warn); }
+    .bg-inuse { background: var(--color-primary); }
+    .bg-decommissioned { background: var(--color-danger); }
+    .bg-unavailable { background: var(--color-cat-purple); }
 
     .vs-vehicle-info { flex: 1; min-width: 0; }
-    .vs-reg { font-weight: 600; font-size: 14px; color: #212121; }
-    .vs-details { font-size: 12px; color: #666; display: flex; align-items: center; gap: 8px; }
-    .vs-driver { display: inline-flex; align-items: center; gap: 2px; color: #1565c0; }
-    .vs-mini-icon { font-size: 14px !important; width: 14px !important; height: 14px !important; }
+    .vs-reg { font-weight: 600; font-size: var(--text-md); color: var(--color-text); }
+    .vs-details { font-size: var(--text-xs); color: var(--color-text-2); display: flex; align-items: center; gap: 8px; }
+    .vs-driver { display: inline-flex; align-items: center; gap: 2px; color: var(--color-primary-hover); }
+    .vs-mini-icon { font-size: var(--text-md) !important; width: 14px !important; height: 14px !important; }
 
     .vs-vehicle-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    .vs-province { font-size: 11px; color: #888; background: #f5f5f5; padding: 2px 8px; border-radius: 10px; }
+    .vs-province { font-size: var(--text-xs); color: var(--color-text-3); background: var(--color-surface-2); padding: 2px 8px; border-radius: 10px; }
     .vs-status-badge {
-      font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+      font-size: var(--text-xs); font-weight: 600; padding: 3px 10px; border-radius: 12px;
     }
-    .badge-available { background: #e8f5e9; color: #2e7d32; }
-    .badge-maintenance { background: #fff3e0; color: #e65100; }
-    .badge-inuse { background: #e3f2fd; color: #1565c0; }
-    .badge-decommissioned { background: #fce4ec; color: #c62828; }
-    .badge-unavailable { background: #f3e5f5; color: #6a1b9a; }
+    .badge-available { background: var(--color-ok-soft); color: var(--color-ok); }
+    .badge-maintenance { background: var(--color-warn-soft); color: var(--color-warn); }
+    .badge-inuse { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .badge-decommissioned { background: var(--color-cat-pink-soft); color: var(--color-danger); }
+    .badge-unavailable { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
 
     .vs-empty {
       display: flex; flex-direction: column; align-items: center; gap: 8px;
-      padding: 32px; color: #999;
+      padding: 32px; color: var(--color-text-3);
     }
     .vs-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.5; }
   `]
@@ -20881,7 +20857,7 @@ export class VehicleStatusDialog {
             <p class="header-sub">{{ stepDescriptions[currentStep] }}</p>
           </div>
         </div>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -21301,8 +21277,8 @@ export class VehicleStatusDialog {
       align-items: center; justify-content: center;
     }
     .welly-avatar mat-icon { font-size: 28px; width: 28px; height: 28px; }
-    .wizard-header h2 { margin: 0; font-size: 20px; }
-    .header-sub { margin: 2px 0 0; font-size: 13px; opacity: 0.9; }
+    .wizard-header h2 { margin: 0; font-size: var(--text-2xl); }
+    .header-sub { margin: 2px 0 0; font-size: var(--text-sm); opacity: 0.9; }
     .wizard-header button { color: white; }
 
     .step-bar {
@@ -21315,22 +21291,22 @@ export class VehicleStatusDialog {
     }
     .dot {
       width: 32px; height: 32px; border-radius: 50%;
-      background: #e0e0e0; color: #999; display: flex;
+      background: var(--color-line); color: var(--color-text-3); display: flex;
       align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 600; transition: all 0.3s;
+      font-size: var(--text-sm); font-weight: 600; transition: all 0.3s;
     }
-    .step-dot.active .dot { background: #00bcd4; color: white; }
-    .step-dot.completed .dot { background: #4caf50; color: white; }
-    .step-dot.completed .dot mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .step-label { font-size: 10px; color: #999; text-align: center; }
-    .step-dot.active .step-label { color: #00bcd4; font-weight: 600; }
-    .step-dot.completed .step-label { color: #4caf50; }
+    .step-dot.active .dot { background: var(--color-cat-teal); color: white; }
+    .step-dot.completed .dot { background: var(--color-ok); color: white; }
+    .step-dot.completed .dot mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
+    .step-label { font-size: var(--text-xs); color: var(--color-text-3); text-align: center; }
+    .step-dot.active .step-label { color: var(--color-cat-teal); font-weight: 600; }
+    .step-dot.completed .step-label { color: var(--color-ok); }
     .step-line {
-      flex: 1; height: 2px; background: #e0e0e0;
+      flex: 1; height: 2px; background: var(--color-line);
       min-width: 20px; max-width: 60px; margin: 0 4px;
       margin-bottom: 18px; transition: background 0.3s;
     }
-    .step-line.completed { background: #4caf50; }
+    .step-line.completed { background: var(--color-ok); }
 
     .wizard-content { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
 
@@ -21338,99 +21314,99 @@ export class VehicleStatusDialog {
       display: flex; gap: 12px; align-items: flex-start; margin-bottom: 20px;
     }
     .welly-icon {
-      color: #00bcd4; background: #e0f7fa; border-radius: 50%;
-      padding: 8px; font-size: 24px; width: 24px; height: 24px;
+      color: var(--color-cat-teal); background: var(--color-cat-teal-soft); border-radius: 50%;
+      padding: 8px; font-size: var(--text-3xl); width: 24px; height: 24px;
       flex-shrink: 0;
     }
     .bubble {
-      background: #f5f5f5; border-radius: 12px; padding: 12px 16px;
-      font-size: 14px; line-height: 1.5; flex: 1;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface-2); border-radius: 12px; padding: 12px 16px;
+      font-size: var(--text-md); line-height: 1.5; flex: 1;
+      border: 1px solid var(--color-line);
     }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; margin-left: 4px; }
-    .badge.ok { background: #e8f5e9; color: #2e7d32; }
-    .badge.warn { background: #fff3e0; color: #e65100; }
-    .badge.err { background: #ffebee; color: #c62828; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: var(--text-xs); font-weight: 600; margin-left: 4px; }
+    .badge.ok { background: var(--color-ok-soft); color: var(--color-ok); }
+    .badge.warn { background: var(--color-warn-soft); color: var(--color-warn); }
+    .badge.err { background: var(--color-danger-soft); color: var(--color-danger); }
 
     /* Upload */
     .upload-zone {
-      border: 2px dashed #bdbdbd; border-radius: 16px; padding: 48px 24px;
+      border: 2px dashed var(--color-line-strong); border-radius: 16px; padding: 48px 24px;
       text-align: center; cursor: pointer; transition: all 0.2s;
       margin: 16px 0;
     }
-    .upload-zone:hover { border-color: #00bcd4; background: #e0f7fa; }
-    .upload-zone.has-file { border-color: #4caf50; background: #e8f5e9; }
-    .upload-icon { font-size: 48px !important; width: 48px !important; height: 48px !important; color: #bdbdbd; }
-    .upload-icon.done { color: #4caf50; }
-    .upload-zone h3 { margin: 12px 0 4px; color: #333; }
-    .upload-zone p { margin: 0; color: #666; font-size: 13px; }
+    .upload-zone:hover { border-color: var(--color-cat-teal); background: var(--color-cat-teal-soft); }
+    .upload-zone.has-file { border-color: var(--color-ok); background: var(--color-ok-soft); }
+    .upload-icon { font-size: 48px !important; width: 48px !important; height: 48px !important; color: var(--color-line-strong); }
+    .upload-icon.done { color: var(--color-ok); }
+    .upload-zone h3 { margin: 12px 0 4px; color: var(--color-text); }
+    .upload-zone p { margin: 0; color: var(--color-text-2); font-size: var(--text-sm); }
 
     .step-actions {
       display: flex; justify-content: space-between; align-items: center;
-      padding-top: 16px; border-top: 1px solid #e0e0e0; margin-top: 16px;
+      padding-top: 16px; border-top: 1px solid var(--color-line); margin-top: 16px;
     }
     .step-actions button mat-icon { margin-right: 4px; }
 
     /* Analysis table */
-    .analysis-table-wrap { max-height: 350px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; }
-    .analysis-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .analysis-table th { background: #fafafa; padding: 8px 10px; text-align: left; font-weight: 600; position: sticky; top: 0; border-bottom: 2px solid #e0e0e0; }
-    .analysis-table td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; }
-    .analysis-table .s-ok { color: #4caf50; font-size: 18px; }
-    .analysis-table .s-warn { color: #ff9800; font-size: 18px; }
-    .analysis-table .s-err { color: #f44336; font-size: 18px; }
+    .analysis-table-wrap { max-height: 350px; overflow-y: auto; border: 1px solid var(--color-line); border-radius: 8px; }
+    .analysis-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+    .analysis-table th { background: var(--color-canvas); padding: 8px 10px; text-align: left; font-weight: 600; position: sticky; top: 0; border-bottom: 2px solid var(--color-line); }
+    .analysis-table td { padding: 6px 10px; border-bottom: 1px solid var(--color-line); }
+    .analysis-table .s-ok { color: var(--color-ok); font-size: var(--text-xl); }
+    .analysis-table .s-warn { color: var(--color-warn); font-size: var(--text-xl); }
+    .analysis-table .s-err { color: var(--color-danger); font-size: var(--text-xl); }
     .analysis-table .num { text-align: right; font-family: monospace; }
     .analysis-table .addr-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .error-row { background: #fff5f5; }
-    .warn-row { background: #fffbf0; }
+    .error-row { background: var(--color-danger-soft); }
+    .warn-row { background: var(--color-warn-soft); }
 
     /* Warehouse cards */
     .warehouse-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 8px 0; }
     .wh-card {
       display: flex; align-items: center; gap: 12px;
-      border: 2px solid #e0e0e0; border-radius: 12px; padding: 16px;
+      border: 2px solid var(--color-line); border-radius: 12px; padding: 16px;
       cursor: pointer; transition: all 0.2s;
     }
-    .wh-card:hover { border-color: #00bcd4; background: #e0f7fa; }
-    .wh-card.selected { border-color: #4caf50; background: #e8f5e9; }
-    .wh-card mat-icon:first-child { font-size: 32px; width: 32px; height: 32px; color: #78909c; }
+    .wh-card:hover { border-color: var(--color-cat-teal); background: var(--color-cat-teal-soft); }
+    .wh-card.selected { border-color: var(--color-ok); background: var(--color-ok-soft); }
+    .wh-card mat-icon:first-child { font-size: var(--text-4xl); width: 32px; height: 32px; color: var(--color-text-2); }
     .wh-info { display: flex; flex-direction: column; flex: 1; }
-    .wh-info strong { font-size: 15px; }
-    .wh-info span { font-size: 12px; color: #666; }
+    .wh-info strong { font-size: var(--text-md); }
+    .wh-info span { font-size: var(--text-xs); color: var(--color-text-2); }
     .wh-mgr { font-style: italic; }
-    .wh-check { color: #4caf50; }
+    .wh-check { color: var(--color-ok); }
 
     /* Address fixes */
     .address-fix-list { display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; }
-    .address-fix-card { border: 1px solid #ffe0b2; border-radius: 10px; padding: 12px 16px; background: #fffbf0; }
+    .address-fix-card { border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent); border-radius: 10px; padding: 12px 16px; background: var(--color-warn-soft); }
     .afc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .afc-header .s-warn { color: #ff9800; }
-    .inv-chip { background: #e0e0e0; padding: 2px 8px; border-radius: 8px; font-size: 11px; margin-left: auto; }
+    .afc-header .s-warn { color: var(--color-warn); }
+    .inv-chip { background: var(--color-line); padding: 2px 8px; border-radius: 8px; font-size: var(--text-xs); margin-left: auto; }
     .afc-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
-    .afc-fields mat-form-field { font-size: 13px; }
+    .afc-fields mat-form-field { font-size: var(--text-sm); }
 
     /* Driver / Vehicle */
     .dv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .dv-section h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: #333; }
+    .dv-section h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--color-text); }
     .full-width { width: 100%; }
 
     /* Confirm */
     .confirm-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 8px 0; }
     .summary-card {
       display: flex; align-items: center; gap: 12px;
-      border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px;
-      background: #fafafa;
+      border: 1px solid var(--color-line); border-radius: 12px; padding: 16px;
+      background: var(--color-canvas);
     }
-    .summary-card mat-icon { font-size: 28px; width: 28px; height: 28px; color: #00bcd4; }
+    .summary-card mat-icon { font-size: 28px; width: 28px; height: 28px; color: var(--color-cat-teal); }
     .summary-card div { display: flex; flex-direction: column; }
-    .summary-card strong { font-size: 16px; color: #333; }
-    .summary-card span { font-size: 11px; color: #999; }
-    .create-btn { font-size: 15px !important; padding: 8px 24px !important; }
+    .summary-card strong { font-size: var(--text-lg); color: var(--color-text); }
+    .summary-card span { font-size: var(--text-xs); color: var(--color-text-3); }
+    .create-btn { font-size: var(--text-md) !important; padding: 8px 24px !important; }
 
     /* Done */
     .step-done { text-align: center; padding: 32px 0; }
-    .done-icon mat-icon { font-size: 72px; width: 72px; height: 72px; color: #4caf50; }
-    .done-number { font-size: 28px; font-weight: 700; color: #00bcd4; margin: 8px 0; }
+    .done-icon mat-icon { font-size: 72px; width: 72px; height: 72px; color: var(--color-ok); }
+    .done-number { font-size: var(--text-3xl); font-weight: 700; color: var(--color-cat-teal); margin: 8px 0; }
   `]
 })
 export class WellyTripsheetWizardDialog {
@@ -21478,6 +21454,7 @@ export class WellyTripsheetWizardDialog {
   private ngZone = inject(NgZone);
 
   private http = inject(HttpClient);
+  private readonly toast = inject(ToastService);
 
   constructor(
     public dialogRef: MatDialogRef<WellyTripsheetWizardDialog>,
@@ -21620,7 +21597,7 @@ export class WellyTripsheetWizardDialog {
       },
       error: (err) => {
         this.analyzing = false;
-        alert('Analysis failed: ' + (err.error?.message || err.message));
+        this.toast.error('Analysis failed: ' + (err.error?.message || err.message));
       }
     });
   }
@@ -21718,7 +21695,7 @@ export class WellyTripsheetWizardDialog {
       },
       error: (err) => {
         this.creating = false;
-        alert('Failed to create tripsheet: ' + (err.error?.message || err.message));
+        this.toast.error('Failed to create tripsheet: ' + (err.error?.message || err.message));
       }
     });
   }
@@ -21814,7 +21791,7 @@ export class WellyTripsheetWizardDialog {
             <span class="subtitle" *ngIf="loading">Analyzing pending invoices...</span>
           </div>
         </div>
-        <button mat-icon-button mat-dialog-close>
+        <button aria-label="Close" mat-icon-button mat-dialog-close>
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -21936,7 +21913,7 @@ export class WellyTripsheetWizardDialog {
                       <mat-icon *ngIf="!creatingMap[whIdx + '-' + bIdx]">add_road</mat-icon>
                       {{ creatingMap[whIdx + '-' + bIdx] ? 'Creating...' : 'Create Tripsheet' }}
                     </button>
-                    <button mat-icon-button (click)="toggleExpand(whIdx, bIdx); $event.stopPropagation()">
+                    <button aria-label="Show or hide details" mat-icon-button (click)="toggleExpand(whIdx, bIdx); $event.stopPropagation()">
                       <mat-icon>{{ isExpanded(whIdx, bIdx) ? 'expand_less' : 'expand_more' }}</mat-icon>
                     </button>
                   </div>
@@ -21998,8 +21975,8 @@ export class WellyTripsheetWizardDialog {
     .welly-suggests-dialog { display: flex; flex-direction: column; height: 100%; }
     .dialog-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 24px; border-bottom: 1px solid #e0e0e0;
-      background: linear-gradient(135deg, #ff6f00, #e65100); color: white;
+      padding: 16px 24px; border-bottom: 1px solid var(--color-line);
+      background: linear-gradient(135deg, #ff6f00, var(--color-warn)); color: white;
       margin: -24px -24px 0;
     }
     .header-left { display: flex; align-items: center; gap: 14px; }
@@ -22009,97 +21986,97 @@ export class WellyTripsheetWizardDialog {
       align-items: center; justify-content: center;
     }
     .welly-avatar mat-icon { font-size: 28px; width: 28px; height: 28px; }
-    .dialog-header h2 { margin: 0; font-size: 20px; }
-    .dialog-header .subtitle { font-size: 13px; opacity: 0.9; }
+    .dialog-header h2 { margin: 0; font-size: var(--text-2xl); }
+    .dialog-header .subtitle { font-size: var(--text-sm); opacity: 0.9; }
     .dialog-header button { color: white; }
     .welly-speech { padding: 16px 24px 0; }
     .speech-bubble {
-      background: #fff3e0; border: 1px solid #ffe0b2; border-radius: 12px;
-      padding: 14px 18px; font-size: 13.5px; line-height: 1.5; color: #333;
+      background: var(--color-warn-soft); border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent); border-radius: 12px;
+      padding: 14px 18px; font-size: var(--text-sm); line-height: 1.5; color: var(--color-text);
       position: relative;
     }
     .dialog-content { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
     .loading-state, .error-state, .empty-state {
       display: flex; flex-direction: column; align-items: center;
-      justify-content: center; height: 300px; gap: 16px; color: #666;
+      justify-content: center; height: 300px; gap: 16px; color: var(--color-text-2);
     }
     .error-state mat-icon, .empty-state mat-icon { font-size: 56px; width: 56px; height: 56px; }
-    .error-state mat-icon { color: #f44336; }
-    .empty-state mat-icon { color: #4caf50; }
+    .error-state mat-icon { color: var(--color-danger); }
+    .empty-state mat-icon { color: var(--color-ok); }
     .warehouse-tab-label { display: flex; align-items: center; gap: 8px; }
     .tab-badge {
-      background: #ff6f00; color: white; border-radius: 10px;
-      padding: 1px 8px; font-size: 11px; font-weight: 600; min-width: 20px; text-align: center;
+      background: var(--color-warn); color: white; border-radius: 10px;
+      padding: 1px 8px; font-size: var(--text-xs); font-weight: 600; min-width: 20px; text-align: center;
     }
     .warehouse-banner {
-      background: linear-gradient(135deg, #fff8e1, #fff3e0);
-      border: 1px solid #ffe0b2; border-radius: 12px;
+      background: linear-gradient(135deg, var(--color-warn-soft), var(--color-warn-soft));
+      border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent); border-radius: 12px;
       padding: 16px 20px; margin: 16px 0;
     }
     .banner-stats { display: flex; gap: 32px; flex-wrap: wrap; }
     .stat { display: flex; flex-direction: column; }
-    .stat-value { font-size: 20px; font-weight: 700; color: #e65100; }
-    .stat-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
-    .banner-summary { margin: 10px 0 0; font-size: 13px; color: #666; }
+    .stat-value { font-size: var(--text-2xl); font-weight: 700; color: var(--color-warn); }
+    .stat-label { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.5px; }
+    .banner-summary { margin: 10px 0 0; font-size: var(--text-sm); color: var(--color-text-2); }
     .suggestions-list { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
     .suggestion-card {
-      border: 2px solid #e0e0e0; border-radius: 12px; overflow: hidden;
-      transition: all 0.2s ease; background: white;
+      border: 2px solid var(--color-line); border-radius: 12px; overflow: hidden;
+      transition: all 0.2s ease; background: var(--color-surface);
     }
     .suggestion-card:hover { border-color: #ff6f00; box-shadow: 0 2px 8px rgba(255,111,0,0.12); }
-    .suggestion-card.selected { border-color: #ff6f00; background: #fff8e1; }
-    .suggestion-card.created { border-color: #4caf50; background: #f1f8e9; opacity: 0.7; }
+    .suggestion-card.selected { border-color: var(--color-warn); background: var(--color-warn-soft); }
+    .suggestion-card.created { border-color: var(--color-ok); background: var(--color-ok-soft); opacity: 0.7; }
     .card-header {
       display: flex; align-items: center; gap: 12px;
       padding: 14px 16px; cursor: pointer;
     }
     .card-check { flex-shrink: 0; }
     .card-route { flex: 1; min-width: 0; }
-    .route-label { display: flex; align-items: center; gap: 6px; font-size: 15px; flex-wrap: wrap; }
-    .route-icon { color: #ff6f00; font-size: 20px; width: 20px; height: 20px; }
-    .route-sep { color: #bbb; }
+    .route-label { display: flex; align-items: center; gap: 6px; font-size: var(--text-md); flex-wrap: wrap; }
+    .route-icon { color: var(--color-warn); font-size: var(--text-2xl); width: 20px; height: 20px; }
+    .route-sep { color: var(--color-text-3); }
     .route-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
     .meta-chip {
       display: inline-flex; align-items: center; gap: 3px;
-      font-size: 11.5px; color: #666; background: #f5f5f5;
+      font-size: var(--text-xs); color: var(--color-text-2); background: var(--color-surface-2);
       padding: 2px 8px; border-radius: 8px;
     }
-    .meta-chip mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .meta-chip.value { color: #2e7d32; background: #e8f5e9; font-weight: 600; }
+    .meta-chip mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
+    .meta-chip.value { color: var(--color-ok); background: var(--color-ok-soft); font-weight: 600; }
     .meta-chip.priority { font-weight: 600; }
-    .priority-critical { background: #ffebee; color: #c62828; }
-    .priority-urgent { background: #fff3e0; color: #e65100; }
-    .priority-high { background: #fff8e1; color: #f57f17; }
-    .priority-normal { background: #e8f5e9; color: #2e7d32; }
-    .priority-low { background: #f5f5f5; color: #757575; }
+    .priority-critical { background: var(--color-danger-soft); color: var(--color-danger); }
+    .priority-urgent { background: var(--color-warn-soft); color: var(--color-warn); }
+    .priority-high { background: var(--color-warn-soft); color: var(--color-warn); }
+    .priority-normal { background: var(--color-ok-soft); color: var(--color-ok); }
+    .priority-low { background: var(--color-surface-2); color: var(--color-text-3); }
     .card-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .created-badge {
       display: flex; align-items: center; gap: 4px;
-      color: #4caf50; font-size: 13px; font-weight: 600;
+      color: var(--color-ok); font-size: var(--text-sm); font-weight: 600;
     }
-    .created-badge mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .card-details { border-top: 1px solid #eee; padding: 16px; background: #fafafa; }
-    .customer-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .created-badge mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
+    .card-details { border-top: 1px solid var(--color-line); padding: 16px; background: var(--color-canvas); }
+    .customer-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
     .customer-table th {
-      text-align: left; padding: 8px 10px; color: #666; font-weight: 600;
-      border-bottom: 2px solid #e0e0e0; font-size: 11px; text-transform: uppercase;
+      text-align: left; padding: 8px 10px; color: var(--color-text-2); font-weight: 600;
+      border-bottom: 2px solid var(--color-line); font-size: var(--text-xs); text-transform: uppercase;
     }
-    .customer-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+    .customer-table td { padding: 8px 10px; border-bottom: 1px solid var(--color-line); }
     .customer-table .right { text-align: right; }
     .customer-name { font-weight: 500; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .customer-code { color: #999; font-size: 12px; }
+    .customer-code { color: var(--color-text-3); font-size: var(--text-xs); }
     .details-footer { margin-top: 10px; }
     .age-warning {
       display: inline-flex; align-items: center; gap: 4px;
-      color: #e65100; font-size: 12px; font-weight: 500;
+      color: var(--color-warn); font-size: var(--text-xs); font-weight: 500;
     }
-    .age-warning mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .age-warning mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
     .dialog-actions {
       display: flex; justify-content: flex-end; align-items: center; gap: 12px;
-      padding: 12px 24px; border-top: 1px solid #e0e0e0; background: #fafafa;
+      padding: 12px 24px; border-top: 1px solid var(--color-line); background: var(--color-canvas);
       margin: 0 -24px -24px;
     }
-    .selection-info { flex: 1; font-size: 13px; color: #666; }
+    .selection-info { flex: 1; font-size: var(--text-sm); color: var(--color-text-2); }
   `]
 })
 export class WellySuggestsDialog implements OnInit {
@@ -22298,7 +22275,7 @@ export class WellySuggestsDialog implements OnInit {
             <span class="ab-subtitle">{{ headerSubtitle() }}</span>
           </div>
         </div>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
 
       <!-- Stepper -->
@@ -22481,7 +22458,7 @@ export class WellySuggestsDialog implements OnInit {
                   </div>
                 </div>
                 <div class="gc-actions">
-                  <button mat-icon-button (click)="expandedMap[i] = !expandedMap[i]">
+                  <button [attr.aria-label]="expandedMap[i] ? 'Hide details' : 'Show details'" [attr.aria-expanded]="!!expandedMap[i]" mat-icon-button (click)="expandedMap[i] = !expandedMap[i]">
                     <mat-icon>{{ expandedMap[i] ? 'expand_less' : 'expand_more' }}</mat-icon>
                   </button>
                 </div>
@@ -22568,8 +22545,8 @@ export class WellySuggestsDialog implements OnInit {
                 </div>
               </div>
               <div class="stop-move">
-                <button mat-icon-button [disabled]="i === 0" (click)="moveStop(i, -1)"><mat-icon>arrow_upward</mat-icon></button>
-                <button mat-icon-button [disabled]="i === stops.length - 1" (click)="moveStop(i, 1)"><mat-icon>arrow_downward</mat-icon></button>
+                <button aria-label="Move up" mat-icon-button [disabled]="i === 0" (click)="moveStop(i, -1)"><mat-icon>arrow_upward</mat-icon></button>
+                <button aria-label="Move down" mat-icon-button [disabled]="i === stops.length - 1" (click)="moveStop(i, 1)"><mat-icon>arrow_downward</mat-icon></button>
               </div>
             </div>
           </div>
@@ -22648,212 +22625,212 @@ export class WellySuggestsDialog implements OnInit {
       background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center;
     }
     .ab-avatar mat-icon { font-size: 28px; width: 28px; height: 28px; }
-    .ab-header h2 { margin: 0; font-size: 20px; }
-    .ab-subtitle { font-size: 13px; opacity: .9; }
+    .ab-header h2 { margin: 0; font-size: var(--text-2xl); }
+    .ab-subtitle { font-size: var(--text-sm); opacity: .9; }
     .ab-header button { color: #fff; }
 
     .ab-steps { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 18px 24px 6px; }
     .ab-step { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
     .ab-step-num {
-      width: 34px; height: 34px; border-radius: 50%; background: #e0e0e0; color: #757575;
-      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px;
+      width: 34px; height: 34px; border-radius: 50%; background: var(--color-line); color: var(--color-text-3);
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--text-md);
       transition: all .2s;
     }
-    .ab-step-num mat-icon { font-size: 20px; width: 20px; height: 20px; }
-    .ab-step.active .ab-step-num { background: #2575fc; color: #fff; }
-    .ab-step.done .ab-step-num { background: #4caf50; color: #fff; }
-    .ab-step-label { font-size: 12px; color: #757575; font-weight: 600; }
-    .ab-step.active .ab-step-label { color: #2575fc; }
-    .ab-connector { width: 60px; height: 3px; background: #e0e0e0; border-radius: 2px; margin-bottom: 20px; }
-    .ab-connector.filled { background: #4caf50; }
+    .ab-step-num mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; }
+    .ab-step.active .ab-step-num { background: var(--color-primary); color: #fff; }
+    .ab-step.done .ab-step-num { background: var(--color-ok); color: #fff; }
+    .ab-step-label { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 600; }
+    .ab-step.active .ab-step-label { color: var(--color-primary); }
+    .ab-connector { width: 60px; height: 3px; background: var(--color-line); border-radius: 2px; margin-bottom: 20px; }
+    .ab-connector.filled { background: var(--color-ok); }
 
     .ab-body { flex: 1; overflow-y: auto; padding: 8px 24px 16px; }
-    .ab-center { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 320px; gap: 14px; color: #666; }
+    .ab-center { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 320px; gap: 14px; color: var(--color-text-2); }
     .ab-center.small { height: 220px; }
-    .ab-center .err { font-size: 52px; width: 52px; height: 52px; color: #f44336; }
-    .ab-center .empty { font-size: 52px; width: 52px; height: 52px; color: #bbb; }
+    .ab-center .err { font-size: 52px; width: 52px; height: 52px; color: var(--color-danger); }
+    .ab-center .empty { font-size: 52px; width: 52px; height: 52px; color: var(--color-text-3); }
 
     .ab-panel { animation: fade .25s ease; }
     @keyframes fade { from { opacity: 0; transform: translateY(6px);} to {opacity:1; transform:none;} }
-    .ab-q { margin: 8px 0 2px; font-size: 20px; color: #263238; text-align: center; }
-    .ab-hint { margin: 0 0 20px; text-align: center; color: #888; font-size: 13.5px; }
+    .ab-q { margin: 8px 0 2px; font-size: var(--text-2xl); color: var(--color-text); text-align: center; }
+    .ab-hint { margin: 0 0 20px; text-align: center; color: var(--color-text-3); font-size: var(--text-sm); }
 
     /* Warehouse cards */
     .wh-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 760px; margin: 0 auto; }
     @media (max-width: 600px) { .wh-grid { grid-template-columns: 1fr; } }
     .wh-card {
-      position: relative; border: 2px solid #e6e6e6; border-radius: 16px; padding: 20px 16px;
+      position: relative; border: 2px solid var(--color-line); border-radius: 16px; padding: 20px 16px;
       display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer;
-      transition: all .2s; background: #fff; text-align: center;
+      transition: all .2s; background: var(--color-surface); text-align: center;
     }
     .wh-card:hover { border-color: var(--wh-color); box-shadow: 0 6px 18px rgba(0,0,0,.10); transform: translateY(-3px); }
-    .wh-card.selected { border-color: var(--wh-color); background: color-mix(in srgb, var(--wh-color) 8%, white); }
+    .wh-card.selected { border-color: var(--wh-color); background: color-mix(in srgb, var(--wh-color) 8%, var(--color-surface)); }
     .wh-card.special { border-style: dashed; }
     .wh-icon {
       width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
-      background: color-mix(in srgb, var(--wh-color) 14%, white); color: var(--wh-color);
+      background: color-mix(in srgb, var(--wh-color) 14%, var(--color-surface)); color: var(--wh-color);
     }
     .wh-icon mat-icon { font-size: 30px; width: 30px; height: 30px; }
     .wh-badge {
       position: absolute; top: 12px; right: 12px; min-width: 24px; height: 24px; padding: 0 7px;
-      border-radius: 12px; background: var(--wh-color); color: #fff; font-size: 12px; font-weight: 700;
+      border-radius: 12px; background: var(--wh-color); color: #fff; font-size: var(--text-xs); font-weight: 700;
       display: flex; align-items: center; justify-content: center;
     }
-    .wh-badge.zero { background: #cfcfcf; }
-    .wh-card h4 { margin: 6px 0 0; font-size: 22px; color: #263238; }
-    .wh-name { font-size: 13px; color: #555; }
-    .wh-city { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: #999; }
-    .wh-city mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .wh-meta { margin-top: 6px; font-size: 12px; color: #666; display: flex; gap: 6px; }
-    .wh-meta .dot { color: #ccc; }
+    .wh-badge.zero { background: var(--color-line-strong); }
+    .wh-card h4 { margin: 6px 0 0; font-size: var(--text-2xl); color: var(--color-text); }
+    .wh-name { font-size: var(--text-sm); color: var(--color-text-2); }
+    .wh-city { display: inline-flex; align-items: center; gap: 3px; font-size: var(--text-xs); color: var(--color-text-3); }
+    .wh-city mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
+    .wh-meta { margin-top: 6px; font-size: var(--text-xs); color: var(--color-text-2); display: flex; gap: 6px; }
+    .wh-meta .dot { color: var(--color-text-3); }
     .wh-check { position: absolute; top: 12px; left: 12px; color: var(--wh-color); }
 
     /* Vehicle cards */
     .veh-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 780px; margin: 0 auto; }
     @media (max-width: 720px) { .veh-grid { grid-template-columns: 1fr; } }
     .veh-card {
-      position: relative; border: 2px solid #e6e6e6; border-radius: 16px; padding: 26px 18px;
+      position: relative; border: 2px solid var(--color-line); border-radius: 16px; padding: 26px 18px;
       display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;
-      transition: all .2s; background: #fff; text-align: center;
+      transition: all .2s; background: var(--color-surface); text-align: center;
     }
     .veh-card:hover { border-color: #2575fc; box-shadow: 0 6px 18px rgba(37,117,252,.15); transform: translateY(-3px); }
-    .veh-card.selected { border-color: #2575fc; background: #f0f6ff; }
+    .veh-card.selected { border-color: var(--color-primary); background: var(--color-primary-soft); }
     .veh-icon {
-      width: 64px; height: 64px; border-radius: 16px; background: #eef3ff; color: #2575fc;
+      width: 64px; height: 64px; border-radius: 16px; background: var(--color-primary-soft); color: var(--color-primary);
       display: flex; align-items: center; justify-content: center;
     }
     .veh-icon mat-icon { font-size: 36px; width: 36px; height: 36px; }
-    .veh-card h4 { margin: 4px 0 0; font-size: 22px; color: #263238; }
-    .veh-desc { font-size: 13px; color: #777; }
+    .veh-card h4 { margin: 4px 0 0; font-size: var(--text-2xl); color: var(--color-text); }
+    .veh-desc { font-size: var(--text-sm); color: var(--color-text-3); }
     .veh-cap { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-    .veh-cap span { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: #666; }
-    .veh-cap mat-icon { font-size: 16px; width: 16px; height: 16px; color: #2575fc; }
-    .veh-check { position: absolute; top: 12px; right: 12px; color: #2575fc; }
+    .veh-cap span { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--color-text-2); }
+    .veh-cap mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-primary); }
+    .veh-check { position: absolute; top: 12px; right: 12px; color: var(--color-primary); }
 
     /* Build step */
     .build-context { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
     .ctx-chip {
       display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px;
-      background: #ede7f6; color: #5e35b1; font-size: 13px; font-weight: 600;
+      background: var(--color-cat-purple-soft); color: var(--color-cat-purple); font-size: var(--text-sm); font-weight: 600;
     }
-    .ctx-chip.veh { background: #e3f2fd; color: #1565c0; }
+    .ctx-chip.veh { background: var(--color-primary-soft); color: var(--color-primary-hover); }
     .ctx-chip mat-icon { font-size: 17px; width: 17px; height: 17px; }
 
-    .manual-box { border: 1px solid #e0e0e0; border-radius: 14px; padding: 16px 18px; background: #fafbff; }
+    .manual-box { border: 1px solid var(--color-line); border-radius: 14px; padding: 16px 18px; background: var(--color-surface-2); }
     .manual-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-    .manual-head mat-icon { color: #2575fc; }
-    .manual-head strong { display: block; font-size: 14px; color: #263238; }
-    .manual-head span { font-size: 12.5px; color: #888; }
+    .manual-head mat-icon { color: var(--color-primary); }
+    .manual-head strong { display: block; font-size: var(--text-md); color: var(--color-text); }
+    .manual-head span { font-size: var(--text-xs); color: var(--color-text-3); }
     .manual-row { display: flex; gap: 10px; align-items: flex-start; }
     .manual-field { flex: 1; }
     .manual-field ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
-    .manual-err { color: #e53935; font-size: 12.5px; }
+    .manual-err { color: var(--color-danger); font-size: var(--text-xs); }
 
-    .basket { margin-top: 12px; border-top: 1px dashed #d5d5e5; padding-top: 12px; }
-    .basket-head { display: flex; justify-content: space-between; font-size: 13px; color: #444; margin-bottom: 8px; }
-    .basket-head span { color: #2e7d32; font-weight: 700; }
+    .basket { margin-top: 12px; border-top: 1px dashed var(--color-line); padding-top: 12px; }
+    .basket-head { display: flex; justify-content: space-between; font-size: var(--text-sm); color: var(--color-text-2); margin-bottom: 8px; }
+    .basket-head span { color: var(--color-ok); font-weight: 700; }
     .basket-item {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid #eee; margin-bottom: 6px;
+      padding: 8px 10px; border-radius: 10px; background: var(--color-surface); border: 1px solid var(--color-line); margin-bottom: 6px;
     }
     .bi-main { display: flex; flex-direction: column; }
-    .bi-num { font-weight: 700; font-size: 13px; color: #2575fc; }
-    .bi-cust { font-size: 12.5px; color: #555; }
+    .bi-num { font-weight: 700; font-size: var(--text-sm); color: var(--color-primary); }
+    .bi-cust { font-size: var(--text-xs); color: var(--color-text-2); }
     .bi-side { display: flex; align-items: center; gap: 10px; }
-    .bi-city { font-size: 12px; color: #999; }
-    .bi-amt { font-size: 13px; font-weight: 600; color: #2e7d32; }
+    .bi-city { font-size: var(--text-xs); color: var(--color-text-3); }
+    .bi-amt { font-size: var(--text-sm); font-weight: 600; color: var(--color-ok); }
     .basket-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 
     .sec-div { margin: 20px 0; }
     .ai-groups-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .ai-groups-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; color: #263238; }
-    .ai-groups-head h3 mat-icon { color: #7b1fa2; }
-    .ai-groups-head span { font-size: 13px; color: #888; }
+    .ai-groups-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-lg); color: var(--color-text); }
+    .ai-groups-head h3 mat-icon { color: var(--color-cat-purple); }
+    .ai-groups-head span { font-size: var(--text-sm); color: var(--color-text-3); }
 
     .groups-list { display: flex; flex-direction: column; gap: 12px; }
-    .group-card { border: 2px solid #e6e6e6; border-radius: 12px; overflow: hidden; background: #fff; transition: all .2s; }
+    .group-card { border: 2px solid var(--color-line); border-radius: 12px; overflow: hidden; background: var(--color-surface); transition: all .2s; }
     .group-card:hover { border-color: #2575fc; box-shadow: 0 2px 10px rgba(37,117,252,.10); }
-    .group-card.selected { border-color: #2575fc; background: #f5f9ff; }
-    .group-card.created { border-color: #4caf50; background: #f1f8e9; opacity: .75; }
+    .group-card.selected { border-color: var(--color-primary); background: var(--color-surface-2); }
+    .group-card.created { border-color: var(--color-ok); background: var(--color-ok-soft); opacity: .75; }
     .group-header { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
     .gc-check { flex-shrink: 0; }
     .gc-route { flex: 1; min-width: 0; cursor: pointer; }
-    .gc-title { display: flex; align-items: center; gap: 6px; font-size: 15px; flex-wrap: wrap; }
-    .gc-title mat-icon { color: #2575fc; font-size: 20px; width: 20px; height: 20px; }
-    .gc-title .sep { color: #bbb; }
+    .gc-title { display: flex; align-items: center; gap: 6px; font-size: var(--text-md); flex-wrap: wrap; }
+    .gc-title mat-icon { color: var(--color-primary); font-size: var(--text-2xl); width: 20px; height: 20px; }
+    .gc-title .sep { color: var(--color-text-3); }
     .gc-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-    .mchip { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: #666; background: #f3f3f3; padding: 2px 8px; border-radius: 8px; }
-    .mchip mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .mchip.val { color: #2e7d32; background: #e8f5e9; font-weight: 600; }
-    .mchip.cap { color: #2e7d32; background: #e8f5e9; font-weight: 600; }
-    .mchip.cap.over { color: #e65100; background: #fff3e0; }
+    .mchip { display: inline-flex; align-items: center; gap: 3px; font-size: var(--text-xs); color: var(--color-text-2); background: var(--color-surface-2); padding: 2px 8px; border-radius: 8px; }
+    .mchip mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
+    .mchip.val { color: var(--color-ok); background: var(--color-ok-soft); font-weight: 600; }
+    .mchip.cap { color: var(--color-ok); background: var(--color-ok-soft); font-weight: 600; }
+    .mchip.cap.over { color: var(--color-warn); background: var(--color-warn-soft); }
     .gc-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    .created-tag { display: flex; align-items: center; gap: 4px; color: #4caf50; font-weight: 600; font-size: 13px; }
-    .created-tag mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .group-details { border-top: 1px solid #eee; padding: 14px; background: #fafafa; }
-    .cust-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .cust-table th { text-align: left; padding: 8px 10px; color: #666; font-weight: 600; font-size: 11px; text-transform: uppercase; border-bottom: 2px solid #e0e0e0; }
-    .cust-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+    .created-tag { display: flex; align-items: center; gap: 4px; color: var(--color-ok); font-weight: 600; font-size: var(--text-sm); }
+    .created-tag mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
+    .group-details { border-top: 1px solid var(--color-line); padding: 14px; background: var(--color-canvas); }
+    .cust-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+    .cust-table th { text-align: left; padding: 8px 10px; color: var(--color-text-2); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; border-bottom: 2px solid var(--color-line); }
+    .cust-table td { padding: 8px 10px; border-bottom: 1px solid var(--color-line); }
     .cust-table .r { text-align: right; }
     .cust-table .cn { font-weight: 500; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .cust-table .cc { color: #999; font-size: 12px; }
+    .cust-table .cc { color: var(--color-text-3); font-size: var(--text-xs); }
 
     .ab-footer { display: flex; align-items: center; gap: 12px; padding: 12px 24px;
-      border-top: 1px solid #e0e0e0; background: #fafafa; margin: 0 -24px -24px; }
+      border-top: 1px solid var(--color-line); background: var(--color-canvas); margin: 0 -24px -24px; }
     .ab-spacer { flex: 1; }
-    .foot-info { font-size: 13px; color: #666; }
+    .foot-info { font-size: var(--text-sm); color: var(--color-text-2); }
     .ab-footer mat-spinner { display: inline-block; margin-right: 6px; }
 
     /* Current load bar */
     .cur-load { display: flex; align-items: center; justify-content: space-between;
-      border: 2px solid #2575fc; border-radius: 12px; padding: 12px 16px; background: #f0f6ff; margin-bottom: 14px; }
-    .cur-load.empty { border-color: #e0e0e0; border-style: dashed; background: #fafafa; }
+      border: 2px solid var(--color-primary); border-radius: 12px; padding: 12px 16px; background: var(--color-primary-soft); margin-bottom: 14px; }
+    .cur-load.empty { border-color: var(--color-line); border-style: dashed; background: var(--color-canvas); }
     .cl-left { display: flex; align-items: center; gap: 12px; }
-    .cl-left mat-icon { color: #2575fc; }
-    .cur-load.empty .cl-left mat-icon { color: #aaa; }
-    .cl-left strong { display: block; font-size: 14px; color: #263238; }
-    .cl-left span { font-size: 12.5px; color: #666; }
+    .cl-left mat-icon { color: var(--color-primary); }
+    .cur-load.empty .cl-left mat-icon { color: var(--color-text-3); }
+    .cl-left strong { display: block; font-size: var(--text-md); color: var(--color-text); }
+    .cl-left span { font-size: var(--text-xs); color: var(--color-text-2); }
     .cl-right { display: flex; align-items: center; gap: 10px; }
-    .cap-flag { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600;
-      color: #2e7d32; background: #e8f5e9; padding: 4px 10px; border-radius: 16px; }
-    .cap-flag.over { color: #e65100; background: #fff3e0; }
-    .cap-flag mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .cap-flag { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-ok); background: var(--color-ok-soft); padding: 4px 10px; border-radius: 16px; }
+    .cap-flag.over { color: var(--color-warn); background: var(--color-warn-soft); }
+    .cap-flag mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
 
     /* Invoice rows in batch */
     .inv-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px;
       cursor: pointer; border: 1px solid transparent; transition: all .15s; }
-    .inv-row:hover { background: #f5f9ff; }
-    .inv-row.picked { background: #eaf3ff; border-color: #bcdcff; }
+    .inv-row:hover { background: var(--color-surface-2); }
+    .inv-row.picked { background: var(--color-primary-soft); border-color: color-mix(in srgb, var(--color-primary) 35%, transparent); }
     .iv-main { display: flex; flex-direction: column; min-width: 150px; }
-    .iv-num { font-weight: 700; font-size: 13px; color: #2575fc; }
-    .iv-cust { font-size: 12.5px; color: #444; }
+    .iv-num { font-weight: 700; font-size: var(--text-sm); color: var(--color-primary); }
+    .iv-cust { font-size: var(--text-xs); color: var(--color-text-2); }
     .iv-mid { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .iv-city { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: #999; }
-    .iv-city mat-icon { font-size: 13px; width: 13px; height: 13px; }
-    .iv-prod { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: #37474f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
-    .iv-prod mat-icon { font-size: 15px; width: 15px; height: 15px; color: #7b1fa2; flex-shrink: 0; }
+    .iv-city { display: inline-flex; align-items: center; gap: 3px; font-size: var(--text-xs); color: var(--color-text-3); }
+    .iv-city mat-icon { font-size: var(--text-sm); width: 13px; height: 13px; }
+    .iv-prod { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); font-weight: 600; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
+    .iv-prod mat-icon { font-size: 15px; width: 15px; height: 15px; color: var(--color-cat-purple); flex-shrink: 0; }
     .iv-side { display: flex; flex-direction: column; align-items: flex-end; }
-    .iv-qty { font-size: 11.5px; color: #888; }
-    .iv-amt { font-size: 13px; font-weight: 600; color: #2e7d32; }
-    .mchip.sel { color: #1565c0; background: #e3f2fd; font-weight: 600; }
+    .iv-qty { font-size: var(--text-xs); color: var(--color-text-3); }
+    .iv-amt { font-size: var(--text-sm); font-weight: 600; color: var(--color-ok); }
+    .mchip.sel { color: var(--color-primary-hover); background: var(--color-primary-soft); font-weight: 600; }
 
     /* Route details */
     .route-config { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 8px; }
     @media (max-width: 720px) { .route-config { grid-template-columns: 1fr; } }
     .route-config mat-form-field { width: 100%; }
     .stops-head { margin: 8px 0 10px; }
-    .stops-head h4 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 15px; color: #263238; }
-    .stops-head mat-icon { color: #2575fc; }
+    .stops-head h4 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-md); color: var(--color-text); }
+    .stops-head mat-icon { color: var(--color-primary); }
     .stops-list { display: flex; flex-direction: column; gap: 10px; }
-    .stop-card { display: flex; align-items: flex-start; gap: 12px; border: 1px solid #e6e6e6;
-      border-radius: 12px; padding: 12px 14px; background: #fff; }
-    .stop-seq { width: 30px; height: 30px; border-radius: 50%; background: #2575fc; color: #fff;
+    .stop-card { display: flex; align-items: flex-start; gap: 12px; border: 1px solid var(--color-line);
+      border-radius: 12px; padding: 12px 14px; background: var(--color-surface); }
+    .stop-seq { width: 30px; height: 30px; border-radius: 50%; background: var(--color-primary); color: #fff;
       display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; margin-top: 4px; }
     .stop-body { flex: 1; min-width: 0; }
     .stop-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-    .stop-title strong { font-size: 14px; color: #263238; }
-    .stop-code { font-size: 12px; color: #999; }
-    .stop-chip { font-size: 11.5px; color: #2e7d32; background: #e8f5e9; padding: 2px 8px; border-radius: 8px; }
+    .stop-title strong { font-size: var(--text-md); color: var(--color-text); }
+    .stop-code { font-size: var(--text-xs); color: var(--color-text-3); }
+    .stop-chip { font-size: var(--text-xs); color: var(--color-ok); background: var(--color-ok-soft); padding: 2px 8px; border-radius: 8px; }
     .stop-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
     @media (max-width: 720px) { .stop-fields { grid-template-columns: 1fr; } }
     .stop-fields mat-form-field { width: 100%; }
@@ -22863,21 +22840,21 @@ export class WellySuggestsDialog implements OnInit {
     /* Review */
     .review-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
     @media (max-width: 900px) { .review-grid { grid-template-columns: repeat(2, 1fr); } }
-    .rv-card { border: 1px solid #e6e6e6; border-radius: 12px; padding: 12px 14px; background: #fafbff;
+    .rv-card { border: 1px solid var(--color-line); border-radius: 12px; padding: 12px 14px; background: var(--color-surface-2);
       display: flex; flex-direction: column; gap: 4px; }
-    .rv-card.total { background: #e8f5e9; border-color: #c8e6c9; }
-    .rv-k { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #999; }
-    .rv-v { font-size: 15px; font-weight: 600; color: #263238; }
-    .cap-banner { display: flex; align-items: center; gap: 8px; background: #fff3e0; color: #e65100;
-      border: 1px solid #ffe0b2; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
-    .review-stops h4 { display: flex; align-items: center; gap: 6px; font-size: 15px; color: #263238; margin: 0 0 10px; }
-    .review-stops h4 mat-icon { color: #2575fc; }
-    .rs-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
-    .rs-seq { width: 24px; height: 24px; border-radius: 50%; background: #eef3ff; color: #2575fc;
-      display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
-    .rs-name { flex: 1; font-size: 13.5px; color: #333; }
-    .rs-loc { font-size: 12.5px; color: #888; }
-    .rs-amt { font-size: 13.5px; font-weight: 600; color: #2e7d32; min-width: 90px; text-align: right; }
+    .rv-card.total { background: var(--color-ok-soft); border-color: color-mix(in srgb, var(--color-ok) 35%, transparent); }
+    .rv-k { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .4px; color: var(--color-text-3); }
+    .rv-v { font-size: var(--text-md); font-weight: 600; color: var(--color-text); }
+    .cap-banner { display: flex; align-items: center; gap: 8px; background: var(--color-warn-soft); color: var(--color-warn);
+      border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent); border-radius: 10px; padding: 10px 14px; font-size: var(--text-sm); margin-bottom: 16px; }
+    .review-stops h4 { display: flex; align-items: center; gap: 6px; font-size: var(--text-md); color: var(--color-text); margin: 0 0 10px; }
+    .review-stops h4 mat-icon { color: var(--color-primary); }
+    .rs-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--color-line); }
+    .rs-seq { width: 24px; height: 24px; border-radius: 50%; background: var(--color-primary-soft); color: var(--color-primary);
+      display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; }
+    .rs-name { flex: 1; font-size: var(--text-sm); color: var(--color-text); }
+    .rs-loc { font-size: var(--text-xs); color: var(--color-text-3); }
+    .rs-amt { font-size: var(--text-sm); font-weight: 600; color: var(--color-ok); min-width: 90px; text-align: right; }
   `]
 })
 export class AiTripsheetBuilderDialog implements OnInit {
@@ -23261,7 +23238,7 @@ export class AiTripsheetBuilderDialog implements OnInit {
             }
           </div>
         </div>
-        <button mat-icon-button (click)="close()">
+        <button aria-label="Close" mat-icon-button (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -23375,7 +23352,7 @@ export class AiTripsheetBuilderDialog implements OnInit {
       justify-content: space-between;
       align-items: flex-start;
       padding: 20px 24px 16px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
     }
 
     .header-info h2 {
@@ -23383,13 +23360,13 @@ export class AiTripsheetBuilderDialog implements OnInit {
       align-items: center;
       gap: 10px;
       margin: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       font-weight: 600;
-      color: #1a1a2e;
+      color: var(--color-text);
     }
 
     .header-info h2 mat-icon {
-      color: #ff9800;
+      color: var(--color-warn);
     }
 
     .vehicle-meta {
@@ -23399,21 +23376,21 @@ export class AiTripsheetBuilderDialog implements OnInit {
     }
 
     .meta-tag {
-      font-size: 12px;
+      font-size: var(--text-xs);
       padding: 2px 10px;
       border-radius: 12px;
-      background: #f0f0f0;
-      color: #555;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
     }
 
     .meta-tag.type {
-      background: rgba(33,150,243,0.1);
-      color: #1565c0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-hover);
     }
 
     .meta-tag.province {
-      background: rgba(76,175,80,0.1);
-      color: #2e7d32;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
     }
 
     .dialog-body {
@@ -23428,20 +23405,20 @@ export class AiTripsheetBuilderDialog implements OnInit {
       align-items: center;
       justify-content: center;
       padding: 48px;
-      color: #888;
+      color: var(--color-text-3);
     }
 
     .empty-center mat-icon {
       font-size: 56px;
       width: 56px;
       height: 56px;
-      color: #ccc;
+      color: var(--color-text-3);
       margin-bottom: 12px;
     }
 
     .empty-center h3 {
       margin: 0 0 8px;
-      color: #555;
+      color: var(--color-text-2);
     }
 
     .summary-row {
@@ -23456,16 +23433,16 @@ export class AiTripsheetBuilderDialog implements OnInit {
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
-      background: #f8f9fa;
-      border: 1px solid #e9ecef;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
       border-radius: 10px;
       flex: 1;
       min-width: 160px;
     }
 
     .summary-card mat-icon {
-      color: #1e90ff;
-      font-size: 24px;
+      color: var(--color-primary);
+      font-size: var(--text-3xl);
     }
 
     .summary-info {
@@ -23474,14 +23451,14 @@ export class AiTripsheetBuilderDialog implements OnInit {
     }
 
     .summary-value {
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 700;
-      color: #1a1a2e;
+      color: var(--color-text);
     }
 
     .summary-label {
-      font-size: 11px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -23489,7 +23466,7 @@ export class AiTripsheetBuilderDialog implements OnInit {
     .table-container {
       overflow-x: auto;
       border-radius: 10px;
-      border: 1px solid #e9ecef;
+      border: 1px solid var(--color-line);
     }
 
     .fuel-tx-table {
@@ -23497,29 +23474,29 @@ export class AiTripsheetBuilderDialog implements OnInit {
     }
 
     .fuel-tx-table th {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
       font-weight: 600;
-      color: #1a1a2e;
-      font-size: 12px;
+      color: var(--color-text);
+      font-size: var(--text-xs);
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
 
     .fuel-tx-table td {
-      color: #333;
-      font-size: 13px;
+      color: var(--color-text);
+      font-size: var(--text-sm);
     }
 
     .fuel-tx-table tr:hover td {
-      background: rgba(30,144,255,0.04);
+      background: var(--color-primary-soft);
     }
 
     .assignment-badge {
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 2px 8px;
       border-radius: 8px;
-      background: rgba(33,150,243,0.1);
-      color: #1565c0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-hover);
       white-space: nowrap;
     }
   `]
@@ -23603,7 +23580,7 @@ export class FuelHistoryDialog {
             }
           </div>
         </div>
-        <button mat-icon-button (click)="close()">
+        <button aria-label="Close" mat-icon-button (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -23773,22 +23750,22 @@ export class FuelHistoryDialog {
       justify-content: space-between;
       align-items: flex-start;
       padding: 20px 24px 16px;
-      border-bottom: 1px solid #e9ecef;
-      background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+      border-bottom: 1px solid var(--color-line);
+      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface) 100%);
     }
 
     .header-info h2 {
       margin: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       font-weight: 700;
-      color: #1a1a2e;
+      color: var(--color-text);
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
     .header-info h2 mat-icon {
-      color: #ff9800;
+      color: var(--color-warn);
       font-size: 28px;
       width: 28px;
       height: 28px;
@@ -23802,22 +23779,22 @@ export class FuelHistoryDialog {
     }
 
     .meta-tag {
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 3px 10px;
       border-radius: 12px;
-      background: rgba(0,0,0,0.06);
-      color: #555;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
       font-weight: 500;
     }
 
     .meta-tag.type {
-      background: rgba(33,150,243,0.1);
-      color: #1565c0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-hover);
     }
 
     .meta-tag.province {
-      background: rgba(76,175,80,0.1);
-      color: #2e7d32;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
     }
 
     .dialog-body {
@@ -23832,20 +23809,20 @@ export class FuelHistoryDialog {
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .empty-center mat-icon {
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #ddd;
+      color: var(--color-text-3);
       margin-bottom: 16px;
     }
 
     .empty-center h3 {
       margin: 0 0 8px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .summary-row {
@@ -23863,21 +23840,21 @@ export class FuelHistoryDialog {
       gap: 12px;
       padding: 14px 16px;
       border-radius: 12px;
-      background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
-      border: 1px solid #e9ecef;
+      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface) 100%);
+      border: 1px solid var(--color-line);
     }
 
     .summary-card mat-icon {
       font-size: 28px;
       width: 28px;
       height: 28px;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
-    .summary-card.completed mat-icon { color: #4caf50; }
-    .summary-card.scheduled mat-icon { color: #ff9800; }
-    .summary-card.in-progress mat-icon { color: #2196f3; }
-    .summary-card.cost mat-icon { color: #9c27b0; }
+    .summary-card.completed mat-icon { color: var(--color-ok); }
+    .summary-card.scheduled mat-icon { color: var(--color-warn); }
+    .summary-card.in-progress mat-icon { color: var(--color-primary); }
+    .summary-card.cost mat-icon { color: var(--color-cat-purple); }
 
     .summary-info {
       display: flex;
@@ -23885,14 +23862,14 @@ export class FuelHistoryDialog {
     }
 
     .summary-value {
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 700;
-      color: #1a1a2e;
+      color: var(--color-text);
     }
 
     .summary-label {
-      font-size: 11px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -23914,7 +23891,7 @@ export class FuelHistoryDialog {
     .table-container {
       overflow-x: auto;
       border-radius: 10px;
-      border: 1px solid #e9ecef;
+      border: 1px solid var(--color-line);
     }
 
     .maint-table {
@@ -23922,60 +23899,60 @@ export class FuelHistoryDialog {
     }
 
     .maint-table th {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
       font-weight: 600;
-      color: #1a1a2e;
-      font-size: 12px;
+      color: var(--color-text);
+      font-size: var(--text-xs);
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
 
     .maint-table td {
-      color: #333;
-      font-size: 13px;
+      color: var(--color-text);
+      font-size: var(--text-sm);
     }
 
     .maint-table tr:hover td {
-      background: rgba(255,152,0,0.04);
+      background: var(--color-warn-soft);
     }
 
     .maint-table tr.row-overdue td {
-      background: rgba(244,67,54,0.04);
+      background: var(--color-danger-soft);
     }
 
     .maint-table tr.row-in-progress td {
-      background: rgba(33,150,243,0.04);
+      background: var(--color-primary-soft);
     }
 
     .type-badge {
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 3px 10px;
       border-radius: 10px;
       font-weight: 600;
       white-space: nowrap;
     }
 
-    .type-badge.type-scheduled { background: rgba(255,152,0,0.12); color: #e65100; }
-    .type-badge.type-repair { background: rgba(244,67,54,0.12); color: #c62828; }
-    .type-badge.type-inspection { background: rgba(33,150,243,0.12); color: #1565c0; }
-    .type-badge.type-license { background: rgba(156,39,176,0.12); color: #7b1fa2; }
-    .type-badge.type-tire { background: rgba(121,85,72,0.12); color: #4e342e; }
-    .type-badge.type-body { background: rgba(0,150,136,0.12); color: #00695c; }
-    .type-badge.type-electrical { background: rgba(255,193,7,0.12); color: #f57f17; }
-    .type-badge.type-preventive { background: rgba(76,175,80,0.12); color: #2e7d32; }
+    .type-badge.type-scheduled { background: var(--color-warn-soft); color: var(--color-warn); }
+    .type-badge.type-repair { background: var(--color-danger-soft); color: var(--color-danger); }
+    .type-badge.type-inspection { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .type-badge.type-license { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .type-badge.type-tire { background: var(--color-cat-amber-soft); color: var(--color-cat-amber); }
+    .type-badge.type-body { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); }
+    .type-badge.type-electrical { background: var(--color-warn-soft); color: var(--color-warn); }
+    .type-badge.type-preventive { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .status-chip {
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 3px 10px;
       border-radius: 10px;
       font-weight: 600;
       white-space: nowrap;
     }
 
-    .status-chip.status-completed { background: rgba(76,175,80,0.12); color: #2e7d32; }
-    .status-chip.status-scheduled { background: rgba(255,152,0,0.12); color: #e65100; }
-    .status-chip.status-in-progress { background: rgba(33,150,243,0.12); color: #1565c0; }
-    .status-chip.status-overdue { background: rgba(244,67,54,0.12); color: #c62828; }
+    .status-chip.status-completed { background: var(--color-ok-soft); color: var(--color-ok); }
+    .status-chip.status-scheduled { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-chip.status-in-progress { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .status-chip.status-overdue { background: var(--color-danger-soft); color: var(--color-danger); }
 
     .priority-dot {
       display: inline-block;
@@ -23985,13 +23962,13 @@ export class FuelHistoryDialog {
       margin-right: 6px;
     }
 
-    .priority-dot.priority-critical { background: #f44336; }
-    .priority-dot.priority-high { background: #ff9800; }
-    .priority-dot.priority-medium { background: #2196f3; }
-    .priority-dot.priority-low { background: #4caf50; }
+    .priority-dot.priority-critical { background: var(--color-danger); }
+    .priority-dot.priority-high { background: var(--color-warn); }
+    .priority-dot.priority-medium { background: var(--color-primary); }
+    .priority-dot.priority-low { background: var(--color-ok); }
 
     .muted {
-      color: #bbb;
+      color: var(--color-text-3);
     }
   `]
 })
@@ -24112,20 +24089,20 @@ export class VehicleMaintenanceHistoryDialog {
         </div>
         <div class="header-actions">
           <div class="date-nav">
-            <button mat-icon-button matTooltip="Previous day" (click)="changeDay(-1)" class="header-btn">
+            <button aria-label="Previous day" mat-icon-button matTooltip="Previous day" (click)="changeDay(-1)" class="header-btn">
               <mat-icon>chevron_left</mat-icon>
             </button>
             <input type="date" class="date-input" [ngModel]="selectedDate" (ngModelChange)="onDateChange($event)" [max]="maxDate" />
-            <button mat-icon-button matTooltip="Next day" (click)="changeDay(1)" class="header-btn" [disabled]="isToday">
+            <button aria-label="Next day" mat-icon-button matTooltip="Next day" (click)="changeDay(1)" class="header-btn" [disabled]="isToday">
               <mat-icon>chevron_right</mat-icon>
             </button>
             <button mat-stroked-button class="today-btn" (click)="goToToday()" [disabled]="isToday">Today</button>
           </div>
-          <button mat-icon-button matTooltip="Refresh live from CarTrack" (click)="refreshFromCarTrack()" class="header-btn" [disabled]="refreshing || loading">
+          <button aria-label="Refresh live from CarTrack" mat-icon-button matTooltip="Refresh live from CarTrack" (click)="refreshFromCarTrack()" class="header-btn" [disabled]="refreshing || loading">
             <mat-icon [class.spin]="refreshing">refresh</mat-icon>
           </button>
           @if (trips.length > 0) {
-            <button mat-icon-button matTooltip="Export…" [matMenuTriggerFor]="exportMenu" class="header-btn">
+            <button aria-label="Export…" mat-icon-button matTooltip="Export…" [matMenuTriggerFor]="exportMenu" class="header-btn">
               <mat-icon>download</mat-icon>
             </button>
             <mat-menu #exportMenu="matMenu">
@@ -24143,7 +24120,7 @@ export class VehicleMaintenanceHistoryDialog {
               </button>
             </mat-menu>
           }
-          <button mat-icon-button (click)="close()" class="header-btn">
+          <button aria-label="Close" mat-icon-button (click)="close()" class="header-btn">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -24317,7 +24294,7 @@ export class VehicleMaintenanceHistoryDialog {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #fff;
+      background: var(--color-surface);
       border-radius: 16px;
       overflow: hidden;
     }
@@ -24333,7 +24310,7 @@ export class VehicleMaintenanceHistoryDialog {
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 600;
       display: flex;
       align-items: center;
@@ -24342,7 +24319,7 @@ export class VehicleMaintenanceHistoryDialog {
     }
 
     .dialog-header h2 mat-icon {
-      font-size: 24px; width: 24px; height: 24px;
+      font-size: var(--text-3xl); width: 24px; height: 24px;
     }
 
     .header-actions {
@@ -24372,7 +24349,7 @@ export class VehicleMaintenanceHistoryDialog {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 2px 8px;
       border-radius: 10px;
       background: rgba(255,255,255,0.2);
@@ -24380,7 +24357,7 @@ export class VehicleMaintenanceHistoryDialog {
     }
 
     .meta-tag mat-icon {
-      font-size: 13px; width: 13px; height: 13px;
+      font-size: var(--text-sm); width: 13px; height: 13px;
     }
 
     /* Loading / Empty states */
@@ -24391,15 +24368,15 @@ export class VehicleMaintenanceHistoryDialog {
       justify-content: center;
       flex: 1;
       padding: 60px 20px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .empty-center mat-icon {
       font-size: 56px; width: 56px; height: 56px;
-      color: #ccc; margin-bottom: 16px;
+      color: var(--color-text-3); margin-bottom: 16px;
     }
 
-    .empty-center h3 { color: #555; margin: 0 0 8px; }
+    .empty-center h3 { color: var(--color-text-2); margin: 0 0 8px; }
 
     /* Summary Strip */
     .summary-strip {
@@ -24407,8 +24384,8 @@ export class VehicleMaintenanceHistoryDialog {
       align-items: center;
       gap: 12px;
       padding: 10px 20px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e9ecef;
+      background: var(--color-canvas);
+      border-bottom: 1px solid var(--color-line);
       flex-wrap: wrap;
     }
 
@@ -24416,42 +24393,42 @@ export class VehicleMaintenanceHistoryDialog {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 12px;
-      color: #555;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       padding: 4px 10px;
       border-radius: 16px;
-      background: #fff;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
     }
 
     .summary-chip mat-icon {
-      font-size: 16px; width: 16px; height: 16px; color: #00838f;
+      font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-cat-teal);
     }
 
-    .summary-chip.speed mat-icon { color: #e53935; }
-    .summary-chip.warning mat-icon { color: #ff8f00; }
-    .summary-chip.warning { background: #fff8e1; border-color: #ffe082; }
-    .summary-chip.distance { background: #e0f7fa; border-color: #80deea; }
-    .summary-chip.fuel { background: #e8f5e9; border-color: #a5d6a7; }
-    .summary-chip.fuel mat-icon { color: #2e7d32; }
+    .summary-chip.speed mat-icon { color: var(--color-danger); }
+    .summary-chip.warning mat-icon { color: var(--color-warn); }
+    .summary-chip.warning { background: var(--color-warn-soft); border-color: color-mix(in srgb, var(--color-warn) 35%, transparent); }
+    .summary-chip.distance { background: var(--color-cat-teal-soft); border-color: color-mix(in srgb, var(--color-cat-teal) 35%, transparent); }
+    .summary-chip.fuel { background: var(--color-ok-soft); border-color: color-mix(in srgb, var(--color-ok) 35%, transparent); }
+    .summary-chip.fuel mat-icon { color: var(--color-ok); }
 
     /* Live "on the move now" styling */
     .top-progress { position: sticky; top: 0; z-index: 5; }
-    .summary-chip.live-chip { background: #ffebee; border-color: #ef9a9a; color: #c62828; font-weight: 600; }
+    .summary-chip.live-chip { background: var(--color-danger-soft); border-color: color-mix(in srgb, var(--color-danger) 35%, transparent); color: var(--color-danger); font-weight: 600; }
     .summary-chip.live-chip .dot {
-      width: 9px; height: 9px; border-radius: 50%; background: #e53935; display: inline-block;
+      width: 9px; height: 9px; border-radius: 50%; background: var(--color-danger); display: inline-block;
       margin-right: 2px; animation: live-blink 1.1s ease-in-out infinite;
     }
     @keyframes live-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-    .empty-center.live h3 { color: #c62828; }
-    .empty-center.live .live-note { font-size: 12.5px; color: #777; max-width: 420px; }
+    .empty-center.live h3 { color: var(--color-danger); }
+    .empty-center.live .live-note { font-size: var(--text-xs); color: var(--color-text-3); max-width: 420px; }
     .empty-center.live button { margin-top: 12px; }
     .live-pulse {
       width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      background: rgba(229,57,53,0.12); color: #e53935; margin-bottom: 8px;
+      background: var(--color-danger-soft); color: var(--color-danger); margin-bottom: 8px;
       animation: live-ring 1.6s ease-out infinite;
     }
-    .live-pulse mat-icon { font-size: 32px; width: 32px; height: 32px; }
+    .live-pulse mat-icon { font-size: var(--text-4xl); width: 32px; height: 32px; }
     @keyframes live-ring {
       0% { box-shadow: 0 0 0 0 rgba(229,57,53,0.35); }
       100% { box-shadow: 0 0 0 18px rgba(229,57,53,0); }
@@ -24459,20 +24436,20 @@ export class VehicleMaintenanceHistoryDialog {
 
     /* Fuel-theft / anomaly banner */
     .fuel-risk-banner {
-      margin: 8px 12px; padding: 10px 14px; background: #fff;
-      border: 1px solid #eee; border-left: 4px solid #d32f2f; border-radius: 6px;
+      margin: 8px 12px; padding: 10px 14px; background: var(--color-surface);
+      border: 1px solid var(--color-line); border-left: 4px solid var(--color-danger); border-radius: 6px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     .fuel-risk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .fuel-risk-head mat-icon { font-size: 20px; width: 20px; height: 20px; }
-    .fuel-risk-title { font-weight: 700; font-size: 14px; }
-    .fuel-risk-score { font-size: 12px; color: #777; }
-    .fuel-risk-econ { font-size: 12px; color: #555; margin-left: auto; background: #f5f5f5; padding: 2px 8px; border-radius: 10px; }
+    .fuel-risk-head mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; }
+    .fuel-risk-title { font-weight: 700; font-size: var(--text-md); }
+    .fuel-risk-score { font-size: var(--text-xs); color: var(--color-text-3); }
+    .fuel-risk-econ { font-size: var(--text-xs); color: var(--color-text-2); margin-left: auto; background: var(--color-surface-2); padding: 2px 8px; border-radius: 10px; }
     .fuel-risk-list { margin: 8px 0 0; padding: 0; list-style: none; }
-    .fuel-risk-list li { display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; color: #444; padding: 3px 0; }
-    .fuel-risk-list li.high { color: #b71c1c; font-weight: 600; }
-    .fuel-risk-list li mat-icon { font-size: 16px; width: 16px; height: 16px; margin-top: 1px; color: #999; }
-    .fuel-risk-list li.high mat-icon { color: #d32f2f; }
+    .fuel-risk-list li { display: flex; align-items: flex-start; gap: 6px; font-size: var(--text-xs); color: var(--color-text-2); padding: 3px 0; }
+    .fuel-risk-list li.high { color: var(--color-danger); font-weight: 600; }
+    .fuel-risk-list li mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; margin-top: 1px; color: var(--color-text-3); }
+    .fuel-risk-list li.high mat-icon { color: var(--color-danger); }
 
     /* Date navigation */
     .date-nav {
@@ -24487,15 +24464,15 @@ export class VehicleMaintenanceHistoryDialog {
       border: none;
       border-radius: 6px;
       padding: 4px 8px;
-      font-size: 12px;
-      color: #1a1a2e;
+      font-size: var(--text-xs);
+      color: var(--color-text);
       cursor: pointer;
     }
 
     .today-btn {
       color: #fff !important;
       border-color: rgba(255,255,255,0.6) !important;
-      font-size: 11px;
+      font-size: var(--text-xs);
       height: 28px;
       line-height: 28px;
       min-width: 0;
@@ -24512,30 +24489,30 @@ export class VehicleMaintenanceHistoryDialog {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: #2e7d32 !important;
-      background: #f1f8e9 !important;
+      color: var(--color-ok) !important;
+      background: var(--color-ok-soft) !important;
     }
 
     .fuel-header mat-icon {
-      font-size: 16px; width: 16px; height: 16px;
+      font-size: var(--text-lg); width: 16px; height: 16px;
     }
 
     .fuel-list {
-      border-bottom: 2px solid #e0e0e0;
+      border-bottom: 2px solid var(--color-line);
     }
 
     .fuel-item {
       display: flex;
       gap: 10px;
       padding: 10px 16px;
-      border-bottom: 1px solid #f0f0f0;
-      background: #fbfffb;
+      border-bottom: 1px solid var(--color-line);
+      background: var(--color-surface-2);
     }
 
     .fuel-icon {
       width: 26px; height: 26px;
       border-radius: 50%;
-      background: #2e7d32;
+      background: var(--color-ok);
       color: #fff;
       display: flex;
       align-items: center;
@@ -24545,23 +24522,23 @@ export class VehicleMaintenanceHistoryDialog {
     }
 
     .fuel-icon mat-icon {
-      font-size: 16px; width: 16px; height: 16px;
+      font-size: var(--text-lg); width: 16px; height: 16px;
     }
 
     .fuel-details { flex: 1; min-width: 0; }
-    .fuel-time { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+    .fuel-time { font-size: var(--text-sm); font-weight: 600; color: var(--color-text); }
     .fuel-loc {
-      font-size: 11px; color: #666; margin-top: 2px;
+      font-size: var(--text-xs); color: var(--color-text-2); margin-top: 2px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .fuel-stats {
       display: flex; align-items: center; gap: 4px;
-      margin-top: 3px; font-size: 11px; color: #2e7d32; font-weight: 600;
+      margin-top: 3px; font-size: var(--text-xs); color: var(--color-ok); font-weight: 600;
     }
 
     .summary-chip strong {
       font-weight: 700;
-      color: #1a1a2e;
+      color: var(--color-text);
     }
 
     .export-btn-wrap {
@@ -24571,22 +24548,22 @@ export class VehicleMaintenanceHistoryDialog {
     }
 
     .fuel-health-btn {
-      background: #ef6c00 !important;
+      background: var(--color-warn) !important;
       color: #fff !important;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
 
     .export-btn {
-      background: #00838f !important;
+      background: var(--color-cat-teal) !important;
       color: #fff !important;
-      font-size: 12px;
+      font-size: var(--text-xs);
       height: 32px;
       line-height: 32px;
       padding: 0 14px;
     }
 
     .export-btn mat-icon {
-      font-size: 16px; width: 16px; height: 16px; margin-right: 4px;
+      font-size: var(--text-lg); width: 16px; height: 16px; margin-right: 4px;
     }
 
     /* Main Content Layout */
@@ -24601,19 +24578,19 @@ export class VehicleMaintenanceHistoryDialog {
     .trip-sidebar {
       width: 320px;
       min-width: 320px;
-      border-right: 1px solid #e9ecef;
+      border-right: 1px solid var(--color-line);
       display: flex;
       flex-direction: column;
-      background: #fff;
+      background: var(--color-surface);
     }
 
     .sidebar-header {
       padding: 12px 16px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
-      color: #333;
-      border-bottom: 1px solid #e9ecef;
-      background: #fafafa;
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
+      background: var(--color-canvas);
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
@@ -24628,25 +24605,25 @@ export class VehicleMaintenanceHistoryDialog {
       gap: 10px;
       padding: 12px 16px;
       cursor: pointer;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--color-line);
       transition: background 0.15s;
     }
 
-    .trip-item:hover { background: #f5f9ff; }
+    .trip-item:hover { background: var(--color-surface-2); }
     .trip-item.active {
-      background: #e3f2fd;
-      border-left: 3px solid #00838f;
+      background: var(--color-primary-soft);
+      border-left: 3px solid var(--color-cat-teal);
     }
 
     .trip-number {
       width: 26px; height: 26px;
       border-radius: 50%;
-      background: #00838f;
+      background: var(--color-cat-teal);
       color: #fff;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 700;
       flex-shrink: 0;
       margin-top: 2px;
@@ -24658,9 +24635,9 @@ export class VehicleMaintenanceHistoryDialog {
     }
 
     .trip-time {
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
-      color: #1a1a2e;
+      color: var(--color-text);
     }
 
     .trip-locations {
@@ -24668,8 +24645,8 @@ export class VehicleMaintenanceHistoryDialog {
       align-items: center;
       gap: 4px;
       margin-top: 3px;
-      font-size: 11px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .loc-from, .loc-to {
@@ -24680,10 +24657,10 @@ export class VehicleMaintenanceHistoryDialog {
     }
 
     .arrow-icon {
-      font-size: 12px !important;
+      font-size: var(--text-xs) !important;
       width: 12px !important;
       height: 12px !important;
-      color: #bbb;
+      color: var(--color-text-3);
     }
 
     .trip-stats {
@@ -24691,13 +24668,13 @@ export class VehicleMaintenanceHistoryDialog {
       align-items: center;
       gap: 4px;
       margin-top: 4px;
-      font-size: 11px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
 
-    .dot-sep { color: #ccc; }
-    .speed-warning { color: #e53935; font-weight: 600; }
-    .harsh-count { color: #ff8f00; font-weight: 600; }
+    .dot-sep { color: var(--color-text-3); }
+    .speed-warning { color: var(--color-danger); font-weight: 600; }
+    .harsh-count { color: var(--color-warn); font-weight: 600; }
 
     /* Map Area */
     .map-area {
@@ -24719,7 +24696,7 @@ export class VehicleMaintenanceHistoryDialog {
       flex-direction: column;
       align-items: center;
       gap: 12px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     @media (max-width: 768px) {
@@ -24785,6 +24762,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
 
   private http = inject(HttpClient);
   private dialog = inject(MatDialog);
+  private readonly toast = inject(ToastService);
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: any,
@@ -25187,8 +25165,8 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
           <div style="padding:12px;min-width:200px;">
             <h3 style="margin:0 0 6px;font-size:15px;color:#2e7d32;">\u26FD Refuelling</h3>
             <p style="margin:4px 0;font-size:13px;"><strong>${fuel.depotName || fuel.depotAssignment || 'Fuel station'}</strong></p>
-            <p style="margin:4px 0;font-size:12px;color:#666;"><strong>Time:</strong> ${this.formatTime(fuel.timestamp)}</p>
-            <hr style="border:none;border-top:1px solid #eee;margin:8px 0;">
+            <p style="margin:4px 0;font-size:12px;color:var(--color-text-2);"><strong>Time:</strong> ${this.formatTime(fuel.timestamp)}</p>
+            <hr style="border:none;border-top:1px solid var(--color-line);margin:8px 0;">
             <p style="margin:4px 0;font-size:12px;"><strong>Litres:</strong> ${Number(fuel.litres).toFixed(1)} L</p>
             <p style="margin:4px 0;font-size:12px;"><strong>Amount:</strong> R${Number(fuel.amount).toFixed(2)}</p>
           </div>`;
@@ -25234,7 +25212,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
           <p style="margin:4px 0;font-size:13px;"><strong>${this.liveStatus.address || 'On the move'}</strong></p>
           <p style="margin:4px 0;font-size:12px;"><strong>Speed:</strong> ${Number(this.liveStatus.speed).toFixed(0)} km/h</p>
           ${this.liveStatus.driverName ? `<p style="margin:4px 0;font-size:12px;"><strong>Driver:</strong> ${this.liveStatus.driverName}</p>` : ''}
-          ${this.liveStatus.lastUpdate ? `<p style="margin:4px 0;font-size:12px;color:#666;"><strong>Updated:</strong> ${this.formatTime(this.liveStatus.lastUpdate)}</p>` : ''}
+          ${this.liveStatus.lastUpdate ? `<p style="margin:4px 0;font-size:12px;color:var(--color-text-2);"><strong>Updated:</strong> ${this.formatTime(this.liveStatus.lastUpdate)}</p>` : ''}
         </div>`;
       this.infoWindow.setContent(content);
       this.infoWindow.open(this.map, marker);
@@ -25264,8 +25242,8 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
           Trip ${index + 1} — ${type === 'start' ? 'Start' : 'End'}
         </h3>
         <p style="margin:4px 0;font-size:13px;"><strong>📍 ${loc}</strong></p>
-        <p style="margin:4px 0;font-size:12px;color:#666;"><strong>Time:</strong> ${time}</p>
-        <hr style="border:none;border-top:1px solid #eee;margin:8px 0;">
+        <p style="margin:4px 0;font-size:12px;color:var(--color-text-2);"><strong>Time:</strong> ${time}</p>
+        <hr style="border:none;border-top:1px solid var(--color-line);margin:8px 0;">
         <p style="margin:4px 0;font-size:12px;"><strong>Distance:</strong> ${distKm} km</p>
         <p style="margin:4px 0;font-size:12px;"><strong>Duration:</strong> ${dur}</p>
         <p style="margin:4px 0;font-size:12px;"><strong>Max Speed:</strong> <span style="color:${trip.maxSpeed > 120 ? '#e53935' : '#333'};">${Math.round(trip.maxSpeed)} km/h</span></p>
@@ -25421,7 +25399,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
       },
       error: (err) => {
         console.error('Failed to build km summary:', err);
-        window.alert('Could not build the km summary. Please try again.');
+        this.toast.error('Could not build the km summary. Please try again.');
       }
     });
   }
@@ -25483,7 +25461,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
             <option [ngValue]="90">Last 90 days</option>
             <option [ngValue]="180">Last 6 months</option>
           </select>
-          <button mat-icon-button (click)="close()"><mat-icon>close</mat-icon></button>
+          <button aria-label="Close" mat-icon-button (click)="close()"><mat-icon>close</mat-icon></button>
         </div>
       </div>
 
@@ -25609,68 +25587,68 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
     </div>
   `,
   styles: [`
-    .fh-dialog { display: flex; flex-direction: column; background: #fff; }
+    .fh-dialog { display: flex; flex-direction: column; background: var(--color-surface); }
     .fh-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 20px; background: linear-gradient(135deg, #e65100 0%, #ef6c00 100%); color: #fff;
+      padding: 16px 20px; background: linear-gradient(135deg, var(--color-warn) 0%, var(--color-warn) 100%); color: #fff;
     }
     .fh-title { display: flex; align-items: center; gap: 12px; }
     .fh-title mat-icon { font-size: 30px; width: 30px; height: 30px; }
-    .fh-title h2 { margin: 0; font-size: 18px; }
-    .fh-sub { font-size: 12.5px; opacity: 0.9; }
+    .fh-title h2 { margin: 0; font-size: var(--text-xl); }
+    .fh-sub { font-size: var(--text-xs); opacity: 0.9; }
     .fh-controls { display: flex; align-items: center; gap: 6px; }
-    .fh-range { border: none; border-radius: 6px; padding: 6px 8px; font-size: 12.5px; }
-    .fh-center { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px; color: #777; }
+    .fh-range { border: none; border-radius: 6px; padding: 6px 8px; font-size: var(--text-xs); }
+    .fh-center { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px; color: var(--color-text-3); }
     .fh-center mat-icon { font-size: 40px; width: 40px; height: 40px; }
     .fh-body { padding: 20px; overflow-y: auto; }
 
     .fh-score-card {
-      display: flex; align-items: center; gap: 20px; padding: 16px; border: 2px solid #ccc;
+      display: flex; align-items: center; gap: 20px; padding: 16px; border: 2px solid var(--color-line-strong);
       border-radius: 12px; margin-bottom: 16px;
     }
     .fh-gauge {
       width: 96px; height: 96px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
     .fh-gauge-inner {
-      width: 78px; height: 78px; border-radius: 50%; background: #fff; display: flex; align-items: baseline; justify-content: center; gap: 1px;
+      width: 78px; height: 78px; border-radius: 50%; background: var(--color-surface); display: flex; align-items: baseline; justify-content: center; gap: 1px;
     }
-    .fh-score { font-size: 30px; font-weight: 800; line-height: 1; }
-    .fh-score-max { font-size: 13px; color: #999; }
-    .fh-badge { color: #fff; padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-    .fh-score-desc { margin: 8px 0 0; font-size: 13px; color: #555; }
+    .fh-score { font-size: var(--text-4xl); font-weight: 800; line-height: 1; }
+    .fh-score-max { font-size: var(--text-sm); color: var(--color-text-3); }
+    .fh-badge { color: #fff; padding: 3px 12px; border-radius: 12px; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; }
+    .fh-score-desc { margin: 8px 0 0; font-size: var(--text-sm); color: var(--color-text-2); }
 
     .fh-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
-    .fh-stat { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; text-align: center; }
-    .fh-stat-val { display: block; font-size: 18px; font-weight: 700; color: #1a1a2e; }
-    .fh-stat-lbl { font-size: 11.5px; color: #888; }
+    .fh-stat { background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 8px; padding: 10px 12px; text-align: center; }
+    .fh-stat-val { display: block; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
+    .fh-stat-lbl { font-size: var(--text-xs); color: var(--color-text-3); }
 
     .fh-section { margin-bottom: 18px; }
-    .fh-section h3 { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #333; margin: 0 0 8px; }
-    .fh-section h3 mat-icon { font-size: 18px; width: 18px; height: 18px; color: #ef6c00; }
+    .fh-section h3 { display: flex; align-items: center; gap: 6px; font-size: var(--text-md); color: var(--color-text); margin: 0 0 8px; }
+    .fh-section h3 mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-warn); }
     .fh-findings { list-style: none; margin: 0; padding: 0; }
-    .fh-findings li { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: #555; padding: 5px 0; }
-    .fh-findings li.high { color: #c62828; font-weight: 600; }
-    .fh-findings li mat-icon { font-size: 17px; width: 17px; height: 17px; color: #999; margin-top: 1px; }
-    .fh-findings li.high mat-icon { color: #d32f2f; }
-    .fh-ok { display: flex; align-items: center; gap: 8px; color: #2e7d32; font-size: 13.5px; background: #e8f5e9; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
-    .fh-notes { background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; }
-    .fh-notes div { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8d6e00; padding: 2px 0; }
+    .fh-findings li { display: flex; align-items: flex-start; gap: 6px; font-size: var(--text-sm); color: var(--color-text-2); padding: 5px 0; }
+    .fh-findings li.high { color: var(--color-danger); font-weight: 600; }
+    .fh-findings li mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--color-text-3); margin-top: 1px; }
+    .fh-findings li.high mat-icon { color: var(--color-danger); }
+    .fh-ok { display: flex; align-items: center; gap: 8px; color: var(--color-ok); font-size: var(--text-sm); background: var(--color-ok-soft); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
+    .fh-notes { background: var(--color-warn-soft); border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent); border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; }
+    .fh-notes div { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--color-warn); padding: 2px 0; }
     .fh-notes mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
-    .fh-table-wrap { overflow-x: auto; border: 1px solid #eee; border-radius: 8px; }
-    .fh-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    .fh-table th, .fh-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
-    .fh-table th { background: #fafafa; font-weight: 600; color: #666; }
+    .fh-table-wrap { overflow-x: auto; border: 1px solid var(--color-line); border-radius: 8px; }
+    .fh-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+    .fh-table th, .fh-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--color-line); white-space: nowrap; }
+    .fh-table th { background: var(--color-canvas); font-weight: 600; color: var(--color-text-2); }
     .fh-table td.num, .fh-table th.num { text-align: right; }
-    .fh-table td.over { color: #c62828; font-weight: 700; }
-    .fh-table td.muted, .fh-table .muted { color: #bbb; font-style: italic; }
-    .fh-table tr.flagged { background: #fff5f5; }
-    .fh-table tr.flagged-high { background: #ffebee; }
-    .flag-pill { display: inline-flex; align-items: center; gap: 4px; background: #fff3e0; color: #e65100; padding: 2px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 600; }
-    .flag-pill.high { background: #ffebee; color: #c62828; }
-    .flag-pill mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .ok-tick { color: #2e7d32; font-weight: 700; }
-    .fh-empty { color: #999; font-size: 13px; }
+    .fh-table td.over { color: var(--color-danger); font-weight: 700; }
+    .fh-table td.muted, .fh-table .muted { color: var(--color-text-3); font-style: italic; }
+    .fh-table tr.flagged { background: color-mix(in srgb, var(--color-danger-soft) 50%, var(--color-surface)); }
+    .fh-table tr.flagged-high { background: var(--color-danger-soft); }
+    .flag-pill { display: inline-flex; align-items: center; gap: 4px; background: var(--color-warn-soft); color: var(--color-warn); padding: 2px 8px; border-radius: 10px; font-size: var(--text-xs); font-weight: 600; }
+    .flag-pill.high { background: var(--color-danger-soft); color: var(--color-danger); }
+    .flag-pill mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
+    .ok-tick { color: var(--color-ok); font-weight: 700; }
+    .fh-empty { color: var(--color-text-3); font-size: var(--text-sm); }
   `]
 })
 export class FuelHealthDialog {
@@ -25748,7 +25726,7 @@ export class FuelHealthDialog {
         <h2>Barcode lookup</h2>
         <span class="bl__code">{{ data.code }}</span>
       </div>
-      <button class="bl__x" (click)="close()"><mat-icon>close</mat-icon></button>
+      <button aria-label="Close" class="bl__x" (click)="close()"><mat-icon>close</mat-icon></button>
     </div>
 
     <div class="bl__body">
@@ -25834,27 +25812,27 @@ export class FuelHealthDialog {
   `,
   styles: [`
     .bl { display:flex; flex-direction:column; max-height:82vh; }
-    .bl__head { display:flex; align-items:center; gap:12px; padding:18px 20px; background:linear-gradient(135deg,#4f46e5,#6366f1); color:#fff; }
+    .bl__head { display:flex; align-items:center; gap:12px; padding:18px 20px; background:linear-gradient(135deg,var(--color-primary),var(--color-primary)); color:#fff; }
     .bl__head > mat-icon { font-size:30px; width:30px; height:30px; }
     .bl__title h2 { margin:0; font-size:1.1rem; }
     .bl__code { font-family:monospace; font-size:0.8rem; opacity:0.9; }
     .bl__x { margin-left:auto; background:rgba(255,255,255,0.15); border:none; color:#fff; width:34px; height:34px; border-radius:10px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
     .bl__body { padding:16px 20px; overflow:auto; display:flex; flex-direction:column; gap:14px; }
-    .bl__empty { text-align:center; color:#94a3b8; padding:24px; }
+    .bl__empty { text-align:center; color:var(--color-text-3); padding:24px; }
     .bl__empty mat-icon { font-size:44px; width:44px; height:44px; }
-    .bl__block { border:1px solid #e2e8f0; border-radius:12px; padding:12px; }
-    .bl__bt { display:flex; align-items:center; gap:6px; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:#64748b; font-weight:700; margin-bottom:8px; }
-    .bl__bt mat-icon { font-size:16px; width:16px; height:16px; color:#4f46e5; }
+    .bl__block { border:1px solid var(--color-line); border-radius:12px; padding:12px; }
+    .bl__bt { display:flex; align-items:center; gap:6px; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--color-text-3); font-weight:700; margin-bottom:8px; }
+    .bl__bt mat-icon { font-size:var(--text-lg); width:16px; height:16px; color:var(--color-primary); }
     .bl__kv { display:flex; justify-content:space-between; font-size:0.84rem; padding:3px 0; }
-    .bl__kv span { color:#64748b; }
-    .bl__row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-top:1px dashed #e2e8f0; }
+    .bl__kv span { color:var(--color-text-3); }
+    .bl__row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-top:1px dashed var(--color-line); }
     .bl__row:first-of-type { border-top:none; }
-    .bl__sub { font-size:0.74rem; color:#64748b; margin-top:2px; }
-    .bl__qty { text-align:right; } .bl__qty b { font-size:1.05rem; } .bl__qty span { display:block; font-size:0.66rem; color:#64748b; }
-    .bl__chip { font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:999px; background:#eef0f6; color:#475569; text-transform:capitalize; }
+    .bl__sub { font-size:0.74rem; color:var(--color-text-3); margin-top:2px; }
+    .bl__qty { text-align:right; } .bl__qty b { font-size:1.05rem; } .bl__qty span { display:block; font-size:0.66rem; color:var(--color-text-3); }
+    .bl__chip { font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--color-surface-2); color:var(--color-text-2); text-transform:capitalize; }
     .bl__scan { display:flex; gap:8px; align-items:center; padding:5px 0; font-size:0.82rem; }
-    .bl__scan mat-icon { font-size:17px; width:17px; height:17px; color:#4f46e5; }
-    .bl__foot { display:flex; justify-content:flex-end; gap:8px; padding:14px 20px; border-top:1px solid #e2e8f0; }
+    .bl__scan mat-icon { font-size:17px; width:17px; height:17px; color:var(--color-primary); }
+    .bl__foot { display:flex; justify-content:flex-end; gap:8px; padding:14px 20px; border-top:1px solid var(--color-line); }
   `]
 })
 export class BarcodeLookupDialog {
@@ -25866,7 +25844,7 @@ export class BarcodeLookupDialog {
 
   openLoad(loadId: number): void {
     this.dialogRef.close();
-    this.router.navigate(['/logistics'], { queryParams: { loadId } });
+    this.router.navigate(['/logistics/loads', loadId]);
   }
 
   openScanPage(): void {
@@ -25899,7 +25877,7 @@ export class BarcodeLookupDialog {
     <div class="email-recipients-dialog">
       <div class="dialog-header">
         <h2><mat-icon>outgoing_mail</mat-icon> Email Trip Sheet</h2>
-        <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
       </div>
 
       <mat-dialog-content>
@@ -25921,7 +25899,7 @@ export class BarcodeLookupDialog {
               <mat-hint class="error-hint">{{ inputError }}</mat-hint>
             }
           </mat-form-field>
-          <button mat-mini-fab color="primary" (click)="addEmail()" matTooltip="Add recipient" [disabled]="!emailInput.trim()">
+          <button aria-label="Add recipient" mat-mini-fab color="primary" (click)="addEmail()" matTooltip="Add recipient" [disabled]="!emailInput.trim()">
             <mat-icon>add</mat-icon>
           </button>
         </div>
@@ -25932,7 +25910,7 @@ export class BarcodeLookupDialog {
               <span class="email-chip">
                 <mat-icon>person</mat-icon>
                 {{ email }}
-                <button class="remove-chip" (click)="removeEmail(email)" title="Remove">
+                <button aria-label="Close" class="remove-chip" (click)="removeEmail(email)" title="Remove">
                   <mat-icon>cancel</mat-icon>
                 </button>
               </span>
@@ -25968,33 +25946,33 @@ export class BarcodeLookupDialog {
     .dialog-header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 24px; margin: -24px -24px 0 -24px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); color: white;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%); color: white;
     }
-    .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 18px; }
+    .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: var(--text-xl); }
     .dialog-header button { color: white; }
     mat-dialog-content { padding-top: 20px !important; }
-    .hint-text { color: #666; font-size: 13px; margin: 0 0 12px; }
+    .hint-text { color: var(--color-text-2); font-size: var(--text-sm); margin: 0 0 12px; }
     .email-input-row { display: flex; align-items: center; gap: 12px; }
     .email-field { flex: 1; }
-    .error-hint { color: #d32f2f; }
+    .error-hint { color: var(--color-danger); }
     .chips-area { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
     .email-chip {
       display: inline-flex; align-items: center; gap: 6px;
-      background: #e3f2fd; color: #1565c0; border-radius: 16px;
-      padding: 5px 6px 5px 12px; font-size: 13px; font-weight: 500;
+      background: var(--color-primary-soft); color: var(--color-primary-hover); border-radius: 16px;
+      padding: 5px 6px 5px 12px; font-size: var(--text-sm); font-weight: 500;
     }
-    .email-chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .email-chip mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
     .remove-chip {
       background: none; border: none; cursor: pointer; padding: 0;
-      display: flex; align-items: center; color: #90a4ae;
+      display: flex; align-items: center; color: var(--color-text-3);
     }
-    .remove-chip:hover { color: #d32f2f; }
-    .remove-chip mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .remove-chip:hover { color: var(--color-danger); }
+    .remove-chip mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
     .no-emails {
-      display: flex; align-items: center; gap: 8px; color: #999;
-      padding: 12px; background: #fafafa; border-radius: 8px; margin-bottom: 16px; font-size: 13px;
+      display: flex; align-items: center; gap: 8px; color: var(--color-text-3);
+      padding: 12px; background: var(--color-canvas); border-radius: 8px; margin-bottom: 16px; font-size: var(--text-sm);
     }
-    .quick-add { margin-bottom: 16px; font-size: 12px; }
+    .quick-add { margin-bottom: 16px; font-size: var(--text-xs); }
     .quick-add mat-icon { margin-right: 4px; }
     .cc-checkbox { display: block; margin-bottom: 8px; }
     mat-dialog-actions { padding: 12px 24px 16px; }
@@ -26084,13 +26062,13 @@ export class TripsheetEmailRecipientsDialog {
               <mat-icon>receipt</mat-icon> Delivery Notes
             </mat-button-toggle>
           </mat-button-toggle-group>
-          <button mat-icon-button (click)="print()" matTooltip="Print" [disabled]="loading">
+          <button aria-label="Print" mat-icon-button (click)="print()" matTooltip="Print" [disabled]="loading">
             <mat-icon>print</mat-icon>
           </button>
-          <button mat-icon-button (click)="downloadPdf()" matTooltip="Download PDF" [disabled]="loading">
+          <button aria-label="Download PDF" mat-icon-button (click)="downloadPdf()" matTooltip="Download PDF" [disabled]="loading">
             <mat-icon>download</mat-icon>
           </button>
-          <button mat-icon-button mat-dialog-close matTooltip="Close">
+          <button aria-label="Close" mat-icon-button mat-dialog-close matTooltip="Close">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -26122,13 +26100,13 @@ export class TripsheetEmailRecipientsDialog {
     }
     .doc-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 20px; background: #1976d2; color: white; flex-shrink: 0;
+      padding: 10px 20px; background: var(--color-primary); color: white; flex-shrink: 0;
       gap: 12px; flex-wrap: wrap;
     }
-    .doc-header h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; }
+    .doc-header h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-lg); }
     .doc-number {
       background: rgba(255,255,255,0.2); border-radius: 12px;
-      padding: 2px 12px; font-size: 13px; font-weight: 600;
+      padding: 2px 12px; font-size: var(--text-sm); font-weight: 600;
     }
     .header-actions { display: flex; align-items: center; gap: 6px; }
     .header-actions button { color: white; }
@@ -26136,10 +26114,10 @@ export class TripsheetEmailRecipientsDialog {
       background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.35);
       border-radius: 6px; margin-right: 8px; height: 36px;
     }
-    .mode-toggle ::ng-deep .mat-button-toggle { color: rgba(255,255,255,0.75); background: transparent; font-size: 12px; }
-    .mode-toggle ::ng-deep .mat-button-toggle-checked { background: rgba(255,255,255,0.95); color: #1976d2; font-weight: 600; }
+    .mode-toggle ::ng-deep .mat-button-toggle { color: rgba(255,255,255,0.75); background: transparent; font-size: var(--text-xs); }
+    .mode-toggle ::ng-deep .mat-button-toggle-checked { background: rgba(255,255,255,0.95); color: var(--color-primary); font-weight: 600; }
     .mode-toggle ::ng-deep .mat-button-toggle-label-content { line-height: 34px; padding: 0 10px; display: flex; align-items: center; gap: 4px; }
-    .mode-toggle mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .mode-toggle mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
     .doc-loading, .doc-error {
       flex: 1; display: flex; flex-direction: column; align-items: center;
       justify-content: center; gap: 12px; color: #eee;
@@ -26149,16 +26127,16 @@ export class TripsheetEmailRecipientsDialog {
       padding: 8px 20px; background: #37474f; flex-shrink: 0;
       max-height: 96px; overflow-y: auto;
     }
-    .sel-label { color: #b0bec5; font-size: 12px; font-weight: 600; margin-right: 4px; text-transform: uppercase; }
+    .sel-label { color: var(--color-text-3); font-size: var(--text-xs); font-weight: 600; margin-right: 4px; text-transform: uppercase; }
     .sel-chip {
-      background: rgba(255,255,255,0.1); color: #cfd8dc;
+      background: rgba(255,255,255,0.1); color: var(--color-text-3);
       border: 1px solid rgba(255,255,255,0.25); border-radius: 14px;
-      padding: 3px 12px; font-size: 12px; cursor: pointer; font-weight: 500;
+      padding: 3px 12px; font-size: var(--text-xs); cursor: pointer; font-weight: 500;
     }
     .sel-chip:hover { background: rgba(255,255,255,0.22); }
-    .sel-chip.active { background: #fff; color: #1976d2; border-color: #fff; font-weight: 700; }
-    .doc-error mat-icon { font-size: 48px; width: 48px; height: 48px; color: #ef5350; }
-    .doc-frame { flex: 1; width: 100%; border: none; background: white; }
+    .sel-chip.active { background: var(--color-surface); color: var(--color-primary); border-color: var(--color-surface); font-weight: 700; }
+    .doc-error mat-icon { font-size: 48px; width: 48px; height: 48px; color: var(--color-danger); }
+    .doc-frame { flex: 1; width: 100%; border: none; background: var(--color-surface); }
   `]
 })
 export class TripsheetDocumentPreviewDialog implements OnInit {

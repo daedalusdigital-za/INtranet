@@ -6,8 +6,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialogModule, MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -22,6 +20,11 @@ import {
 } from '../../services/expense-tracker.service';
 import { BooksService } from '../../services/books.service';
 import { environment } from '../../../environments/environment';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 
 const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
@@ -35,9 +38,9 @@ const MONTHS = ['January','February','March','April','May','June',
   imports: [
     CommonModule, FormsModule, RouterModule,
     MatButtonModule, MatIconModule, MatMenuModule, MatDialogModule,
-    MatSnackBarModule, MatProgressSpinnerModule, MatTooltipModule,
+    MatTooltipModule,
     MatSelectModule, MatFormFieldModule, MatInputModule, MatChipsModule,
-    MatTabsModule, NavbarComponent
+    MatTabsModule, NavbarComponent, SkeletonRowsComponent, EmptyStateComponent, StatusChipComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -46,7 +49,7 @@ const MONTHS = ['January','February','March','April','May','June',
       <!-- Header -->
       <div class="et-header">
         <div class="header-left">
-          <button mat-icon-button class="back-btn" (click)="goBack()">
+          <button aria-label="Back" mat-icon-button class="back-btn" (click)="goBack()">
             <mat-icon>arrow_back</mat-icon>
           </button>
           <div class="header-icon-wrap"><mat-icon>receipt_long</mat-icon></div>
@@ -74,9 +77,9 @@ const MONTHS = ['January','February','March','April','May','June',
       <!-- Year picker + summary cards -->
       <div class="top-bar">
         <div class="year-nav">
-          <button mat-icon-button (click)="changeYear(-1)"><mat-icon>chevron_left</mat-icon></button>
+          <button aria-label="Previous" mat-icon-button (click)="changeYear(-1)"><mat-icon>chevron_left</mat-icon></button>
           <span class="year-label">{{ selectedYear }}</span>
-          <button mat-icon-button (click)="changeYear(1)"><mat-icon>chevron_right</mat-icon></button>
+          <button aria-label="Next" mat-icon-button (click)="changeYear(1)"><mat-icon>chevron_right</mat-icon></button>
         </div>
         <div class="summary-cards" *ngIf="summary">
           <div class="s-card total">
@@ -135,19 +138,19 @@ const MONTHS = ['January','February','March','April','May','June',
 
       <!-- Table -->
       <div class="table-wrap" *ngIf="!loading">
-        <table class="exp-table" *ngIf="items.length > 0">
+        <table class="app-table exp-table" *ngIf="items.length > 0">
           <thead>
             <tr>
-              <th (click)="sort('company')">COMPANY <mat-icon class="sort-icon" *ngIf="sortBy==='company'">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon></th>
-              <th>SERVICES RENDERED</th>
-              <th>INVOICED TO</th>
-              <th (click)="sort('amount')" class="num-col">AMOUNT <mat-icon class="sort-icon" *ngIf="sortBy==='amount'">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon></th>
-              <th>PAID BY</th>
-              <th>INVOICE NUMBER</th>
-              <th (click)="sort('date')" class="date-col">DATE <mat-icon class="sort-icon" *ngIf="sortBy==='date'">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon></th>
-              <th>TYPE</th>
-              <th>CATEGORY</th>
-              <th>STATUS</th>
+              <th (click)="sort('company')" class="sortable">Company <mat-icon class="sort-icon" *ngIf="sortBy==='company'">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon></th>
+              <th>Services rendered</th>
+              <th>Invoiced to</th>
+              <th (click)="sort('amount')" class="num sortable">Amount <mat-icon class="sort-icon" *ngIf="sortBy==='amount'">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon></th>
+              <th>Paid by</th>
+              <th>Invoice number</th>
+              <th (click)="sort('date')" class="date-col sortable">Date <mat-icon class="sort-icon" *ngIf="sortBy==='date'">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon></th>
+              <th>Type</th>
+              <th>Category</th>
+              <th>Status</th>
               <th class="actions-col"></th>
             </tr>
           </thead>
@@ -161,18 +164,18 @@ const MONTHS = ['January','February','March','April','May','June',
               </td>
               <td class="services-cell">{{ item.servicesRendered }}</td>
               <td>{{ item.invoicedTo }}</td>
-              <td class="num-col amount-cell">{{ item.amount | currency:'ZAR':'symbol-narrow':'1.2-2' }}</td>
+              <td class="num amount-cell">{{ item.amount | currency:'ZAR':'symbol-narrow':'1.2-2' }}</td>
               <td>{{ item.paidBy || '—' }}</td>
-              <td class="inv-cell">{{ item.invoiceNumber || '—' }}</td>
+              <td class="ref">{{ item.invoiceNumber || '—' }}</td>
               <td class="date-col">{{ item.itemDate | date:'dd MMM yyyy' }}</td>
               <td><span class="type-chip" [class.po]="item.itemType==='PurchaseOrder'">{{ item.itemType === 'PurchaseOrder' ? 'PO' : 'SVC' }}</span></td>
               <td>
                 <span class="cat-chip" *ngIf="getCategoryName(item.categoryId)" [style.background]="getCategoryColor(item.categoryId)">{{ getCategoryName(item.categoryId) }}</span>
                 <span *ngIf="!getCategoryName(item.categoryId)" class="no-data">—</span>
               </td>
-              <td><span class="status-chip" [class]="'status-'+item.status.toLowerCase()">{{ item.status }}</span></td>
+              <td><app-status-chip [status]="item.status"></app-status-chip></td>
               <td class="actions-col">
-                <button mat-icon-button [matMenuTriggerFor]="rowMenu" class="row-menu-btn">
+                <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="rowMenu" class="row-menu-btn">
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #rowMenu="matMenu">
@@ -187,128 +190,112 @@ const MONTHS = ['January','February','March','April','May','June',
           </tbody>
           <tfoot>
             <tr class="total-row">
-              <td colspan="3"><strong>TOTAL ({{ items.length }} items)</strong></td>
-              <td class="num-col"><strong>{{ getPageTotal() | currency:'ZAR':'symbol-narrow':'1.2-2' }}</strong></td>
+              <td colspan="3">Total ({{ items.length }} items)</td>
+              <td class="num">{{ getPageTotal() | currency:'ZAR':'symbol-narrow':'1.2-2' }}</td>
               <td colspan="7"></td>
             </tr>
           </tfoot>
         </table>
 
-        <div class="empty-state" *ngIf="items.length === 0">
-          <mat-icon>receipt_long</mat-icon>
-          <h3>No expenses found</h3>
-          <p>Add your first expense or import an Excel file to get started.</p>
+        <app-empty-state *ngIf="items.length === 0 && hasFilters" icon="filter_alt_off" title="No expenses match these filters"
+                         message="Try another search, type, status or category.">
+          <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
+        </app-empty-state>
+        <app-empty-state *ngIf="items.length === 0 && !hasFilters" icon="receipt_long" title="No expenses found"
+                         message="Add your first expense or import an Excel file to get started.">
           <button mat-flat-button color="primary" (click)="openAddDialog()">
             <mat-icon>add</mat-icon> Add Expense
           </button>
-        </div>
+        </app-empty-state>
       </div>
 
       <div class="loading-wrap" *ngIf="loading">
-        <mat-spinner diameter="40"></mat-spinner>
-        <span>Loading expenses…</span>
+        <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
       </div>
 
       <!-- Pagination -->
       <div class="pagination" *ngIf="totalCount > pageSize && !loading">
-        <button mat-icon-button [disabled]="currentPage <= 1" (click)="goToPage(currentPage-1)"><mat-icon>chevron_left</mat-icon></button>
+        <button aria-label="Previous page" mat-icon-button [disabled]="currentPage <= 1" (click)="goToPage(currentPage-1)"><mat-icon>chevron_left</mat-icon></button>
         <span class="page-info">Page {{ currentPage }} of {{ totalPages }} ({{ totalCount }} items)</span>
-        <button mat-icon-button [disabled]="currentPage >= totalPages" (click)="goToPage(currentPage+1)"><mat-icon>chevron_right</mat-icon></button>
+        <button aria-label="Next page" mat-icon-button [disabled]="currentPage >= totalPages" (click)="goToPage(currentPage+1)"><mat-icon>chevron_right</mat-icon></button>
       </div>
 
     </div>
   `,
   styles: [`
-    :host { display: block; min-height: 100vh; background: #f1f5f9; }
+    :host { display: block; min-height: 100vh; background: var(--color-surface-2); }
     .et-container { max-width: 1500px; margin: 0 auto; padding: 20px 16px 48px; }
 
     /* Header */
     .et-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
     .header-left { display: flex; align-items: center; gap: 12px; }
-    .back-btn { color: #6b7280; }
-    .header-icon-wrap { width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #6366f1, #4f46e5); display: flex; align-items: center; justify-content: center; }
-    .header-icon-wrap mat-icon { color: white; font-size: 26px; width: 26px; height: 26px; }
-    h1 { margin: 0; font-size: 22px; font-weight: 700; color: #111827; }
-    .subtitle { margin: 0; font-size: 13px; color: #6b7280; }
+    .back-btn { color: var(--color-text-3); }
+    .header-icon-wrap { width: 48px; height: 48px; border-radius: var(--radius-lg); background: var(--color-primary-soft); display: flex; align-items: center; justify-content: center; }
+    .header-icon-wrap mat-icon { color: var(--color-primary); font-size: 26px; width: 26px; height: 26px; }
+    h1 { margin: 0; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
+    .subtitle { margin: 0; font-size: var(--text-sm); color: var(--color-text-3); }
     .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .action-btn { border-radius: 10px; font-size: 13px; color: #374151; background: white; }
+    .action-btn { border-radius: 10px; font-size: var(--text-sm); color: var(--color-text-2); background: var(--color-surface); }
     .add-btn { border-radius: 10px; }
 
     /* Top bar */
     .top-bar { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
-    .year-nav { display: flex; align-items: center; gap: 4px; background: white; border-radius: 12px; padding: 4px 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-    .year-label { font-size: 16px; font-weight: 700; color: #111827; min-width: 48px; text-align: center; }
+    .year-nav { display: flex; align-items: center; gap: 4px; background: var(--color-surface); border-radius: 12px; padding: 4px 8px; box-shadow: var(--shadow-sm); }
+    .year-label { font-size: var(--text-lg); font-weight: 700; color: var(--color-text); min-width: 48px; text-align: center; }
     .summary-cards { display: flex; gap: 10px; flex-wrap: wrap; }
-    .s-card { display: flex; align-items: center; gap: 10px; background: white; border-radius: 12px; padding: 10px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .s-card { display: flex; align-items: center; gap: 10px; background: var(--color-surface); border-radius: 12px; padding: 10px 16px; box-shadow: var(--shadow-sm); }
     .s-card mat-icon { font-size: 22px; width: 22px; height: 22px; }
-    .s-card.total mat-icon { color: #6366f1; }
-    .s-card.amount mat-icon { color: #0ea5e9; }
-    .s-card.paid mat-icon { color: #10b981; }
-    .s-card.pending mat-icon { color: #f59e0b; }
-    .s-val { display: block; font-size: 15px; font-weight: 700; color: #111827; }
-    .s-lbl { display: block; font-size: 11px; color: #6b7280; }
+    .s-card.total mat-icon { color: var(--color-primary); }
+    .s-card.amount mat-icon { color: var(--color-cat-teal); }
+    .s-card.paid mat-icon { color: var(--color-ok); }
+    .s-card.pending mat-icon { color: var(--color-warn); }
+    .s-val { display: block; font-size: var(--text-md); font-weight: 700; color: var(--color-text); }
+    .s-lbl { display: block; font-size: var(--text-xs); color: var(--color-text-3); }
 
     /* Month tabs */
-    .month-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; background: white; border-radius: 14px; padding: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-    .m-tab { position: relative; padding: 6px 12px; border: none; background: transparent; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 500; color: #6b7280; transition: all 0.15s; white-space: nowrap; }
-    .m-tab:hover { background: #f1f5f9; color: #374151; }
-    .m-tab.active { background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; }
-    .m-count { position: absolute; top: -2px; right: -2px; background: #ef4444; color: white; font-size: 9px; border-radius: 8px; padding: 0 4px; min-width: 16px; text-align: center; }
+    .month-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; background: var(--color-surface); border-radius: 14px; padding: 6px; box-shadow: var(--shadow-sm); }
+    .m-tab { position: relative; padding: 6px 12px; border: none; background: transparent; border-radius: 10px; cursor: pointer; font-size: var(--text-sm); font-weight: 500; color: var(--color-text-3); transition: all 0.15s; white-space: nowrap; }
+    .m-tab:hover { background: var(--color-surface-2); color: var(--color-text-2); }
+    .m-tab.active { background: var(--color-primary); color: var(--color-on-primary); }
+    .m-count { position: absolute; top: -2px; right: -2px; background: var(--color-brand); color: var(--color-on-primary); font-size: var(--text-xs); line-height: 16px; border-radius: 8px; padding: 0 4px; min-width: 16px; text-align: center; }
 
     /* Filters */
     .filters-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
-    .search-wrap { display: flex; align-items: center; gap: 8px; background: white; border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 8px 14px; flex: 1; min-width: 200px; }
-    .search-wrap:focus-within { border-color: #6366f1; }
-    .search-icon { color: #9ca3af; font-size: 20px; width: 20px; height: 20px; }
-    .search-input { border: none; outline: none; font-size: 14px; background: transparent; flex: 1; }
-    .filter-sel { padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; background: white; font-size: 13px; color: #374151; cursor: pointer; }
-    .filter-sel:focus { outline: none; border-color: #6366f1; }
+    .search-wrap { display: flex; align-items: center; gap: 8px; background: var(--color-surface); border: 1.5px solid var(--color-line); border-radius: 10px; padding: 8px 14px; flex: 1; min-width: 200px; }
+    .search-wrap:focus-within { border-color: var(--color-primary); }
+    .search-icon { color: var(--color-text-3); font-size: 20px; width: 20px; height: 20px; }
+    .search-input { border: none; outline: none; font-size: var(--text-md); color: var(--color-text); background: transparent; flex: 1; }
+    .filter-sel { padding: 9px 12px; border: 1.5px solid var(--color-line); border-radius: 10px; background: var(--color-surface); font-size: var(--text-sm); color: var(--color-text-2); cursor: pointer; }
+    .filter-sel:focus { outline: none; border-color: var(--color-primary); }
 
     /* Table */
-    .table-wrap { background: white; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.08); overflow-x: auto; }
-    .exp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .exp-table th { padding: 12px 14px; text-align: left; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; background: #f9fafb; border-bottom: 2px solid #e5e7eb; cursor: pointer; white-space: nowrap; }
+    .table-wrap { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); overflow-x: auto; }
+    .exp-table th.sortable { cursor: pointer; }
     .exp-table th mat-icon.sort-icon { font-size: 14px; vertical-align: middle; width: 14px; height: 14px; }
-    .exp-table td { padding: 12px 14px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
-    .exp-table tr:hover td { background: #f9fafb; }
-    .row-paid td { background: #f0fdf4 !important; }
-    .row-cancelled td { background: #fef2f2 !important; opacity: 0.7; }
+    .row-paid td { background: var(--color-ok-soft); }
+    .row-cancelled td { background: var(--color-danger-soft); opacity: 0.7; }
 
-    .company-name { font-weight: 600; color: #111827; }
-    .linked-inv { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6366f1; margin-top: 2px; }
+    .company-name { font-weight: 600; color: var(--color-text); }
+    .linked-inv { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-primary); margin-top: 2px; }
     .linked-inv mat-icon { font-size: 12px; width: 12px; height: 12px; }
     .services-cell { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .num-col { text-align: right; }
-    .amount-cell { font-weight: 600; color: #111827; }
+    .amount-cell { font-weight: 600; color: var(--color-text); }
     .date-col { white-space: nowrap; }
-    .inv-cell { font-family: monospace; font-size: 12px; }
-    .no-data { color: #d1d5db; }
+    .no-data { color: var(--color-line-strong); }
     .actions-col { width: 40px; text-align: center; }
     .row-menu-btn { width: 32px; height: 32px; line-height: 32px; }
-    .delete-menu-item { color: #ef4444; }
+    .delete-menu-item { color: var(--color-danger); }
 
-    .type-chip { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: #e0e7ff; color: #4338ca; }
-    .type-chip.po { background: #fef3c7; color: #d97706; }
+    .type-chip { padding: 3px 8px; border-radius: 6px; font-size: var(--text-xs); font-weight: 700; background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .type-chip.po { background: var(--color-cat-amber-soft); color: var(--color-cat-amber); }
 
-    .cat-chip { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; color: white; display: inline-block; }
-    .status-chip { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-    .status-pending  { background: #fef3c7; color: #d97706; }
-    .status-paid     { background: #dcfce7; color: #16a34a; }
-    .status-cancelled{ background: #fee2e2; color: #dc2626; }
+    .cat-chip { padding: 3px 8px; border-radius: 6px; font-size: var(--text-xs); font-weight: 600; color: var(--color-on-dark); display: inline-block; }
 
-    tfoot .total-row td { padding: 12px 14px; border-top: 2px solid #e5e7eb; background: #f9fafb; }
-
-    /* Empty state */
-    .empty-state { padding: 60px 24px; text-align: center; color: #6b7280; }
-    .empty-state mat-icon { font-size: 52px; width: 52px; height: 52px; color: #cbd5e1; margin-bottom: 12px; }
-    .empty-state h3 { margin: 0 0 6px; color: #374151; }
-    .empty-state p { margin: 0 0 16px; font-size: 13px; }
-
-    .loading-wrap { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 48px; color: #6b7280; background: white; border-radius: 16px; }
+    .loading-wrap { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); overflow: hidden; }
 
     /* Pagination */
     .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
-    .page-info { font-size: 13px; color: #6b7280; }
+    .page-info { font-size: var(--text-sm); color: var(--color-text-3); }
   `]
 })
 export class ExpenseTrackerComponent implements OnInit {
@@ -342,7 +329,8 @@ export class ExpenseTrackerComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private toast: ToastService,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -389,7 +377,7 @@ export class ExpenseTrackerComponent implements OnInit {
       },
       error: () => {
         this.loading = false;
-        this.snackBar.open('Failed to load expenses', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load expenses');
       }
     });
   }
@@ -401,6 +389,14 @@ export class ExpenseTrackerComponent implements OnInit {
   }
 
   get totalPages(): number { return Math.ceil(this.totalCount / this.pageSize); }
+
+  get hasFilters(): boolean { return !!(this.searchQuery || this.filterType || this.filterStatus || this.filterCategory); }
+
+  clearFilters(): void {
+    this.searchQuery = ''; this.filterType = ''; this.filterStatus = ''; this.filterCategory = '';
+    this.currentPage = 1;
+    this.loadItems();
+  }
 
   selectMonth(m: number): void {
     this.selectedMonth = m;
@@ -449,16 +445,20 @@ export class ExpenseTrackerComponent implements OnInit {
 
   markPaid(item: ExpenseItem): void {
     this.service.update(item.id, { ...item, status: 'Paid' }).subscribe({
-      next: () => { this.loadItems(); this.snackBar.open('Marked as Paid', 'Close', { duration: 2500 }); },
-      error: () => this.snackBar.open('Failed to update', 'Close', { duration: 3000 })
+      next: () => { this.loadItems(); this.toast.done('Marked as Paid'); },
+      error: () => this.toast.error('Failed to update')
     });
   }
 
-  deleteItem(item: ExpenseItem): void {
-    if (!confirm(`Delete expense from "${item.company}"?`)) return;
+  async deleteItem(item: ExpenseItem): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete expense from "${item.company}"?`,
+      confirmText: 'Delete expense',
+      danger: true
+    }))) return;
     this.service.delete(item.id).subscribe({
-      next: () => { this.loadItems(); this.loadSummary(); this.snackBar.open('Deleted', 'Close', { duration: 2500 }); },
-      error: () => this.snackBar.open('Failed to delete', 'Close', { duration: 3000 })
+      next: () => { this.loadItems(); this.loadSummary(); this.toast.done('Deleted'); },
+      error: () => this.toast.error('Failed to delete')
     });
   }
 
@@ -512,7 +512,7 @@ export class ExpenseTrackerComponent implements OnInit {
           a.href = url; a.download = `expenses_${this.departmentName}_${this.selectedYear}.xlsx`;
           a.click(); URL.revokeObjectURL(url);
         },
-        error: () => this.snackBar.open('Export failed', 'Close', { duration: 3000 })
+        error: () => this.toast.error('Export failed')
       });
   }
 
@@ -533,7 +533,7 @@ export class ExpenseTrackerComponent implements OnInit {
       <div class="ei-header">
         <mat-icon>{{ data.item ? 'edit' : 'add_circle' }}</mat-icon>
         <h2>{{ data.item ? 'Edit Expense' : 'Add Expense' }}</h2>
-        <button mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
       </div>
       <div class="ei-body">
         <div class="row2">
@@ -614,20 +614,20 @@ export class ExpenseTrackerComponent implements OnInit {
   `,
   styles: [`
     .ei-dialog { display: flex; flex-direction: column; }
-    .ei-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid #f3f4f6; }
-    .ei-header mat-icon { color: #6366f1; font-size: 26px; width: 26px; height: 26px; }
-    .ei-header h2 { flex: 1; margin: 0; font-size: 18px; font-weight: 700; color: #111827; }
+    .ei-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid var(--color-surface-2); }
+    .ei-header mat-icon { color: var(--color-primary); font-size: 26px; width: 26px; height: 26px; }
+    .ei-header h2 { flex: 1; margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
     .ei-body { padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-    .ei-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid #f3f4f6; }
+    .ei-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--color-surface-2); }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     .fg { display: flex; flex-direction: column; gap: 4px; }
     .fg.full { grid-column: 1 / -1; }
-    .fg label { font-size: 12px; font-weight: 600; color: #374151; }
-    .finput { padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 14px; font-family: inherit; width: 100%; box-sizing: border-box; transition: border-color .15s; }
-    .finput:focus { outline: none; border-color: #6366f1; }
-    .fsel { padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 14px; background: white; width: 100%; cursor: pointer; }
-    .fsel:focus { outline: none; border-color: #6366f1; }
+    .fg label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-2); }
+    .finput { padding: 9px 12px; border: 1.5px solid var(--color-line); border-radius: 8px; font-size: var(--text-md); font-family: inherit; width: 100%; box-sizing: border-box; transition: border-color .15s; background: var(--color-surface); color: var(--color-text); }
+    .finput:focus { outline: none; border-color: var(--color-primary); }
+    .fsel { padding: 9px 12px; border: 1.5px solid var(--color-line); border-radius: 8px; font-size: var(--text-md); background: var(--color-surface); color: var(--color-text); width: 100%; cursor: pointer; }
+    .fsel:focus { outline: none; border-color: var(--color-primary); }
     textarea.finput { resize: vertical; }
   `]
 })
@@ -639,7 +639,7 @@ export class ExpenseItemDialogComponent {
     public dialogRef: MatDialogRef<ExpenseItemDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: any,
     private service: ExpenseTrackerService,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {
     const it = data.item;
     if (it) {
@@ -684,12 +684,12 @@ export class ExpenseItemDialogComponent {
     obs.subscribe({
       next: () => {
         this.saving = false;
-        this.snackBar.open(this.data.item ? 'Updated' : 'Expense added', 'Close', { duration: 2500 });
+        this.toast.done(this.data.item ? 'Updated' : 'Expense added');
         this.dialogRef.close(true);
       },
       error: () => {
         this.saving = false;
-        this.snackBar.open('Failed to save', 'Close', { duration: 3000 });
+        this.toast.error('Failed to save');
       }
     });
   }
@@ -701,13 +701,13 @@ export class ExpenseItemDialogComponent {
 @Component({
   selector: 'link-invoice-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatDialogModule, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatDialogModule, SkeletonRowsComponent, EmptyStateComponent],
   template: `
     <div class="li-dialog">
       <div class="li-header">
         <mat-icon>link</mat-icon>
         <h2>Link to Uploaded Invoice</h2>
-        <button mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
       </div>
       <div class="li-body">
         <div class="search-wrap">
@@ -715,7 +715,7 @@ export class ExpenseItemDialogComponent {
           <input class="sinput" placeholder="Search by supplier or invoice number…"
                  [(ngModel)]="search" (ngModelChange)="onSearch()">
         </div>
-        <div class="loading-row" *ngIf="loading"><mat-spinner diameter="28"></mat-spinner></div>
+        <app-skeleton-rows *ngIf="loading" [rows]="4" [avatar]="false"></app-skeleton-rows>
         <div class="inv-list" *ngIf="!loading">
           <div class="inv-row selected" *ngIf="data.item.bookInvoiceId">
             <mat-icon>check_circle</mat-icon>
@@ -731,7 +731,12 @@ export class ExpenseItemDialogComponent {
             </div>
             <mat-icon *ngIf="inv.id === data.item.bookInvoiceId" class="linked-check">check_circle</mat-icon>
           </div>
-          <div class="empty" *ngIf="invoices.length===0 && !loading">No invoices found.</div>
+          <app-empty-state *ngIf="invoices.length===0 && !loading && search" [compact]="true" icon="filter_alt_off"
+                           title="No invoices match your search" message="Try another supplier or invoice number.">
+            <button mat-stroked-button (click)="search = ''; fetch()">Clear the search</button>
+          </app-empty-state>
+          <app-empty-state *ngIf="invoices.length===0 && !loading && !search" [compact]="true" icon="picture_as_pdf"
+                           title="No invoices found" message="Invoices uploaded to this department's Books show up here."></app-empty-state>
         </div>
       </div>
       <div class="li-footer"><button mat-button (click)="dialogRef.close()">Close</button></div>
@@ -739,25 +744,23 @@ export class ExpenseItemDialogComponent {
   `,
   styles: [`
     .li-dialog { display: flex; flex-direction: column; max-height: 75vh; }
-    .li-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; }
-    .li-header mat-icon { color: #6366f1; }
-    .li-header h2 { flex: 1; margin: 0; font-size: 17px; font-weight: 700; }
+    .li-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid var(--color-surface-2); flex-shrink: 0; }
+    .li-header mat-icon { color: var(--color-primary); }
+    .li-header h2 { flex: 1; margin: 0; font-size: var(--text-lg); font-weight: 700; }
     .li-body { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
-    .li-footer { flex-shrink: 0; padding: 10px 20px 14px; border-top: 1px solid #f3f4f6; display: flex; justify-content: flex-end; }
-    .search-wrap { display: flex; align-items: center; gap: 8px; border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 8px 14px; }
-    .search-wrap mat-icon { color: #9ca3af; font-size: 18px; }
-    .sinput { border: none; outline: none; font-size: 14px; flex: 1; }
-    .loading-row { display: flex; justify-content: center; padding: 24px; }
+    .li-footer { flex-shrink: 0; padding: 10px 20px 14px; border-top: 1px solid var(--color-surface-2); display: flex; justify-content: flex-end; }
+    .search-wrap { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--color-line); border-radius: 10px; padding: 8px 14px; }
+    .search-wrap mat-icon { color: var(--color-text-3); font-size: 18px; }
+    .sinput { border: none; outline: none; font-size: var(--text-md); flex: 1; background: transparent; color: var(--color-text); }
     .inv-list { display: flex; flex-direction: column; gap: 6px; }
-    .inv-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; cursor: pointer; transition: all .15s; }
-    .inv-row:hover { border-color: #6366f1; background: #f5f3ff; }
-    .inv-row.selected { border-color: #10b981; background: #f0fdf4; cursor: default; }
-    .inv-row.current { border-color: #6366f1; }
-    .pdf-icon { color: #ef4444; }
-    .inv-sup { font-weight: 600; font-size: 14px; }
-    .inv-meta { font-size: 12px; color: #6b7280; }
-    .linked-check { color: #6366f1; margin-left: auto; }
-    .empty { text-align: center; color: #9ca3af; padding: 24px; }
+    .inv-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1.5px solid var(--color-line); border-radius: 10px; cursor: pointer; transition: all .15s; }
+    .inv-row:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
+    .inv-row.selected { border-color: var(--color-ok); background: var(--color-ok-soft); cursor: default; }
+    .inv-row.current { border-color: var(--color-primary); }
+    .pdf-icon { color: var(--color-danger); }
+    .inv-sup { font-weight: 600; font-size: var(--text-md); }
+    .inv-meta { font-size: var(--text-xs); color: var(--color-text-3); }
+    .linked-check { color: var(--color-primary); margin-left: auto; }
   `]
 })
 export class LinkInvoiceDialogComponent implements OnInit {
@@ -771,7 +774,7 @@ export class LinkInvoiceDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: any,
     private booksService: BooksService,
     private expService: ExpenseTrackerService,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void { this.fetch(); }
@@ -792,17 +795,17 @@ export class LinkInvoiceDialogComponent implements OnInit {
   link(inv: any): void {
     this.expService.update(this.data.item.id, { ...this.data.item, bookInvoiceId: inv.id }).subscribe({
       next: () => {
-        this.snackBar.open(`Linked to ${inv.supplierName}`, 'Close', { duration: 2500 });
+        this.toast.done(`Linked to ${inv.supplierName}`);
         this.dialogRef.close(true);
       },
-      error: () => this.snackBar.open('Failed to link', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to link')
     });
   }
 
   unlink(): void {
     this.expService.update(this.data.item.id, { ...this.data.item, bookInvoiceId: null }).subscribe({
-      next: () => { this.snackBar.open('Unlinked', 'Close', { duration: 2500 }); this.dialogRef.close(true); },
-      error: () => this.snackBar.open('Failed to unlink', 'Close', { duration: 3000 })
+      next: () => { this.toast.done('Unlinked'); this.dialogRef.close(true); },
+      error: () => this.toast.error('Failed to unlink')
     });
   }
 }
@@ -813,13 +816,13 @@ export class LinkInvoiceDialogComponent implements OnInit {
 @Component({
   selector: 'excel-upload-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatDialogModule, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatDialogModule],
   template: `
     <div class="up-dialog">
       <div class="up-header">
         <mat-icon>upload_file</mat-icon>
         <h2>Import from Excel</h2>
-        <button mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
       </div>
       <div class="up-body">
         <div class="info-box">
@@ -866,26 +869,26 @@ export class LinkInvoiceDialogComponent implements OnInit {
   `,
   styles: [`
     .up-dialog { display: flex; flex-direction: column; }
-    .up-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid #f3f4f6; }
-    .up-header mat-icon { color: #6366f1; }
-    .up-header h2 { flex: 1; margin: 0; font-size: 17px; font-weight: 700; }
+    .up-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid var(--color-surface-2); }
+    .up-header mat-icon { color: var(--color-primary); }
+    .up-header h2 { flex: 1; margin: 0; font-size: var(--text-lg); font-weight: 700; }
     .up-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
-    .up-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid #f3f4f6; }
-    .info-box { display: flex; gap: 10px; padding: 12px 14px; background: #eff6ff; border-radius: 10px; font-size: 13px; color: #1e40af; }
-    .info-box mat-icon { flex-shrink: 0; color: #3b82f6; }
+    .up-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--color-surface-2); }
+    .info-box { display: flex; gap: 10px; padding: 12px 14px; background: var(--color-primary-soft); border-radius: 10px; font-size: var(--text-sm); color: var(--color-primary-hover); }
+    .info-box mat-icon { flex-shrink: 0; color: var(--color-primary); }
     .period-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .fg { display: flex; flex-direction: column; gap: 4px; }
-    .fg label { font-size: 12px; font-weight: 600; color: #374151; }
-    .finput { padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 14px; width: 100%; box-sizing: border-box; }
-    .finput:focus { outline: none; border-color: #6366f1; }
-    .fsel { padding: 9px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 14px; background: white; width: 100%; }
-    .drop-zone { border: 2px dashed #d1d5db; border-radius: 14px; padding: 32px; text-align: center; cursor: pointer; transition: all .2s; color: #6b7280; font-size: 14px; }
-    .drop-zone mat-icon { font-size: 40px; width: 40px; height: 40px; color: #d1d5db; display: block; margin: 0 auto 10px; }
-    .drop-zone:hover, .drop-zone.has-file { border-color: #6366f1; background: #f5f3ff; color: #4338ca; }
-    .drop-zone.has-file mat-icon { color: #10b981; }
-    .result-box { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; font-size: 13px; }
-    .result-box.success { background: #f0fdf4; color: #16a34a; }
-    .result-box.error { background: #fef2f2; color: #dc2626; }
+    .fg label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-2); }
+    .finput { padding: 9px 12px; border: 1.5px solid var(--color-line); border-radius: 8px; font-size: var(--text-md); width: 100%; box-sizing: border-box; background: var(--color-surface); color: var(--color-text); }
+    .finput:focus { outline: none; border-color: var(--color-primary); }
+    .fsel { padding: 9px 12px; border: 1.5px solid var(--color-line); border-radius: 8px; font-size: var(--text-md); background: var(--color-surface); color: var(--color-text); width: 100%; }
+    .drop-zone { border: 2px dashed var(--color-line-strong); border-radius: 14px; padding: 32px; text-align: center; cursor: pointer; transition: all .2s; color: var(--color-text-3); font-size: var(--text-md); }
+    .drop-zone mat-icon { font-size: 40px; width: 40px; height: 40px; color: var(--color-line-strong); display: block; margin: 0 auto 10px; }
+    .drop-zone:hover, .drop-zone.has-file { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .drop-zone.has-file mat-icon { color: var(--color-ok); }
+    .result-box { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; font-size: var(--text-sm); }
+    .result-box.success { background: var(--color-ok-soft); color: var(--color-ok); }
+    .result-box.error { background: var(--color-danger-soft); color: var(--color-danger); }
   `]
 })
 export class ExcelUploadDialogComponent {
@@ -900,8 +903,7 @@ export class ExcelUploadDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<ExcelUploadDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: any,
-    private service: ExpenseTrackerService,
-    private snackBar: MatSnackBar
+    private service: ExpenseTrackerService
   ) {
     this.year  = data.year  || new Date().getFullYear();
     this.month = data.month || new Date().getMonth() + 1;
@@ -936,24 +938,24 @@ export class ExcelUploadDialogComponent {
   selector: 'category-manager-dialog',
   standalone: true,
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule,
-            MatDialogModule, MatProgressSpinnerModule],
+            MatDialogModule, SkeletonRowsComponent],
   template: `
     <div class="cm-dialog">
       <div class="cm-header">
         <mat-icon>label</mat-icon>
         <h2>Manage Categories</h2>
-        <button mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
       </div>
       <div class="cm-body">
         <div class="add-row">
           <div class="color-dot" [style.background]="newColor"></div>
           <input [(ngModel)]="newName" class="cinput" placeholder="New category name" (keydown.enter)="addCategory()">
           <input type="color" [(ngModel)]="newColor" class="color-pick">
-          <button mat-flat-button color="primary" [disabled]="!newName.trim() || saving" (click)="addCategory()">
+          <button aria-label="Add" mat-flat-button color="primary" [disabled]="!newName.trim() || saving" (click)="addCategory()">
             <mat-icon>add</mat-icon>
           </button>
         </div>
-        <div class="loading-row" *ngIf="loading"><mat-spinner diameter="28"></mat-spinner></div>
+        <app-skeleton-rows *ngIf="loading" [rows]="4" [avatar]="false"></app-skeleton-rows>
         <div class="cat-list">
           <div class="cat-row" *ngFor="let c of categories">
             <div class="color-dot" [style.background]="c.color"></div>
@@ -962,9 +964,9 @@ export class ExcelUploadDialogComponent {
             <input *ngIf="editId === c.id" type="color" [(ngModel)]="editColor" class="color-pick">
             <span class="cat-scope" *ngIf="c.departmentId === 0">Global</span>
             <span class="cat-scope dept" *ngIf="c.departmentId !== 0">Dept</span>
-            <button mat-icon-button (click)="startEdit(c)" *ngIf="editId !== c.id"><mat-icon>edit</mat-icon></button>
-            <button mat-icon-button color="primary" (click)="saveEdit(c)" *ngIf="editId === c.id"><mat-icon>check</mat-icon></button>
-            <button mat-icon-button color="warn" (click)="deleteCategory(c)"><mat-icon>delete</mat-icon></button>
+            <button aria-label="Edit" mat-icon-button (click)="startEdit(c)" *ngIf="editId !== c.id"><mat-icon>edit</mat-icon></button>
+            <button aria-label="Confirm" mat-icon-button color="primary" (click)="saveEdit(c)" *ngIf="editId === c.id"><mat-icon>check</mat-icon></button>
+            <button aria-label="Delete" mat-icon-button color="warn" (click)="deleteCategory(c)"><mat-icon>delete</mat-icon></button>
           </div>
         </div>
       </div>
@@ -973,23 +975,22 @@ export class ExcelUploadDialogComponent {
   `,
   styles: [`
     .cm-dialog { display: flex; flex-direction: column; max-height: 80vh; }
-    .cm-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; }
-    .cm-header mat-icon { color: #6366f1; }
-    .cm-header h2 { flex: 1; margin: 0; font-size: 17px; font-weight: 700; }
+    .cm-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid var(--color-surface-2); flex-shrink: 0; }
+    .cm-header mat-icon { color: var(--color-primary); }
+    .cm-header h2 { flex: 1; margin: 0; font-size: var(--text-lg); font-weight: 700; }
     .cm-body { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 12px; }
-    .cm-footer { flex-shrink: 0; padding: 10px 20px 14px; border-top: 1px solid #f3f4f6; display: flex; justify-content: flex-end; }
+    .cm-footer { flex-shrink: 0; padding: 10px 20px 14px; border-top: 1px solid var(--color-surface-2); display: flex; justify-content: flex-end; }
     .add-row { display: flex; align-items: center; gap: 8px; }
-    .cat-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #f3f4f6; border-radius: 10px; }
-    .cat-row:hover { background: #f9fafb; }
+    .cat-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--color-surface-2); border-radius: 10px; }
+    .cat-row:hover { background: var(--color-canvas); }
     .color-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
-    .cinput { flex: 1; padding: 8px 10px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; outline: none; }
-    .cinput:focus { border-color: #6366f1; }
+    .cinput { flex: 1; padding: 8px 10px; border: 1.5px solid var(--color-line); border-radius: 8px; font-size: var(--text-sm); outline: none; background: var(--color-surface); color: var(--color-text); }
+    .cinput:focus { border-color: var(--color-primary); }
     .cinput.flex1 { flex: 1; }
-    .color-pick { width: 34px; height: 34px; padding: 2px; border: 1.5px solid #e5e7eb; border-radius: 8px; cursor: pointer; }
-    .cat-name { flex: 1; font-size: 14px; color: #374151; }
-    .cat-scope { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #f1f5f9; color: #64748b; }
-    .cat-scope.dept { background: #ede9fe; color: #7c3aed; }
-    .loading-row { display: flex; justify-content: center; padding: 16px; }
+    .color-pick { width: 34px; height: 34px; padding: 2px; border: 1.5px solid var(--color-line); border-radius: 8px; cursor: pointer; }
+    .cat-name { flex: 1; font-size: var(--text-md); color: var(--color-text-2); }
+    .cat-scope { font-size: var(--text-xs); padding: 2px 8px; border-radius: 10px; background: var(--color-surface-2); color: var(--color-text-3); }
+    .cat-scope.dept { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
   `]
 })
 export class CategoryManagerDialogComponent implements OnInit {
@@ -1006,7 +1007,8 @@ export class CategoryManagerDialogComponent implements OnInit {
     public dialogRef: MatDialogRef<CategoryManagerDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: any,
     private service: ExpenseTrackerService,
-    private snackBar: MatSnackBar
+    private toast: ToastService,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void { this.load(); }
@@ -1023,7 +1025,7 @@ export class CategoryManagerDialogComponent implements OnInit {
     this.saving = true;
     this.service.createCategory({ departmentId: this.data.departmentId, name: this.newName.trim(), color: this.newColor }).subscribe({
       next: () => { this.newName = ''; this.saving = false; this.load(); },
-      error: () => { this.saving = false; this.snackBar.open('Failed', 'Close', { duration: 3000 }); }
+      error: () => { this.saving = false; this.toast.error('Failed to add category'); }
     });
   }
 
@@ -1037,8 +1039,13 @@ export class CategoryManagerDialogComponent implements OnInit {
     });
   }
 
-  deleteCategory(c: ExpenseCategory): void {
-    if (!confirm(`Remove category "${c.name}"? Existing items will lose this category.`)) return;
+  async deleteCategory(c: ExpenseCategory): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Remove category "${c.name}"?`,
+      message: 'Existing items will lose this category.',
+      confirmText: 'Remove category',
+      danger: true
+    }))) return;
     this.service.deleteCategory(c.id).subscribe({ next: () => this.load() });
   }
 }

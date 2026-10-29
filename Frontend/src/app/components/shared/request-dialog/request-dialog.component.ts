@@ -41,7 +41,7 @@ interface RequestCategory {
     <div class="request-dialog">
       <div class="dialog-header">
         <h2>Submit a Request</h2>
-        <button mat-icon-button (click)="close()">
+        <button aria-label="Close" mat-icon-button (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -75,7 +75,7 @@ interface RequestCategory {
       justify-content: center;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       position: relative;
@@ -102,7 +102,7 @@ interface RequestCategory {
 
     .subtitle {
       text-align: center;
-      color: #666;
+      color: var(--color-text-2);
       margin-bottom: 24px;
       font-size: 1rem;
     }
@@ -240,7 +240,7 @@ export class RequestDialogComponent {
     <div class="hr-menu-dialog">
       <div class="dialog-header">
         <h2>HR Requests</h2>
-        <button mat-icon-button (click)="close()">
+        <button aria-label="Close" mat-icon-button (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -250,7 +250,7 @@ export class RequestDialogComponent {
         
         <div class="options-list">
           <div class="option-item" (click)="openLeaveRequest()">
-            <mat-icon class="option-icon" style="color: #4caf50">event_busy</mat-icon>
+            <mat-icon class="option-icon" style="color: var(--color-ok)">event_busy</mat-icon>
             <div class="option-text">
               <span class="option-name">Leave Request</span>
               <span class="option-desc">Apply for annual, sick, or other leave</span>
@@ -259,7 +259,7 @@ export class RequestDialogComponent {
           </div>
           
           <div class="option-item" (click)="openPayslipRequest()">
-            <mat-icon class="option-icon" style="color: #2196f3">receipt_long</mat-icon>
+            <mat-icon class="option-icon" style="color: var(--color-primary)">receipt_long</mat-icon>
             <div class="option-text">
               <span class="option-name">Payslip Request</span>
               <span class="option-desc">Request your payslip or salary info</span>
@@ -290,7 +290,7 @@ export class RequestDialogComponent {
       justify-content: center;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+      background: linear-gradient(135deg, var(--color-ok) 0%, var(--color-ok) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       position: relative;
@@ -316,7 +316,7 @@ export class RequestDialogComponent {
 
     .subtitle {
       text-align: center;
-      color: #666;
+      color: var(--color-text-2);
       margin-bottom: 24px;
     }
 
@@ -331,13 +331,13 @@ export class RequestDialogComponent {
       align-items: center;
       padding: 16px;
       border-radius: 12px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .option-item:hover {
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       transform: translateX(4px);
     }
 
@@ -357,16 +357,16 @@ export class RequestDialogComponent {
     .option-name {
       font-weight: 600;
       font-size: 1rem;
-      color: #333;
+      color: var(--color-text);
     }
 
     .option-desc {
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .arrow-icon {
-      color: #999;
+      color: var(--color-text-3);
     }
   `]
 })
@@ -442,7 +442,7 @@ interface UserOption {
       <div class="dialog-header">
         <mat-icon class="header-icon">event</mat-icon>
         <h2>Schedule a Meeting</h2>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -551,7 +551,7 @@ interface UserOption {
                       <div class="chip-avatar">{{ (attendee.name || '?').charAt(0) }}</div>
                       {{ attendee.name || 'Unknown' }}
                     </div>
-                    <button matChipRemove>
+                    <button aria-label="Close" matChipRemove>
                       <mat-icon>cancel</mat-icon>
                     </button>
                   </mat-chip-row>
@@ -584,14 +584,14 @@ interface UserOption {
   styles: [`
     .meeting-dialog {
       width: 100%;
-      color: #1f2430;
+      color: var(--color-text);
     }
     /* Ensure form inputs are always dark-on-light regardless of global theme */
-    .meeting-dialog ::ng-deep .mat-mdc-form-field { color: #1f2430; }
+    .meeting-dialog ::ng-deep .mat-mdc-form-field { color: var(--color-text); }
     .meeting-dialog ::ng-deep input.mat-mdc-input-element,
-    .meeting-dialog ::ng-deep textarea.mat-mdc-input-element { color: #1f2430 !important; caret-color: #1f2430; }
+    .meeting-dialog ::ng-deep textarea.mat-mdc-input-element { color: var(--color-text) !important; caret-color: var(--color-text); }
     .meeting-dialog ::ng-deep .mat-mdc-select-value,
-    .meeting-dialog ::ng-deep .mat-mdc-select-value-text { color: #1f2430 !important; }
+    .meeting-dialog ::ng-deep .mat-mdc-select-value-text { color: var(--color-text) !important; }
     .meeting-dialog ::ng-deep .mat-mdc-form-field-infix input::placeholder,
     .meeting-dialog ::ng-deep .mat-mdc-form-field-infix textarea::placeholder { color: #9aa0ab !important; }
     .meeting-dialog ::ng-deep .mdc-floating-label,
@@ -655,7 +655,7 @@ interface UserOption {
       margin-bottom: 12px;
       font-size: 0.9rem;
       font-weight: 500;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .location-section {
@@ -694,7 +694,7 @@ interface UserOption {
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb, #1e40af);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       color: white;
       display: flex;
       align-items: center;
@@ -715,7 +715,7 @@ interface UserOption {
 
     .user-dept {
       font-size: 12px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .selected-attendees {
@@ -735,7 +735,7 @@ interface UserOption {
       width: 24px;
       height: 24px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb, #1e40af);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       color: white;
       display: flex;
       align-items: center;
@@ -749,7 +749,7 @@ interface UserOption {
       justify-content: flex-end;
       gap: 12px;
       padding-top: 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     .dialog-actions button {
@@ -928,7 +928,7 @@ interface BookDepartment {
       <div class="dialog-header">
         <mat-icon class="header-icon">account_balance</mat-icon>
         <h2>Invoice Payment Inquiry</h2>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -942,7 +942,7 @@ interface BookDepartment {
             <div class="step-number" [class.active]="!selectedDepartment">1</div>
             <span class="step-label">Select Department</span>
             @if (selectedDepartment) {
-              <button mat-icon-button class="change-btn" (click)="resetDepartment()">
+              <button aria-label="Edit" mat-icon-button class="change-btn" (click)="resetDepartment()">
                 <mat-icon>edit</mat-icon>
               </button>
             }
@@ -977,7 +977,7 @@ interface BookDepartment {
               <div class="step-number" [class.active]="selectedDepartment && !selectedInvoice">2</div>
               <span class="step-label">Find Invoice</span>
               @if (selectedInvoice) {
-                <button mat-icon-button class="change-btn" (click)="resetInvoice()">
+                <button aria-label="Edit" mat-icon-button class="change-btn" (click)="resetInvoice()">
                   <mat-icon>edit</mat-icon>
                 </button>
               }
@@ -1109,7 +1109,7 @@ interface BookDepartment {
       justify-content: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       position: relative;
@@ -1141,7 +1141,7 @@ interface BookDepartment {
 
     .subtitle {
       text-align: center;
-      color: #666;
+      color: var(--color-text-2);
       margin-bottom: 20px;
       font-size: 0.95rem;
     }
@@ -1152,14 +1152,14 @@ interface BookDepartment {
     .step {
       margin-bottom: 20px;
       padding: 16px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 12px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       transition: all 0.3s;
     }
 
     .step.completed {
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       border-color: #a5d6a7;
     }
 
@@ -1174,8 +1174,8 @@ interface BookDepartment {
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: #e0e0e0;
-      color: #666;
+      background: var(--color-line);
+      color: var(--color-text-2);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1185,19 +1185,19 @@ interface BookDepartment {
     }
 
     .step-number.active {
-      background: #2196f3;
+      background: var(--color-primary);
       color: white;
     }
 
     .step.completed .step-number {
-      background: #4caf50;
+      background: var(--color-ok);
       color: white;
     }
 
     .step-label {
       font-weight: 600;
       font-size: 0.95rem;
-      color: #333;
+      color: var(--color-text);
     }
 
     .change-btn {
@@ -1225,19 +1225,19 @@ interface BookDepartment {
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
-      background: white;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 10px;
       cursor: pointer;
       font-size: 0.9rem;
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
       transition: all 0.2s;
     }
 
     .dept-chip:hover {
-      border-color: #2196f3;
-      background: #e3f2fd;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
     }
@@ -1246,7 +1246,7 @@ interface BookDepartment {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #2196f3;
+      color: var(--color-primary);
     }
 
     .selected-dept-chip {
@@ -1254,15 +1254,15 @@ interface BookDepartment {
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      background: white;
-      border: 1px solid #4caf50;
+      background: var(--color-surface);
+      border: 1px solid var(--color-ok);
       border-radius: 20px;
       font-weight: 500;
-      color: #2e7d32;
+      color: var(--color-ok);
     }
 
     .selected-dept-chip mat-icon {
-      color: #4caf50;
+      color: var(--color-ok);
       font-size: 20px;
       width: 20px;
       height: 20px;
@@ -1272,7 +1272,7 @@ interface BookDepartment {
       display: flex;
       align-items: center;
       gap: 10px;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 0.9rem;
       grid-column: 1 / -1;
     }
@@ -1292,12 +1292,12 @@ interface BookDepartment {
 
     .inv-number {
       font-weight: 600;
-      color: #1565c0;
+      color: var(--color-primary-hover);
       font-size: 0.9rem;
     }
 
     .inv-supplier {
-      color: #555;
+      color: var(--color-text-2);
       font-size: 0.85rem;
     }
 
@@ -1306,13 +1306,13 @@ interface BookDepartment {
       gap: 12px;
       align-items: center;
       font-size: 0.8rem;
-      color: #888;
+      color: var(--color-text-3);
       margin-top: 2px;
     }
 
     .inv-amount {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .inv-status, .inv-status-badge {
@@ -1322,22 +1322,22 @@ interface BookDepartment {
       font-weight: 600;
     }
 
-    .status-draft { background: #fff3e0; color: #e65100; }
-    .status-confirmed { background: #e8f5e9; color: #2e7d32; }
-    .status-payment-requested { background: #e3f2fd; color: #1565c0; }
-    .status-archived { background: #f5f5f5; color: #757575; }
+    .status-draft { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-confirmed { background: var(--color-ok-soft); color: var(--color-ok); }
+    .status-payment-requested { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .status-archived { background: var(--color-surface-2); color: var(--color-text-3); }
 
     .no-results {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     /* Invoice Card */
     .invoice-card {
-      background: white;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 10px;
       overflow: hidden;
     }
@@ -1346,25 +1346,25 @@ interface BookDepartment {
       display: flex;
       justify-content: space-between;
       padding: 10px 14px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--color-line);
     }
 
     .invoice-card-row:last-child { border-bottom: none; }
 
     .invoice-card-row .label {
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
       font-weight: 500;
     }
 
     .invoice-card-row .value {
       font-size: 0.9rem;
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
     }
 
     .invoice-card-row .value.amount {
-      color: #1565c0;
+      color: var(--color-primary-hover);
       font-weight: 700;
     }
 
@@ -1374,7 +1374,7 @@ interface BookDepartment {
       justify-content: flex-end;
       gap: 12px;
       padding-top: 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     .dialog-actions button {
@@ -1525,7 +1525,7 @@ export class FinanceInquiryDialogComponent implements OnInit {
       <div class="stat-header">
         <mat-icon class="stat-hicon">edit_note</mat-icon>
         <h2>Stationery / Equipment Request</h2>
-        <button mat-icon-button class="stat-close" (click)="close()"><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button class="stat-close" (click)="close()"><mat-icon>close</mat-icon></button>
       </div>
 
       <div class="stat-content">
@@ -1541,7 +1541,7 @@ export class FinanceInquiryDialogComponent implements OnInit {
         <div class="items-section">
           <div class="items-header">
             <span>Items to Request</span>
-            <button mat-icon-button type="button" (click)="addItem()" matTooltip="Add item"><mat-icon>add_circle</mat-icon></button>
+            <button aria-label="Add item" mat-icon-button type="button" (click)="addItem()" matTooltip="Add item"><mat-icon>add_circle</mat-icon></button>
           </div>
           @for (item of items; track $index; let i = $index) {
             <div class="item-row">
@@ -1550,7 +1550,7 @@ export class FinanceInquiryDialogComponent implements OnInit {
                 <input class="item-input qty-input" [(ngModel)]="item.qty" placeholder="Qty" type="number" min="1">
                 <input class="item-input unit-input" [(ngModel)]="item.unit" placeholder="Unit (reams, pcs…)">
               </div>
-              <button mat-icon-button type="button" class="remove-btn" (click)="removeItem(i)" [disabled]="items.length === 1">
+              <button aria-label="Remove" mat-icon-button type="button" class="remove-btn" (click)="removeItem(i)" [disabled]="items.length === 1">
                 <mat-icon>remove_circle_outline</mat-icon>
               </button>
             </div>
@@ -1590,7 +1590,7 @@ export class FinanceInquiryDialogComponent implements OnInit {
                     <div class="quote-attached">
                       <mat-icon class="quote-icon">description</mat-icon>
                       <span class="quote-name">{{quoteFiles[qi]!.name}}</span>
-                      <button mat-icon-button type="button" class="quote-remove" (click)="removeQuote(qi)" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                      <button aria-label="Remove" mat-icon-button type="button" class="quote-remove" (click)="removeQuote(qi)" matTooltip="Remove"><mat-icon>close</mat-icon></button>
                     </div>
                   }
                 </div>
@@ -1624,55 +1624,55 @@ export class FinanceInquiryDialogComponent implements OnInit {
   `,
   styles: [`
     .stat-dialog { min-width: 520px; }
-    .stat-header { display:flex; align-items:center; gap:12px; padding:18px 24px; background:linear-gradient(135deg,#ff9800,#f57c00); color:white; margin:-24px -24px 0; position:relative; }
+    .stat-header { display:flex; align-items:center; gap:12px; padding:18px 24px; background:linear-gradient(135deg,var(--color-warn),var(--color-warn)); color:white; margin:-24px -24px 0; position:relative; }
     .stat-hicon { font-size:30px; width:30px; height:30px; }
     .stat-header h2 { margin:0; font-size:1.4rem; font-weight:700; flex:1; }
     .stat-close { color:white; position:absolute; right:12px; top:50%; transform:translateY(-50%); }
     .stat-content { padding:20px 0 8px; }
-    .stat-subtitle { color:#666; font-size:13px; margin-bottom:16px; }
+    .stat-subtitle { color:var(--color-text-2); font-size:13px; margin-bottom:16px; }
     .quick-chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:18px; }
-    .qc-label { font-size:12px; color:#999; font-weight:600; }
-    .qc-chip { background:#fff3e0; color:#e65100; border:1px solid #ffcc80; border-radius:14px; padding:4px 12px; font-size:12px; cursor:pointer; transition:background 0.15s; }
-    .qc-chip:hover { background:#ffe0b2; }
-    .items-section { background:#f9fafb; border-radius:12px; padding:12px; margin-bottom:16px; }
-    .items-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; color:#374151; margin-bottom:10px; }
-    .items-header button { color:#ff9800; }
+    .qc-label { font-size:12px; color:var(--color-text-3); font-weight:600; }
+    .qc-chip { background:var(--color-warn-soft); color:var(--color-warn); border:1px solid #ffcc80; border-radius:14px; padding:4px 12px; font-size:12px; cursor:pointer; transition:background 0.15s; }
+    .qc-chip:hover { background:var(--color-warn-soft); }
+    .items-section { background:var(--color-canvas); border-radius:12px; padding:12px; margin-bottom:16px; }
+    .items-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; color:var(--color-text-2); margin-bottom:10px; }
+    .items-header button { color:var(--color-warn); }
     .item-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
     .item-inputs { display:flex; gap:8px; flex:1; }
-    .item-input { border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; font-size:13px; outline:none; transition:border-color 0.15s; }
-    .item-input:focus { border-color:#ff9800; }
+    .item-input { border:1px solid var(--color-line); border-radius:8px; padding:8px 10px; font-size:13px; outline:none; transition:border-color 0.15s; }
+    .item-input:focus { border-color:var(--color-warn); }
     .name-input { flex:2; min-width:0; }
     .qty-input { width:70px; }
     .unit-input { width:100px; }
-    .remove-btn { color:#ef4444 !important; flex-shrink:0; }
+    .remove-btn { color:var(--color-danger) !important; flex-shrink:0; }
     .stat-form-row { display:flex; gap:16px; }
     .stat-form-row .full-width { flex:2; }
     .stat-form-row mat-form-field:last-child { flex:1; }
     .full-width { width:100%; }
-    .past-section { border-top:1px solid #eee; padding-top:12px; margin-top:8px; }
-    .past-title { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#555; margin-bottom:8px; }
+    .past-section { border-top:1px solid var(--color-line); padding-top:12px; margin-top:8px; }
+    .past-title { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--color-text-2); margin-bottom:8px; }
     .past-title mat-icon { font-size:15px; width:15px; height:15px; }
-    .past-row { display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:8px; background:#f9fafb; margin-bottom:5px; font-size:12px; }
-    .past-items { flex:1; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .past-date { color:#9ca3af; white-space:nowrap; }
+    .past-row { display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:8px; background:var(--color-canvas); margin-bottom:5px; font-size:12px; }
+    .past-items { flex:1; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .past-date { color:var(--color-text-3); white-space:nowrap; }
     .stat-pill { padding:2px 9px; border-radius:10px; font-size:11px; font-weight:700; }
     .pill-pending { background:#fff3cd; color:#856404; }
-    .pill-approved { background:#d1fae5; color:#065f46; }
-    .pill-declined { background:#fee2e2; color:#991b1b; }
+    .pill-approved { background:var(--color-ok-soft); color:#065f46; }
+    .pill-declined { background:var(--color-danger-soft); color:#991b1b; }
     .quotes-section { margin-bottom:16px; }
-    .quotes-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:#374151; cursor:pointer; user-select:none; }
-    .quotes-toggle input { width:16px; height:16px; cursor:pointer; accent-color:#ff9800; }
+    .quotes-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--color-text-2); cursor:pointer; user-select:none; }
+    .quotes-toggle input { width:16px; height:16px; cursor:pointer; accent-color:var(--color-warn); }
     .quote-files { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
     .quote-file-row { display:flex; align-items:center; }
-    .quote-upload-btn { display:inline-flex; align-items:center; gap:6px; background:#fff3e0; color:#e65100; border:1px dashed #ffcc80; border-radius:8px; padding:7px 14px; font-size:12px; cursor:pointer; transition:background 0.15s; }
-    .quote-upload-btn:hover { background:#ffe0b2; }
+    .quote-upload-btn { display:inline-flex; align-items:center; gap:6px; background:var(--color-warn-soft); color:var(--color-warn); border:1px dashed #ffcc80; border-radius:8px; padding:7px 14px; font-size:12px; cursor:pointer; transition:background 0.15s; }
+    .quote-upload-btn:hover { background:var(--color-warn-soft); }
     .quote-upload-btn mat-icon { font-size:16px; width:16px; height:16px; }
-    .quote-attached { display:flex; align-items:center; gap:8px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:6px 10px; flex:1; }
-    .quote-icon { font-size:16px; width:16px; height:16px; color:#16a34a; }
+    .quote-attached { display:flex; align-items:center; gap:8px; background:var(--color-ok-soft); border:1px solid #bbf7d0; border-radius:8px; padding:6px 10px; flex:1; }
+    .quote-icon { font-size:16px; width:16px; height:16px; color:var(--color-ok); }
     .quote-name { flex:1; font-size:12px; color:#166534; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .quote-remove { color:#ef4444 !important; width:28px; height:28px; line-height:28px; }
+    .quote-remove { color:var(--color-danger) !important; width:28px; height:28px; line-height:28px; }
     .quote-remove mat-icon { font-size:16px; width:16px; height:16px; }
-    .stat-actions { display:flex; justify-content:flex-end; gap:12px; padding-top:16px; border-top:1px solid #eee; }
+    .stat-actions { display:flex; justify-content:flex-end; gap:12px; padding-top:16px; border-top:1px solid var(--color-line); }
     .stat-actions mat-spinner { display:inline-block; }
     .stat-actions mat-icon { margin-right:6px; vertical-align:middle; }
   `]

@@ -8,9 +8,13 @@ services:
       - SA_PASSWORD=YourStrong@Passw0rd
       - MSSQL_PID=Express
     ports:
-      # SECURITY: SQL Server is reachable from this host only (backup/import scripts,
-      # SSMS on the server). Containers use the internal network name "database".
-      - "127.0.0.1:1435:1433"
+      # The biometric clocking machine writes DIRECTLY to this SQL Server over the LAN
+      # (attendance/empregistration tables) on <server>:1435, so this must stay bound to
+      # 0.0.0.0. Binding to 127.0.0.1 (as the 2026-10-23 security hardening did) silently
+      # stopped all clock-ins. Access is limited by the Windows firewall rule
+      # "SQL Server 1435 (Clocking Machine)". To lock this down to loopback, first move
+      # the clocking machine onto the /api/device HTTP endpoint (X-Device-Key).
+      - "0.0.0.0:1435:1433"
     volumes:
       - sql-data:/var/opt/mssql
       - C:\Backups\ProjectTrackerDB:/var/opt/mssql/backup
@@ -48,6 +52,8 @@ services:
       - ConnectionStrings__DefaultConnection=Server=database;Database=ProjectTrackerDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
       - ConnectionStrings__AzureConnection=Server=tcp:pharmacare.database.windows.net,1433;Initial Catalog=PharmaCare;User ID=pharmacare_admin;Password=Pass@123;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;
       - KnowledgeBase__DocumentsPath=/app/kb-docs
+      - Cors__AllowedOrigins__6=http://localhost:4400
+      - Cors__AllowedOrigins__7=http://192.168.10.151:4400
       - DocumentsPath=/app/documents
       - QuotesPath=/app/quotes
       - DownloadsPath=/app/downloads

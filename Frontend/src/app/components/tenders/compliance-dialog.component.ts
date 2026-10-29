@@ -10,11 +10,11 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TenderService, ComplianceDocument } from '../../services/tender.service';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../ui/toast.service';
 
 interface DialogData {
   mode: 'create' | 'edit' | 'view';
@@ -41,7 +41,6 @@ interface DialogData {
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
     MatDividerModule,
     MatProgressBarModule,
     DatePipe
@@ -58,7 +57,7 @@ interface DialogData {
             Compliance Document Details
           }
         </h2>
-        <button mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
       </div>
 
       <mat-dialog-content>
@@ -277,7 +276,7 @@ interface DialogData {
                 <div class="selected-file">
                   <mat-icon>attach_file</mat-icon>
                   <span>{{ selectedFile.name }}</span>
-                  <button mat-icon-button (click)="clearFile()"><mat-icon>close</mat-icon></button>
+                  <button aria-label="Close" mat-icon-button (click)="clearFile()"><mat-icon>close</mat-icon></button>
                 </div>
               }
             </div>
@@ -311,7 +310,7 @@ interface DialogData {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      border-bottom: 1px solid #E0E0E0;
+      border-bottom: 1px solid var(--color-line);
     }
 
     mat-dialog-content {
@@ -330,12 +329,12 @@ interface DialogData {
       margin-bottom: 24px;
     }
     .status-banner mat-icon { font-size: 28px; width: 28px; height: 28px; }
-    .status-banner span { font-size: 16px; font-weight: 500; }
+    .status-banner span { font-size: var(--text-lg); font-weight: 500; }
 
-    .status-banner.valid { background: #E8F5E9; color: #2E7D32; }
-    .status-banner.expiring { background: #FFF3E0; color: #E65100; }
-    .status-banner.warning { background: #FFEBEE; color: #C62828; }
-    .status-banner.expired { background: #FAFAFA; color: #616161; }
+    .status-banner.valid { background: var(--color-ok-soft); color: var(--color-ok); }
+    .status-banner.expiring { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-banner.warning { background: var(--color-danger-soft); color: var(--color-danger); }
+    .status-banner.expired { background: var(--color-canvas); color: var(--color-text-2); }
 
     .info-grid {
       display: grid;
@@ -350,31 +349,31 @@ interface DialogData {
     .info-item.full-width { grid-column: 1 / -1; }
     .info-item mat-icon {
       margin-right: 12px;
-      color: #666;
+      color: var(--color-text-2);
     }
     .info-item .label {
       display: block;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .info-item .value {
       font-weight: 500;
     }
-    .info-item .value.expired { color: #F44336; }
+    .info-item .value.expired { color: var(--color-danger); }
 
     .company-chip {
       display: inline-block;
       padding: 2px 8px;
       border-radius: 4px;
-      color: white;
-      font-size: 11px;
+      color: var(--color-on-dark);
+      font-size: var(--text-xs);
       margin-left: 8px;
     }
 
     .expiry-progress {
       margin-top: 24px;
       padding: 16px;
-      background: #FAFAFA;
+      background: var(--color-canvas);
       border-radius: 8px;
     }
     .expiry-progress h4 { margin: 0 0 12px 0; }
@@ -382,8 +381,8 @@ interface DialogData {
       display: flex;
       justify-content: space-between;
       margin-top: 8px;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .alert-history {
@@ -401,13 +400,13 @@ interface DialogData {
       align-items: center;
       gap: 4px;
       padding: 8px 12px;
-      background: #F5F5F5;
+      background: var(--color-surface-2);
       border-radius: 20px;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
     .alert-chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    .alert-chip.sent { background: #E8F5E9; color: #2E7D32; }
+    .alert-chip.sent { background: var(--color-ok-soft); color: var(--color-ok); }
 
     /* Form */
     .compliance-form {
@@ -433,14 +432,14 @@ interface DialogData {
     }
 
     .file-upload {
-      border: 2px dashed #CCC;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 8px;
       padding: 16px;
       text-align: center;
     }
     .file-upload p {
       margin: 0 0 8px 0;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .selected-file {
@@ -450,13 +449,13 @@ interface DialogData {
       gap: 8px;
       margin-top: 12px;
       padding: 8px;
-      background: #E3F2FD;
+      background: var(--color-primary-soft);
       border-radius: 4px;
     }
 
     mat-dialog-actions {
       padding: 16px 24px;
-      border-top: 1px solid #E0E0E0;
+      border-top: 1px solid var(--color-line);
     }
   `]
 })
@@ -472,7 +471,7 @@ export class ComplianceDialogComponent {
     private fb: FormBuilder,
     private tenderService: TenderService,
     private authService: AuthService,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {
     this.complianceForm = this.fb.group({
       companyCode: [data.companyCode || data.document?.companyCode || 'PMT', Validators.required],
@@ -534,7 +533,7 @@ export class ComplianceDialogComponent {
         a.click();
         window.URL.revokeObjectURL(url);
       },
-      error: () => this.snackBar.open('Error downloading document', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error downloading document')
     });
   }
 
@@ -564,12 +563,12 @@ export class ComplianceDialogComponent {
 
       this.tenderService.createComplianceDocument(formData).subscribe({
         next: () => {
-          this.snackBar.open('Document added successfully', 'Close', { duration: 2000 });
+          this.toast.done('Document added successfully');
           this.dialogRef.close(true);
         },
         error: () => {
           this.saving = false;
-          this.snackBar.open('Error adding document', 'Close', { duration: 3000 });
+          this.toast.error('Error adding document');
         }
       });
     } else {
@@ -584,22 +583,22 @@ export class ComplianceDialogComponent {
           if (this.selectedFile) {
             this.tenderService.uploadComplianceFile(this.data.document!.id, this.selectedFile).subscribe({
               next: () => {
-                this.snackBar.open('Document updated successfully', 'Close', { duration: 2000 });
+                this.toast.done('Document updated successfully');
                 this.dialogRef.close(true);
               },
               error: () => {
-                this.snackBar.open('Document updated but file upload failed', 'Close', { duration: 3000 });
+                this.toast.warn('Document updated but file upload failed');
                 this.dialogRef.close(true);
               }
             });
           } else {
-            this.snackBar.open('Document updated successfully', 'Close', { duration: 2000 });
+            this.toast.done('Document updated successfully');
             this.dialogRef.close(true);
           }
         },
         error: () => {
           this.saving = false;
-          this.snackBar.open('Error updating document', 'Close', { duration: 3000 });
+          this.toast.error('Error updating document');
         }
       });
     }

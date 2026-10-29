@@ -6,7 +6,6 @@ import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -22,6 +21,9 @@ import { Employee, AttendanceMetrics } from '../../models/attendance.model';
 import { interval, Subscription, Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { environment } from '../../../environments/environment';
 import { EmployeeDirectoryComponent } from './employee-directory.component';
 import { DailyRegisterComponent } from './daily-register.component';
@@ -72,7 +74,6 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     MatCardModule,
     MatButtonModule,
     MatIconModule,
-    MatProgressSpinnerModule,
     MatChipsModule,
     MatTooltipModule,
     MatFormFieldModule,
@@ -82,134 +83,108 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     MatDatepickerModule,
     MatNativeDateModule,
     MatMenuModule,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent
   ],
   template: `
     <app-navbar></app-navbar>
 
     <div class="attendance-container">
       @if (!trainingAccess && !mainOfficeAccess && !condomFactoryAccess && !sanitaryPadsAccess && !newRoadAccess && !captownAccess && !brionkhorspruitAccess && !portElizabethAccess && !logisticsAccess) {
-        <!-- Modern Header Section -->
-        <div class="header-section-modern">
-          <div class="header-content">
-            <div class="title-area">
-              <div class="icon-wrapper">
-                <mat-icon>groups</mat-icon>
-              </div>
-              <div class="title-text">
-                <h1>Human Resources</h1>
-                <p class="subtitle">Manage departments, branches & employee data</p>
-              </div>
-            </div>
-            <div class="header-stats">
-              <div class="stat-card">
-                <mat-icon>business</mat-icon>
-                <div class="stat-info">
-                  <span class="stat-value">8</span>
-                  <span class="stat-label">Locations</span>
-                </div>
-              </div>
-              <div class="stat-card">
-                <mat-icon>badge</mat-icon>
-                <div class="stat-info">
-                  <span class="stat-value">Active</span>
-                  <span class="stat-label">Status</span>
-                </div>
-              </div>
-              <button mat-flat-button class="requests-btn" (click)="toggleLeaveRequests()">
-                <mat-icon>inbox</mat-icon>
-                Requests
-                @if (pendingLeaveCount > 0) {
-                  <span class="requests-badge">{{pendingLeaveCount}}</span>
-                }
+        <app-page-header class="people-header" [crumbs]="['People and money', 'People']" title="People"
+                         [subtitle]="locations.length + ' locations · Biometric clock-ins and daily registers'">
+          <div class="location-search">
+            <mat-icon aria-hidden="true">search</mat-icon>
+            <input type="text"
+                   placeholder="Search departments or branches"
+                   aria-label="Search departments or branches"
+                   [(ngModel)]="searchQuery"
+                   (input)="filterLocations()">
+            @if (searchQuery) {
+              <button aria-label="Close" mat-icon-button (click)="clearLocationSearch()" class="clear-btn">
+                <mat-icon>close</mat-icon>
               </button>
-            </div>
+            }
           </div>
-
-          <!-- Search Bar -->
-          <div class="search-section">
-            <div class="search-box">
-              <mat-icon>search</mat-icon>
-              <input type="text" 
-                     placeholder="Search departments or branches..." 
-                     [(ngModel)]="searchQuery"
-                     (input)="filterLocations()">
-              @if (searchQuery) {
-                <button mat-icon-button (click)="clearLocationSearch()" class="clear-btn">
-                  <mat-icon>close</mat-icon>
-                </button>
-              }
-            </div>
-          </div>
-        </div>
+          <button mat-flat-button color="primary" (click)="toggleLeaveRequests()">
+            <mat-icon>inbox</mat-icon>Leave requests
+            @if (pendingLeaveCount > 0) {
+              <span class="requests-badge">{{pendingLeaveCount}}</span>
+            }
+          </button>
+        </app-page-header>
 
         <!-- ============ HR COMMAND CENTRE ============ -->
         <div class="command-centre">
           @if (hrLoading && !hrOverview) {
-            <div class="cc-loading"><mat-spinner diameter="36"></mat-spinner><span>Loading HR command centre…</span></div>
+            <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
           } @else if (hrOverview) {
-            <!-- Directory launcher -->
-            <div class="dir-launch" (click)="openEmployeeDirectory()">
-              <div class="dl-left">
-                <div class="dl-icon"><mat-icon>badge</mat-icon></div>
-                <div class="dl-text">
-                  <span class="dl-title">Employee Directory</span>
-                  <span class="dl-sub">Search, view &amp; edit staff across all sites — Main Office, Security, factories, branches &amp; logistics — and store contracts &amp; documents</span>
+            <div class="launchers">
+              <!-- Directory launcher -->
+              <div class="dir-launch" (click)="openEmployeeDirectory()">
+                <div class="dl-left">
+                  <div class="dl-icon"><mat-icon>badge</mat-icon></div>
+                  <div class="dl-text">
+                    <span class="dl-title">Employee Directory</span>
+                    <span class="dl-sub">Search, view &amp; edit staff across all sites — Main Office, Security, factories, branches &amp; logistics — and store contracts &amp; documents</span>
+                  </div>
                 </div>
+                <button mat-stroked-button class="dl-btn"><mat-icon>arrow_forward</mat-icon> Open Directory</button>
               </div>
-              <button mat-flat-button class="dl-btn"><mat-icon>arrow_forward</mat-icon> Open Directory</button>
-            </div>
 
-            <!-- Daily register launcher -->
-            <div class="dir-launch reg-launch" (click)="openDailyRegister()">
-              <div class="dl-left">
-                <div class="dl-icon reg"><mat-icon>fact_check</mat-icon></div>
-                <div class="dl-text">
-                  <span class="dl-title">Daily Attendance Register</span>
-                  <span class="dl-sub">Capture manual in/out registers for sites that don't clock in — Main Building, Security &amp; more — for a holistic attendance view</span>
+              <!-- Daily register launcher -->
+              <div class="dir-launch" (click)="openDailyRegister()">
+                <div class="dl-left">
+                  <div class="dl-icon"><mat-icon>fact_check</mat-icon></div>
+                  <div class="dl-text">
+                    <span class="dl-title">Daily Attendance Register</span>
+                    <span class="dl-sub">Capture manual in/out registers for sites that don't clock in — Main Building, Security &amp; more — for a holistic attendance view</span>
+                  </div>
                 </div>
+                <button mat-stroked-button class="dl-btn"><mat-icon>edit_note</mat-icon> Capture Register</button>
               </div>
-              <button mat-flat-button class="dl-btn"><mat-icon>edit_note</mat-icon> Capture Register</button>
             </div>
 
             <!-- Top KPI row -->
             <div class="kpi-row">
-              <div class="kpi-card kpi-blue" (click)="openEmployeeDirectory()" matTooltip="Open the employee directory">
+              <div class="kpi-card kpi-primary clickable" (click)="openEmployeeDirectory()" matTooltip="Open the employee directory">
                 <div class="kpi-icon"><mat-icon>groups</mat-icon></div>
                 <div class="kpi-body">
                   <span class="kpi-value">{{ hrOverview.workforce.totalEmployees }}</span>
                   <span class="kpi-label">Active Employees</span>
                 </div>
               </div>
-              <div class="kpi-card kpi-green" matTooltip="Clocked in today">
+              <div class="kpi-card kpi-ok" matTooltip="Clocked in today">
                 <div class="kpi-icon"><mat-icon>how_to_reg</mat-icon></div>
                 <div class="kpi-body">
                   <span class="kpi-value">{{ hrOverview.attendance.clockedInToday }}<small>/{{ hrOverview.workforce.totalEmployees }}</small></span>
                   <span class="kpi-label">Present Today ({{ hrOverview.attendance.attendanceRate }}%)</span>
                 </div>
               </div>
-              <div class="kpi-card kpi-amber" (click)="openMainOfficeDialog()" matTooltip="Not clocked in">
+              <div class="kpi-card kpi-danger clickable" (click)="openMainOfficeDialog()" matTooltip="Not clocked in">
                 <div class="kpi-icon"><mat-icon>person_off</mat-icon></div>
                 <div class="kpi-body">
                   <span class="kpi-value">{{ hrOverview.attendance.notClockedIn }}</span>
                   <span class="kpi-label">Absent Today</span>
                 </div>
               </div>
-              <div class="kpi-card kpi-purple" (click)="openLeavePanel()" matTooltip="On approved leave today">
+              <div class="kpi-card kpi-info clickable" (click)="openLeavePanel()" matTooltip="On approved leave today">
                 <div class="kpi-icon"><mat-icon>beach_access</mat-icon></div>
                 <div class="kpi-body">
                   <span class="kpi-value">{{ hrOverview.leave.onLeaveToday }}</span>
                   <span class="kpi-label">On Leave Today</span>
                 </div>
               </div>
-              <div class="kpi-card kpi-rose" (click)="openLeavePanel()" matTooltip="Pending HR actions">
+              <div class="kpi-card kpi-warn clickable" (click)="openLeavePanel()" matTooltip="Pending HR actions">
                 <div class="kpi-icon"><mat-icon>pending_actions</mat-icon></div>
                 <div class="kpi-body">
                   <span class="kpi-value">{{ hrOverview.leave.pending }}</span>
                   <span class="kpi-label">Pending Approvals</span>
                 </div>
               </div>
-              <div class="kpi-card kpi-teal" matTooltip="New hires this month">
+              <div class="kpi-card" matTooltip="New hires this month">
                 <div class="kpi-icon"><mat-icon>person_add</mat-icon></div>
                 <div class="kpi-body">
                   <span class="kpi-value">{{ hrOverview.workforce.newThisMonth }}</span>
@@ -272,10 +247,10 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
               <div class="cc-panel attention-panel">
                 <div class="cc-panel-head">
                   <div class="cc-panel-title"><mat-icon>notifications_active</mat-icon><h3>HR Attention Centre</h3></div>
-                  <button mat-icon-button (click)="loadHrOverview()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
+                  <button aria-label="Refresh" mat-icon-button (click)="loadHrOverview()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
                 </div>
                 @if (hrOverview.attention.length === 0) {
-                  <div class="cc-empty"><mat-icon>task_alt</mat-icon><p>All clear — nothing needs attention right now.</p></div>
+                  <app-empty-state [compact]="true" icon="task_alt" title="All clear" message="Nothing needs attention right now."></app-empty-state>
                 } @else {
                   <div class="attention-list">
                     @for (item of hrOverview.attention; track item.type) {
@@ -409,7 +384,7 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
                   }
                 }
                 @if (hrOverview.leave.onLeaveNow.length === 0 && hrOverview.leave.upcomingList.length === 0) {
-                  <div class="cc-empty small"><mat-icon>event_available</mat-icon><p>No current or upcoming leave.</p></div>
+                  <app-empty-state [compact]="true" icon="event_available" title="No current or upcoming leave" message="Approved leave shows here once it is booked."></app-empty-state>
                 }
               </div>
             </div>
@@ -421,12 +396,12 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
             <div class="records-panel" (click)="$event.stopPropagation()">
               <div class="rp-head">
                 <div class="rp-title"><mat-icon>fact_check</mat-icon><h3>Incomplete Employee Records</h3></div>
-                <button mat-icon-button (click)="showRecordsPanel = false"><mat-icon>close</mat-icon></button>
+                <button aria-label="Close" mat-icon-button (click)="showRecordsPanel = false"><mat-icon>close</mat-icon></button>
               </div>
               @if (recordsLoading) {
-                <div class="cc-loading"><mat-spinner diameter="32"></mat-spinner></div>
+                <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
               } @else if (incompleteRecords.length === 0) {
-                <div class="cc-empty"><mat-icon>task_alt</mat-icon><p>All employee records are complete.</p></div>
+                <app-empty-state icon="task_alt" title="All employee records are complete" message="Nobody is missing details right now."></app-empty-state>
               } @else {
                 <div class="rp-list">
                   @for (r of incompleteRecords; track r.empId) {
@@ -458,12 +433,18 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
                 <button class="lrp-filter approved" [class.active]="leaveFilter==='Approved'" (click)="setLeaveFilter('Approved')">Approved ({{leaveCounts.approved}})</button>
                 <button class="lrp-filter rejected" [class.active]="leaveFilter==='Rejected'" (click)="setLeaveFilter('Rejected')">Rejected ({{leaveCounts.rejected}})</button>
               </div>
-              <button mat-icon-button (click)="showLeaveRequests=false" style="color:white"><mat-icon>close</mat-icon></button>
+              <button aria-label="Close" mat-icon-button (click)="showLeaveRequests=false"><mat-icon>close</mat-icon></button>
             </div>
             @if (leaveRequestsLoading) {
-              <div class="lrp-loading"><mat-spinner diameter="32"></mat-spinner></div>
+              <app-skeleton-rows [rows]="5"></app-skeleton-rows>
             } @else if (leaveRequests.length === 0) {
-              <div class="lrp-empty"><mat-icon>inbox</mat-icon><p>No requests found</p></div>
+              <app-empty-state icon="inbox"
+                               [title]="leaveFilter === 'all' ? 'No leave requests' : 'No ' + leaveFilter.toLowerCase() + ' leave requests'"
+                               [message]="leaveFilter === 'all' ? 'Leave requests appear here when employees apply.' : 'None of the leave requests are ' + leaveFilter.toLowerCase() + '.'">
+                @if (leaveFilter !== 'all') {
+                  <button mat-stroked-button (click)="setLeaveFilter('all')">Show all requests</button>
+                }
+              </app-empty-state>
             } @else {
               <div class="lrp-list">
                 @for (req of leaveRequests; track req.leaveRequestId) {
@@ -484,8 +465,8 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
                       <span class="lrp-submitted">{{req.submittedAt | date:'d MMM yyyy'}}</span>
                       @if (req.status === 'Pending') {
                         <div class="lrp-actions">
-                          <button mat-icon-button class="approve-btn" matTooltip="Approve" (click)="reviewLeave(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
-                          <button mat-icon-button class="reject-btn" matTooltip="Reject" (click)="reviewLeave(req, 'Rejected')"><mat-icon>cancel</mat-icon></button>
+                          <button aria-label="Approve" mat-icon-button class="approve-btn" matTooltip="Approve" (click)="reviewLeave(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
+                          <button aria-label="Reject" mat-icon-button class="reject-btn" matTooltip="Reject" (click)="reviewLeave(req, 'Rejected')"><mat-icon>cancel</mat-icon></button>
                         </div>
                       }
                     </div>
@@ -500,40 +481,34 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
         <div class="departments-section">
           <div class="departments-grid">
             @for (location of filteredLocations; track location.name) {
-              <div class="department-card" 
+              <div class="location-card"
                    (click)="location.action()"
                    [matTooltip]="'Access ' + location.name">
-                
-                <div class="card-glow"></div>
-                
                 <div class="card-content">
-                  <div class="icon-container" [attr.data-location]="location.id">
+                  <div class="icon-container">
                     <mat-icon>{{ location.icon }}</mat-icon>
                   </div>
-                  
+
                   <h3>{{ location.name }}</h3>
-                  
+
                   <p class="location-description">{{ location.description }}</p>
 
                   <div class="card-footer">
-                    <button mat-flat-button class="access-btn">
+                    <button mat-stroked-button class="access-btn">
                       <mat-icon>lock_open</mat-icon>
                       Access
                     </button>
                   </div>
                 </div>
-
-                <div class="card-indicator"></div>
               </div>
             }
           </div>
 
           @if (filteredLocations.length === 0 && searchQuery) {
-            <div class="no-results">
-              <mat-icon>search_off</mat-icon>
-              <h3>No locations found</h3>
-              <p>Try a different search term</p>
-            </div>
+            <app-empty-state icon="search_off" title="No locations found"
+                             [message]="'No department or branch matches “' + searchQuery + '”.'">
+              <button mat-stroked-button (click)="clearLocationSearch()">Clear the search</button>
+            </app-empty-state>
           }
         </div>
       } @else if (trainingAccess) {
@@ -753,7 +728,7 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
                    placeholder="Search by name, code, or position...">
             <mat-icon matPrefix>search</mat-icon>
             @if (searchQuery) {
-              <button matSuffix mat-icon-button (click)="clearSearch()">
+              <button aria-label="Close" matSuffix mat-icon-button (click)="clearSearch()">
                 <mat-icon>close</mat-icon>
               </button>
             }
@@ -761,9 +736,7 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
         </div>
 
         @if (loading) {
-          <div class="loading-spinner">
-            <mat-spinner></mat-spinner>
-          </div>
+          <app-skeleton-rows [rows]="6"></app-skeleton-rows>
         } @else {
           <div class="employee-grid">
             @for (employee of filteredEmployees; track employee.employeeId) {
@@ -837,10 +810,13 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
                 </div>
               </mat-card>
             } @empty {
-              <div class="empty-state">
-                <mat-icon>people_outline</mat-icon>
-                <h3>No employees found</h3>
-              </div>
+              <app-empty-state class="empty-state" icon="people_outline"
+                               [title]="searchQuery ? 'No employees match your search' : 'No employees found'"
+                               [message]="searchQuery ? 'Nobody matches “' + searchQuery + '”.' : 'No employees are on the live register yet.'">
+                @if (searchQuery) {
+                  <button mat-stroked-button (click)="clearSearch()">Clear the search</button>
+                }
+              </app-empty-state>
             }
           </div>
         }
@@ -1003,160 +979,1131 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     </div>
   `,
   styles: [`
+    :host { display: block; }
+
     .attendance-container {
-      min-height: 100vh;
-      padding: 80px 32px 48px;
-      position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
-      overflow-x: hidden;
+      min-height: calc(100vh - var(--shell-topbar-height));
+      box-sizing: border-box;
+      padding: var(--space-5) var(--space-6) var(--space-8);
+      background: var(--color-canvas);
+      color: var(--color-text);
     }
 
-    /* Modern Header Section */
-    .header-section-modern {
+    @media (max-width: 600px) {
+      .attendance-container {
+        padding: var(--space-4) var(--space-4) var(--space-6);
+      }
+    }
+
+    /* Page header */
+    .people-header {
       max-width: 1400px;
-      margin: 0 auto 40px;
+      margin: 0 auto var(--space-5);
     }
 
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      flex-wrap: wrap;
-      gap: 24px;
-      margin-bottom: 24px;
-    }
-
-    .title-area {
+    .location-search {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: var(--space-2);
+      box-sizing: border-box;
+      width: 280px;
+      max-width: 100%;
+      height: 36px;
+      padding: 0 var(--space-1) 0 var(--space-3);
+      border: 1px solid var(--color-line-strong);
+      border-radius: var(--radius-control);
+      background: var(--color-surface);
     }
 
-    .icon-wrapper {
-      width: 72px;
-      height: 72px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    .location-search:focus-within {
+      border-color: var(--color-primary);
     }
 
-    .icon-wrapper mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      color: white;
+    .location-search > mat-icon {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      font-size: var(--text-xl);
+      color: var(--color-text-2);
     }
 
-    .title-text h1 {
-      margin: 0;
-      font-size: 32px;
-      font-weight: 700;
-      color: white;
-      letter-spacing: -0.5px;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .title-text .subtitle {
-      margin: 4px 0 0;
-      font-size: 16px;
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .header-stats {
-      display: flex;
-      gap: 16px;
-    }
-
-    .stat-card {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px 24px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-    }
-
-    .stat-card mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-      color: white;
-    }
-
-    .stat-info {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .stat-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: white;
-    }
-
-    .stat-label {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.8);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    /* Search Section */
-    .search-section {
-      display: flex;
-      justify-content: center;
-    }
-
-    .search-box {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      width: 100%;
-      max-width: 500px;
-      padding: 14px 20px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-    }
-
-    .search-box mat-icon {
-      color: #1e90ff;
-      font-size: 24px;
-    }
-
-    .search-box input {
+    .location-search input {
       flex: 1;
+      min-width: 0;
       border: none;
       outline: none;
-      font-size: 16px;
       background: transparent;
-      color: #333;
-    }
-
-    .search-box input::placeholder {
-      color: #999;
+      font: inherit;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
 
     .clear-btn {
-      width: 32px;
-      height: 32px;
+      --mdc-icon-button-state-layer-size: 28px;
+      --mdc-icon-button-icon-size: 18px;
     }
 
-    /* Departments Grid */
+    .clear-btn mat-icon {
+      width: 18px;
+      height: 18px;
+      font-size: var(--text-xl);
+    }
+
+    .requests-badge {
+      margin-left: var(--space-2);
+      padding: 0 var(--space-2);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      color: var(--color-primary);
+      font-size: var(--text-xs);
+      font-weight: 800;
+      line-height: 1.6;
+    }
+
+    /* ============ HR COMMAND CENTRE ============ */
+    .command-centre {
+      max-width: 1400px;
+      margin: 0 auto var(--space-6);
+    }
+
+    /* Directory and daily register launchers */
+    .launchers {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
+    }
+
+    @media (max-width: 1100px) {
+      .launchers { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    .dir-launch {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3) var(--space-4);
+      padding: var(--space-4) var(--space-5);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .dir-launch:hover {
+      border-color: var(--color-line-strong);
+      box-shadow: var(--shadow-md);
+    }
+
+    .dl-left {
+      flex: 1 1 260px;
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      min-width: 0;
+    }
+
+    .dl-icon {
+      width: 48px;
+      height: 48px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
+
+    .dl-icon mat-icon {
+      width: 24px;
+      height: 24px;
+      font-size: var(--text-3xl);
+    }
+
+    .dl-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .dl-title {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+
+    .dl-sub {
+      font-size: var(--text-sm);
+      line-height: 1.45;
+      color: var(--color-text-3);
+    }
+
+    .dl-btn { flex-shrink: 0; }
+
+    /* KPI row and holistic strip: white cards with a tinted icon tile */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
+    }
+
+    @media (max-width: 1500px) {
+      .kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 640px) {
+      .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    .holistic-strip {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
+    }
+
+    @media (max-width: 1300px) {
+      .holistic-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 900px) {
+      .holistic-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 480px) {
+      .holistic-strip { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    .kpi-card,
+    .hs-card {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      min-width: 0;
+      padding: var(--space-4);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .kpi-card.clickable,
+    .hs-card {
+      cursor: pointer;
+    }
+
+    .kpi-card.clickable:hover,
+    .hs-card:hover {
+      border-color: var(--color-line-strong);
+      box-shadow: var(--shadow-md);
+    }
+
+    /* Cards without a colour variant keep the neutral tile. */
+    .kpi-icon,
+    .hs-icon {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md);
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+    }
+
+    .kpi-icon mat-icon,
+    .hs-icon mat-icon {
+      width: 24px;
+      height: 24px;
+      font-size: var(--text-3xl);
+    }
+
+    .kpi-primary .kpi-icon,
+    .hs-registers .hs-icon {
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
+
+    .kpi-info .kpi-icon {
+      background: var(--color-info-soft);
+      color: var(--color-info);
+    }
+
+    .kpi-ok .kpi-icon,
+    .hs-holistic .hs-icon {
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
+    }
+
+    .kpi-warn .kpi-icon,
+    .hs-warn .hs-icon {
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
+    }
+
+    .kpi-danger .kpi-icon,
+    .hs-suspend .hs-icon {
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
+    }
+
+    .kpi-body,
+    .hs-body {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .kpi-value,
+    .hs-value {
+      font-size: var(--text-3xl);
+      font-weight: 800;
+      line-height: 1.15;
+      color: var(--color-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .kpi-value small,
+    .hs-value small {
+      font-size: var(--text-md);
+      font-weight: 600;
+      color: var(--color-text-3);
+    }
+
+    .hs-holistic .hs-value { color: var(--color-ok); }
+    .hs-registers .hs-value { color: var(--color-primary); }
+    .hs-warn .hs-value { color: var(--color-warn); }
+    .hs-suspend .hs-value { color: var(--color-danger); }
+    .hs-terminated .hs-value { color: var(--color-text-2); }
+
+    .kpi-label {
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-3);
+    }
+
+    .hs-label {
+      margin-top: 2px;
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .hs-sub {
+      margin-top: 2px;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .hs-sub.warn {
+      font-weight: 600;
+      color: var(--color-warn);
+    }
+
+    /* Panels */
+    .cc-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
+    }
+
+    .cc-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-4);
+    }
+
+    @media (max-width: 1100px) {
+      .cc-grid,
+      .cc-grid-3 { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    .cc-panel {
+      min-width: 0;
+      padding: var(--space-4) var(--space-5) var(--space-5);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .cc-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+      min-height: 40px;
+      margin-bottom: var(--space-3);
+    }
+
+    .cc-panel-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-width: 0;
+    }
+
+    .cc-panel-title mat-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      font-size: var(--text-2xl);
+      color: var(--color-primary);
+    }
+
+    .cc-panel-title h3 {
+      margin: 0;
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+
+    /* HR attention centre */
+    .attention-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .attention-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-left: 4px solid var(--color-line-strong);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .attention-item:hover { background: var(--color-canvas); }
+
+    .att-icon {
+      width: 36px;
+      height: 36px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md);
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+    }
+
+    .att-icon mat-icon {
+      width: 20px;
+      height: 20px;
+      font-size: var(--text-2xl);
+    }
+
+    .att-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .att-title {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .att-detail {
+      margin-top: 2px;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .att-side {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-shrink: 0;
+    }
+
+    .att-go { color: var(--color-text-3); }
+
+    .sev-badge {
+      padding: 2px var(--space-2);
+      border-radius: 999px;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+      font-size: var(--text-xs);
+      font-weight: 700;
+    }
+
+    .attention-item.sev-overdue,
+    .attention-item.sev-critical { border-left-color: var(--color-danger); }
+    .attention-item.sev-due_soon { border-left-color: var(--color-warn); }
+    .attention-item.sev-info { border-left-color: var(--color-info); }
+
+    .sev-overdue .att-icon,
+    .sev-critical .att-icon,
+    .sev-badge.sev-overdue,
+    .sev-badge.sev-critical {
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
+    }
+
+    .sev-due_soon .att-icon,
+    .sev-badge.sev-due_soon {
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
+    }
+
+    .sev-info .att-icon,
+    .sev-badge.sev-info {
+      background: var(--color-info-soft);
+      color: var(--color-info);
+    }
+
+    /* Today's attendance */
+    .att-mini-stats {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+
+    @media (max-width: 480px) {
+      .att-mini-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    .mini-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--space-2) var(--space-1);
+      border-radius: var(--radius-md);
+      background: var(--color-canvas);
+    }
+
+    .ms-val {
+      font-size: var(--text-xl);
+      font-weight: 800;
+      color: var(--color-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ms-val.ms-green { color: var(--color-ok); }
+    .ms-val.ms-amber { color: var(--color-warn); }
+    .ms-val.ms-red { color: var(--color-danger); }
+
+    .ms-lbl {
+      margin-top: 2px;
+      text-align: center;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .trend-block { margin-bottom: var(--space-4); }
+
+    .trend-title,
+    .late-list-title,
+    .leave-sub-title {
+      margin-bottom: var(--space-2);
+      font-size: var(--text-xs);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-text-3);
+    }
+
+    .trend-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: var(--space-2);
+      height: 90px;
+    }
+
+    .trend-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      height: 100%;
+    }
+
+    .trend-bar {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      width: 70%;
+      min-height: 4px;
+      overflow: hidden;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      background: var(--color-primary);
+    }
+
+    .trend-late {
+      width: 100%;
+      background: var(--color-warn);
+    }
+
+    .trend-lbl {
+      margin-top: var(--space-1);
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .late-list {
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-line);
+    }
+
+    .late-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-1) 0;
+      font-size: var(--text-sm);
+    }
+
+    .late-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .late-dept {
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .late-time {
+      font-weight: 700;
+      color: var(--color-warn);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .late-time small {
+      font-weight: 400;
+      color: var(--color-text-3);
+    }
+
+    /* Headcount by department */
+    .dept-bars {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .dept-bar-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .dbr-name {
+      width: 120px;
+      flex-shrink: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
+    }
+
+    .dbr-track {
+      flex: 1;
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--color-surface-3);
+    }
+
+    .dbr-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--color-primary);
+    }
+
+    .dbr-count {
+      width: 32px;
+      text-align: right;
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--color-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Records completeness */
+    .completeness {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .comp-ring {
+      width: 96px;
+      height: 96px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+
+    .comp-inner {
+      width: 72px;
+      height: 72px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--color-surface);
+    }
+
+    .comp-pct {
+      font-size: var(--text-2xl);
+      font-weight: 800;
+      color: var(--color-text);
+    }
+
+    .comp-sub {
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .comp-missing {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .comp-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
+    }
+
+    .comp-row mat-icon {
+      width: 16px;
+      height: 16px;
+      font-size: var(--text-lg);
+      color: var(--color-text-3);
+    }
+
+    .comp-row span { flex: 1; }
+    .comp-row b { color: var(--color-text); }
+
+    .comp-btn {
+      width: 100%;
+      margin-top: var(--space-4);
+    }
+
+    /* Leave summary */
+    .leave-mini {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+
+    .lm-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
+      background: var(--color-canvas);
+    }
+
+    .lm-val {
+      font-size: var(--text-2xl);
+      font-weight: 800;
+      color: var(--color-text);
+    }
+
+    .lm-lbl {
+      margin-top: 2px;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .leave-person {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-1) 0;
+    }
+
+    .lp-avatar {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-size: var(--text-xs);
+      font-weight: 700;
+    }
+
+    .lp-avatar.upcoming {
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+    }
+
+    .lp-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .lp-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .lp-meta {
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    /* Incomplete records overlay */
+    .records-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-5);
+      background: color-mix(in srgb, var(--color-text) 40%, transparent);
+    }
+
+    .records-panel {
+      box-sizing: border-box;
+      width: 640px;
+      max-width: 100%;
+      max-height: 80vh;
+      overflow: auto;
+      padding: var(--space-5);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .rp-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-4);
+    }
+
+    .rp-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .rp-title mat-icon { color: var(--color-primary); }
+
+    .rp-title h3 {
+      margin: 0;
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+
+    .rp-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .rp-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-3);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+    }
+
+    .rp-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .rp-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .rp-dept {
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .rp-missing {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: var(--space-1);
+    }
+
+    .rp-tag {
+      padding: 2px var(--space-2);
+      border-radius: 999px;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
+      font-size: var(--text-xs);
+      font-weight: 600;
+    }
+
+    /* Leave requests panel */
+    .leave-requests-panel {
+      max-width: 1400px;
+      margin: 0 auto var(--space-5);
+      overflow: hidden;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .lrp-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
+      border-bottom: 1px solid var(--color-line);
+    }
+
+    .lrp-title {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .lrp-title h3 {
+      margin: 0;
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+
+    .lrp-title mat-icon {
+      width: 20px;
+      height: 20px;
+      font-size: var(--text-2xl);
+      color: var(--color-primary);
+    }
+
+    .lrp-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .lrp-filter {
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--color-line);
+      border-radius: 999px;
+      background: var(--color-surface);
+      color: var(--color-text-2);
+      font: inherit;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .lrp-filter:hover { border-color: var(--color-line-strong); }
+
+    .lrp-filter.active {
+      border-color: var(--color-primary-soft);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
+
+    .lrp-filter.pending.active {
+      border-color: var(--color-warn-soft);
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
+    }
+
+    .lrp-filter.approved.active {
+      border-color: var(--color-ok-soft);
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
+    }
+
+    .lrp-filter.rejected.active {
+      border-color: var(--color-danger-soft);
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
+    }
+
+    .lrp-list {
+      max-height: 480px;
+      overflow-y: auto;
+      padding: var(--space-3) var(--space-4);
+    }
+
+    .lrp-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      margin-bottom: var(--space-2);
+      padding: var(--space-3);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      transition: background 0.15s ease;
+    }
+
+    .lrp-item:hover { background: var(--color-canvas); }
+    .lrp-pending { border-left: 4px solid var(--color-warn); }
+    .lrp-approved { border-left: 4px solid var(--color-ok); }
+    .lrp-rejected { border-left: 4px solid var(--color-danger); }
+
+    .lrp-avatar {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-size: var(--text-md);
+      font-weight: 700;
+    }
+
+    .lrp-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .lrp-name {
+      font-size: var(--text-md);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+
+    .lrp-dept {
+      margin-left: 6px;
+      font-size: var(--text-xs);
+      font-weight: 400;
+      color: var(--color-text-3);
+    }
+
+    .lrp-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-1);
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
+    }
+
+    .lrp-type {
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-sm);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-weight: 600;
+    }
+
+    .lrp-dates { color: var(--color-text-2); }
+    .lrp-days { color: var(--color-text-3); }
+
+    .lrp-reason {
+      margin-top: var(--space-1);
+      font-size: var(--text-xs);
+      font-style: italic;
+      color: var(--color-text-3);
+    }
+
+    .lrp-review-note {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+      margin-top: var(--space-1);
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
+    }
+
+    .lrp-review-note mat-icon {
+      width: 14px;
+      height: 14px;
+      font-size: var(--text-md);
+    }
+
+    .lrp-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .lrp-status {
+      padding: 2px var(--space-2);
+      border-radius: 999px;
+      font-size: var(--text-xs);
+      font-weight: 700;
+    }
+
+    .status-pending { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-approved { background: var(--color-ok-soft); color: var(--color-ok); }
+    .status-rejected { background: var(--color-danger-soft); color: var(--color-danger); }
+
+    .lrp-submitted {
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
+    }
+
+    .lrp-actions {
+      display: flex;
+      gap: var(--space-1);
+    }
+
+    .approve-btn { --mdc-icon-button-icon-color: var(--color-ok); }
+    .reject-btn { --mdc-icon-button-icon-color: var(--color-danger); }
+
+    /* Location cards */
     .departments-section {
       max-width: 1400px;
       margin: 0 auto;
@@ -1164,715 +2111,225 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
 
     .departments-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 24px;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+      gap: var(--space-4);
     }
 
-    .department-card {
-      position: relative;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 20px;
-      overflow: hidden;
+    .location-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       cursor: pointer;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
-    .department-card:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    .location-card:hover {
+      border-color: var(--color-line-strong);
+      box-shadow: var(--shadow-md);
     }
 
-    .card-glow {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+    .location-card .card-content {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       height: 100%;
-      background: linear-gradient(135deg, rgba(30, 144, 255, 0.1) 0%, rgba(65, 105, 225, 0.05) 100%);
-      opacity: 0;
-      transition: opacity 0.4s;
-    }
-
-    .department-card:hover .card-glow {
-      opacity: 1;
-    }
-
-    .card-content {
-      position: relative;
-      padding: 32px 24px;
+      padding: var(--space-5);
       text-align: center;
-      z-index: 1;
     }
 
     .icon-container {
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 20px;
+      width: 56px;
+      height: 56px;
+      margin-bottom: var(--space-3);
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 20px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      box-shadow: 0 8px 24px rgba(30, 144, 255, 0.4);
-      transition: all 0.4s;
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
-
-    .department-card:hover .icon-container {
-      transform: scale(1.1);
-      box-shadow: 0 12px 32px rgba(30, 144, 255, 0.5);
-    }
-
-    /* Location-specific icon colors */
-    .icon-container[data-location="main-office"] { background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%); }
-    .icon-container[data-location="condom-factory"] { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%); box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4); }
-    .icon-container[data-location="sanitary-pads"] { background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%); box-shadow: 0 8px 24px rgba(240, 147, 251, 0.4); }
-    .icon-container[data-location="new-road"] { background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); box-shadow: 0 8px 24px rgba(255, 167, 38, 0.4); }
-    .icon-container[data-location="cape-town"] { background: linear-gradient(135deg, #26a69a 0%, #00897b 100%); box-shadow: 0 8px 24px rgba(38, 166, 154, 0.4); }
-    .icon-container[data-location="brionkhorspruit"] { background: linear-gradient(135deg, #7c4dff 0%, #651fff 100%); box-shadow: 0 8px 24px rgba(124, 77, 255, 0.4); }
-    .icon-container[data-location="port-elizabeth"] { background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%); box-shadow: 0 8px 24px rgba(66, 165, 245, 0.4); }
-    .icon-container[data-location="logistics"] { background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%); box-shadow: 0 8px 24px rgba(102, 187, 106, 0.4); }
 
     .icon-container mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      color: white;
+      width: 32px;
+      height: 32px;
+      font-size: var(--text-4xl);
     }
 
-    .department-card h3 {
-      margin: 0 0 12px;
-      font-size: 20px;
-      font-weight: 600;
-      color: #1e90ff;
+    .location-card h3 {
+      margin: 0 0 var(--space-1);
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-text);
     }
 
     .location-description {
-      margin: 0 0 20px;
-      color: #666;
-      font-size: 14px;
-      min-height: 40px;
-    }
-
-    .card-footer {
-      margin-top: 8px;
-    }
-
-    .department-card .access-btn {
-      width: 100%;
-      padding: 10px 24px !important;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%) !important;
-      color: white !important;
-      font-weight: 500 !important;
-      border-radius: 12px !important;
-      transition: all 0.3s !important;
-      box-shadow: 0 4px 12px rgba(30, 144, 255, 0.3) !important;
-    }
-
-    .department-card:hover .access-btn {
-      box-shadow: 0 6px 20px rgba(30, 144, 255, 0.4) !important;
-      transform: translateY(-2px);
-    }
-
-    .department-card .access-btn mat-icon {
-      margin-right: 8px;
-    }
-
-    .card-indicator {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #1e90ff 0%, #4169e1 100%);
-      transform: scaleX(0);
-      transition: transform 0.4s;
-    }
-
-    .department-card:hover .card-indicator {
-      transform: scaleX(1);
-    }
-
-    /* No Results */
-    .no-results {
-      text-align: center;
-      padding: 60px;
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .no-results mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      opacity: 0.7;
-    }
-
-    .no-results h3 {
-      margin: 0 0 8px;
-      color: white;
-    }
-
-    .no-results p {
-      margin: 0;
-    }
-
-    /* Leave Requests Panel */
-    .requests-btn { background: rgba(255,255,255,0.15); color: white; border-radius: 20px; padding: 0 16px; height: 40px; display: flex; align-items: center; gap: 6px; font-weight: 600; position: relative; transition: background 0.2s; }
-    .requests-btn:hover { background: rgba(255,255,255,0.25); }
-    .requests-btn mat-icon { font-size: 20px; width: 20px; height: 20px; }
-    .requests-badge { background: #ef4444; color: white; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 800; margin-left: 4px; }
-    .leave-requests-panel { background: white; border-radius: 20px; margin: 0 0 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); overflow: hidden; }
-    .lrp-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, #4caf50, #388e3c); color: white; }
-    .lrp-title { display: flex; align-items: center; gap: 8px; flex: 1; }
-    .lrp-title h3 { margin: 0; font-size: 18px; font-weight: 700; }
-    .lrp-title mat-icon { font-size: 22px; width: 22px; height: 22px; }
-    .lrp-filters { display: flex; gap: 8px; flex-wrap: wrap; }
-    .lrp-filter { background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 16px; padding: 4px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    .lrp-filter.active { background: white; color: #388e3c; }
-    .lrp-filter.pending.active { color: #92400e; }
-    .lrp-filter.approved.active { color: #065f46; }
-    .lrp-filter.rejected.active { color: #991b1b; }
-    .lrp-loading { display: flex; justify-content: center; padding: 40px; }
-    .lrp-empty { text-align: center; padding: 40px; color: #9ca3af; }
-    .lrp-empty mat-icon { font-size: 48px; width: 48px; height: 48px; }
-    .lrp-list { padding: 12px 16px; max-height: 480px; overflow-y: auto; }
-    .lrp-item { display: flex; align-items: flex-start; gap: 14px; padding: 14px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #f1f5f9; background: #fafafa; transition: background 0.15s; }
-    .lrp-item:hover { background: #f0fdf4; }
-    .lrp-pending { border-left: 4px solid #f59e0b; }
-    .lrp-approved { border-left: 4px solid #10b981; }
-    .lrp-rejected { border-left: 4px solid #ef4444; }
-    .lrp-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #4caf50, #388e3c); color: white; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .lrp-info { flex: 1; min-width: 0; }
-    .lrp-name { font-weight: 700; color: #111827; font-size: 14px; }
-    .lrp-dept { font-size: 12px; color: #6b7280; font-weight: 400; margin-left: 6px; }
-    .lrp-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 12px; color: #374151; }
-    .lrp-type { background: #eff6ff; color: #1d4ed8; border-radius: 8px; padding: 2px 8px; font-weight: 600; }
-    .lrp-dates { color: #4b5563; }
-    .lrp-days { color: #6b7280; }
-    .lrp-reason { font-size: 12px; color: #6b7280; font-style: italic; margin-top: 4px; }
-    .lrp-review-note { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #4b5563; margin-top: 4px; }
-    .lrp-review-note mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .lrp-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-    .lrp-status { padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; }
-    .status-pending { background: #fff3cd; color: #856404; }
-    .status-approved { background: #d1fae5; color: #065f46; }
-    .status-rejected { background: #fee2e2; color: #991b1b; }
-    .lrp-submitted { font-size: 11px; color: #9ca3af; }
-    .lrp-actions { display: flex; gap: 4px; }
-    .approve-btn { color: #10b981 !important; }
-    .reject-btn { color: #ef4444 !important; }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      .attendance-container {
-        padding: 80px 16px 32px;
-      }
-
-      .header-content {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .title-area {
-        flex-direction: column;
-        align-items: flex-start;
-        text-align: left;
-      }
-
-      .title-text h1 {
-        font-size: 24px;
-      }
-
-      .header-stats {
-        width: 100%;
-      }
-
-      .stat-card {
-        flex: 1;
-        justify-content: center;
-      }
-
-      .departments-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .notification-dropdown {
-      position: absolute;
-      top: 60px;
-      right: 100px;
-      width: 420px;
-      max-height: 600px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .notification-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid #e0e0e0;
-      background: #f5f5f5;
-    }
-
-    .notification-header h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: #333;
-    }
-
-    .notification-header button {
-      font-size: 13px;
-    }
-
-    .notification-list {
       flex: 1;
-      overflow-y: auto;
-      max-height: 450px;
+      margin: 0 0 var(--space-4);
+      font-size: var(--text-sm);
+      line-height: 1.5;
+      color: var(--color-text-3);
     }
 
-    .no-notifications {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: #999;
-    }
+    .card-footer { align-self: stretch; }
+    .access-btn { width: 100%; }
 
-    .no-notifications mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-    }
-
-    .no-notifications p {
-      margin: 0;
-      font-size: 16px;
-    }
-
-    .notification-item {
-      display: flex;
-      gap: 12px;
-      padding: 16px 20px;
-      border-bottom: 1px solid #f0f0f0;
-      transition: background 0.2s;
-      cursor: pointer;
-    }
-
-    .notification-item:hover {
-      background: #f9f9f9;
-    }
-
-    .notification-item.unread {
-      background: #e3f2fd;
-    }
-
-    .notification-item.unread:hover {
-      background: #d1e7f9;
-    }
-
-    .notification-icon {
-      flex-shrink: 0;
-    }
-
-    .notification-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-    }
-
-    .notification-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .notification-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #333;
-      margin: 0 0 4px 0;
-    }
-
-    .notification-message {
-      font-size: 13px;
-      color: #666;
-      margin: 0 0 6px 0;
-      line-height: 1.4;
-    }
-
-    .notification-time {
-      font-size: 12px;
-      color: #999;
-    }
-
-    .notification-item button {
-      flex-shrink: 0;
-      color: #4CAF50;
-    }
-
-    .notification-footer {
-      padding: 12px 20px;
-      border-top: 1px solid #e0e0e0;
-      text-align: center;
-      background: #f5f5f5;
-    }
-
-    .notification-footer button {
-      width: 100%;
-    }
-
-    .training-section-header,
-    .departments-section-header {
-      text-align: center;
-      margin: 40px 0 32px 0;
-      padding: 0 24px;
-    }
-
-    .training-section-header h2,
-    .departments-section-header h2 {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      font-size: 32px;
-      font-weight: 600;
-      color: white;
-      margin: 0 0 12px 0;
-    }
-
-    .training-section-header h2 mat-icon,
-    .departments-section-header h2 mat-icon {
-      font-size: 36px;
-      width: 36px;
-      height: 36px;
-      color: white;
-    }
-
-    .training-section-header p,
-    .departments-section-header p {
-      font-size: 16px;
-      color: rgba(255, 255, 255, 0.9);
-      margin: 0;
-    }
-
-    .training-access-section {
-      display: flex;
-      justify-content: center;
-      padding: 0 24px 60px 24px;
-      margin-bottom: 40px;
-      border-bottom: 2px solid rgba(0, 0, 139, 0.1);
-    }
-
-    .training-access-card {
-      max-width: 800px;
-      width: 100%;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.95) 0%, rgba(30, 144, 255, 0.95) 100%) !important;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border-radius: 24px !important;
-      box-shadow: 0 12px 48px rgba(0, 0, 139, 0.4) !important;
-      padding: 0 !important;
-      overflow: hidden;
-    }
-
-    .training-card-content {
-      padding: 64px 48px;
-      text-align: center;
-      color: white;
-    }
-
-    .training-main-icon {
-      font-size: 96px;
-      width: 96px;
-      height: 96px;
-      color: white;
-      margin-bottom: 24px;
-      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
-    }
-
-    .training-card-content h2 {
-      font-size: 42px;
-      font-weight: 700;
-      color: white;
-      margin: 0 0 20px 0;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .training-card-content p {
-      font-size: 18px;
-      color: rgba(255, 255, 255, 0.95);
-      margin: 0 0 40px 0;
-      line-height: 1.6;
-    }
-
-    .training-access-btn {
-      padding: 16px 48px !important;
-      font-size: 18px !important;
-      background: white !important;
-      color: #1e90ff !important;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
-      transition: all 0.3s ease !important;
-      font-weight: 600 !important;
-    }
-
-    .training-access-btn:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4) !important;
-      background: rgba(255, 255, 255, 0.95) !important;
-    }
-
-    .training-access-btn mat-icon {
-      margin-right: 8px;
-    }
-
-    .access-section {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 24px;
-      padding: 0 40px 40px 40px;
-      max-width: 1600px;
+    /* ============ Sub-views: training, main office, sites ============ */
+    .factory-section {
+      max-width: 1400px;
       margin: 0 auto;
     }
 
-    .access-card {
-      text-align: center;
-      padding: 32px !important;
-      background: rgba(255, 255, 255, 0.95) !important;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border-radius: 16px !important;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+    .header-section { margin-bottom: var(--space-5); }
+
+    .header-section h1 {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin: 0;
+      font-size: var(--text-3xl);
+      font-weight: 800;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      color: var(--color-text);
     }
 
-    @media (max-width: 1400px) {
-      .access-section {
-        grid-template-columns: repeat(3, 1fr);
-      }
+    .header-section h1 mat-icon {
+      width: 24px;
+      height: 24px;
+      font-size: var(--text-3xl);
+      color: var(--color-primary);
     }
 
-    @media (max-width: 1024px) {
-      .access-section {
-        grid-template-columns: repeat(2, 1fr);
-      }
+    .header-section .subtitle {
+      margin: var(--space-1) 0 0;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
     }
 
-    @media (max-width: 600px) {
-      .access-section {
-        grid-template-columns: 1fr;
-        padding: 0 16px 40px 16px;
-      }
-    }
-
-    .access-card .folder-icon {
-      font-size: 56px;
-      width: 56px;
-      height: 56px;
-      color: #1e90ff;
-      margin: 0 auto 16px auto;
-      display: block;
-    }
-
-    .access-card h2 {
-      font-size: 22px;
-      font-weight: 600;
-      color: #1e90ff;
-      margin: 0 0 12px 0;
-    }
-
-    .access-card p {
-      font-size: 14px;
-      color: #666;
-      margin: 0 0 20px 0;
-    }
-
-    .access-btn {
-      padding: 10px 24px !important;
-      font-size: 14px !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 139, 0.3) !important;
-      transition: all 0.3s ease !important;
-    }
-
-    .access-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(0, 0, 139, 0.4) !important;
-    }
-
-    .access-btn mat-icon {
-      margin-right: 8px;
-    }
-
-    .header-section {
-      margin-bottom: 32px;
-    }
-
+    /* Main office attendance monitor */
     .title-row {
       display: flex;
-      justify-content: space-between;
+      flex-wrap: wrap;
       align-items: center;
-      margin-bottom: 24px;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-bottom: var(--space-5);
     }
 
     .header-actions {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 12px;
-    }
-
-    .export-btn {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      font-weight: 600;
-    }
-
-    .export-btn mat-icon {
-      margin-right: 8px;
-    }
-
-    h1 {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: white;
-      margin: 0;
-      font-size: 32px;
-      font-weight: 600;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    h1 mat-icon {
-      font-size: 36px;
-      width: 36px;
-      height: 36px;
+      gap: var(--space-3);
     }
 
     .refresh-info {
       display: flex;
       align-items: center;
-      gap: 8px;
-      color: white;
-      background: rgba(255, 255, 255, 0.1);
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 14px;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--color-line);
+      border-radius: 999px;
+      background: var(--color-surface);
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
 
     .refresh-info mat-icon {
-      font-size: 20px;
-      animation: rotate 2s linear infinite;
-    }
-
-    @keyframes rotate {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
+      width: 18px;
+      height: 18px;
+      font-size: var(--text-xl);
+      color: var(--color-text-3);
     }
 
     .metrics-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 32px;
+      gap: var(--space-4);
     }
 
     .metric-card {
       display: flex;
+      flex-direction: row;
       align-items: center;
-      gap: 16px;
-      padding: 20px !important;
-      border-radius: 12px !important;
-      transition: transform 0.2s;
+      gap: var(--space-4);
+      padding: var(--space-4) var(--space-5);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
     }
 
-    .metric-card:hover {
-      transform: translateY(-4px);
+    .metric-card > mat-icon {
+      box-sizing: content-box;
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+      font-size: var(--text-3xl);
     }
 
-    .metric-card mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-    }
-
-    .metric-card.total {
-      background: linear-gradient(135deg, #4169e1, #1e90ff);
-      color: white;
-    }
-
-    .metric-card.present {
-      background: linear-gradient(135deg, #28a745, #20c997);
-      color: white;
-    }
-
-    .metric-card.absent {
-      background: linear-gradient(135deg, #dc3545, #e74c3c);
-      color: white;
-    }
-
-    .metric-card.late {
-      background: linear-gradient(135deg, #ffc107, #ff9800);
-      color: white;
-    }
+    .metric-card.total > mat-icon { background: var(--color-primary-soft); color: var(--color-primary); }
+    .metric-card.present > mat-icon { background: var(--color-ok-soft); color: var(--color-ok); }
+    .metric-card.absent > mat-icon { background: var(--color-danger-soft); color: var(--color-danger); }
+    .metric-card.late > mat-icon { background: var(--color-warn-soft); color: var(--color-warn); }
 
     .metric-content h2 {
       margin: 0;
-      font-size: 32px;
-      font-weight: 700;
+      font-size: var(--text-3xl);
+      font-weight: 800;
+      line-height: 1.15;
+      color: var(--color-text);
     }
 
     .metric-content p {
-      margin: 4px 0 0;
-      font-size: 14px;
-      opacity: 0.9;
+      margin: 2px 0 0;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
     }
 
-    .department-section, .employee-section {
-      margin-bottom: 32px;
+    .department-section,
+    .employee-section {
+      margin-bottom: var(--space-6);
     }
 
-    .department-section h2, .employee-section h2 {
+    .department-section h2,
+    .employee-section h2 {
       display: flex;
       align-items: center;
-      gap: 12px;
-      color: white;
-      margin-bottom: 16px;
-      font-size: 24px;
-      font-weight: 600;
+      gap: var(--space-2);
+      margin: 0 0 var(--space-3);
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-text);
+    }
+
+    .department-section h2 mat-icon,
+    .employee-section h2 mat-icon {
+      color: var(--color-primary);
     }
 
     .section-header {
       display: flex;
-      justify-content: space-between;
+      flex-wrap: wrap;
       align-items: center;
-      margin-bottom: 16px;
-      gap: 20px;
+      justify-content: space-between;
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
     }
 
-    .section-header h2 {
-      margin: 0;
-    }
+    .section-header h2 { margin: 0; }
 
     .search-field {
+      --mdc-outlined-text-field-container-shape: var(--radius-control);
       min-width: 300px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 8px;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-
-    .search-field ::ng-deep .mat-mdc-form-field-focus-overlay {
-      background-color: transparent;
-    }
-
-    .search-field ::ng-deep .mat-mdc-text-field-wrapper {
-      background: transparent;
+      border-radius: var(--radius-control);
+      background: var(--color-surface);
     }
 
     .search-field ::ng-deep .mat-mdc-form-field-subscript-wrapper {
@@ -1882,232 +2339,162 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     .department-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-      gap: 16px;
+      gap: var(--space-4);
     }
 
     .department-card {
-      padding: 16px !important;
-      border-radius: 8px !important;
+      padding: var(--space-4);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
     }
 
     .department-card h3 {
-      margin: 0 0 12px;
-      color: #1e90ff;
-      font-size: 18px;
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-md);
+      font-weight: 700;
+      color: var(--color-text);
     }
 
     .dept-stats {
       display: flex;
-      gap: 16px;
       flex-wrap: wrap;
+      gap: var(--space-4);
     }
 
     .dept-stats .stat {
       display: flex;
       align-items: center;
-      gap: 4px;
-      font-size: 14px;
+      gap: var(--space-1);
+      font-size: var(--text-sm);
+      font-weight: 600;
     }
 
-    .dept-stats .stat.present {
-      color: #28a745;
-    }
-
-    .dept-stats .stat.late {
-      color: #ff9800;
-    }
+    .dept-stats .stat.present { color: var(--color-ok); }
+    .dept-stats .stat.late { color: var(--color-warn); }
 
     .dept-stats mat-icon {
-      font-size: 18px;
       width: 18px;
       height: 18px;
+      font-size: var(--text-xl);
     }
 
     .employee-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 12px;
+      gap: var(--space-3);
     }
 
     @media (max-width: 1800px) {
-      .employee-grid {
-        grid-template-columns: repeat(6, 1fr);
-      }
+      .employee-grid { grid-template-columns: repeat(6, 1fr); }
     }
 
     @media (max-width: 1400px) {
-      .employee-grid {
-        grid-template-columns: repeat(5, 1fr);
-      }
+      .employee-grid { grid-template-columns: repeat(5, 1fr); }
     }
 
     @media (max-width: 1200px) {
-      .employee-grid {
-        grid-template-columns: repeat(4, 1fr);
-      }
+      .employee-grid { grid-template-columns: repeat(4, 1fr); }
     }
 
     @media (max-width: 900px) {
-      .employee-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
+      .employee-grid { grid-template-columns: repeat(3, 1fr); }
     }
 
     @media (max-width: 600px) {
-      .employee-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+      .employee-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
     .employee-card {
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1));
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-radius: 24px !important;
-      overflow: hidden;
-      transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
-      border: 1px solid rgba(255, 255, 255, 0.18) !important;
-      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37) !important;
       position: relative;
       min-height: 200px;
-    }
-
-    .employee-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
-      transform: scaleX(0);
-      transform-origin: left;
-      transition: transform 0.3s ease;
-    }
-
-    .employee-card.present::before {
-      background: linear-gradient(90deg, rgba(52, 211, 153, 1), rgba(16, 185, 129, 1));
-    }
-
-    .employee-card.absent::before {
-      background: linear-gradient(90deg, rgba(248, 113, 113, 1), rgba(239, 68, 68, 1));
-    }
-
-    .employee-card.late::before {
-      background: linear-gradient(90deg, rgba(251, 191, 36, 1), rgba(245, 158, 11, 1));
-    }
-
-    .employee-card:hover::before {
-      transform: scaleX(1);
+      overflow: hidden;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .employee-card:hover {
-      transform: translateY(-6px) scale(1.02);
-      box-shadow: 0 16px 48px rgba(31, 38, 135, 0.5) !important;
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.15));
+      border-color: var(--color-line-strong);
+      box-shadow: var(--shadow-md);
     }
 
-    .card-content {
+    .employee-card .card-content {
       display: flex;
       flex-direction: column;
-      padding: 0;
     }
 
     .employee-photo {
       position: relative;
-      width: 100%;
-      height: 140px;
-      background: linear-gradient(135deg, rgba(248, 249, 250, 0.5), rgba(233, 236, 239, 0.5));
-      overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
+      width: 100%;
+      height: 140px;
+      overflow: hidden;
+      background: var(--color-surface-2);
     }
 
     .employee-photo img {
       width: 80px;
       height: 80px;
-      border-radius: 50%;
       object-fit: cover;
-      border: 3px solid rgba(255, 255, 255, 0.8);
-      box-shadow: 0 8px 24px rgba(31, 38, 135, 0.3);
-      transition: all 0.3s ease;
-      cursor: pointer;
-    }
-
-    .employee-photo img:hover {
-      transform: scale(1.05);
-      box-shadow: 0 12px 32px rgba(31, 38, 135, 0.5);
-      border-color: rgba(30, 60, 114, 0.8);
+      border: 3px solid var(--color-surface);
+      border-radius: 50%;
+      box-shadow: var(--shadow-sm);
     }
 
     .photo-placeholder {
       width: 80px;
       height: 80px;
-      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, rgba(233, 236, 239, 0.8), rgba(248, 249, 250, 0.8));
-      border: 3px solid rgba(255, 255, 255, 0.8);
-      box-shadow: 0 8px 24px rgba(31, 38, 135, 0.3);
+      border: 3px solid var(--color-surface);
+      border-radius: 50%;
+      background: var(--color-surface-3);
     }
 
     .photo-placeholder mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      color: #adb5bd;
+      width: 32px;
+      height: 32px;
+      font-size: var(--text-4xl);
+      color: var(--color-text-3);
     }
 
     .status-indicator {
       position: absolute;
-      bottom: 12px;
-      right: 12px;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
+      right: var(--space-3);
+      bottom: var(--space-3);
+      width: 32px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 4px 12px rgba(31, 38, 135, 0.3);
-      transition: all 0.3s ease;
+      border: 2px solid var(--color-surface);
+      border-radius: 50%;
+      background: var(--color-text-3);
+      color: var(--color-on-primary);
     }
 
-    .employee-card:hover .status-indicator {
-      transform: scale(1.15);
-      box-shadow: 0 6px 16px rgba(31, 38, 135, 0.5);
-    }
-
-    .status-indicator.present {
-      background: linear-gradient(135deg, rgba(52, 211, 153, 0.8), rgba(16, 185, 129, 0.8));
-      color: white;
-    }
-
-    .status-indicator.absent {
-      background: linear-gradient(135deg, rgba(248, 113, 113, 0.8), rgba(239, 68, 68, 0.8));
-      color: white;
-    }
-
-    .status-indicator.late {
-      background: linear-gradient(135deg, rgba(251, 191, 36, 0.8), rgba(245, 158, 11, 0.8));
-      color: white;
-    }
+    .status-indicator.present { background: var(--color-ok); }
+    .status-indicator.absent { background: var(--color-danger); }
+    .status-indicator.late { background: var(--color-warn); }
 
     .status-indicator mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
+      font-size: var(--text-xl);
     }
 
     .employee-info {
-      padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 6px;
+      padding: var(--space-3);
     }
 
     .name-section {
@@ -2118,539 +2505,240 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     }
 
     .name-section h3 {
+      flex: 1;
+      min-width: 0;
       margin: 0;
-      font-size: 1.1rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #1e3c72, #2a5298);
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      flex: 1;
+      font-size: var(--text-md);
+      font-weight: 700;
+      color: var(--color-text);
     }
 
-    .late-badge {
-      font-size: 18px !important;
-      width: 18px !important;
-      height: 18px !important;
-      color: #ff9800;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
-
-    .employee-code {
-      margin: 0;
-      font-size: 0.75rem;
-      color: rgba(30, 60, 114, 0.7);
-      font-weight: 600;
-      letter-spacing: 0.5px;
+    .name-section .late-badge {
+      width: 18px;
+      height: 18px;
+      font-size: var(--text-xl);
+      color: var(--color-warn);
     }
 
     .employee-role {
       margin: 0;
-      font-size: 0.85rem;
-      color: rgba(30, 60, 114, 0.8);
-      font-weight: 500;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
     }
 
     .time-info {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.3);
       display: flex;
       flex-direction: column;
       gap: 6px;
+      margin-top: var(--space-2);
+      padding-top: var(--space-2);
+      border-top: 1px solid var(--color-line);
     }
 
     .time-row {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 0.8rem;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-2);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+      font-size: var(--text-xs);
       font-weight: 600;
-      color: white;
-      padding: 4px 8px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(5px);
-      -webkit-backdrop-filter: blur(5px);
     }
 
     .time-row mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
+      font-size: var(--text-lg);
     }
 
-    .time-row.ontime {
-      background: linear-gradient(135deg, rgba(52, 211, 153, 0.8), rgba(16, 185, 129, 0.8));
-      color: white;
-    }
-
-    .time-row.late {
-      background: linear-gradient(135deg, rgba(251, 191, 36, 0.8), rgba(245, 158, 11, 0.8));
-      color: white;
-    }
-
-    .time-row.absent {
-      background: linear-gradient(135deg, rgba(248, 113, 113, 0.8), rgba(239, 68, 68, 0.8));
-      color: white;
-    }
+    .time-row.ontime { background: var(--color-ok-soft); color: var(--color-ok); }
+    .time-row.late { background: var(--color-warn-soft); color: var(--color-warn); }
+    .time-row.absent { background: var(--color-danger-soft); color: var(--color-danger); }
 
     .weekly-attendance {
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      margin-top: var(--space-2);
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-line);
     }
 
     .weekly-title {
-      font-size: 0.7rem;
-      color: rgba(30, 60, 114, 0.8);
-      margin-bottom: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      margin-bottom: var(--space-2);
       text-align: center;
+      font-size: var(--text-xs);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-text-3);
     }
 
     .week-circles {
       display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 0.5rem;
       flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
     }
 
     .day-circle {
+      position: relative;
       width: 24px;
       height: 24px;
-      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.7rem;
-      font-weight: bold;
-      color: white;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-      transition: all 0.3s ease;
-      position: relative;
+      border-radius: 50%;
+      background: var(--color-surface-3);
+      color: var(--color-text-3);
+      font-size: var(--text-xs);
+      font-weight: 700;
       cursor: pointer;
     }
 
-    .day-circle:hover {
-      transform: scale(1.2);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      z-index: 10;
-    }
-
-    .day-circle.ontime {
-      background: linear-gradient(45deg, #28a745, #20c997);
-    }
-
-    .day-circle.late {
-      background: linear-gradient(45deg, #ffc107, #fd7e14);
-    }
-
-    .day-circle.absent {
-      background: linear-gradient(45deg, #dc3545, #e63946);
-    }
+    .day-circle.ontime { background: var(--color-ok); color: var(--color-on-primary); }
+    .day-circle.late { background: var(--color-warn); color: var(--color-on-primary); }
+    .day-circle.absent { background: var(--color-danger); color: var(--color-on-primary); }
 
     .day-circle:hover::after {
       content: attr(title);
       position: absolute;
       bottom: 120%;
       left: 50%;
+      z-index: 10;
       transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.9);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 0.75rem;
+      padding: var(--space-1) var(--space-2);
+      border-radius: var(--radius-sm);
+      background: var(--color-text);
+      color: var(--color-surface);
+      box-shadow: var(--shadow-md);
+      font-size: var(--text-xs);
+      font-weight: 500;
       white-space: nowrap;
-      z-index: 1000;
-      font-weight: normal;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      animation: tooltipFadeIn 0.2s ease;
       pointer-events: none;
-      text-shadow: none;
-    }
-
-    @keyframes tooltipFadeIn {
-      from {
-        opacity: 0;
-        transform: translateX(-50%) translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-      }
-    }
-
-    .loading-spinner {
-      display: flex;
-      justify-content: center;
-      padding: 40px;
     }
 
     .empty-state {
       grid-column: 1 / -1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: white;
     }
 
-    .empty-state mat-icon {
-      font-size: 80px;
-      width: 80px;
-      height: 80px;
-      margin-bottom: 16px;
-      opacity: 0.7;
-    }
-
-    .empty-state h3 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 400;
-    }
-
-    .factory-section {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .factory-section .header-section {
-      text-align: center;
-      margin-bottom: 48px;
-    }
-
-    .factory-section h1 {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      color: white;
-      margin: 0 0 12px 0;
-      font-size: 36px;
-      font-weight: 600;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .factory-section h1 mat-icon {
-      font-size: 42px;
-      width: 42px;
-      height: 42px;
-    }
-
-    .factory-section .subtitle {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 18px;
-      margin: 0;
-    }
-
+    /* Site placeholders (factories, branches, logistics) */
     .coming-soon {
-      text-align: center;
-      padding: 80px 40px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
       max-width: 600px;
       margin: 0 auto;
+      padding: var(--space-8) var(--space-6);
+      text-align: center;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
     }
 
-    .coming-soon mat-icon {
-      font-size: 80px;
-      width: 80px;
-      height: 80px;
-      color: #1e90ff;
-      margin-bottom: 24px;
+    .coming-soon > mat-icon {
+      box-sizing: content-box;
+      width: 32px;
+      height: 32px;
+      margin-bottom: var(--space-4);
+      padding: var(--space-4);
+      border-radius: var(--radius-lg);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-size: var(--text-4xl);
     }
 
     .coming-soon h2 {
-      color: #1e90ff;
-      font-size: 28px;
-      font-weight: 600;
-      margin: 0 0 16px 0;
+      margin: 0 0 var(--space-3);
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--color-text);
     }
 
     .coming-soon p {
-      color: #666;
-      font-size: 16px;
+      margin: 0 0 var(--space-3);
+      font-size: var(--text-md);
       line-height: 1.6;
-      margin: 0 0 16px 0;
+      color: var(--color-text-2);
     }
 
     .coming-soon .azure-note {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      color: #0078d4;
-      font-size: 14px;
-      font-weight: 500;
-      background: linear-gradient(135deg, #e6f3ff 0%, #cce5ff 100%);
-      padding: 12px 24px;
-      border-radius: 8px;
-      margin: 24px 0;
-      border: 1px solid #99ccff;
+      gap: var(--space-2);
+      margin: var(--space-5) 0;
+      padding: var(--space-3) var(--space-5);
+      border-radius: var(--radius-control);
+      background: var(--color-info-soft);
+      color: var(--color-info);
+      font-size: var(--text-sm);
+      font-weight: 600;
     }
 
     .coming-soon .azure-note mat-icon {
-      font-size: 20px;
       width: 20px;
       height: 20px;
-      margin: 0;
-      color: #0078d4;
+      font-size: var(--text-2xl);
     }
 
-    .coming-soon button {
-      margin-top: 16px;
-    }
+    .coming-soon button { margin-top: var(--space-3); }
 
-    .training-content {
-      padding: 24px 0;
-    }
-
+    /* Training centre */
     .training-categories {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-      gap: 24px;
-      margin-top: 24px;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+      gap: var(--space-4);
     }
 
     .training-category-card {
-      padding: 32px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .training-category-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      padding: var(--space-5);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
     }
 
     .category-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-      color: #1e90ff;
-      margin-bottom: 16px;
+      box-sizing: content-box;
+      width: 24px;
+      height: 24px;
+      margin-bottom: var(--space-3);
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-size: var(--text-3xl);
     }
 
     .training-category-card h3 {
-      color: #1e90ff;
-      font-size: 20px;
-      font-weight: 600;
-      margin: 0 0 12px 0;
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-text);
     }
 
     .training-category-card p {
-      color: #666;
-      font-size: 14px;
+      margin: 0 0 var(--space-4);
+      font-size: var(--text-sm);
       line-height: 1.6;
-      margin: 0 0 20px 0;
+      color: var(--color-text-3);
     }
 
     .training-actions {
       display: flex;
-      gap: 12px;
       flex-wrap: wrap;
+      gap: var(--space-3);
     }
 
     .training-actions button {
       flex: 1;
       min-width: 140px;
     }
-
-    .training-actions button mat-icon {
-      margin-right: 8px;
-    }
-
-    .spacer {
-      flex: 1 1 auto;
-    }
-
-    /* ============ HR COMMAND CENTRE ============ */
-    .command-centre { max-width: 1400px; margin: 0 auto 40px; }
-    .cc-loading { display:flex; align-items:center; justify-content:center; gap:14px; padding:48px; color:#cbd5e1; }
-    .cc-loading span { font-size:14px; }
-
-    /* Directory launcher */
-    .dir-launch { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 22px; margin-bottom:20px;
-      border-radius:16px; cursor:pointer; background:linear-gradient(135deg,rgba(99,102,241,0.22),rgba(14,165,233,0.18));
-      border:1px solid rgba(129,140,248,0.35); transition:transform .18s ease, box-shadow .18s ease; }
-    .dir-launch:hover { transform:translateY(-2px); box-shadow:0 12px 30px rgba(0,0,0,0.28); }
-    .reg-launch { background:linear-gradient(135deg,#0e7490,#0891b2); }
-    .dl-icon.reg { background:rgba(255,255,255,0.18); }
-    .holistic-strip { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin:0 0 20px; }
-    .hs-card { display:flex; align-items:center; gap:14px; padding:16px 18px; border-radius:14px; cursor:pointer; transition:transform .15s ease, box-shadow .15s ease; color:#fff; }
-    .hs-card:hover { transform:translateY(-2px); box-shadow:0 10px 26px rgba(0,0,0,0.25); }
-    .hs-holistic { background:linear-gradient(135deg,#0891b2,#0e7490); }
-    .hs-registers { background:linear-gradient(135deg,#4338ca,#4f46e5); }
-    .hs-warn { background:linear-gradient(135deg,#b45309,#d97706); }
-    .hs-suspend { background:linear-gradient(135deg,#b91c1c,#dc2626); }
-    .hs-terminated { background:linear-gradient(135deg,#4b5563,#6b7280); }
-    .hs-icon { width:46px; height:46px; border-radius:12px; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; }
-    .hs-icon mat-icon { font-size:26px; width:26px; height:26px; }
-    .hs-body { display:flex; flex-direction:column; }
-    .hs-value { font-size:26px; font-weight:700; line-height:1; }
-    .hs-value small { font-size:14px; opacity:.75; font-weight:500; }
-    .hs-label { font-size:13px; font-weight:600; margin-top:3px; }
-    .hs-sub { font-size:11px; opacity:.85; margin-top:2px; }
-    .hs-sub.warn { color:#fde68a; font-weight:600; }
-    @media (max-width:1100px) { .holistic-strip { grid-template-columns:repeat(2,1fr); } }
-    .dl-left { display:flex; align-items:center; gap:16px; min-width:0; }
-    .dl-icon { width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg,#6366f1,#4f46e5); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .dl-icon mat-icon { color:#fff; font-size:28px; width:28px; height:28px; }
-    .dl-text { display:flex; flex-direction:column; min-width:0; }
-    .dl-title { font-size:17px; font-weight:800; color:#f8fafc; }
-    .dl-sub { font-size:12.5px; color:#c7d2fe; }
-    .dl-btn { background:#fff !important; color:#4f46e5 !important; font-weight:700 !important; flex-shrink:0; }
-
-    /* KPI row */
-    .kpi-row { display:grid; grid-template-columns:repeat(6,1fr); gap:16px; margin-bottom:20px; }
-    @media (max-width:1200px){ .kpi-row{ grid-template-columns:repeat(3,1fr); } }
-    @media (max-width:640px){ .kpi-row{ grid-template-columns:repeat(2,1fr); } }
-    .kpi-card { display:flex; align-items:center; gap:14px; padding:18px; border-radius:16px;
-      background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.09);
-      backdrop-filter:blur(10px); cursor:pointer; transition:transform .18s ease, box-shadow .18s ease, border-color .18s; }
-    .kpi-card:hover { transform:translateY(-3px); box-shadow:0 12px 30px rgba(0,0,0,0.28); border-color:rgba(255,255,255,0.2); }
-    .kpi-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .kpi-icon mat-icon { color:#fff; font-size:26px; width:26px; height:26px; }
-    .kpi-body { display:flex; flex-direction:column; min-width:0; }
-    .kpi-value { font-size:26px; font-weight:800; color:#f8fafc; line-height:1.1; }
-    .kpi-value small { font-size:14px; font-weight:600; color:#94a3b8; }
-    .kpi-label { font-size:12px; color:#94a3b8; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .kpi-blue .kpi-icon{ background:linear-gradient(135deg,#3b82f6,#2563eb); }
-    .kpi-green .kpi-icon{ background:linear-gradient(135deg,#10b981,#059669); }
-    .kpi-amber .kpi-icon{ background:linear-gradient(135deg,#f59e0b,#d97706); }
-    .kpi-purple .kpi-icon{ background:linear-gradient(135deg,#8b5cf6,#7c3aed); }
-    .kpi-rose .kpi-icon{ background:linear-gradient(135deg,#f43f5e,#e11d48); }
-    .kpi-teal .kpi-icon{ background:linear-gradient(135deg,#14b8a6,#0d9488); }
-
-    /* Grids */
-    .cc-grid { display:grid; grid-template-columns:1.3fr 1fr; gap:16px; margin-bottom:16px; }
-    .cc-grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:8px; }
-    @media (max-width:1100px){ .cc-grid, .cc-grid-3 { grid-template-columns:1fr; } }
-    .cc-panel { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
-      border-radius:16px; padding:18px; backdrop-filter:blur(10px); }
-    .cc-panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
-    .cc-panel-title { display:flex; align-items:center; gap:10px; }
-    .cc-panel-title mat-icon { color:#60a5fa; }
-    .cc-panel-title h3 { margin:0; font-size:15px; font-weight:700; color:#e2e8f0; }
-    .cc-link { color:#60a5fa; font-size:12px; min-width:0; }
-    .cc-empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:32px 16px; color:#94a3b8; text-align:center; }
-    .cc-empty mat-icon { font-size:36px; width:36px; height:36px; color:#34d399; }
-    .cc-empty.small { padding:18px; }
-    .cc-empty p { margin:0; font-size:13px; }
-
-    /* Attention centre */
-    .attention-list { display:flex; flex-direction:column; gap:10px; }
-    .attention-item { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px;
-      background:rgba(255,255,255,0.04); border-left:4px solid #64748b; cursor:pointer; transition:background .15s, transform .15s; }
-    .attention-item:hover { background:rgba(255,255,255,0.09); transform:translateX(2px); }
-    .att-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center;
-      background:rgba(255,255,255,0.08); flex-shrink:0; }
-    .att-icon mat-icon { color:#e2e8f0; }
-    .att-body { flex:1; min-width:0; }
-    .att-title { font-size:13.5px; font-weight:600; color:#f1f5f9; }
-    .att-detail { font-size:12px; color:#94a3b8; margin-top:2px; }
-    .att-side { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-    .att-go { color:#64748b; }
-    .sev-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:3px 8px; border-radius:20px; }
-    .attention-item.sev-overdue { border-left-color:#ef4444; }
-    .attention-item.sev-critical { border-left-color:#f97316; }
-    .attention-item.sev-due_soon { border-left-color:#eab308; }
-    .attention-item.sev-info { border-left-color:#38bdf8; }
-    .sev-badge.sev-overdue { background:rgba(239,68,68,0.18); color:#fca5a5; }
-    .sev-badge.sev-critical { background:rgba(249,115,22,0.18); color:#fdba74; }
-    .sev-badge.sev-due_soon { background:rgba(234,179,8,0.18); color:#fde047; }
-    .sev-badge.sev-info { background:rgba(56,189,248,0.18); color:#7dd3fc; }
-
-    /* Today's attendance */
-    .att-mini-stats { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:16px; }
-    .mini-stat { display:flex; flex-direction:column; align-items:center; padding:10px 4px; border-radius:10px; background:rgba(255,255,255,0.04); }
-    .ms-val { font-size:18px; font-weight:800; color:#e2e8f0; }
-    .ms-val.ms-green{ color:#34d399; } .ms-val.ms-amber{ color:#fbbf24; } .ms-val.ms-red{ color:#f87171; }
-    .ms-lbl { font-size:10.5px; color:#94a3b8; margin-top:2px; text-align:center; }
-    .trend-block { margin-bottom:14px; }
-    .trend-title, .late-list-title, .leave-sub-title { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:#94a3b8; margin-bottom:8px; font-weight:600; }
-    .trend-bars { display:flex; align-items:flex-end; gap:8px; height:90px; }
-    .trend-col { flex:1; display:flex; flex-direction:column; align-items:center; height:100%; justify-content:flex-end; }
-    .trend-bar { width:70%; min-height:4px; background:linear-gradient(180deg,#60a5fa,#3b82f6); border-radius:6px 6px 0 0; position:relative; display:flex; align-items:flex-start; overflow:hidden; }
-    .trend-late { width:100%; background:rgba(251,191,36,0.85); }
-    .trend-lbl { font-size:10px; color:#94a3b8; margin-top:5px; }
-    .late-list { border-top:1px solid rgba(255,255,255,0.07); padding-top:12px; }
-    .late-row { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:12.5px; }
-    .late-name { flex:1; color:#e2e8f0; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .late-dept { color:#94a3b8; font-size:11px; }
-    .late-time { color:#fbbf24; font-weight:600; }
-    .late-time small { color:#94a3b8; font-weight:400; }
-
-    /* Department bars */
-    .dept-bars { display:flex; flex-direction:column; gap:10px; }
-    .dept-bar-row { display:flex; align-items:center; gap:10px; }
-    .dbr-name { width:120px; font-size:12px; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .dbr-track { flex:1; height:10px; background:rgba(255,255,255,0.07); border-radius:6px; overflow:hidden; }
-    .dbr-fill { height:100%; background:linear-gradient(90deg,#6366f1,#60a5fa); border-radius:6px; }
-    .dbr-count { width:32px; text-align:right; font-size:12px; font-weight:700; color:#e2e8f0; }
-
-    /* Completeness ring */
-    .completeness { display:flex; align-items:center; gap:18px; }
-    .comp-ring { width:96px; height:96px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .comp-inner { width:72px; height:72px; border-radius:50%; background:#0f172a; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-    .comp-pct { font-size:20px; font-weight:800; color:#f8fafc; }
-    .comp-sub { font-size:10px; color:#94a3b8; }
-    .comp-missing { flex:1; display:flex; flex-direction:column; gap:6px; }
-    .comp-row { display:flex; align-items:center; gap:8px; font-size:12.5px; color:#cbd5e1; }
-    .comp-row mat-icon { font-size:16px; width:16px; height:16px; color:#94a3b8; }
-    .comp-row span { flex:1; }
-    .comp-row b { color:#f1f5f9; }
-    .comp-btn { width:100%; margin-top:14px; color:#c7d2fe !important; border-color:rgba(199,210,254,0.4) !important; font-size:12.5px; }
-
-    /* Leave mini */
-    .leave-mini { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
-    .lm-stat { display:flex; flex-direction:column; align-items:center; padding:10px; border-radius:10px; background:rgba(255,255,255,0.04); }
-    .lm-val { font-size:20px; font-weight:800; color:#e2e8f0; }
-    .lm-lbl { font-size:10.5px; color:#94a3b8; margin-top:2px; }
-    .leave-person { display:flex; align-items:center; gap:10px; padding:6px 0; }
-    .lp-avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#8b5cf6,#7c3aed); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .lp-avatar.upcoming { background:linear-gradient(135deg,#0ea5e9,#0284c7); }
-    .lp-info { display:flex; flex-direction:column; min-width:0; }
-    .lp-name { font-size:13px; color:#e2e8f0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .lp-meta { font-size:11px; color:#94a3b8; }
-
-    /* Records overlay */
-    .records-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(2px); }
-    .records-panel { width:640px; max-width:100%; max-height:80vh; overflow:auto; background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:20px; }
-    .rp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-    .rp-title { display:flex; align-items:center; gap:10px; }
-    .rp-title mat-icon { color:#60a5fa; }
-    .rp-title h3 { margin:0; font-size:16px; color:#e2e8f0; }
-    .rp-list { display:flex; flex-direction:column; gap:8px; }
-    .rp-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.04); }
-    .rp-info { display:flex; flex-direction:column; min-width:0; }
-    .rp-name { font-size:13.5px; font-weight:600; color:#f1f5f9; }
-    .rp-dept { font-size:11.5px; color:#94a3b8; }
-    .rp-missing { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
-    .rp-tag { font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:20px; background:rgba(244,63,94,0.16); color:#fda4af; }
   `]
 })
 export class PeopleComponent implements OnInit, OnDestroy {
@@ -2668,7 +2756,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
     {
       id: 1,
       icon: 'person_add',
-      iconColor: '#4CAF50',
+      iconColor: 'var(--color-ok)',
       title: 'New Employee Added',
       message: 'John Doe has been added to the Main Office department',
       time: '5 minutes ago',
@@ -2677,7 +2765,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
     {
       id: 2,
       icon: 'assignment_late',
-      iconColor: '#FF9800',
+      iconColor: 'var(--color-warn)',
       title: 'Attendance Alert',
       message: '3 employees marked as late today',
       time: '1 hour ago',
@@ -2686,7 +2774,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
     {
       id: 3,
       icon: 'local_shipping',
-      iconColor: '#2196F3',
+      iconColor: 'var(--color-primary)',
       title: 'Logistics Update',
       message: 'New shipment scheduled for delivery',
       time: '2 hours ago',
@@ -2695,7 +2783,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
     {
       id: 4,
       icon: 'factory',
-      iconColor: '#9C27B0',
+      iconColor: 'var(--color-cat-purple)',
       title: 'Production Report',
       message: 'Condom Factory monthly report is ready',
       time: '3 hours ago',
@@ -2704,7 +2792,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
     {
       id: 5,
       icon: 'school',
-      iconColor: '#00BCD4',
+      iconColor: 'var(--color-cat-teal)',
       title: 'Training Reminder',
       message: 'New training video available for Sales Representatives',
       time: '5 hours ago',
@@ -3062,8 +3150,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
   completenessRing(): string {
     const pct = this.hrOverview?.workforce.completenessRate ?? 0;
     const deg = Math.round(pct * 3.6);
-    const colour = pct >= 90 ? '#34d399' : pct >= 70 ? '#fbbf24' : '#f87171';
-    return `conic-gradient(${colour} ${deg}deg, rgba(255,255,255,0.1) ${deg}deg)`;
+    const colour = pct >= 90 ? 'var(--color-ok)' : pct >= 70 ? 'var(--color-warn)' : 'var(--color-danger)';
+    return `conic-gradient(${colour} ${deg}deg, var(--color-surface-3) ${deg}deg)`;
   }
 
   openMainOfficeDialog(): void {
@@ -3333,7 +3421,7 @@ export class PeopleComponent implements OnInit, OnDestroy {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     mat-dialog-content {
@@ -3447,7 +3535,7 @@ export class WeeklyReportDialogComponent {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     mat-dialog-content {
@@ -3511,6 +3599,136 @@ export class MonthlyReportDialogComponent {
   }
 }
 
+// Shared look for the site password dialogs below
+const SITE_PASSWORD_DIALOG_STYLES = `
+  :host { display: block; }
+
+  .dialog-container {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    color: var(--color-text);
+    min-width: 360px;
+  }
+
+  .dialog-header {
+    text-align: center;
+    margin-bottom: var(--space-5);
+  }
+
+  .lock-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    border-radius: 50%;
+  }
+
+  .lock-icon mat-icon {
+    font-size: var(--text-4xl);
+    width: 32px;
+    height: 32px;
+  }
+
+  .dialog-header h2 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-3xl);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .info-text {
+    margin: 0;
+    font-size: var(--text-md);
+    color: var(--color-text-2);
+  }
+
+  .dialog-body,
+  .dialog-content { margin-bottom: var(--space-5); }
+
+  .input-group {
+    position: relative;
+    margin-bottom: var(--space-4);
+  }
+
+  .input-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-3);
+    font-size: var(--text-2xl);
+    width: 20px;
+    height: 20px;
+  }
+
+  .password-input {
+    width: 100%;
+    padding: 14px 14px 14px 46px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-control);
+    color: var(--color-text);
+    font-size: var(--text-lg);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+  }
+
+  .password-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  .password-input.error { border-color: var(--color-danger); }
+  .password-input::placeholder { color: var(--color-text-3); }
+
+  .error-message {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-danger-soft);
+    border-radius: var(--radius-md);
+    color: var(--color-danger);
+    font-size: var(--text-md);
+    margin-bottom: var(--space-4);
+    animation: shake 0.4s ease-in-out;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+  }
+
+  .error-message mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
+
+  .contact-hint,
+  .contact-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--color-text-3);
+  }
+
+  .contact-hint mat-icon,
+  .contact-text mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+  }
+`;
+
 // Main Office Password Dialog Component
 @Component({
   selector: 'app-main-office-password-dialog',
@@ -3559,185 +3777,17 @@ export class MonthlyReportDialogComponent {
       </div>
 
       <div class="dialog-actions">
-        <button class="btn-cancel" (click)="onCancel()">
+        <button mat-stroked-button class="btn-cancel" (click)="onCancel()">
           Cancel
         </button>
-        <button class="btn-access" (click)="validatePassword()">
+        <button mat-flat-button color="primary" class="btn-access" (click)="validatePassword()">
           <mat-icon>lock_open</mat-icon>
           Access
         </button>
       </div>
     </div>
   `,
-  styles: [`
-    :host { display: block; }
-
-    .dialog-container {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      border-radius: 20px;
-      padding: 32px;
-      color: white;
-      min-width: 360px;
-    }
-
-    .dialog-header {
-      text-align: center;
-      margin-bottom: 28px;
-    }
-
-    .lock-icon {
-      width: 72px;
-      height: 72px;
-      margin: 0 auto 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    }
-
-    .lock-icon mat-icon {
-      font-size: 36px;
-      width: 36px;
-      height: 36px;
-      color: white;
-    }
-
-    .dialog-header h2 {
-      margin: 0 0 8px;
-      font-size: 24px;
-      font-weight: 600;
-      color: white;
-    }
-
-    .info-text {
-      margin: 0;
-      font-size: 14px;
-      color: rgba(255, 255, 255, 0.8);
-    }
-
-    .dialog-body { margin-bottom: 24px; }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 16px 16px 16px 52px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-radius: 12px;
-      color: white;
-      font-size: 16px;
-      transition: all 0.3s;
-      box-sizing: border-box;
-    }
-
-    .password-input:focus {
-      outline: none;
-      border-color: rgba(255, 255, 255, 0.5);
-      background: rgba(255, 255, 255, 0.15);
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
-    }
-
-    .password-input.error { border-color: #ff6b6b; }
-    .password-input::placeholder { color: rgba(255, 255, 255, 0.4); }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      background: rgba(255, 107, 107, 0.15);
-      border: 1px solid rgba(255, 107, 107, 0.3);
-      border-radius: 10px;
-      color: #ff6b6b;
-      font-size: 14px;
-      margin-bottom: 16px;
-      animation: shake 0.4s ease-in-out;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-8px); }
-      75% { transform: translateX(8px); }
-    }
-
-    .error-message mat-icon { font-size: 18px; width: 18px; height: 18px; }
-
-    .contact-hint {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin: 0;
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.6);
-    }
-
-    .contact-hint mat-icon { font-size: 16px; width: 16px; height: 16px; }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-    }
-
-    .btn-cancel, .btn-access {
-      flex: 1;
-      padding: 14px 24px;
-      border: none;
-      border-radius: 12px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: all 0.3s;
-    }
-
-    .btn-cancel {
-      background: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .btn-cancel:hover {
-      background: rgba(255, 255, 255, 0.15);
-      color: white;
-    }
-
-    .btn-access {
-      background: rgba(255, 255, 255, 0.95);
-      color: #1e90ff;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    }
-
-    .btn-access:hover {
-      transform: translateY(-2px);
-      background: white;
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
-    }
-
-    .btn-access mat-icon { font-size: 20px; width: 20px; height: 20px; }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class MainOfficePasswordDialogComponent {
   password: string = '';
@@ -3772,7 +3822,7 @@ export class MainOfficePasswordDialogComponent {
   standalone: true,
   imports: [CommonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, FormsModule],
   template: `
-    <div class="dialog-container" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);">
+    <div class="dialog-container">
       <div class="dialog-header">
         <div class="lock-icon"><mat-icon>factory</mat-icon></div>
         <h2>Access Condom Factory</h2>
@@ -3789,39 +3839,12 @@ export class MainOfficePasswordDialogComponent {
         <p class="contact-hint"><mat-icon>info_outline</mat-icon>Contact factory management for access</p>
       </div>
       <div class="dialog-actions">
-        <button class="btn-cancel" (click)="onCancel()">Cancel</button>
-        <button class="btn-access" (click)="validatePassword()"><mat-icon>lock_open</mat-icon>Access</button>
+        <button mat-stroked-button class="btn-cancel" (click)="onCancel()">Cancel</button>
+        <button mat-flat-button color="primary" class="btn-access" (click)="validatePassword()"><mat-icon>lock_open</mat-icon>Access</button>
       </div>
     </div>
   `,
-  styles: [`
-    :host { display: block; }
-    .dialog-container { border-radius: 20px; padding: 32px; color: white; min-width: 360px; }
-    .dialog-header { text-align: center; margin-bottom: 28px; }
-    .lock-icon { width: 72px; height: 72px; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
-    .lock-icon mat-icon { font-size: 36px; width: 36px; height: 36px; color: white; }
-    .dialog-header h2 { margin: 0 0 8px; font-size: 24px; font-weight: 600; color: white; }
-    .info-text { margin: 0; font-size: 14px; color: rgba(255,255,255,0.8); }
-    .dialog-body { margin-bottom: 24px; }
-    .input-group { position: relative; margin-bottom: 16px; }
-    .input-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.5); font-size: 20px; width: 20px; height: 20px; }
-    .password-input { width: 100%; padding: 16px 16px 16px 52px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; color: white; font-size: 16px; transition: all 0.3s; box-sizing: border-box; }
-    .password-input:focus { outline: none; border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.15); box-shadow: 0 0 0 4px rgba(255,255,255,0.1); }
-    .password-input.error { border-color: #ffcdd2; }
-    .password-input::placeholder { color: rgba(255,255,255,0.4); }
-    .error-message { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 10px; color: white; font-size: 14px; margin-bottom: 16px; animation: shake 0.4s ease-in-out; }
-    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
-    .error-message mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .contact-hint { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; font-size: 13px; color: rgba(255,255,255,0.6); }
-    .contact-hint mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    .dialog-actions { display: flex; gap: 12px; }
-    .btn-cancel, .btn-access { flex: 1; padding: 14px 24px; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s; }
-    .btn-cancel { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.2); }
-    .btn-cancel:hover { background: rgba(255,255,255,0.15); color: white; }
-    .btn-access { background: rgba(255,255,255,0.95); color: #ee5a5a; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
-    .btn-access:hover { transform: translateY(-2px); background: white; box-shadow: 0 6px 24px rgba(0,0,0,0.25); }
-    .btn-access mat-icon { font-size: 20px; width: 20px; height: 20px; }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class CondomFactoryPasswordDialogComponent {
   password: string = '';
@@ -3897,196 +3920,17 @@ export class CondomFactoryPasswordDialogComponent {
       </div>
 
       <div class="dialog-actions">
-        <button class="cancel-btn" (click)="onCancel()">
+        <button mat-stroked-button class="cancel-btn" (click)="onCancel()">
           Cancel
         </button>
-        <button class="access-btn" (click)="validatePassword()">
+        <button mat-flat-button color="primary" class="access-btn" (click)="validatePassword()">
           <mat-icon>lock_open</mat-icon>
           Access
         </button>
       </div>
     </div>
   `,
-  styles: [`
-    .dialog-container {
-      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
-      border-radius: 16px;
-      padding: 32px;
-      min-width: 350px;
-      box-shadow: 0 20px 60px rgba(240, 147, 251, 0.4);
-    }
-
-    .dialog-header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .lock-icon {
-      width: 70px;
-      height: 70px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .lock-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: white;
-    }
-
-    h2 {
-      color: white;
-      font-size: 24px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .info-text {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    .dialog-content {
-      margin-bottom: 24px;
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: rgba(240, 147, 251, 0.7);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 16px 16px 16px 48px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.95);
-      font-size: 16px;
-      outline: none;
-      transition: all 0.3s ease;
-      box-sizing: border-box;
-    }
-
-    .password-input:focus {
-      border-color: white;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
-    }
-
-    .password-input::placeholder {
-      color: #999;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #d32f2f;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      animation: shake 0.5s ease-in-out;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .contact-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 13px;
-      margin: 0;
-    }
-
-    .contact-text mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-
-    .cancel-btn {
-      padding: 12px 24px;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      background: transparent;
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .cancel-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: white;
-    }
-
-    .access-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      background: white;
-      color: #f5576c;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .access-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .access-btn mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class SanitaryPadsPasswordDialogComponent {
   password: string = '';
@@ -4153,196 +3997,17 @@ export class SanitaryPadsPasswordDialogComponent {
       </div>
 
       <div class="dialog-actions">
-        <button class="cancel-btn" (click)="onCancel()">
+        <button mat-stroked-button class="cancel-btn" (click)="onCancel()">
           Cancel
         </button>
-        <button class="access-btn" (click)="validatePassword()">
+        <button mat-flat-button color="primary" class="access-btn" (click)="validatePassword()">
           <mat-icon>lock_open</mat-icon>
           Access
         </button>
       </div>
     </div>
   `,
-  styles: [`
-    .dialog-container {
-      background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
-      border-radius: 16px;
-      padding: 32px;
-      min-width: 350px;
-      box-shadow: 0 20px 60px rgba(255, 167, 38, 0.4);
-    }
-
-    .dialog-header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .lock-icon {
-      width: 70px;
-      height: 70px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .lock-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: white;
-    }
-
-    h2 {
-      color: white;
-      font-size: 24px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .info-text {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    .dialog-content {
-      margin-bottom: 24px;
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: rgba(251, 140, 0, 0.7);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 16px 16px 16px 48px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.95);
-      font-size: 16px;
-      outline: none;
-      transition: all 0.3s ease;
-      box-sizing: border-box;
-    }
-
-    .password-input:focus {
-      border-color: white;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
-    }
-
-    .password-input::placeholder {
-      color: #999;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #d32f2f;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      animation: shake 0.5s ease-in-out;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .contact-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 13px;
-      margin: 0;
-    }
-
-    .contact-text mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-
-    .cancel-btn {
-      padding: 12px 24px;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      background: transparent;
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .cancel-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: white;
-    }
-
-    .access-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      background: white;
-      color: #fb8c00;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .access-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .access-btn mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class NewRoadPasswordDialogComponent {
   password: string = '';
@@ -4409,196 +4074,17 @@ export class NewRoadPasswordDialogComponent {
       </div>
 
       <div class="dialog-actions">
-        <button class="cancel-btn" (click)="onCancel()">
+        <button mat-stroked-button class="cancel-btn" (click)="onCancel()">
           Cancel
         </button>
-        <button class="access-btn" (click)="validatePassword()">
+        <button mat-flat-button color="primary" class="access-btn" (click)="validatePassword()">
           <mat-icon>lock_open</mat-icon>
           Access
         </button>
       </div>
     </div>
   `,
-  styles: [`
-    .dialog-container {
-      background: linear-gradient(135deg, #26a69a 0%, #00897b 100%);
-      border-radius: 16px;
-      padding: 32px;
-      min-width: 350px;
-      box-shadow: 0 20px 60px rgba(38, 166, 154, 0.4);
-    }
-
-    .dialog-header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .lock-icon {
-      width: 70px;
-      height: 70px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .lock-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: white;
-    }
-
-    h2 {
-      color: white;
-      font-size: 24px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .info-text {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    .dialog-content {
-      margin-bottom: 24px;
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: rgba(0, 137, 123, 0.7);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 16px 16px 16px 48px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.95);
-      font-size: 16px;
-      outline: none;
-      transition: all 0.3s ease;
-      box-sizing: border-box;
-    }
-
-    .password-input:focus {
-      border-color: white;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
-    }
-
-    .password-input::placeholder {
-      color: #999;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #d32f2f;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      animation: shake 0.5s ease-in-out;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .contact-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 13px;
-      margin: 0;
-    }
-
-    .contact-text mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-
-    .cancel-btn {
-      padding: 12px 24px;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      background: transparent;
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .cancel-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: white;
-    }
-
-    .access-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      background: white;
-      color: #00897b;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .access-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .access-btn mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class CaptownPasswordDialogComponent {
   password: string = '';
@@ -4665,196 +4151,17 @@ export class CaptownPasswordDialogComponent {
       </div>
 
       <div class="dialog-actions">
-        <button class="cancel-btn" (click)="onCancel()">
+        <button mat-stroked-button class="cancel-btn" (click)="onCancel()">
           Cancel
         </button>
-        <button class="access-btn" (click)="validatePassword()">
+        <button mat-flat-button color="primary" class="access-btn" (click)="validatePassword()">
           <mat-icon>lock_open</mat-icon>
           Access
         </button>
       </div>
     </div>
   `,
-  styles: [`
-    .dialog-container {
-      background: linear-gradient(135deg, #7c4dff 0%, #651fff 100%);
-      border-radius: 16px;
-      padding: 32px;
-      min-width: 350px;
-      box-shadow: 0 20px 60px rgba(124, 77, 255, 0.4);
-    }
-
-    .dialog-header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .lock-icon {
-      width: 70px;
-      height: 70px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .lock-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: white;
-    }
-
-    h2 {
-      color: white;
-      font-size: 24px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .info-text {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    .dialog-content {
-      margin-bottom: 24px;
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: rgba(101, 31, 255, 0.7);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 16px 16px 16px 48px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.95);
-      font-size: 16px;
-      outline: none;
-      transition: all 0.3s ease;
-      box-sizing: border-box;
-    }
-
-    .password-input:focus {
-      border-color: white;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
-    }
-
-    .password-input::placeholder {
-      color: #999;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #d32f2f;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      animation: shake 0.5s ease-in-out;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .contact-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 13px;
-      margin: 0;
-    }
-
-    .contact-text mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-
-    .cancel-btn {
-      padding: 12px 24px;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      background: transparent;
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .cancel-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: white;
-    }
-
-    .access-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      background: white;
-      color: #651fff;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .access-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .access-btn mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class BrionkhorspruitPasswordDialogComponent {
   password: string = '';
@@ -4921,196 +4228,17 @@ export class BrionkhorspruitPasswordDialogComponent {
       </div>
 
       <div class="dialog-actions">
-        <button class="cancel-btn" (click)="onCancel()">
+        <button mat-stroked-button class="cancel-btn" (click)="onCancel()">
           Cancel
         </button>
-        <button class="access-btn" (click)="validatePassword()">
+        <button mat-flat-button color="primary" class="access-btn" (click)="validatePassword()">
           <mat-icon>lock_open</mat-icon>
           Access
         </button>
       </div>
     </div>
   `,
-  styles: [`
-    .dialog-container {
-      background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%);
-      border-radius: 16px;
-      padding: 32px;
-      min-width: 350px;
-      box-shadow: 0 20px 60px rgba(66, 165, 245, 0.4);
-    }
-
-    .dialog-header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .lock-icon {
-      width: 70px;
-      height: 70px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .lock-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: white;
-    }
-
-    h2 {
-      color: white;
-      font-size: 24px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .info-text {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    .dialog-content {
-      margin-bottom: 24px;
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: rgba(30, 136, 229, 0.7);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 16px 16px 16px 48px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.95);
-      font-size: 16px;
-      outline: none;
-      transition: all 0.3s ease;
-      box-sizing: border-box;
-    }
-
-    .password-input:focus {
-      border-color: white;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
-    }
-
-    .password-input::placeholder {
-      color: #999;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #d32f2f;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      animation: shake 0.5s ease-in-out;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .contact-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 13px;
-      margin: 0;
-    }
-
-    .contact-text mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-
-    .cancel-btn {
-      padding: 12px 24px;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      background: transparent;
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .cancel-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: white;
-    }
-
-    .access-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      background: white;
-      color: #1e88e5;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .access-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .access-btn mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class PortElizabethPasswordDialogComponent {
   password: string = '';
@@ -5177,196 +4305,17 @@ export class PortElizabethPasswordDialogComponent {
       </div>
 
       <div class="dialog-actions">
-        <button class="cancel-btn" (click)="onCancel()">
+        <button mat-stroked-button class="cancel-btn" (click)="onCancel()">
           Cancel
         </button>
-        <button class="access-btn" (click)="validatePassword()">
+        <button mat-flat-button color="primary" class="access-btn" (click)="validatePassword()">
           <mat-icon>lock_open</mat-icon>
           Access
         </button>
       </div>
     </div>
   `,
-  styles: [`
-    .dialog-container {
-      background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
-      border-radius: 16px;
-      padding: 32px;
-      min-width: 350px;
-      box-shadow: 0 20px 60px rgba(102, 187, 106, 0.4);
-    }
-
-    .dialog-header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .lock-icon {
-      width: 70px;
-      height: 70px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .lock-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: white;
-    }
-
-    h2 {
-      color: white;
-      font-size: 24px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .info-text {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    .dialog-content {
-      margin-bottom: 24px;
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: rgba(67, 160, 71, 0.7);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 16px 16px 16px 48px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.95);
-      font-size: 16px;
-      outline: none;
-      transition: all 0.3s ease;
-      box-sizing: border-box;
-    }
-
-    .password-input:focus {
-      border-color: white;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
-    }
-
-    .password-input::placeholder {
-      color: #999;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #d32f2f;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      animation: shake 0.5s ease-in-out;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .contact-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 13px;
-      margin: 0;
-    }
-
-    .contact-text mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-
-    .cancel-btn {
-      padding: 12px 24px;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      background: transparent;
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .cancel-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: white;
-    }
-
-    .access-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      background: white;
-      color: #43a047;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .access-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .access-btn mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class LogisticsPasswordDialogComponent {
   password: string = '';
@@ -5433,196 +4382,17 @@ export class LogisticsPasswordDialogComponent {
       </div>
 
       <div class="dialog-actions">
-        <button class="cancel-btn" (click)="onCancel()">
+        <button mat-stroked-button class="cancel-btn" (click)="onCancel()">
           Cancel
         </button>
-        <button class="access-btn" (click)="validatePassword()">
+        <button mat-flat-button color="primary" class="access-btn" (click)="validatePassword()">
           <mat-icon>lock_open</mat-icon>
           Access
         </button>
       </div>
     </div>
   `,
-  styles: [`
-    .dialog-container {
-      background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%);
-      border-radius: 16px;
-      padding: 32px;
-      min-width: 350px;
-      box-shadow: 0 20px 60px rgba(92, 107, 192, 0.4);
-    }
-
-    .dialog-header {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    .lock-icon {
-      width: 70px;
-      height: 70px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .lock-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: white;
-    }
-
-    h2 {
-      color: white;
-      font-size: 24px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .info-text {
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    .dialog-content {
-      margin-bottom: 24px;
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: rgba(57, 73, 171, 0.7);
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 16px 16px 16px 48px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.95);
-      font-size: 16px;
-      outline: none;
-      transition: all 0.3s ease;
-      box-sizing: border-box;
-    }
-
-    .password-input:focus {
-      border-color: white;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
-    }
-
-    .password-input::placeholder {
-      color: #999;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.95);
-      color: #d32f2f;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 16px;
-      animation: shake 0.5s ease-in-out;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-5px); }
-      75% { transform: translateX(5px); }
-    }
-
-    .error-message mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-
-    .contact-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 13px;
-      margin: 0;
-    }
-
-    .contact-text mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-
-    .dialog-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-
-    .cancel-btn {
-      padding: 12px 24px;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      background: transparent;
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .cancel-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: white;
-    }
-
-    .access-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      background: white;
-      color: #3949ab;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    .access-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .access-btn mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
-  `]
+  styles: [SITE_PASSWORD_DIALOG_STYLES]
 })
 export class TrainingPasswordDialogComponent {
   password: string = '';

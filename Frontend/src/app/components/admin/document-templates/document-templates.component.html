@@ -11,7 +11,7 @@
     <button mat-stroked-button (click)="loadCatalogue()"><mat-icon>refresh</mat-icon> Refresh</button>
   </div>
 
-  <div *ngIf="loading" class="dt-loading"><mat-spinner diameter="40"></mat-spinner></div>
+  <div *ngIf="loading" class="dt-loading"><app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows></div>
 
   <!-- Catalogue grid: companies × document types -->
   <div *ngIf="!loading" class="catalogue">
@@ -76,10 +76,10 @@
             {{ uploadingArt === 'logo' ? 'Uploading…' : (logoUrl ? 'Replace' : 'Upload') }}
             <input type="file" accept="image/*" hidden (change)="onArtPicked($event, 'logo')" />
           </label>
-          <button mat-icon-button *ngIf="logoUrl" matTooltip="Download logo" (click)="downloadArt('logo')">
+          <button aria-label="Download logo" mat-icon-button *ngIf="logoUrl" matTooltip="Download logo" (click)="downloadArt('logo')">
             <mat-icon>download</mat-icon>
           </button>
-          <button mat-icon-button *ngIf="hasLogo" matTooltip="Remove logo" (click)="removeArt('logo')">
+          <button aria-label="Remove logo" mat-icon-button *ngIf="hasLogo" matTooltip="Remove logo" (click)="removeArt('logo')">
             <mat-icon>delete</mat-icon>
           </button>
         </div>
@@ -97,10 +97,10 @@
             {{ uploadingArt === 'banner' ? 'Uploading…' : (bannerUrl ? 'Replace' : 'Upload') }}
             <input type="file" accept="image/*" hidden (change)="onArtPicked($event, 'banner')" />
           </label>
-          <button mat-icon-button *ngIf="bannerUrl" matTooltip="Download banner" (click)="downloadArt('banner')">
+          <button aria-label="Download banner" mat-icon-button *ngIf="bannerUrl" matTooltip="Download banner" (click)="downloadArt('banner')">
             <mat-icon>download</mat-icon>
           </button>
-          <button mat-icon-button *ngIf="hasBanner" matTooltip="Remove banner" (click)="removeArt('banner')">
+          <button aria-label="Remove banner" mat-icon-button *ngIf="hasBanner" matTooltip="Remove banner" (click)="removeArt('banner')">
             <mat-icon>delete</mat-icon>
           </button>
         </div>
@@ -150,26 +150,32 @@
             <mat-icon>search</mat-icon>
             <input type="text" placeholder="Search invoice #, customer…"
                    [(ngModel)]="invoiceSearch" (keyup.enter)="loadInvoices()" />
-            <button mat-icon-button (click)="loadInvoices()"><mat-icon>refresh</mat-icon></button>
+            <button aria-label="Refresh" mat-icon-button (click)="loadInvoices()"><mat-icon>refresh</mat-icon></button>
           </div>
           <div class="inv-list">
-            <div *ngIf="loadingInvoices" class="inv-loading"><mat-spinner diameter="22"></mat-spinner></div>
-            <div class="inv-row"
-                 *ngFor="let inv of invoices"
-                 [class.sel]="selectedInvoice?.transactionNumber === inv.transactionNumber"
-                 (click)="pickInvoice(inv)">
-              <div class="inv-main">
-                <span class="inv-num">{{ inv.transactionNumber }}</span>
-                <span class="inv-cust">{{ inv.customerName }}</span>
+            <app-skeleton-rows *ngIf="loadingInvoices" [rows]="3" [avatar]="false"></app-skeleton-rows>
+            <ng-container *ngIf="!loadingInvoices">
+              <div class="inv-row"
+                   *ngFor="let inv of invoices"
+                   [class.sel]="selectedInvoice?.transactionNumber === inv.transactionNumber"
+                   (click)="pickInvoice(inv)">
+                <div class="inv-main">
+                  <span class="inv-num">{{ inv.transactionNumber }}</span>
+                  <span class="inv-cust">{{ inv.customerName }}</span>
+                </div>
+                <div class="inv-meta">
+                  <span>{{ inv.date | date:'dd MMM yyyy' }}</span>
+                  <span class="inv-total">R {{ inv.total | number:'1.2-2' }}</span>
+                </div>
               </div>
-              <div class="inv-meta">
-                <span>{{ inv.date | date:'dd MMM yyyy' }}</span>
-                <span class="inv-total">R {{ inv.total | number:'1.2-2' }}</span>
-              </div>
-            </div>
-            <div *ngIf="!loadingInvoices && invoices.length === 0" class="inv-empty">
-              No imported invoices found for this company.
-            </div>
+            </ng-container>
+            <app-empty-state *ngIf="!loadingInvoices && invoices.length === 0 && invoiceSearch" [compact]="true" icon="filter_alt_off"
+                             title="No invoices match your search" message="Try another invoice number or customer name.">
+              <button mat-stroked-button (click)="invoiceSearch = ''; loadInvoices()">Clear the search</button>
+            </app-empty-state>
+            <app-empty-state *ngIf="!loadingInvoices && invoices.length === 0 && !invoiceSearch" [compact]="true" icon="receipt_long"
+                             title="No imported invoices for this company" message="Invoices imported from Sage for this company show up here.">
+            </app-empty-state>
           </div>
         </div>
 
@@ -178,9 +184,9 @@
             <div class="frame-label">Live Preview (intranet)</div>
             <iframe *ngIf="previewUrl" [src]="previewUrl" class="preview-frame"></iframe>
             <div *ngIf="!previewUrl" class="frame-empty">
-              <mat-icon>visibility</mat-icon>
-              <p>Pick an invoice, or save the template, to preview.</p>
-              <button mat-stroked-button (click)="refreshPreview()">Preview with sample data</button>
+              <app-empty-state icon="visibility" title="No preview yet" message="Pick an invoice, or save the template, to preview.">
+                <button mat-stroked-button (click)="refreshPreview()">Preview with sample data</button>
+              </app-empty-state>
             </div>
           </div>
           <div class="frame-col" *ngIf="sampleUrl">
@@ -192,8 +198,6 @@
     </div>
   </div>
 
-  <div *ngIf="!selectedCompany && !loading" class="pick-hint">
-    <mat-icon>touch_app</mat-icon>
-    <p>Select a company &amp; document type above to upload the Sage report and build the template.</p>
-  </div>
+  <app-empty-state *ngIf="!selectedCompany && !loading" icon="touch_app" title="Pick a company and document type"
+                   message="Select a company &amp; document type above to upload the Sage report and build the template."></app-empty-state>
 </div>

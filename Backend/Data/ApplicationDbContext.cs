@@ -232,10 +232,103 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Requisitions.RequisitionInvoice> RequisitionInvoices { get; set; }
         public DbSet<Models.Requisitions.RequisitionApprovalStep> RequisitionApprovalSteps { get; set; }
         public DbSet<Models.Signatures.ElectronicSignature> ElectronicSignatures { get; set; }
+
+        // Logistics - client bookings & tracked shipment lifecycle
+        public DbSet<Models.Logistics.Shipments.ShipmentAddress> ShipmentAddresses { get; set; }
+        public DbSet<Models.Logistics.Shipments.ClientBooking> ClientBookings { get; set; }
+        public DbSet<Models.Logistics.Shipments.Shipment> Shipments { get; set; }
+        public DbSet<Models.Logistics.Shipments.ShipmentItem> ShipmentItems { get; set; }
+        public DbSet<Models.Logistics.Shipments.ShipmentWaybill> ShipmentWaybills { get; set; }
+        public DbSet<Models.Logistics.Shipments.ShipmentEvent> ShipmentEvents { get; set; }
+        public DbSet<Models.Logistics.Shipments.ShipmentPod> ShipmentPods { get; set; }
+        public DbSet<Models.Logistics.Shipments.ShipmentException> ShipmentExceptions { get; set; }
+        public DbSet<Models.Logistics.Shipments.ShipmentDriverScan> ShipmentDriverScans { get; set; }
+        public DbSet<Models.Logistics.Shipments.ShipmentNotificationLog> ShipmentNotificationLogs { get; set; }
+        public DbSet<Models.Logistics.Shipments.NumberSequence> NumberSequences { get; set; }
+
+        // Logistics - Rocket Freight client portal (sign-ins scoped to one customer)
+        public DbSet<Models.Logistics.Shipments.PortalUser> PortalUsers { get; set; }
+        public DbSet<Models.Logistics.Shipments.PortalNotificationPref> PortalNotificationPrefs { get; set; }
+        public DbSet<Models.Logistics.Shipments.PortalSupportMessage> PortalSupportMessages { get; set; }
+
+        // Flows (automated business processes)
+        public DbSet<Models.Flows.FlowDefinition> FlowDefinitions { get; set; }
+        public DbSet<Models.Flows.FlowRun> FlowRuns { get; set; }
+        public DbSet<Models.Flows.FlowTask> FlowTasks { get; set; }
+        public DbSet<Models.Flows.FlowAuditEvent> FlowAuditEvents { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
+            // Flows
+            modelBuilder.Entity<Models.Flows.FlowDefinition>(e =>
+            {
+                e.HasOne(d => d.CreatedByUser).WithMany().HasForeignKey(d => d.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
+            });
+            modelBuilder.Entity<Models.Flows.FlowRun>(e =>
+            {
+                e.HasOne(r => r.Definition).WithMany(d => d.Runs).HasForeignKey(r => r.FlowDefinitionId).OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(r => r.StartedByUser).WithMany().HasForeignKey(r => r.StartedByUserId).OnDelete(DeleteBehavior.NoAction);
+                e.HasIndex(r => r.Status);
+                e.HasIndex(r => new { r.EntityType, r.EntityKey });
+                e.HasIndex(r => r.RunNumber).IsUnique();
+            });
+            modelBuilder.Entity<Models.Flows.FlowTask>(e =>
+            {
+                e.HasOne(t => t.Run).WithMany(r => r.Tasks).HasForeignKey(t => t.FlowRunId).OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(t => t.CompletedByUser).WithMany().HasForeignKey(t => t.CompletedByUserId).OnDelete(DeleteBehavior.NoAction);
+                e.HasIndex(t => new { t.Status, t.AssignedToUserId });
+                e.HasIndex(t => t.DueAt);
+            });
+            modelBuilder.Entity<Models.Flows.FlowAuditEvent>(e =>
+            {
+                e.HasOne(a => a.Run).WithMany(r => r.Events).HasForeignKey(a => a.FlowRunId).OnDelete(DeleteBehavior.Cascade);
+                e.HasIndex(a => a.FlowRunId);
+            });
+
+            // Shipments: two FKs to the same address table, 1:1 waybill/pod, append-only events.
+            modelBuilder.Entity<Models.Logistics.Shipments.Shipment>(e =>
+            {
+                e.HasOne(s => s.PickupAddress).WithMany().HasForeignKey(s => s.PickupAddressId).OnDelete(DeleteBehavior.Restrict);
+                e.HasOne(s => s.DeliveryAddress).WithMany().HasForeignKey(s => s.DeliveryAddressId).OnDelete(DeleteBehavior.Restrict);
+                e.HasOne(s => s.Booking).WithMany(b => b.Shipments).HasForeignKey(s => s.BookingId).OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(s => s.Load).WithMany().HasForeignKey(s => s.LoadId).OnDelete(DeleteBehavior.SetNull);
+                e.HasOne(s => s.Waybill).WithOne(w => w.Shipment).HasForeignKey<Models.Logistics.Shipments.ShipmentWaybill>(w => w.ShipmentId);
+                e.HasOne(s => s.Pod).WithOne(p => p.Shipment).HasForeignKey<Models.Logistics.Shipments.ShipmentPod>(p => p.ShipmentId);
+                e.HasIndex(s => s.Status);
+                e.HasIndex(s => s.LoadId);
+                e.HasIndex(s => s.CollectionDate);
+                e.Property(s => s.TotalWeightKg).HasPrecision(18, 3);
+            });
+            modelBuilder.Entity<Models.Logistics.Shipments.ShipmentItem>(e =>
+            {
+                e.Property(i => i.WeightKg).HasPrecision(18, 3);
+                e.Property(i => i.LengthCm).HasPrecision(18, 2);
+                e.Property(i => i.WidthCm).HasPrecision(18, 2);
+                e.Property(i => i.HeightCm).HasPrecision(18, 2);
+            });
+            modelBuilder.Entity<Models.Logistics.Shipments.ClientBooking>(e =>
+            {
+                e.HasIndex(b => b.BookingNo).IsUnique();
+                e.HasIndex(b => new { b.CustomerId, b.Status });
+            });
+            modelBuilder.Entity<Models.Logistics.Shipments.ShipmentWaybill>(e =>
+            {
+                e.HasIndex(w => w.WaybillNo).IsUnique();
+                e.HasIndex(w => w.TrackingToken).IsUnique();
+            });
+            modelBuilder.Entity<Models.Logistics.Shipments.ShipmentEvent>(e => e.HasIndex(x => new { x.ShipmentId, x.OccurredAt }));
+            modelBuilder.Entity<Models.Logistics.Shipments.ShipmentDriverScan>(e => e.HasIndex(x => x.ScanId).IsUnique());
+            modelBuilder.Entity<Models.Logistics.Shipments.ShipmentAddress>(e => e.HasIndex(a => new { a.CustomerId, a.IsSaved }));
+            modelBuilder.Entity<Models.Logistics.Shipments.PortalUser>(e =>
+            {
+                e.HasIndex(u => u.Email).IsUnique();
+                e.HasIndex(u => u.CustomerId);
+                e.HasOne(u => u.Customer).WithMany().HasForeignKey(u => u.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            });
+            modelBuilder.Entity<Models.Logistics.Shipments.PortalNotificationPref>(e => e.HasIndex(p => p.PortalUserId).IsUnique());
+            modelBuilder.Entity<Models.Logistics.Shipments.PortalSupportMessage>(e => e.HasIndex(m => new { m.PortalUserId, m.CreatedAt }));
             // Vehicle movement history: fast lookups by vehicle/day and idempotent upserts by CarTrack trip id
             modelBuilder.Entity<Models.Logistics.VehicleMovementHistory>(e =>
             {

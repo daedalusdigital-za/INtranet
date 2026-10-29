@@ -10,6 +10,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { DocumentsService, SharedItem, DocumentFile } from '../../services/documents.service';
 import { AuthService } from '../../services/auth.service';
+import { ConfirmService } from '../../ui/confirm.service';
 
 @Component({
   selector: 'app-shared-with-me',
@@ -25,7 +26,7 @@ import { AuthService } from '../../services/auth.service';
       <div class="header-section">
         <div class="header-top">
           <div class="breadcrumb-nav">
-            <button mat-icon-button class="back-btn" (click)="onBack()" matTooltip="Back">
+            <button aria-label="Back" mat-icon-button class="back-btn" (click)="onBack()" matTooltip="Back">
               <mat-icon>arrow_back</mat-icon>
             </button>
             <div class="breadcrumb-trail">
@@ -73,7 +74,7 @@ import { AuthService } from '../../services/auth.service';
                     </span>
                     @if (item.note) { <span class="file-note">"{{ item.note }}"</span> }
                   </div>
-                  <button mat-icon-button class="file-menu-btn" [matMenuTriggerFor]="menu"
+                  <button aria-label="More actions" mat-icon-button class="file-menu-btn" [matMenuTriggerFor]="menu"
                           (click)="$event.stopPropagation()">
                     <mat-icon>more_vert</mat-icon>
                   </button>
@@ -117,7 +118,7 @@ import { AuthService } from '../../services/auth.service';
                     </span>
                   </div>
                   @if (!file.isFolder) {
-                    <button mat-icon-button class="file-menu-btn" (click)="$event.stopPropagation(); downloadFile(file)"
+                    <button aria-label="Download" mat-icon-button class="file-menu-btn" (click)="$event.stopPropagation(); downloadFile(file)"
                             matTooltip="Download">
                       <mat-icon>download</mat-icon>
                     </button>
@@ -134,13 +135,13 @@ import { AuthService } from '../../services/auth.service';
     .hub-container {
       padding: 80px 32px 32px; min-height: 100vh;
       position: relative;
-      background: #0f172a;
+      background: var(--color-text);
       background-image:
         radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
         radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
         radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
         radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+        linear-gradient(135deg, var(--color-text) 0%, #1e1b4b 55%, var(--color-text) 100%);
       background-attachment: fixed;
       overflow-x: hidden;
     }
@@ -159,28 +160,28 @@ import { AuthService } from '../../services/auth.service';
     .loading-state { display: flex; justify-content: center; padding: 80px; }
     .empty-state { text-align: center; padding: 80px 40px; background: rgba(255,255,255,0.95);
       border-radius: 20px; }
-    .empty-state mat-icon { font-size: 100px; width: 100px; height: 100px; color: #e0e0e0; }
-    .empty-state h2 { color: #333; margin: 24px 0 8px; }
-    .empty-state p { color: #666; }
+    .empty-state mat-icon { font-size: 100px; width: 100px; height: 100px; color: var(--color-line); }
+    .empty-state h2 { color: var(--color-text); margin: 24px 0 8px; }
+    .empty-state p { color: var(--color-text-2); }
     .files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
     .file-card { background: rgba(255,255,255,0.95); border-radius: 16px; padding: 20px; cursor: pointer;
       transition: all 0.3s ease; position: relative; border: 2px solid transparent; }
     .file-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
     .file-card.folder { border-left: 4px solid #ffc107; }
     .file-icon-wrapper { width: 64px; height: 64px; margin: 0 auto 16px; display: flex;
-      align-items: center; justify-content: center; border-radius: 16px; background: #f5f5f5; }
+      align-items: center; justify-content: center; border-radius: 16px; background: var(--color-surface-2); }
     .file-icon-wrapper mat-icon { font-size: 36px; width: 36px; height: 36px; }
-    .file-icon-wrapper.folder { background: #fff8e1; } .file-icon-wrapper.folder mat-icon { color: #ffc107; }
-    .file-icon-wrapper.pdf { background: #ffebee; } .file-icon-wrapper.pdf mat-icon { color: #e53935; }
-    .file-icon-wrapper.word { background: #e3f2fd; } .file-icon-wrapper.word mat-icon { color: #1976d2; }
-    .file-icon-wrapper.excel { background: #e8f5e9; } .file-icon-wrapper.excel mat-icon { color: #388e3c; }
-    .file-icon-wrapper.powerpoint { background: #fff3e0; } .file-icon-wrapper.powerpoint mat-icon { color: #f57c00; }
-    .file-icon-wrapper.image { background: #f3e5f5; } .file-icon-wrapper.image mat-icon { color: #7b1fa2; }
+    .file-icon-wrapper.folder { background: var(--color-warn-soft); } .file-icon-wrapper.folder mat-icon { color: #ffc107; }
+    .file-icon-wrapper.pdf { background: var(--color-danger-soft); } .file-icon-wrapper.pdf mat-icon { color: var(--color-danger); }
+    .file-icon-wrapper.word { background: var(--color-primary-soft); } .file-icon-wrapper.word mat-icon { color: var(--color-primary); }
+    .file-icon-wrapper.excel { background: var(--color-ok-soft); } .file-icon-wrapper.excel mat-icon { color: var(--color-ok); }
+    .file-icon-wrapper.powerpoint { background: var(--color-warn-soft); } .file-icon-wrapper.powerpoint mat-icon { color: var(--color-warn); }
+    .file-icon-wrapper.image { background: var(--color-cat-purple-soft); } .file-icon-wrapper.image mat-icon { color: #7b1fa2; }
     .file-details { text-align: center; }
-    .file-name { display: block; font-weight: 500; color: #333; overflow: hidden;
+    .file-name { display: block; font-weight: 500; color: var(--color-text); overflow: hidden;
       text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }
-    .file-meta { font-size: 12px; color: #999; }
-    .file-note { display: block; font-size: 12px; color: #1e90ff; font-style: italic; margin-top: 4px; }
+    .file-meta { font-size: 12px; color: var(--color-text-3); }
+    .file-note { display: block; font-size: 12px; color: var(--color-primary); font-style: italic; margin-top: 4px; }
     .file-menu-btn { position: absolute; top: 8px; right: 8px; }
   `]
 })
@@ -197,7 +198,8 @@ export class SharedWithMeComponent implements OnInit {
     private documentsService: DocumentsService,
     private snackBar: MatSnackBar,
     private router: Router,
-    private authService: AuthService
+    private authService: AuthService,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -285,8 +287,12 @@ export class SharedWithMeComponent implements OnInit {
     return item.sharedByUserId === this.currentUserId;
   }
 
-  removeShare(item: SharedItem): void {
-    if (!confirm(`Remove sharing of "${item.name}"?`)) return;
+  async removeShare(item: SharedItem): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Stop sharing "${item.name}"?`,
+      confirmText: 'Stop sharing',
+      danger: true
+    }))) return;
     this.documentsService.unshare(item.id).subscribe({
       next: () => { this.snackBar.open('Share removed', 'Close', { duration: 3000 }); this.loadShared(); },
       error: () => this.snackBar.open('Failed to remove share', 'Close', { duration: 3000 })

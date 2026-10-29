@@ -31,20 +31,20 @@ import { MatIconModule } from '@angular/material/icon';
   `,
   styles: [`
     .pw-dialog { padding: 28px 26px 22px; text-align: center; max-width: 380px; }
-    .pw-icon { width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg,#2563eb,#0ea5e9); }
-    .pw-icon mat-icon { color: #fff; font-size: 30px; width: 30px; height: 30px; }
-    h2 { margin: 0 0 6px; font-size: 20px; color: #1f2937; font-weight: 700; }
-    p { margin: 0 0 20px; font-size: 13px; color: #6b7280; line-height: 1.5; }
-    .pw-field { display: flex; align-items: center; gap: 8px; border: 2px solid #e5e7eb; border-radius: 10px; padding: 0 12px; background: #f9fafb; transition: border-color .2s; }
-    .pw-field:focus-within { border-color: #2563eb; background: #fff; }
-    .pw-field mat-icon { color: #9ca3af; }
-    .pw-field input { flex: 1; border: none; background: transparent; outline: none; font-size: 18px; letter-spacing: 6px; text-align: center; padding: 12px 0; color: #1f2937; }
-    .pw-field.shake { animation: shake .35s; border-color: #ef4444; }
+    .pw-icon { width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; background: var(--color-primary-soft); }
+    .pw-icon mat-icon { color: var(--color-primary); font-size: var(--text-4xl); width: 32px; height: 32px; }
+    h2 { margin: 0 0 6px; font-size: var(--text-2xl); color: var(--color-text); font-weight: 700; }
+    p { margin: 0 0 20px; font-size: var(--text-sm); color: var(--color-text-3); line-height: 1.5; }
+    .pw-field { display: flex; align-items: center; gap: 8px; border: 2px solid var(--color-line); border-radius: 10px; padding: 0 12px; background: var(--color-canvas); transition: border-color .2s; }
+    .pw-field:focus-within { border-color: var(--color-primary); background: var(--color-surface); }
+    .pw-field mat-icon { color: var(--color-text-3); }
+    .pw-field input { flex: 1; border: none; background: transparent; outline: none; font-size: var(--text-xl); letter-spacing: 6px; text-align: center; padding: 12px 0; color: var(--color-text); }
+    .pw-field.shake { animation: shake .35s; border-color: var(--color-danger); }
     @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-6px);} 75%{transform:translateX(6px);} }
-    .pw-error { display: flex; align-items: center; justify-content: center; gap: 6px; color: #ef4444; font-size: 13px; margin-top: 12px; }
-    .pw-error mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .pw-error { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--color-danger); font-size: var(--text-sm); margin-top: 12px; }
+    .pw-error mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
     .pw-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
-    .pw-actions mat-icon { margin-right: 4px; font-size: 18px; width: 18px; height: 18px; }
+    .pw-actions mat-icon { margin-right: 4px; font-size: var(--text-xl); width: 18px; height: 18px; }
   `]
 })
 export class AssetPasswordDialogComponent {

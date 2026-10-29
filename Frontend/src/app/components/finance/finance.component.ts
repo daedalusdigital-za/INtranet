@@ -12,11 +12,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { ToastService } from '../../ui/toast.service';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { FinanceService } from '../../services/finance.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { environment } from '../../../environments/environment';
 
 interface BookInvoice {
@@ -72,9 +73,9 @@ interface RequestedPayment {
     MatInputModule,
     MatSelectModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
     MatTooltipModule,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent
   ],
   templateUrl: './finance.component.html',
   styleUrls: ['./finance.component.scss']
@@ -155,7 +156,7 @@ export class FinanceComponent implements OnInit {
     private financeService: FinanceService,
     private http: HttpClient,
     private router: Router,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -260,7 +261,7 @@ export class FinanceComponent implements OnInit {
         this.loading = false;
         
         if (this.invoices.length === 0) {
-          this.snackBar.open('No invoices found for this department', 'Close', { duration: 2000 });
+          this.toast.info('No invoices found for this department');
         }
       },
       error: (err) => {
@@ -270,7 +271,7 @@ export class FinanceComponent implements OnInit {
         this.totalInvoices = 0;
         
         const errorMsg = err.error?.message || err.message || 'Error loading invoices';
-        this.snackBar.open(errorMsg, 'Close', { duration: 5000 });
+        this.toast.error(errorMsg);
       }
     });
   }
@@ -297,10 +298,10 @@ export class FinanceComponent implements OnInit {
       next: () => {
         invoice.status = 'Paid';
         invoice.paymentDate = new Date();
-        this.snackBar.open(`Invoice ${invoice.invoiceNumber || ''} marked as paid`, 'Close', { duration: 2500 });
+        this.toast.done(`Invoice ${invoice.invoiceNumber || ''} marked as paid`);
         this.loadInvoiceStats();
       },
-      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to mark as paid', 'Close', { duration: 4000 })
+      error: (err) => this.toast.error(err?.error?.error || "Couldn't mark the invoice as paid. Try again.")
     });
   }
 
@@ -309,10 +310,10 @@ export class FinanceComponent implements OnInit {
       next: () => {
         invoice.status = 'Confirmed';
         invoice.paymentDate = undefined;
-        this.snackBar.open(`Invoice ${invoice.invoiceNumber || ''} marked as unpaid`, 'Close', { duration: 2500 });
+        this.toast.done(`Invoice ${invoice.invoiceNumber || ''} marked as unpaid`);
         this.loadInvoiceStats();
       },
-      error: (err) => this.snackBar.open(err?.error?.error || 'Failed to mark as unpaid', 'Close', { duration: 4000 })
+      error: (err) => this.toast.error(err?.error?.error || "Couldn't mark the invoice as unpaid. Try again.")
     });
   }
 
@@ -357,7 +358,7 @@ export class FinanceComponent implements OnInit {
       },
       error: () => {
         this.accessError = 'You do not have permission to view company financials.';
-        this.snackBar.open('Access denied — finance permission required.', 'Close', { duration: 4000 });
+        this.toast.error('Access denied: finance permission required.');
       }
     });
   }
@@ -396,13 +397,13 @@ export class FinanceComponent implements OnInit {
           },
           error: () => {
             this.requestedPaymentsLoading = false;
-            this.snackBar.open('Error loading requested payments', 'Close', { duration: 3000 });
+            this.toast.error("Couldn't load requested payments. Try again.");
           }
         });
       },
       error: () => {
         this.requestedPaymentsLoading = false;
-        this.snackBar.open('Error loading requested payments', 'Close', { duration: 3000 });
+        this.toast.error("Couldn't load requested payments. Try again.");
       }
     });
   }
@@ -429,14 +430,14 @@ export class FinanceComponent implements OnInit {
     // Update invoice status to Submitted/Paid
     this.http.put(`${environment.apiUrl}/Books/${payment.id}/status`, { status: 'Paid' }).subscribe({
       next: () => {
-        this.snackBar.open(`Invoice ${payment.invoiceNumber} approved and submitted`, 'Close', { duration: 3000 });
+        this.toast.done(`Invoice ${payment.invoiceNumber} approved and submitted`);
         this.requestedPayments = this.requestedPayments.filter(p => p.id !== payment.id);
         this.closePreviewDialog();
         this.loadStats();
       },
       error: () => {
         // If endpoint doesn't exist yet, just remove from local list
-        this.snackBar.open(`Invoice ${payment.invoiceNumber} marked as submitted`, 'Close', { duration: 3000 });
+        this.toast.info(`Invoice ${payment.invoiceNumber} marked as submitted`);
         this.requestedPayments = this.requestedPayments.filter(p => p.id !== payment.id);
         this.closePreviewDialog();
       }
@@ -446,13 +447,13 @@ export class FinanceComponent implements OnInit {
   rejectPayment(payment: RequestedPayment): void {
     this.http.put(`${environment.apiUrl}/Books/${payment.id}/status`, { status: 'Rejected' }).subscribe({
       next: () => {
-        this.snackBar.open(`Invoice ${payment.invoiceNumber} rejected`, 'Close', { duration: 3000 });
+        this.toast.done(`Invoice ${payment.invoiceNumber} rejected`);
         this.requestedPayments = this.requestedPayments.filter(p => p.id !== payment.id);
         this.closePreviewDialog();
         this.loadStats();
       },
       error: () => {
-        this.snackBar.open(`Invoice ${payment.invoiceNumber} marked as rejected`, 'Close', { duration: 3000 });
+        this.toast.info(`Invoice ${payment.invoiceNumber} marked as rejected`);
         this.requestedPayments = this.requestedPayments.filter(p => p.id !== payment.id);
         this.closePreviewDialog();
       }
@@ -504,7 +505,7 @@ export class FinanceComponent implements OnInit {
         req.status = status;
         this.loadStationeryCounts();
       },
-      error: () => this.snackBar.open('Failed to update', 'Close', { duration: 2000 })
+      error: () => this.toast.error("Couldn't update the stationery request. Try again.")
     });
   }
 
@@ -557,9 +558,9 @@ export class FinanceComponent implements OnInit {
         if (this.requisitionFilter !== 'all' && this.requisitionFilter !== status) {
           this.requisitions = this.requisitions.filter(r => r.id !== req.id);
         }
-        this.snackBar.open(`Requisition marked ${status}`, 'Close', { duration: 2000 });
+        this.toast.done(`Requisition marked ${status}`);
       },
-      error: () => this.snackBar.open('Failed to update requisition', 'Close', { duration: 2500 })
+      error: () => this.toast.error("Couldn't update the requisition. Try again.")
     });
   }
 }

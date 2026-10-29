@@ -1,0 +1,170 @@
+// ============================================================
+// Design tokens (design review D-01, D-02).
+// Palette matched to the Promed logo: navy, Promed blue, cyan.
+// Components use these, never raw hex values.
+//
+// Dark mode (D-04): AppearanceService sets data-theme="dark" on <html> when
+// the person picks Dark, or picks "Same as this computer" on a dark computer.
+// Row density: data-density="compact" tightens table rows.
+// ============================================================
+:root {
+  color-scheme: light;
+  // Brand
+  --color-brand: #262262;          // logo navy: navigation, brand moments
+  --color-primary: #2167a8;        // logo mid blue: actions, links, selection
+  --color-primary-hover: #1b568d;
+  --color-primary-soft: #e3eef8;
+  --color-on-primary: #ffffff;
+  --color-focus: #3cbde9;          // logo cyan: focus rings and highlights only
+
+  // Neutrals, tinted toward the navy
+  --color-canvas: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef0f7;
+  --color-surface-3: #e6e9f3;
+  --color-text: #1a1936;
+  --color-text-2: #4b5070;
+  --color-text-3: #737896;
+  --color-line: #dcdfeb;
+  --color-line-strong: #c5c9da;
+
+  // Status (only for status, never decoration)
+  --color-ok: #1d7a52;
+  --color-ok-soft: #e2f3ea;
+  --color-warn: #93600f;
+  --color-warn-soft: #fbf0dc;
+  --color-danger: #b03a2c;
+  --color-danger-soft: #f9e5e1;
+  --color-info: var(--color-primary);
+  --color-info-soft: var(--color-primary-soft);
+
+  // Categories: telling kinds of thing apart (document types, chart series, tags),
+  // never status. Each has a soft fill for chips and tiles.
+  --color-cat-purple: #6b4fbb;
+  --color-cat-purple-soft: #efeafb;
+  --color-cat-teal: #0f7c7a;
+  --color-cat-teal-soft: #dff3f2;
+  --color-cat-pink: #b23a74;
+  --color-cat-pink-soft: #f8e4ee;
+  --color-cat-amber: #8a6a00;
+  --color-cat-amber-soft: #fbf3d6;
+
+  // Text and icons on colour that stays dark in both themes: photos, maps, video, the
+  // navigation bar. Elsewhere use --color-on-primary.
+  --color-on-dark: #ffffff;
+  --color-scrim: rgba(26, 25, 54, 0.45);
+
+  // App shell
+  --nav-bg: #262262;
+  --nav-text: #d9dbf5;
+  --nav-text-dim: #9a9dd0;
+  --nav-hover: rgba(255, 255, 255, 0.08);
+  --nav-active: rgba(255, 255, 255, 0.14);
+  --shell-sidebar-width: 232px;
+  --shell-topbar-height: 56px;
+
+  // Type: one UI face, one mono for references (invoices, loads, barcodes)
+  --font-body: 'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-body);
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-4xl: 32px;
+
+  // Radius: three steps plus controls
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-control: 8px;
+
+  // Elevation
+  --shadow-sm: 0 1px 2px rgba(26, 25, 54, 0.06);
+  --shadow-md: 0 1px 2px rgba(26, 25, 54, 0.06), 0 6px 16px rgba(26, 25, 54, 0.08);
+  --shadow-lg: 0 1px 2px rgba(26, 25, 54, 0.06), 0 12px 32px rgba(26, 25, 54, 0.12);
+
+  // Spacing (4/8 grid)
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+
+  // Table rows: comfortable by default, compact when the person chooses it (D-04)
+  --row-pad-y: 10px;
+
+  // ---- Legacy names, kept so existing component styles follow the new palette ----
+  --brand-50: #eef4fb;
+  --brand-100: #dbe8f6;
+  --brand-200: #b9d2ed;
+  --brand-400: #5b93cf;
+  --brand-500: #3a7cc0;
+  --brand-600: var(--color-primary);
+  --brand-700: var(--color-primary-hover);
+  --brand-800: var(--color-brand);
+  --brand: var(--color-primary);
+  --brand-grad: var(--color-primary);
+  --ink-900: var(--color-text);
+  --ink-700: var(--color-text-2);
+  --ink-500: var(--color-text-3);
+  --ink-300: var(--color-line-strong);
+  --ink-100: var(--color-surface-2);
+  --surface: var(--color-surface);
+  --canvas: var(--color-canvas);
+}
+
+:root[data-theme='dark'] {
+  --color-brand: #b9bcf5;
+  --color-primary: #6aa9e6;
+  --color-primary-hover: #8bbcec;
+  --color-primary-soft: #1c2d4d;
+  --color-on-primary: #0e0f22;
+  --color-focus: #67d2f3;
+  --color-canvas: #0e0f22;
+  --color-surface: #16183a;
+  --color-surface-2: #1e2148;
+  --color-surface-3: #252957;
+  --color-text: #eceef9;
+  --color-text-2: #b8bcd8;
+  --color-text-3: #979cbd;
+  --color-line: #353a6c;
+  --color-line-strong: #4b5190;
+  --color-ok: #5cc995;
+  --color-ok-soft: #133528;
+  --color-warn: #e6b256;
+  --color-warn-soft: #3a2c12;
+  --color-danger: #f08a7a;
+  --color-danger-soft: #3d1c1a;
+  --color-cat-purple: #b9a6f2;
+  --color-cat-purple-soft: #2a2350;
+  --color-cat-teal: #6fd3cf;
+  --color-cat-teal-soft: #12302f;
+  --color-cat-pink: #f09cc4;
+  --color-cat-pink-soft: #3a1c2c;
+  --color-cat-amber: #e8c75a;
+  --color-cat-amber-soft: #352c10;
+  --color-scrim: rgba(0, 0, 0, 0.6);
+  --nav-bg: #0a0b1c;
+  --nav-text-dim: #8d90c0;
+  --nav-hover: rgba(255, 255, 255, 0.06);
+  --nav-active: rgba(255, 255, 255, 0.1);
+  --brand-50: #1c2d4d;
+  --brand-100: #22385e;
+  --brand-200: #2c4670;
+  --brand-400: #6aa9e6;
+  --brand-500: #6aa9e6;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+:root[data-density='compact'] {
+  --row-pad-y: 5px;
+}

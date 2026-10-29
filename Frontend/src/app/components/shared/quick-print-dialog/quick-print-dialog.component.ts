@@ -20,7 +20,7 @@ export interface Printer {
     <div class="quick-print-dialog">
       <div class="dialog-header">
         <h2>Quick Print</h2>
-        <button mat-icon-button (click)="close()">
+        <button aria-label="Close" mat-icon-button (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -54,7 +54,7 @@ export interface Printer {
       justify-content: center;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       position: relative;
@@ -81,7 +81,7 @@ export interface Printer {
 
     .subtitle {
       text-align: center;
-      color: #666;
+      color: var(--color-text-2);
       margin-bottom: 24px;
       font-size: 1rem;
     }

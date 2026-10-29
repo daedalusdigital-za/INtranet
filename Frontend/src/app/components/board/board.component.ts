@@ -20,7 +20,11 @@ import { Subscription } from 'rxjs';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 
 @Component({
   selector: 'app-board',
@@ -40,9 +44,11 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     MatFormFieldModule,
     MatDividerModule,
     MatTooltipModule,
-    MatSnackBarModule,
     DragDropModule,
-    NavbarComponent
+    NavbarComponent,
+    StatusChipComponent,
+    EmptyStateComponent,
+    SkeletonRowsComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -69,7 +75,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
             <!-- Board Actions Menu -->
             <div class="board-actions">
               @if (canManage) {
-                <button mat-icon-button [matMenuTriggerFor]="boardActionsMenu" class="board-menu-btn" matTooltip="Board Options">
+                <button aria-label="Board Options" mat-icon-button [matMenuTriggerFor]="boardActionsMenu" class="board-menu-btn" matTooltip="Board Options">
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #boardActionsMenu="matMenu">
@@ -89,18 +95,16 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
                   <mat-divider></mat-divider>
                   <button mat-menu-item class="delete-action" (click)="confirmDeleteBoard()">
                     <mat-icon color="warn">delete</mat-icon>
-                    <span style="color: #f44336;">Delete Board</span>
+                    <span style="color: var(--color-danger);">Delete Board</span>
                   </button>
                 </mat-menu>
               }
             </div>
 
             <div class="board-status-section">
-              <div class="status-badge" [class]="'status-' + board.status.toLowerCase().replace(' ', '-')">
-                {{ board.status }}
-              </div>
+              <app-status-chip [status]="board.status"></app-status-chip>
               @if (canManage) {
-                <button mat-icon-button [matMenuTriggerFor]="statusMenu" class="status-menu-btn">
+                <button aria-label="Change status" matTooltip="Change status" mat-icon-button [matMenuTriggerFor]="statusMenu" class="status-menu-btn">
                   <mat-icon>edit</mat-icon>
                 </button>
                 <mat-menu #statusMenu="matMenu">
@@ -161,7 +165,12 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
             <div class="checklist-items">
               @if (board.checklistItems.length === 0) {
-                <p class="no-checklist">No checklist items yet.</p>
+                <app-empty-state [compact]="true" icon="checklist" title="No tasks on this board yet"
+                  message="Tasks you add here drive the board's progress.">
+                  @if (canManage && !showAddChecklist) {
+                    <button mat-stroked-button (click)="toggleAddChecklist()"><mat-icon>add</mat-icon> Add Task</button>
+                  }
+                </app-empty-state>
               } @else {
                 <!-- Outstanding Items -->
                 @if (getOutstandingItems().length > 0) {
@@ -182,7 +191,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
                               <span>{{ item.title }}</span>
                             </mat-checkbox>
                             @if (canManage) {
-                              <button mat-icon-button class="delete-checklist-btn" (click)="deleteChecklistItem(item)">
+                              <button aria-label="Delete task" mat-icon-button class="delete-checklist-btn" (click)="deleteChecklistItem(item)">
                                 <mat-icon>close</mat-icon>
                               </button>
                             }
@@ -215,7 +224,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
                               <span class="completed-by">{{ item.completedByName }}</span>
                             }
                             @if (canManage) {
-                              <button mat-icon-button class="delete-checklist-btn" (click)="deleteChecklistItem(item)">
+                              <button aria-label="Delete task" mat-icon-button class="delete-checklist-btn" (click)="deleteChecklistItem(item)">
                                 <mat-icon>close</mat-icon>
                               </button>
                             }
@@ -273,14 +282,19 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
                     <span class="member-role" [class]="'role-' + member.role.toLowerCase()">{{ member.role }}</span>
                   </div>
                   @if (canManage && member.role !== 'Owner') {
-                    <button mat-icon-button class="remove-member-btn" (click)="removeMember(member)">
+                    <button aria-label="Remove member" mat-icon-button class="remove-member-btn" (click)="removeMember(member)">
                       <mat-icon>close</mat-icon>
                     </button>
                   }
                 </div>
               }
               @if (!board.members || board.members.length === 0) {
-                <p class="no-members">No members added yet.</p>
+                <app-empty-state class="no-members" [compact]="true" icon="group" title="No members yet"
+                  message="Invite people so they can see and work on this board.">
+                  @if (canManage && !showInviteMember) {
+                    <button mat-stroked-button (click)="toggleInviteMember()"><mat-icon>person_add</mat-icon> Invite Member</button>
+                  }
+                </app-empty-state>
               }
             </div>
           </div>
@@ -353,26 +367,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
             </div>
           }
         </div>
-      }
-
-      <!-- Delete Confirmation Dialog -->
-      @if (showDeleteConfirm) {
-        <div class="delete-overlay" (click)="cancelDelete()">
-          <div class="delete-dialog" (click)="$event.stopPropagation()">
-            <div class="delete-dialog-icon">
-              <mat-icon color="warn">warning</mat-icon>
-            </div>
-            <h3>Delete Board?</h3>
-            <p>Are you sure you want to delete "<strong>{{ board?.title }}</strong>"?</p>
-            <p class="warning-text">This action cannot be undone. All lists, cards, and data will be permanently deleted.</p>
-            <div class="delete-dialog-actions">
-              <button mat-button (click)="cancelDelete()">Cancel</button>
-              <button mat-raised-button color="warn" (click)="deleteBoard()">
-                <mat-icon>delete</mat-icon>
-                Delete Board
-              </button>
-            </div>
-          </div>
+      } @else {
+        <div class="board-loading">
+          <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
         </div>
       }
     </div>
@@ -381,15 +378,23 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     .board-container {
       padding: 80px;
       min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: var(--color-canvas);
     }
 
     .board-header {
       margin-bottom: 24px;
-      background: rgba(255, 255, 255, 0.95);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .board-loading {
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
     }
 
     .board-header-top {
@@ -407,16 +412,13 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
     .board-info h2 {
       margin: 0 0 8px 0;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--color-text);
       font-weight: 600;
     }
 
     .board-description {
       margin: 0 0 12px 0;
-      color: #666;
+      color: var(--color-text-2);
       word-wrap: break-word;
       overflow-wrap: break-word;
       white-space: normal;
@@ -432,9 +434,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 14px;
-      color: #555;
-      background: #f5f5f5;
+      font-size: var(--text-md);
+      color: var(--color-text-2);
+      background: var(--color-surface-2);
       padding: 6px 12px;
       border-radius: 20px;
     }
@@ -443,7 +445,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #4169e1;
+      color: var(--color-primary);
     }
 
     .board-status-section {
@@ -452,42 +454,15 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       gap: 8px;
     }
 
-    .status-badge {
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-weight: 600;
-      font-size: 14px;
-    }
-
-    .status-planning {
-      background: linear-gradient(135deg, #ffd93d 0%, #f9a825 100%);
-      color: #333;
-    }
-
-    .status-in-progress {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
-    }
-
-    .status-completed {
-      background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
-      color: white;
-    }
-
-    .status-on-hold {
-      background: linear-gradient(135deg, #ff5722 0%, #d84315 100%);
-      color: white;
-    }
-
     .status-menu-btn {
-      color: #4169e1;
+      color: var(--color-primary);
     }
 
     .progress-section {
       margin: 16px 0;
       padding: 16px;
-      background: #f9f9f9;
-      border-radius: 8px;
+      background: var(--color-canvas);
+      border-radius: var(--radius-control);
     }
 
     .progress-header {
@@ -498,15 +473,12 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
     .progress-label {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .progress-value {
       font-weight: 700;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--color-primary);
     }
 
     .board-progress {
@@ -514,13 +486,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       border-radius: 5px;
     }
 
-    ::ng-deep .board-progress .mat-mdc-progress-bar-fill::after {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%) !important;
-    }
-
     .progress-detail {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       margin-top: 4px;
       display: block;
     }
@@ -528,7 +496,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     .checklist-section {
       margin-top: 16px;
       padding: 16px;
-      background: #f9f9f9;
+      background: var(--color-canvas);
       border-radius: 8px;
     }
 
@@ -544,12 +512,12 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       align-items: center;
       gap: 8px;
       margin: 0;
-      font-size: 16px;
-      color: #333;
+      font-size: var(--text-lg);
+      color: var(--color-text);
     }
 
     .checklist-header h3 mat-icon {
-      color: #4169e1;
+      color: var(--color-primary);
     }
 
     .add-checklist-form {
@@ -573,46 +541,39 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       display: flex;
       align-items: center;
       padding: 8px 12px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 6px;
       transition: all 0.2s;
     }
 
     .checklist-item:hover {
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-sm);
     }
 
     .checklist-item.completed {
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
     }
 
     .checked-text {
       text-decoration: line-through;
-      color: #888;
+      color: var(--color-text-3);
     }
 
     .completed-by {
-      font-size: 11px;
-      color: #4caf50;
+      font-size: var(--text-xs);
+      color: var(--color-ok);
       margin-left: auto;
       margin-right: 8px;
     }
 
     .delete-checklist-btn {
-      color: #f44336;
+      color: var(--color-danger);
       transform: scale(0.8);
-    }
-
-    .no-checklist {
-      color: #888;
-      font-style: italic;
-      text-align: center;
-      padding: 16px;
     }
 
     .checklist-group {
       margin-bottom: 8px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       border-radius: 8px;
       overflow: hidden;
     }
@@ -622,19 +583,19 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
-      background: #fff;
+      background: var(--color-surface);
       cursor: pointer;
       user-select: none;
       transition: background 0.2s;
     }
 
     .checklist-group-header:hover {
-      background: #f0f0f0;
+      background: var(--color-surface-2);
     }
 
     .fold-icon {
       transition: transform 0.25s ease;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 20px;
     }
 
@@ -644,19 +605,19 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
     .group-title {
       font-weight: 600;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .outstanding-title {
-      color: #e65100;
+      color: var(--color-warn);
     }
 
     .completed-title {
-      color: #2e7d32;
+      color: var(--color-ok);
     }
 
     .group-count {
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
       padding: 2px 10px;
       border-radius: 12px;
@@ -664,17 +625,17 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     }
 
     .outstanding-count {
-      background: #fff3e0;
-      color: #e65100;
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
     }
 
     .completed-count {
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
     }
 
     .checklist-group-items {
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
       padding: 4px 0;
     }
 
@@ -682,7 +643,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     .members-section {
       margin-top: 16px;
       padding: 16px;
-      background: #f9f9f9;
+      background: var(--color-canvas);
       border-radius: 8px;
     }
 
@@ -698,12 +659,12 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       align-items: center;
       gap: 8px;
       margin: 0;
-      font-size: 16px;
-      color: #333;
+      font-size: var(--text-lg);
+      color: var(--color-text);
     }
 
     .members-header h3 mat-icon {
-      color: #4169e1;
+      color: var(--color-primary);
     }
 
     .invite-member-form {
@@ -728,14 +689,14 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: white;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 24px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       transition: all 0.2s;
     }
 
     .member-item:hover {
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-sm);
     }
 
     .member-avatar {
@@ -746,7 +707,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: var(--color-primary-soft);
     }
 
     .member-avatar img {
@@ -756,7 +717,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     }
 
     .member-avatar mat-icon {
-      color: white;
+      color: var(--color-primary);
       font-size: 28px;
       width: 28px;
       height: 28px;
@@ -769,54 +730,50 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
     .member-name {
       font-weight: 500;
-      font-size: 14px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
     }
 
     .member-role {
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 2px 8px;
       border-radius: 10px;
     }
 
     .role-owner {
-      background: linear-gradient(135deg, #ffd93d 0%, #f9a825 100%);
-      color: #333;
+      background: var(--color-cat-amber-soft);
+      color: var(--color-cat-amber);
     }
 
     .role-admin {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
 
     .role-member {
-      background: #e0e0e0;
-      color: #666;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
     }
 
     .remove-member-btn {
-      color: #f44336;
+      color: var(--color-danger);
       transform: scale(0.7);
     }
 
     .no-members {
-      color: #888;
-      font-style: italic;
-      text-align: center;
-      padding: 16px;
       width: 100%;
     }
 
     /* Card Created By Styling */
     .card-meta.created-by {
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       padding: 4px 8px;
       border-radius: 4px;
       margin-bottom: 4px;
     }
 
     .card-meta.created-by mat-icon {
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     .lists-container {
@@ -828,19 +785,20 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
     .list-column {
       flex: 0 0 320px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 12px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
       padding: 16px;
       max-height: calc(100vh - 200px);
       display: flex;
       flex-direction: column;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-sm);
       transition: transform 0.2s;
     }
 
     .list-column:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-md);
     }
 
     .list-header {
@@ -849,28 +807,24 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       align-items: center;
       margin-bottom: 16px;
       padding-bottom: 12px;
-      border-bottom: 2px solid transparent;
-      border-image: linear-gradient(90deg, #1e90ff 0%, #4169e1 100%) 1;
+      border-bottom: 2px solid var(--color-primary);
     }
 
     .list-header h3 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 700;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--color-text);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .card-count {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       padding: 4px 12px;
       border-radius: 20px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
     }
 
@@ -885,10 +839,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       margin-bottom: 12px;
       cursor: pointer;
       transition: all 0.3s ease;
-      border-left: 4px solid;
-      border-image: linear-gradient(180deg, #1e90ff 0%, #4169e1 100%) 1;
-      background: white;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+      border-left: 4px solid var(--color-primary);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
     }
 
@@ -897,7 +850,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     }
 
     .card :deep(.mat-mdc-card-title) {
-      font-size: 15px;
+      font-size: var(--text-md);
       white-space: normal;
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -911,7 +864,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
     .card:hover {
       transform: translateX(4px);
-      box-shadow: 0 4px 12px rgba(0, 0, 139, 0.3);
+      box-shadow: var(--shadow-md);
     }
 
     .card.cdk-drag-animating {
@@ -920,14 +873,13 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
     .cdk-drag-placeholder {
       opacity: 0.4;
-      border: 2px dashed;
-      border-image: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%) 1;
-      background: rgba(0, 0, 139, 0.1);
+      border: 2px dashed var(--color-primary);
+      background: var(--color-primary-soft);
     }
 
     .card-description {
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
       margin: 8px 0;
       display: -webkit-box;
       -webkit-line-clamp: 3;
@@ -943,11 +895,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       margin: 4px 0;
       font-weight: 500;
     }
@@ -956,7 +905,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       font-size: 16px;
       width: 16px;
       height: 16px;
-      color: #2563eb;
+      color: var(--color-primary);
     }
 
     .card-footer {
@@ -964,16 +913,16 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       gap: 12px;
       margin-top: 12px;
       padding-top: 8px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--color-line);
     }
 
     .card-badge {
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
-      color: #666;
-      background: #f5f5f5;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
+      background: var(--color-surface-2);
       padding: 4px 8px;
       border-radius: 12px;
     }
@@ -982,22 +931,13 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
       font-size: 14px;
       width: 14px;
       height: 14px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--color-primary);
     }
 
     .add-card-btn {
       width: 100%;
       margin-top: 8px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
       font-weight: 600;
-    }
-
-    .add-card-btn:hover {
-      background: linear-gradient(135deg, #4169e1 0%, #1e90ff 100%);
     }
 
     /* Board Actions Menu */
@@ -1007,89 +947,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
     }
 
     .board-menu-btn {
-      background: rgba(255, 255, 255, 0.9);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Delete Confirmation Dialog */
-    .delete-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      backdrop-filter: blur(4px);
-    }
-
-    .delete-dialog {
-      background: white;
-      border-radius: 16px;
-      padding: 32px;
-      max-width: 400px;
-      text-align: center;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-      animation: dialogAppear 0.2s ease-out;
-    }
-
-    @keyframes dialogAppear {
-      from {
-        opacity: 0;
-        transform: scale(0.9);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1);
-      }
-    }
-
-    .delete-dialog-icon {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      background: #fff3e0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 16px;
-    }
-
-    .delete-dialog-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-      color: #ff9800;
-    }
-
-    .delete-dialog h3 {
-      margin: 0 0 8px;
-      font-size: 1.5rem;
-      color: #333;
-    }
-
-    .delete-dialog p {
-      margin: 0 0 8px;
-      color: #666;
-    }
-
-    .delete-dialog .warning-text {
-      font-size: 0.85rem;
-      color: #f44336;
-      margin-bottom: 24px;
-    }
-
-    .delete-dialog-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-    }
-
-    .delete-dialog-actions button {
-      min-width: 120px;
+      background: var(--color-surface-2);
     }
   `]
 })
@@ -1106,7 +964,6 @@ export class BoardComponent implements OnInit, OnDestroy {
   showInviteMember: boolean = false;
   selectedUserToInvite: string = '';
   availableUsers: any[] = [];
-  showDeleteConfirm: boolean = false;
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -1116,7 +973,8 @@ export class BoardComponent implements OnInit, OnDestroy {
     private signalRService: SignalRService,
     private authService: AuthService,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private readonly confirmDialog: ConfirmService,
+    private readonly toast: ToastService
   ) {
     this.currentUser = this.authService.currentUserValue;
   }
@@ -1386,10 +1244,15 @@ export class BoardComponent implements OnInit, OnDestroy {
     });
   }
 
-  removeMember(member: any): void {
+  async removeMember(member: any): Promise<void> {
     if (!this.board) return;
 
-    if (confirm(`Are you sure you want to remove ${member.userName} from the board?`)) {
+    if (await this.confirmDialog.ask({
+      title: `Remove ${member.userName} from ${this.board.title}?`,
+      message: 'They will no longer be a member of this board.',
+      confirmText: 'Remove member',
+      danger: true
+    })) {
       this.apiService.removeBoardMember(this.board.boardId, member.boardMemberId).subscribe({
         next: () => {
           if (this.board && this.board.members) {
@@ -1409,21 +1272,25 @@ export class BoardComponent implements OnInit, OnDestroy {
   editBoard(): void {
     if (!this.board) return;
     // For now, show a snackbar - can be expanded to open an edit dialog
-    this.snackBar.open('Board editing coming soon!', 'OK', { duration: 3000 });
+    this.toast.info('Board editing is coming soon.');
   }
 
   viewReports(): void {
     if (!this.board) return;
     // Navigate to reports or show a report dialog
-    this.snackBar.open('Board reports coming soon!', 'OK', { duration: 3000 });
+    this.toast.info('Board reports are coming soon.');
   }
 
-  confirmDeleteBoard(): void {
-    this.showDeleteConfirm = true;
-  }
-
-  cancelDelete(): void {
-    this.showDeleteConfirm = false;
+  async confirmDeleteBoard(): Promise<void> {
+    if (!this.board) return;
+    if (await this.confirmDialog.ask({
+      title: `Delete board ${this.board.title}?`,
+      message: 'All its lists, cards and data are deleted permanently. This can\'t be undone.',
+      confirmText: 'Delete board',
+      danger: true
+    })) {
+      this.deleteBoard();
+    }
   }
 
   deleteBoard(): void {
@@ -1431,13 +1298,12 @@ export class BoardComponent implements OnInit, OnDestroy {
 
     this.apiService.deleteBoard(this.board.boardId).subscribe({
       next: () => {
-        this.snackBar.open('Board deleted successfully', 'OK', { duration: 3000 });
+        this.toast.done('Board deleted.');
         this.router.navigate(['/dashboard']);
       },
       error: (error) => {
         console.error('Error deleting board:', error);
-        this.snackBar.open('Failed to delete board: ' + (error.message || 'Unknown error'), 'OK', { duration: 5000 });
-        this.showDeleteConfirm = false;
+        this.toast.error('Failed to delete board: ' + (error.message || 'Unknown error'));
       }
     });
   }

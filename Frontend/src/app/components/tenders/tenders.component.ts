@@ -22,7 +22,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatSliderModule } from '@angular/material/slider';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -31,9 +30,15 @@ import { takeUntil } from 'rxjs/operators';
 import { TenderService, Tender, TenderStats, ComplianceDocument, ComplianceSummary, CalendarEvent, TenderBOQItem, TenderTeamMember, TenderDocument, TenderReminder } from '../../services/tender.service';
 import { ArtworkService, ArtworkFile as ArtworkFileApi, ArtworkAnnotation as ArtworkAnnotationApi } from '../../services/artwork.service';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../ui/toast.service';
 import { TenderDetailDialogComponent } from './tender-detail-dialog.component';
 import { ComplianceDialogComponent } from './compliance-dialog.component';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { ConfirmService } from '../../ui/confirm.service';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { ChipTone, StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 
 interface Company {
   code: string;
@@ -98,46 +103,29 @@ interface ArtworkFile {
     MatBadgeModule,
     MatExpansionModule,
     MatProgressBarModule,
-    MatSnackBarModule,
     MatDividerModule,
     MatSliderModule,
     CurrencyPipe,
     DatePipe,
     DecimalPipe,
     TitleCasePipe,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent,
+    StatusChipComponent
   ],
   template: `
     <app-navbar></app-navbar>
     <div class="tenders-container">
-      <!-- Modern Header -->
-      <div class="modern-header">
-        <div class="header-main">
-          <div class="header-icon-wrapper">
-            <mat-icon>gavel</mat-icon>
-          </div>
-          <div class="header-text-area">
-            <h1>Tenders Management</h1>
-            <p class="header-subtitle">Track tenders, manage compliance, and monitor your bidding performance</p>
-          </div>
-        </div>
-        <div class="header-stats-row">
-          <div class="mini-stat">
-            <mat-icon>trending_up</mat-icon>
-            <div class="mini-stat-content">
-              <span class="mini-value">{{ stats?.winRate || 0 }}%</span>
-              <span class="mini-label">Win Rate</span>
-            </div>
-          </div>
-          <div class="mini-stat">
-            <mat-icon>attach_money</mat-icon>
-            <div class="mini-stat-content">
-              <span class="mini-value">{{ stats?.totalValueAwarded | currency:'ZAR':'symbol':'1.0-0' }}</span>
-              <span class="mini-label">Total Awarded</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <app-page-header class="tenders-page-header" [crumbs]="['Operations', 'Tenders']" title="Tenders"
+                       [subtitle]="stats
+                         ? 'Win rate ' + (stats.winRate || 0) + '% · ' + ((stats.totalValueAwarded || 0) | currency:'ZAR':'symbol':'1.0-0') + ' awarded'
+                         : (loading ? 'Loading…' : '')">
+        <button mat-flat-button color="primary" (click)="openCreateTender()">
+          <mat-icon>add</mat-icon>Create tender
+        </button>
+      </app-page-header>
 
       <!-- Top Stats Widgets -->
       <div class="stats-row">
@@ -176,13 +164,6 @@ interface ArtworkFile {
             <div class="stat-label">Lost YTD</div>
           </div>
         </mat-card>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="quick-actions">
-        <button mat-raised-button color="primary" (click)="openCreateTender()">
-          <mat-icon>add</mat-icon> Create Tender
-        </button>
       </div>
 
       <!-- Main Tabs -->
@@ -245,10 +226,10 @@ interface ArtworkFile {
                     }
                   </mat-select>
                 </mat-form-field>
-                <button mat-icon-button color="primary" (click)="applyFilters()" matTooltip="Apply Filters">
+                <button aria-label="Apply Filters" mat-icon-button color="primary" (click)="applyFilters()" matTooltip="Apply Filters">
                   <mat-icon>filter_list</mat-icon>
                 </button>
-                <button mat-icon-button (click)="clearFilters()" matTooltip="Clear Filters">
+                <button aria-label="Clear Filters" mat-icon-button (click)="clearFilters()" matTooltip="Clear Filters">
                   <mat-icon>clear</mat-icon>
                 </button>
               </div>
@@ -256,38 +237,9 @@ interface ArtworkFile {
 
             <!-- Tenders Table -->
             @if (loading) {
-              <div class="loading-state">
-                <div class="loading-card">
-                  <div class="lc-icon-wrap">
-                    <mat-icon class="lc-icon pulse-icon">gavel</mat-icon>
-                  </div>
-                  <h3>Loading Tender Management</h3>
-                  <p class="lc-subtitle">Fetching tenders, compliance & calendar data</p>
-                  <div class="lc-progress-wrap">
-                    <div class="lc-progress-track">
-                      <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
-                    </div>
-                    <div class="lc-progress-info">
-                      <span class="lc-progress-message">{{ loadingMessage }}</span>
-                      <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
-                    </div>
-                  </div>
-                  <div class="lc-steps">
-                    @for (step of loadingSteps; track step.label; let i = $index) {
-                      <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
-                        <div class="lc-step-dot">
-                          @if (loadingStage > i) {
-                            <mat-icon>check</mat-icon>
-                          } @else {
-                            <mat-icon>{{ step.icon }}</mat-icon>
-                          }
-                        </div>
-                        <span class="lc-step-label">{{ step.label }}</span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              </div>
+              <mat-card class="table-card">
+                <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows>
+              </mat-card>
             } @else {
               <mat-card class="table-card">
                 <table mat-table [dataSource]="tendersDataSource" matSort class="tenders-table">
@@ -347,9 +299,7 @@ interface ArtworkFile {
                   <ng-container matColumnDef="status">
                     <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
                     <td mat-cell *matCellDef="let tender">
-                      <span class="status-chip" [style.background-color]="getStatusColor(tender.status)">
-                        {{ tender.status }}
-                      </span>
+                      <app-status-chip [status]="tender.status" [tone]="getStatusTone(tender.status)"></app-status-chip>
                     </td>
                   </ng-container>
 
@@ -357,9 +307,7 @@ interface ArtworkFile {
                   <ng-container matColumnDef="samples">
                     <th mat-header-cell *matHeaderCellDef mat-sort-header>Samples</th>
                     <td mat-cell *matCellDef="let tender">
-                      <span class="mini-status-chip" [class]="'msc-' + (tender.samplesStatus || 'Not Started').toLowerCase().replace(' ', '-')">
-                        {{ tender.samplesStatus || 'Not Started' }}
-                      </span>
+                      <app-status-chip [status]="tender.samplesStatus || 'Not Started'" [tone]="progressTone(tender.samplesStatus)"></app-status-chip>
                     </td>
                   </ng-container>
 
@@ -367,9 +315,7 @@ interface ArtworkFile {
                   <ng-container matColumnDef="artwork">
                     <th mat-header-cell *matHeaderCellDef mat-sort-header>Artwork</th>
                     <td mat-cell *matCellDef="let tender">
-                      <span class="mini-status-chip" [class]="'msc-' + (tender.artworkStatus || 'Not Started').toLowerCase().replace(' ', '-')">
-                        {{ tender.artworkStatus || 'Not Started' }}
-                      </span>
+                      <app-status-chip [status]="tender.artworkStatus || 'Not Started'" [tone]="progressTone(tender.artworkStatus)"></app-status-chip>
                     </td>
                   </ng-container>
 
@@ -377,7 +323,7 @@ interface ArtworkFile {
                   <ng-container matColumnDef="actions">
                     <th mat-header-cell *matHeaderCellDef>Actions</th>
                     <td mat-cell *matCellDef="let tender">
-                      <button mat-icon-button [matMenuTriggerFor]="tenderMenu" matTooltip="Actions">
+                      <button aria-label="Actions" mat-icon-button [matMenuTriggerFor]="tenderMenu" matTooltip="Actions">
                         <mat-icon>more_vert</mat-icon>
                       </button>
                       <mat-menu #tenderMenu="matMenu">
@@ -423,6 +369,21 @@ interface ArtworkFile {
 
                   <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                   <tr mat-row *matRowDef="let row; columns: displayedColumns;" (click)="openTenderDetail(row)"></tr>
+                  <tr class="mat-mdc-row" *matNoDataRow>
+                    <td class="mat-mdc-cell" [attr.colspan]="displayedColumns.length">
+                      @if (searchTerm || selectedCompany || selectedProvince || selectedStatus || selectedDepartment) {
+                        <app-empty-state icon="filter_alt_off" title="No tenders match these filters"
+                                         message="Try another company, province, status or department, or clear the filters.">
+                          <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
+                        </app-empty-state>
+                      } @else {
+                        <app-empty-state icon="description" title="No tenders yet"
+                                         message="Tenders you create show here with their closing dates and status.">
+                          <button mat-stroked-button (click)="openCreateTender()"><mat-icon>add</mat-icon>Create tender</button>
+                        </app-empty-state>
+                      }
+                    </td>
+                  </tr>
                 </table>
                 <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons></mat-paginator>
               </mat-card>
@@ -497,7 +458,7 @@ interface ArtworkFile {
                                 {{ doc.daysLeft >= 0 ? doc.daysLeft + ' days' : 'EXPIRED' }}
                               </span>
                             </div>
-                            <button mat-icon-button [matMenuTriggerFor]="docMenu" (click)="$event.stopPropagation()">
+                            <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="docMenu" (click)="$event.stopPropagation()">
                               <mat-icon>more_vert</mat-icon>
                             </button>
                             <mat-menu #docMenu="matMenu">
@@ -522,7 +483,7 @@ interface ArtworkFile {
                               <span class="doc-name">{{ docType.label }}</span>
                             </div>
                             <span class="missing-badge">Not Uploaded</span>
-                            <button mat-icon-button (click)="openAddCompliance(company.code, docType.value)">
+                            <button aria-label="Add" mat-icon-button (click)="openAddCompliance(company.code, docType.value)">
                               <mat-icon>add_circle</mat-icon>
                             </button>
                           </div>
@@ -547,9 +508,9 @@ interface ArtworkFile {
             <mat-card class="calendar-card">
               <mat-card-header>
                 <mat-card-title>
-                  <button mat-icon-button (click)="prevMonth()"><mat-icon>chevron_left</mat-icon></button>
+                  <button aria-label="Previous" mat-icon-button (click)="prevMonth()"><mat-icon>chevron_left</mat-icon></button>
                   {{ calendarMonth | date:'MMMM yyyy' }}
-                  <button mat-icon-button (click)="nextMonth()"><mat-icon>chevron_right</mat-icon></button>
+                  <button aria-label="Next" mat-icon-button (click)="nextMonth()"><mat-icon>chevron_right</mat-icon></button>
                 </mat-card-title>
                 <div class="calendar-legend">
                   <span class="legend-item closing"><span class="dot"></span> Closing</span>
@@ -606,10 +567,10 @@ interface ArtworkFile {
               </mat-card-header>
               <mat-card-content>
                 @if (reminders.length === 0) {
-                  <div class="no-reminders">
-                    <mat-icon style="font-size: 48px; width: 48px; height: 48px; color: #ccc;">notifications_off</mat-icon>
-                    <p style="color: #999; margin-top: 8px;">No active reminders. Create one from the button above or from a tender's action menu.</p>
-                  </div>
+                  <app-empty-state icon="notifications_off" title="No active reminders"
+                                   message="Create one here or from a tender's action menu.">
+                    <button mat-stroked-button (click)="openReminderDialog()"><mat-icon>notification_add</mat-icon> Create Reminder</button>
+                  </app-empty-state>
                 } @else {
                   <div class="reminders-list">
                     @for (reminder of reminders; track reminder.id) {
@@ -633,18 +594,14 @@ interface ArtworkFile {
                         </div>
                         <div class="reminder-actions">
                           @if (reminder.isSent) {
-                            <mat-chip class="sent-chip">
-                              <mat-icon>check_circle</mat-icon> Sent {{ reminder.sentAt | date:'dd MMM' }}
-                            </mat-chip>
+                            <app-status-chip [status]="'Sent ' + (reminder.sentAt | date:'dd MMM')" tone="ok"></app-status-chip>
                           } @else if (reminder.isDue) {
-                            <mat-chip class="due-chip">
-                              <mat-icon>warning</mat-icon> Due Now
-                            </mat-chip>
+                            <app-status-chip status="Due Now" tone="warn"></app-status-chip>
                           }
-                          <button mat-icon-button matTooltip="Send Now" (click)="sendReminderNow(reminder)" [disabled]="reminder.isSent">
+                          <button aria-label="Send Now" mat-icon-button matTooltip="Send Now" (click)="sendReminderNow(reminder)" [disabled]="reminder.isSent">
                             <mat-icon>send</mat-icon>
                           </button>
-                          <button mat-icon-button matTooltip="Delete Reminder" (click)="deleteReminder(reminder)" color="warn">
+                          <button aria-label="Delete Reminder" mat-icon-button matTooltip="Delete Reminder" (click)="deleteReminder(reminder)" color="warn">
                             <mat-icon>delete</mat-icon>
                           </button>
                         </div>
@@ -692,7 +649,7 @@ interface ArtworkFile {
                         <span class="file-name">{{ analyzerDocument.name }}</span>
                         <span class="file-size">{{ formatFileSize(analyzerDocument.size) }}</span>
                       </div>
-                      <button mat-icon-button (click)="removeAnalyzerDocument($event)" matTooltip="Remove file">
+                      <button aria-label="Remove file" mat-icon-button (click)="removeAnalyzerDocument($event)" matTooltip="Remove file">
                         <mat-icon>close</mat-icon>
                       </button>
                     </div>
@@ -800,7 +757,7 @@ interface ArtworkFile {
                              [disabled]="aiThinking"
                              placeholder="e.g., What BBBEE level is required?">
                     </mat-form-field>
-                    <button mat-fab color="primary" (click)="sendAnalyzerQuestion()" [disabled]="!analyzerQuestion || aiThinking">
+                    <button aria-label="Send" mat-fab color="primary" (click)="sendAnalyzerQuestion()" [disabled]="!analyzerQuestion || aiThinking">
                       <mat-icon>send</mat-icon>
                     </button>
                   </div>
@@ -848,7 +805,7 @@ interface ArtworkFile {
                     }
                   </mat-select>
                 </mat-form-field>
-                <button mat-raised-button class="upload-artwork-btn" (click)="showArtworkUploadDialog = true">
+                <button mat-flat-button color="primary" (click)="showArtworkUploadDialog = true">
                   <mat-icon>cloud_upload</mat-icon> Upload Artwork
                 </button>
               </div>
@@ -919,16 +876,16 @@ interface ArtworkFile {
                       }
                     </mat-card-content>
                     <mat-card-actions class="artwork-card-actions">
-                      <button mat-icon-button matTooltip="View" (click)="openArtworkViewer(artwork)">
+                      <button aria-label="View" mat-icon-button matTooltip="View" (click)="openArtworkViewer(artwork)">
                         <mat-icon>visibility</mat-icon>
                       </button>
-                      <button mat-icon-button [matTooltip]="artwork.tenderNumber ? 'Linked to ' + artwork.tenderNumber : 'Link to Tender'" (click)="openLinkTenderDialog(artwork)">
-                        <mat-icon [style.color]="artwork.tenderNumber ? '#4caf50' : ''">link</mat-icon>
+                      <button [attr.aria-label]="artwork.tenderNumber ? 'Linked to ' + artwork.tenderNumber : 'Link to Tender'" mat-icon-button [matTooltip]="artwork.tenderNumber ? 'Linked to ' + artwork.tenderNumber : 'Link to Tender'" (click)="openLinkTenderDialog(artwork)">
+                        <mat-icon [style.color]="artwork.tenderNumber ? 'var(--color-ok)' : ''">link</mat-icon>
                       </button>
-                      <button mat-icon-button matTooltip="Download" (click)="downloadArtwork(artwork)">
+                      <button aria-label="Download" mat-icon-button matTooltip="Download" (click)="downloadArtwork(artwork)">
                         <mat-icon>download</mat-icon>
                       </button>
-                      <button mat-icon-button matTooltip="Delete" (click)="deleteArtwork(artwork)" class="delete-btn">
+                      <button aria-label="Delete" mat-icon-button matTooltip="Delete" (click)="deleteArtwork(artwork)" class="delete-btn">
                         <mat-icon>delete</mat-icon>
                       </button>
                     </mat-card-actions>
@@ -936,14 +893,19 @@ interface ArtworkFile {
                 }
               </div>
             } @else {
-              <div class="artwork-empty">
-                <mat-icon>palette</mat-icon>
-                <h3>No Artwork Found</h3>
-                <p>Upload artwork files (PDFs, images) to get started. You can link artwork to tenders and download files.</p>
-                <button mat-raised-button class="upload-artwork-btn" (click)="showArtworkUploadDialog = true">
-                  <mat-icon>cloud_upload</mat-icon> Upload Your First Artwork
-                </button>
-              </div>
+              @if (artworkFiles.length > 0) {
+                <app-empty-state icon="filter_alt_off" title="No artwork matches these filters"
+                                 message="Try another search, company or category, or clear the filters.">
+                  <button mat-stroked-button (click)="artworkSearchTerm = ''; artworkCompanyFilter = ''; artworkCategoryFilter = ''; filterArtwork()">Clear the filters</button>
+                </app-empty-state>
+              } @else {
+                <app-empty-state icon="palette" title="No artwork yet"
+                                 message="Upload artwork files (PDFs, images) to get started. You can link artwork to tenders and download files.">
+                  <button mat-flat-button color="primary" (click)="showArtworkUploadDialog = true">
+                    <mat-icon>cloud_upload</mat-icon> Upload Your First Artwork
+                  </button>
+                </app-empty-state>
+              }
             }
           </div>
         </mat-tab>
@@ -957,7 +919,7 @@ interface ArtworkFile {
           <div class="artwork-dialog-header">
             <mat-icon>cloud_upload</mat-icon>
             <h2>Upload Artwork</h2>
-            <button mat-icon-button (click)="showArtworkUploadDialog = false"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" mat-icon-button (click)="showArtworkUploadDialog = false"><mat-icon>close</mat-icon></button>
           </div>
           <div class="artwork-dialog-body">
             <div class="artwork-drop-zone"
@@ -977,7 +939,7 @@ interface ArtworkFile {
                     <span class="file-name">{{ artworkUploadFile.name }}</span>
                     <span class="file-size">{{ formatFileSize(artworkUploadFile.size) }}</span>
                   </div>
-                  <button mat-icon-button (click)="artworkUploadFile = null; $event.stopPropagation()">
+                  <button aria-label="Close" mat-icon-button (click)="artworkUploadFile = null; $event.stopPropagation()">
                     <mat-icon>close</mat-icon>
                   </button>
                 </div>
@@ -1050,10 +1012,10 @@ interface ArtworkFile {
               <button mat-raised-button class="link-tender-viewer-btn" (click)="openLinkTenderDialog(selectedArtwork)">
                 <mat-icon>link</mat-icon> {{ selectedArtwork.tenderNumber ? 'Change Tender' : 'Link to Tender' }}
               </button>
-              <button mat-icon-button matTooltip="Download" (click)="downloadArtwork(selectedArtwork)">
+              <button aria-label="Download" mat-icon-button matTooltip="Download" (click)="downloadArtwork(selectedArtwork)">
                 <mat-icon>download</mat-icon>
               </button>
-              <button mat-icon-button matTooltip="Close" (click)="closeArtworkViewer()">
+              <button aria-label="Close" mat-icon-button matTooltip="Close" (click)="closeArtworkViewer()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -1084,7 +1046,7 @@ interface ArtworkFile {
           <div class="artwork-dialog-header link-header">
             <mat-icon>link</mat-icon>
             <h2>Link Artwork to Tender</h2>
-            <button mat-icon-button (click)="closeLinkTenderDialog()"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" mat-icon-button (click)="closeLinkTenderDialog()"><mat-icon>close</mat-icon></button>
           </div>
           <div class="artwork-dialog-body">
             <div class="send-summary-card">
@@ -1135,7 +1097,7 @@ interface ArtworkFile {
           <div class="artwork-dialog-header send-header">
             <mat-icon>send</mat-icon>
             <h2>Send to Marketing / Graphics</h2>
-            <button mat-icon-button (click)="showSendToMarketingDialog = false"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" mat-icon-button (click)="showSendToMarketingDialog = false"><mat-icon>close</mat-icon></button>
           </div>
           <div class="artwork-dialog-body">
             <div class="send-summary-card">
@@ -1216,7 +1178,7 @@ interface ArtworkFile {
           <div class="reminder-dialog-header">
             <mat-icon>notification_add</mat-icon>
             <h2>Create Tender Reminder</h2>
-            <button mat-icon-button (click)="closeReminderDialog()"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" mat-icon-button (click)="closeReminderDialog()"><mat-icon>close</mat-icon></button>
           </div>
           <div class="reminder-dialog-body">
             <!-- Tender Selection -->
@@ -1237,7 +1199,7 @@ interface ArtworkFile {
                   <mat-option [value]="evt.value" [disabled]="!isEventAvailable(evt.value)">
                     <mat-icon>{{ evt.icon }}</mat-icon> {{ evt.label }}
                     @if (!isEventAvailable(evt.value)) {
-                      <span style="color: #999; font-size: 12px;"> (no date set)</span>
+                      <span style="color: var(--color-text-3); font-size: var(--text-xs);"> (no date set)</span>
                     }
                   </mat-option>
                 }
@@ -1294,115 +1256,22 @@ interface ArtworkFile {
       display: block;
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
     .tenders-container {
       padding: 24px;
-      padding-top: 88px;
+      padding-top: var(--space-5);
       max-width: 1600px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
       position: relative;
     }
 
-    /* Modern Header Styles */
-    .modern-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 32px;
-      flex-wrap: wrap;
-      gap: 24px;
-    }
-
-    .header-main {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .header-icon-wrapper {
-      width: 72px;
-      height: 72px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .header-icon-wrapper mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      color: white;
-    }
-
-    .header-text-area h1 {
-      margin: 0;
-      font-size: 32px;
-      font-weight: 700;
-      color: white;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .header-subtitle {
-      margin: 4px 0 0 0;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 15px;
-      font-weight: 400;
-    }
-
-    .header-stats-row {
-      display: flex;
-      gap: 24px;
-      flex-wrap: wrap;
-    }
-
-    .mini-stat {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      padding: 12px 20px;
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .mini-stat mat-icon {
-      font-size: 24px;
-      width: 24px;
-      height: 24px;
-      color: white;
-    }
-
-    .mini-stat-content {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .mini-value {
-      font-size: 18px;
-      font-weight: 700;
-      color: white;
-    }
-
-    .mini-label {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.8);
+    /* Page header: inside the content container so it lines up with the cards below */
+    .tenders-page-header {
+      margin-bottom: var(--space-5);
     }
 
     /* Stats Row */
@@ -1420,27 +1289,26 @@ interface ArtworkFile {
       cursor: pointer;
       transition: all 0.3s ease;
       border-left: 4px solid transparent;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
     }
 
     .stat-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-md);
     }
 
-    .stat-card.active { border-left-color: #1e90ff; }
-    .stat-card.active .stat-icon { color: #1e90ff; }
-    .stat-card.closing { border-left-color: #FF9800; }
-    .stat-card.closing .stat-icon { color: #FF9800; }
-    .stat-card.compliance { border-left-color: #F44336; }
-    .stat-card.compliance .stat-icon { color: #F44336; }
-    .stat-card.awarded { border-left-color: #4CAF50; }
-    .stat-card.awarded .stat-icon { color: #4CAF50; }
-    .stat-card.lost { border-left-color: #9E9E9E; }
-    .stat-card.lost .stat-icon { color: #9E9E9E; }
+    .stat-card.active { border-left-color: var(--color-primary); }
+    .stat-card.active .stat-icon { color: var(--color-primary); }
+    .stat-card.closing { border-left-color: var(--color-warn); }
+    .stat-card.closing .stat-icon { color: var(--color-warn); }
+    .stat-card.compliance { border-left-color: var(--color-danger); }
+    .stat-card.compliance .stat-icon { color: var(--color-danger); }
+    .stat-card.awarded { border-left-color: var(--color-ok); }
+    .stat-card.awarded .stat-icon { color: var(--color-ok); }
+    .stat-card.lost { border-left-color: var(--color-line-strong); }
+    .stat-card.lost .stat-icon { color: var(--color-text-3); }
 
     .stat-icon {
       font-size: 36px;
@@ -1449,84 +1317,50 @@ interface ArtworkFile {
     .stat-icon mat-icon { font-size: 36px; width: 36px; height: 36px; }
 
     .stat-value {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       font-weight: 700;
       line-height: 1;
-      color: #1a1a2e;
+      color: var(--color-text);
+    }
+
+    /* Big numbers shrink to fit their card instead of wrapping onto a second line (long rand
+       values, narrow screens). 100cqi is the card's width; the px is its icon and padding. */
+    .stats-row > .stat-card { container-type: inline-size; }
+    .stats-row .stat-card .stat-value {
+      white-space: nowrap;
+      font-size: clamp(18px, calc((100cqi - 44px) / 8.5), 32px);
     }
 
     .stat-label {
-      font-size: 14px;
-      color: #666;
+      font-size: var(--text-md);
+      color: var(--color-text-2);
       margin-top: 4px;
     }
 
-    /* Quick Actions */
-    .quick-actions {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    .quick-actions button {
-      background: rgba(255, 255, 255, 0.2) !important;
-      backdrop-filter: blur(10px);
-      color: white !important;
-      border: 1px solid rgba(255, 255, 255, 0.3) !important;
-      border-radius: 12px !important;
-      padding: 8px 20px !important;
-      font-weight: 500;
-      transition: all 0.3s ease;
-    }
-
-    .quick-actions button:hover {
-      background: rgba(255, 255, 255, 0.3) !important;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    .quick-actions button[color="primary"] {
-      background: white !important;
-      color: #1e90ff !important;
-    }
-
-    .quick-actions button[color="primary"]:hover {
-      background: #f0f8ff !important;
-    }
-
     /* Tabs */
-    ::ng-deep .mat-mdc-tab-group {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    :host ::ng-deep .mat-mdc-tab-group {
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
     }
 
-    ::ng-deep .mat-mdc-tab-header {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      border-radius: 20px 20px 0 0;
+    :host ::ng-deep .mat-mdc-tab-header {
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
     }
 
-    ::ng-deep .mat-mdc-tab-labels {
+    :host ::ng-deep .mat-mdc-tab-labels {
       background: transparent;
     }
 
-    ::ng-deep .mat-mdc-tab {
-      color: rgba(255, 255, 255, 0.8) !important;
+    :host ::ng-deep .mat-mdc-tab {
       font-weight: 500;
     }
 
-    ::ng-deep .mat-mdc-tab.mdc-tab--active {
-      color: white !important;
-    }
-
-    ::ng-deep .mat-mdc-tab-body-wrapper {
+    :host ::ng-deep .mat-mdc-tab-body-wrapper {
       padding: 24px;
-    }
-
-    ::ng-deep .mdc-tab-indicator__content--underline {
-      border-color: white !important;
     }
 
     .tab-icon { margin-right: 8px; }
@@ -1534,9 +1368,9 @@ interface ArtworkFile {
       margin-left: 8px;
       padding: 2px 8px;
       border-radius: 12px;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
-    .badge.warn { background: #F44336; color: white; }
+    .badge.warn { background: var(--color-danger); color: var(--color-on-primary); }
 
     .tab-content { padding: 0; }
 
@@ -1544,9 +1378,9 @@ interface ArtworkFile {
     .filter-card {
       margin-bottom: 16px;
       padding: 20px;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       border: none;
     }
 
@@ -1582,8 +1416,8 @@ interface ArtworkFile {
     /* Table */
     .table-card { 
       overflow: hidden;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       border: none;
     }
 
@@ -1592,27 +1426,27 @@ interface ArtworkFile {
     }
 
     .tenders-table tr { cursor: pointer; }
-    .tenders-table tr:hover { background: #f0f8ff; }
+    .tenders-table tr:hover { background: var(--color-canvas); }
 
     ::ng-deep .tenders-table .mat-mdc-header-row {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: var(--color-surface-2);
     }
 
     ::ng-deep .tenders-table .mat-mdc-header-cell {
-      color: white !important;
+      color: var(--color-text-2);
       font-weight: 600;
     }
 
     .company-chip {
       padding: 4px 10px;
       border-radius: 8px;
-      color: white;
+      color: var(--color-on-dark);
       font-weight: 500;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
 
     .tender-link {
-      color: #1e90ff;
+      color: var(--color-primary);
       cursor: pointer;
       font-weight: 500;
     }
@@ -1630,114 +1464,37 @@ interface ArtworkFile {
       white-space: nowrap;
     }
     .tender-dept {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .closing-cell {
       display: flex;
       flex-direction: column;
     }
-    .closing-cell.urgent .closing-date { color: #F44336; font-weight: 600; }
-    .days-left { font-size: 12px; color: #666; }
+    .closing-cell.urgent .closing-date { color: var(--color-danger); font-weight: 600; }
+    .days-left { font-size: var(--text-xs); color: var(--color-text-2); }
 
-    .status-chip {
-      padding: 6px 14px;
-      border-radius: 20px;
-      color: white;
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .mini-status-chip {
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      white-space: nowrap;
-      display: inline-block;
-    }
-    .msc-not-started { background: #f5f5f5; color: #9e9e9e; }
-    .msc-in-progress { background: #e3f2fd; color: #1565c0; }
-    .msc-submitted { background: #fff3e0; color: #e65100; }
-    .msc-approved { background: #e8f5e9; color: #2e7d32; }
-    .msc-rejected { background: #fce4ec; color: #c62828; }
 
     .workflow-badge {
       padding: 4px 10px;
       border-radius: 8px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 500;
-      background: #E0E0E0;
+      background: var(--color-line);
     }
-    .workflow-draft { background: #E3F2FD; color: #1565C0; }
-    .workflow-review { background: #FFF3E0; color: #E65100; }
-    .workflow-director-signoff { background: #F3E5F5; color: #7B1FA2; }
-    .workflow-submission-ready { background: #E8F5E9; color: #2E7D32; }
+    .workflow-draft { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .workflow-review { background: var(--color-warn-soft); color: var(--color-warn); }
+    .workflow-director-signoff { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .workflow-submission-ready { background: var(--color-ok-soft); color: var(--color-ok); }
 
-    .priority-critical { color: #D32F2F; }
-    .priority-high { color: #F57C00; }
-    .priority-medium { color: #FBC02D; }
-    .priority-low { color: #9E9E9E; }
+    .priority-critical { color: var(--color-danger); }
+    .priority-high { color: var(--color-warn); }
+    .priority-medium { color: var(--color-cat-amber); }
+    .priority-low { color: var(--color-text-3); }
 
-    .delete-action { color: #F44336 !important; }
+    .delete-action { color: var(--color-danger) !important; }
 
-    .loading-state {
-      display: flex; justify-content: center; padding: 60px 20px;
-    }
-    .loading-card {
-      background: #fff; border-radius: 20px;
-      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.08);
-      max-width: 520px; width: 100%;
-    }
-    .loading-card h3 { color: #1a1a2e; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
-    .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(25,118,210,0.12), rgba(30,136,229,0.12));
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(25,118,210,0.15);
-    }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #1976D2; }
-    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
-    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
-    .lc-progress-wrap { margin: 8px 0 24px; }
-    .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
-    .lc-progress-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #1976D2, #42a5f5, #1e88e5);
-      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
-      transition: width 0.15s ease-out; position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4)); border-radius: 0 4px 4px 0;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
-    .lc-progress-message { color: #64748b; font-weight: 500; }
-    .lc-progress-pct { color: #1976D2; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
-    .lc-step {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      flex: 1; padding-top: 16px; opacity: 0.35; transition: opacity 0.4s ease, transform 0.3s ease;
-    }
-    .lc-step.active { opacity: 1; transform: translateY(-2px); }
-    .lc-step.done { opacity: 0.65; }
-    .lc-step-dot {
-      width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
-    }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #1976D2, #1e88e5); box-shadow: 0 2px 10px rgba(25,118,210,0.3); }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
-    .lc-step.done .lc-step-dot { background: #dcfce7; }
-    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #1976D2; }
-    .lc-step.done .lc-step-label { color: #16a34a; }
 
     /* Compliance Tab */
     .compliance-summary {
@@ -1753,25 +1510,25 @@ interface ArtworkFile {
       align-items: center;
       padding: 24px;
       text-align: center;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       transition: all 0.3s ease;
     }
 
     .compliance-stat:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-md);
     }
 
     .compliance-stat mat-icon { font-size: 40px; width: 40px; height: 40px; }
-    .compliance-stat .value { font-size: 36px; font-weight: 700; margin: 8px 0; color: #1a1a2e; }
-    .compliance-stat .label { color: #666; }
+    .compliance-stat .value { font-size: var(--text-4xl); font-weight: 700; margin: 8px 0; color: var(--color-text); }
+    .compliance-stat .label { color: var(--color-text-2); }
 
-    .compliance-stat.valid mat-icon { color: #4CAF50; }
-    .compliance-stat.expiring mat-icon { color: #FF9800; }
-    .compliance-stat.warning mat-icon { color: #F44336; }
-    .compliance-stat.expired mat-icon { color: #9E9E9E; }
+    .compliance-stat.valid mat-icon { color: var(--color-ok); }
+    .compliance-stat.expiring mat-icon { color: var(--color-warn); }
+    .compliance-stat.warning mat-icon { color: var(--color-danger); }
+    .compliance-stat.expired mat-icon { color: var(--color-text-3); }
 
     .compliance-actions {
       display: flex;
@@ -1786,9 +1543,9 @@ interface ArtworkFile {
     }
 
     .company-compliance-card {
-      border-top: 4px solid #E0E0E0;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border-top: 4px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
     }
 
     .company-indicator {
@@ -1806,21 +1563,21 @@ interface ArtworkFile {
       padding: 12px;
       border-radius: 8px;
       margin-bottom: 8px;
-      background: #FAFAFA;
+      background: var(--color-canvas);
     }
 
-    .doc-row.status-valid { background: #E8F5E9; border-left: 3px solid #4CAF50; }
-    .doc-row.status-expiring { background: #FFF3E0; border-left: 3px solid #FF9800; }
-    .doc-row.status-warning { background: #FFEBEE; border-left: 3px solid #F44336; }
-    .doc-row.status-expired { background: #FAFAFA; border-left: 3px solid #9E9E9E; }
-    .doc-row.missing { background: #FFF; border: 1px dashed #CCC; }
+    .doc-row.status-valid { background: var(--color-ok-soft); border-left: 3px solid var(--color-ok); }
+    .doc-row.status-expiring { background: var(--color-warn-soft); border-left: 3px solid var(--color-warn); }
+    .doc-row.status-warning { background: var(--color-danger-soft); border-left: 3px solid var(--color-danger); }
+    .doc-row.status-expired { background: var(--color-canvas); border-left: 3px solid var(--color-line-strong); }
+    .doc-row.missing { background: var(--color-surface); border: 1px dashed var(--color-line-strong); }
 
     .doc-info {
       display: flex;
       align-items: center;
       flex: 1;
     }
-    .doc-info mat-icon { margin-right: 8px; color: #666; }
+    .doc-info mat-icon { margin-right: 8px; color: var(--color-text-2); }
     .doc-name { font-weight: 500; }
 
     .doc-status {
@@ -1829,33 +1586,33 @@ interface ArtworkFile {
       align-items: flex-end;
       margin-right: 8px;
     }
-    .expiry { font-size: 12px; color: #666; }
+    .expiry { font-size: var(--text-xs); color: var(--color-text-2); }
 
     .days-badge {
       padding: 2px 8px;
       border-radius: 10px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 500;
     }
-    .days-badge.valid { background: #C8E6C9; color: #2E7D32; }
-    .days-badge.expiring { background: #FFE0B2; color: #E65100; }
-    .days-badge.warning { background: #FFCDD2; color: #C62828; }
-    .days-badge.expired { background: #EEEEEE; color: #616161; }
+    .days-badge.valid { background: var(--color-ok-soft); color: var(--color-ok); }
+    .days-badge.expiring { background: var(--color-warn-soft); color: var(--color-warn); }
+    .days-badge.warning { background: var(--color-danger-soft); color: var(--color-danger); }
+    .days-badge.expired { background: var(--color-surface-2); color: var(--color-text-2); }
 
     .missing-badge {
       padding: 4px 12px;
-      background: #FFF3E0;
-      color: #E65100;
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
       border-radius: 12px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       margin-right: 8px;
     }
 
     /* Calendar Tab */
     .calendar-card {
       overflow: hidden;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
     }
 
     .calendar-card mat-card-header {
@@ -1865,70 +1622,71 @@ interface ArtworkFile {
       flex-wrap: wrap;
       gap: 16px;
       padding: 20px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
     }
 
     .calendar-card mat-card-header mat-card-title {
-      color: white;
+      color: var(--color-text);
     }
 
     .calendar-legend {
       display: flex;
       gap: 16px;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
 
     .legend-item {
       display: flex;
       align-items: center;
       gap: 4px;
-      color: rgba(255, 255, 255, 0.9);
+      color: var(--color-text-2);
     }
     .legend-item .dot {
       width: 10px;
       height: 10px;
       border-radius: 50%;
     }
-    .legend-item.closing .dot { background: #F44336; }
-    .legend-item.briefing .dot { background: #64B5F6; }
-    .legend-item.site-visit .dot { background: #4CAF50; }
-    .legend-item.clarification .dot { background: #FF9800; }
-    .legend-item.evaluation .dot { background: #9C27B0; }
+    .legend-item.closing .dot { background: var(--color-danger); }
+    .legend-item.briefing .dot { background: var(--color-info); }
+    .legend-item.site-visit .dot { background: var(--color-ok); }
+    .legend-item.clarification .dot { background: var(--color-warn); }
+    .legend-item.evaluation .dot { background: var(--color-cat-purple); }
 
     .calendar-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 1px;
-      background: #E0E0E0;
-      border: 1px solid #E0E0E0;
+      background: var(--color-line);
+      border: 1px solid var(--color-line);
       border-radius: 0 0 16px 16px;
       overflow: hidden;
     }
 
     .day-header {
-      background: #F8F9FA;
+      background: var(--color-canvas);
       padding: 12px;
       text-align: center;
       font-weight: 600;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     .calendar-day {
-      background: white;
+      background: var(--color-surface);
       min-height: 100px;
       padding: 8px;
       position: relative;
       transition: all 0.2s ease;
     }
-    .calendar-day:hover { background: #f0f8ff; }
-    .calendar-day.other-month { background: #FAFAFA; }
-    .calendar-day.other-month .day-number { color: #CCC; }
-    .calendar-day.today { background: #E3F2FD; }
-    .calendar-day.today .day-number { color: #1e90ff; font-weight: 700; }
+    .calendar-day:hover { background: var(--color-canvas); }
+    .calendar-day.other-month { background: var(--color-canvas); }
+    .calendar-day.other-month .day-number { color: var(--color-text-3); }
+    .calendar-day.today { background: var(--color-primary-soft); }
+    .calendar-day.today .day-number { color: var(--color-primary); font-weight: 700; }
 
     .day-number {
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 500;
     }
 
@@ -1939,7 +1697,7 @@ interface ArtworkFile {
       align-items: center;
       padding: 2px 4px;
       border-radius: 3px;
-      font-size: 10px;
+      font-size: var(--text-xs);
       margin-bottom: 2px;
       cursor: pointer;
       white-space: nowrap;
@@ -1955,11 +1713,11 @@ interface ArtworkFile {
       flex-shrink: 0;
     }
 
-    .event-closing { background: #FFCDD2; color: #C62828; }
-    .event-briefing { background: #BBDEFB; color: #1565C0; }
-    .event-siteVisit { background: #C8E6C9; color: #2E7D32; }
-    .event-clarification { background: #FFE0B2; color: #E65100; }
-    .event-evaluation { background: #E1BEE7; color: #6A1B9A; }
+    .event-closing { background: var(--color-danger-soft); color: var(--color-danger); }
+    .event-briefing { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .event-siteVisit { background: var(--color-ok-soft); color: var(--color-ok); }
+    .event-clarification { background: var(--color-warn-soft); color: var(--color-warn); }
+    .event-evaluation { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
 
     /* Analytics Tab */
     .analytics-grid {
@@ -1970,20 +1728,20 @@ interface ArtworkFile {
 
     .analytics-card { 
       padding: 20px;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-      background: white;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      background: var(--color-surface);
     }
 
     ::ng-deep .analytics-card mat-card-header {
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
       padding-bottom: 12px;
       margin-bottom: 16px;
     }
 
     ::ng-deep .analytics-card mat-card-title {
-      color: #1a1a2e;
-      font-size: 16px;
+      color: var(--color-text);
+      font-size: var(--text-lg);
       font-weight: 600;
     }
 
@@ -1992,12 +1750,9 @@ interface ArtworkFile {
       margin: 24px 0;
     }
     .big-stat .value {
-      font-size: 56px;
+      font-size: var(--text-4xl);
       font-weight: 700;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--color-primary);
     }
     .big-stat mat-progress-bar { margin-top: 16px; border-radius: 8px; }
 
@@ -2007,7 +1762,7 @@ interface ArtworkFile {
     }
 
     ::ng-deep .big-stat .mdc-linear-progress__bar-inner {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: var(--color-primary);
     }
 
     .stat-breakdown {
@@ -2016,37 +1771,37 @@ interface ArtworkFile {
       margin-top: 16px;
     }
     .breakdown-item { text-align: center; }
-    .breakdown-item .label { display: block; font-size: 12px; color: #666; }
-    .breakdown-item .value { font-size: 24px; font-weight: 600; }
-    .breakdown-item.won .value { color: #4CAF50; }
-    .breakdown-item.lost .value { color: #F44336; }
+    .breakdown-item .label { display: block; font-size: var(--text-xs); color: var(--color-text-2); }
+    .breakdown-item .value { font-size: var(--text-3xl); font-weight: 600; }
+    .breakdown-item.won .value { color: var(--color-ok); }
+    .breakdown-item.lost .value { color: var(--color-danger); }
 
     .value-row {
       display: flex;
       justify-content: space-between;
       padding: 12px 0;
-      border-bottom: 1px solid #EEE;
+      border-bottom: 1px solid var(--color-line);
     }
     .value-row .value { font-weight: 600; }
-    .value-row .value.highlight { color: #4CAF50; font-size: 18px; }
+    .value-row .value.highlight { color: var(--color-ok); font-size: var(--text-xl); }
 
     .bar-row {
       display: flex;
       align-items: center;
       margin-bottom: 12px;
     }
-    .bar-row .label { width: 60px; font-size: 12px; }
+    .bar-row .label { width: 60px; font-size: var(--text-xs); }
     .bar-container {
       flex: 1;
       height: 24px;
-      background: #EEE;
+      background: var(--color-surface-2);
       border-radius: 12px;
       margin: 0 8px;
       overflow: hidden;
     }
     .bar {
       height: 100%;
-      background: linear-gradient(90deg, #1e90ff, #4169e1);
+      background: var(--color-primary);
       border-radius: 12px;
       transition: width 0.5s ease;
     }
@@ -2057,7 +1812,7 @@ interface ArtworkFile {
       justify-content: space-between;
       align-items: center;
       padding: 10px 0;
-      border-bottom: 1px solid #EEE;
+      border-bottom: 1px solid var(--color-line);
     }
     .status-row .value, .company-row .value, .dept-row .value { font-weight: 600; }
 
@@ -2071,10 +1826,10 @@ interface ArtworkFile {
     }
 
     .upload-section {
-      background: white;
-      border-radius: 16px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       padding: 32px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      box-shadow: var(--shadow-sm);
     }
 
     .upload-header {
@@ -2086,45 +1841,45 @@ interface ArtworkFile {
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     .upload-header h3 {
       margin: 12px 0 8px 0;
-      font-size: 24px;
-      color: #1a1a2e;
+      font-size: var(--text-3xl);
+      color: var(--color-text);
     }
 
     .upload-header p {
-      color: #666;
+      color: var(--color-text-2);
       margin: 0;
     }
 
     .drop-zone {
-      border: 2px dashed #ccc;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 16px;
       padding: 48px;
       text-align: center;
       cursor: pointer;
       transition: all 0.3s ease;
-      background: #fafafa;
+      background: var(--color-canvas);
     }
 
     .drop-zone:hover {
-      border-color: #1e90ff;
-      background: #f0f7ff;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
     }
 
     .drop-zone.dragover {
-      border-color: #1e90ff;
-      background: #e3f2fd;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
       transform: scale(1.02);
     }
 
     .drop-zone.has-file {
       border-style: solid;
-      border-color: #4CAF50;
-      background: #E8F5E9;
+      border-color: var(--color-ok);
+      background: var(--color-ok-soft);
       padding: 24px;
     }
 
@@ -2132,22 +1887,22 @@ interface ArtworkFile {
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #ccc;
+      color: var(--color-text-3);
     }
 
     .drop-zone:hover .upload-icon {
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     .drop-text {
-      font-size: 18px;
-      color: #666;
+      font-size: var(--text-xl);
+      color: var(--color-text-2);
       margin: 16px 0 8px 0;
     }
 
     .drop-hint {
-      font-size: 13px;
-      color: #999;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
       margin: 0;
     }
 
@@ -2162,7 +1917,7 @@ interface ArtworkFile {
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #F44336;
+      color: var(--color-danger);
     }
 
     .file-details {
@@ -2172,14 +1927,14 @@ interface ArtworkFile {
     .file-name {
       display: block;
       font-weight: 600;
-      color: #333;
-      font-size: 16px;
+      color: var(--color-text);
+      font-size: var(--text-lg);
     }
 
     .file-size {
       display: block;
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
 
     .analyze-btn {
@@ -2189,7 +1944,7 @@ interface ArtworkFile {
       gap: 8px;
       margin: 24px auto 0;
       padding: 12px 32px;
-      font-size: 16px;
+      font-size: var(--text-lg);
     }
 
     .analyze-btn mat-spinner {
@@ -2198,12 +1953,12 @@ interface ArtworkFile {
 
     /* ── Analyzer Progress Bar ── */
     .analyzer-progress {
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       padding: 24px;
       margin-top: 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-      border: 1px solid #e2e8f0;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--color-line);
     }
 
     .analyzer-progress-header {
@@ -2214,7 +1969,7 @@ interface ArtworkFile {
     }
 
     .analyzer-pulse-icon {
-      color: #ffd700;
+      color: var(--color-cat-amber);
       font-size: 22px;
       width: 22px;
       height: 22px;
@@ -2227,18 +1982,18 @@ interface ArtworkFile {
     }
 
     .analyzer-progress-title {
-      font-size: 15px;
+      font-size: var(--text-md);
       font-weight: 700;
-      color: #1e293b;
+      color: var(--color-text);
       flex: 1;
     }
 
     .analyzer-progress-timer {
-      font-family: 'SF Mono', 'Cascadia Code', monospace;
-      font-size: 13px;
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
       font-weight: 700;
-      color: #64748b;
-      background: #f1f5f9;
+      color: var(--color-text-3);
+      background: var(--color-surface-2);
       padding: 3px 10px;
       border-radius: 8px;
     }
@@ -2246,7 +2001,7 @@ interface ArtworkFile {
     .analyzer-progress-track {
       width: 100%;
       height: 8px;
-      background: #e2e8f0;
+      background: var(--color-line);
       border-radius: 4px;
       overflow: hidden;
       margin-bottom: 16px;
@@ -2254,23 +2009,10 @@ interface ArtworkFile {
 
     .analyzer-progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7);
+      background: var(--color-primary);
       border-radius: 4px;
       transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
-    }
-
-    .analyzer-progress-fill::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-      animation: analyzerShimmer 1.5s infinite;
-    }
-
-    @keyframes analyzerShimmer {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
     }
 
     .analyzer-progress-steps {
@@ -2284,18 +2026,18 @@ interface ArtworkFile {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 13px;
-      color: #94a3b8;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
       transition: all 0.3s;
     }
 
     .analyzer-step.active {
-      color: #6366f1;
+      color: var(--color-primary);
       font-weight: 600;
     }
 
     .analyzer-step.done {
-      color: #22c55e;
+      color: var(--color-ok);
     }
 
     .analyzer-step-icon {
@@ -2312,22 +2054,22 @@ interface ArtworkFile {
       height: 18px;
     }
 
-    .analyzer-step.done .analyzer-step-icon mat-icon { color: #22c55e; }
-    .analyzer-step:not(.done):not(.active) .analyzer-step-icon mat-icon { color: #cbd5e1; }
+    .analyzer-step.done .analyzer-step-icon mat-icon { color: var(--color-ok); }
+    .analyzer-step:not(.done):not(.active) .analyzer-step-icon mat-icon { color: var(--color-line-strong); }
 
     .analyzer-progress-msg {
       text-align: center;
-      color: #64748b;
-      font-size: 13px;
+      color: var(--color-text-3);
+      font-size: var(--text-sm);
       margin: 8px 0 0;
       font-style: italic;
     }
 
     /* Chat Section */
     .chat-section {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -2339,13 +2081,16 @@ interface ArtworkFile {
       align-items: center;
       gap: 12px;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
     }
+
+    .chat-header mat-icon { color: var(--color-primary); }
 
     .chat-header h4 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--text-xl);
     }
 
     .chat-messages {
@@ -2355,7 +2100,7 @@ interface ArtworkFile {
       display: flex;
       flex-direction: column;
       gap: 16px;
-      background: #f8f9fa;
+      background: var(--color-canvas);
     }
 
     .message {
@@ -2380,29 +2125,29 @@ interface ArtworkFile {
     }
 
     .message.assistant .message-avatar {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
 
     .message.user .message-avatar {
-      background: #E0E0E0;
-      color: #666;
+      background: var(--color-line);
+      color: var(--color-text-2);
     }
 
     .message-content {
-      background: white;
+      background: var(--color-surface);
       padding: 12px 16px;
       border-radius: 16px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      box-shadow: var(--shadow-sm);
     }
 
     .message.user .message-content {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
     }
 
     .message-text {
-      font-size: 14px;
+      font-size: var(--text-md);
       line-height: 1.6;
     }
 
@@ -2417,13 +2162,14 @@ interface ArtworkFile {
 
     .message-time {
       display: block;
-      font-size: 11px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       margin-top: 6px;
     }
 
     .message.user .message-time {
-      color: rgba(255, 255, 255, 0.7);
+      color: var(--color-on-primary);
+      opacity: 0.75;
     }
 
     .typing-indicator {
@@ -2436,7 +2182,7 @@ interface ArtworkFile {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #1e90ff;
+      background: var(--color-primary);
       animation: typing 1.4s infinite ease-in-out;
     }
 
@@ -2453,19 +2199,19 @@ interface ArtworkFile {
       flex-wrap: wrap;
       gap: 8px;
       padding: 12px 24px;
-      background: #f0f0f0;
-      border-top: 1px solid #e0e0e0;
+      background: var(--color-surface-2);
+      border-top: 1px solid var(--color-line);
     }
 
     .quick-label {
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       align-self: center;
       margin-right: 8px;
     }
 
     .quick-questions button {
-      font-size: 12px;
+      font-size: var(--text-xs);
       padding: 4px 12px;
       border-radius: 16px;
     }
@@ -2475,8 +2221,8 @@ interface ArtworkFile {
       align-items: center;
       gap: 12px;
       padding: 16px 24px;
-      background: white;
-      border-top: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-line);
     }
 
     .message-input {
@@ -2490,7 +2236,6 @@ interface ArtworkFile {
     @media (max-width: 1200px) {
       .stats-row { grid-template-columns: repeat(3, 1fr); }
       .compliance-grid { grid-template-columns: repeat(2, 1fr); }
-      .modern-header { flex-direction: column; align-items: flex-start; }
     }
 
     @media (max-width: 768px) {
@@ -2499,24 +2244,17 @@ interface ArtworkFile {
       .compliance-summary { grid-template-columns: repeat(2, 1fr); }
       .compliance-grid { grid-template-columns: 1fr; }
       .analytics-grid { grid-template-columns: 1fr; }
-      .header-text-area h1 { font-size: 24px; }
-      .header-icon-wrapper { width: 56px; height: 56px; }
-      .header-icon-wrapper mat-icon { font-size: 32px; width: 32px; height: 32px; }
-      .header-stats-row { width: 100%; }
-      .mini-stat { flex: 1; justify-content: center; }
     }
 
     @media (max-width: 480px) {
       .stats-row { grid-template-columns: 1fr; }
       .compliance-summary { grid-template-columns: 1fr; }
-      .quick-actions { flex-wrap: wrap; }
-      .quick-actions button { flex: 1; min-width: 120px; }
     }
 
     /* Create Reminder Button */
     .create-reminder-btn {
       margin-left: 16px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       height: 32px;
       line-height: 32px;
     }
@@ -2529,21 +2267,17 @@ interface ArtworkFile {
 
     /* Reminders Card */
     .reminders-card {
-      background: rgba(255, 255, 255, 0.95);
+      background: var(--color-surface);
       border-radius: 12px;
     }
     .reminder-count-badge {
-      background: #2563eb;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       border-radius: 12px;
       padding: 2px 8px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       margin-left: 8px;
       vertical-align: middle;
-    }
-    .no-reminders {
-      text-align: center;
-      padding: 32px;
     }
     .reminders-list {
       display: flex;
@@ -2556,27 +2290,27 @@ interface ArtworkFile {
       justify-content: space-between;
       padding: 12px 16px;
       border-radius: 8px;
-      background: #f8f9ff;
-      border: 1px solid #e8eaf6;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
       transition: all 0.2s;
     }
     .reminder-item:hover {
-      background: #f0f1ff;
-      border-color: #c5cae9;
+      background: var(--color-surface-2);
+      border-color: var(--color-line-strong);
     }
     .reminder-sent {
       opacity: 0.6;
-      background: #f5f5f5;
-      border-color: #e0e0e0;
+      background: var(--color-surface-2);
+      border-color: var(--color-line);
     }
     .reminder-due {
-      background: #fff3e0;
-      border-color: #ffcc02;
+      background: var(--color-warn-soft);
+      border-color: var(--color-warn);
       animation: pulse-border 2s infinite;
     }
     @keyframes pulse-border {
-      0%, 100% { border-color: #ffcc02; }
-      50% { border-color: #ff9800; }
+      0%, 100% { border-color: var(--color-line-strong); }
+      50% { border-color: var(--color-warn); }
     }
     .reminder-left {
       display: flex;
@@ -2592,60 +2326,42 @@ interface ArtworkFile {
       align-items: center;
       justify-content: center;
       font-size: 20px;
-      color: white;
+      color: var(--color-on-primary);
     }
-    .event-type-closingdate { background: #f44336; color: white; }
-    .event-type-briefing { background: #2196f3; color: white; }
-    .event-type-sitevisit { background: #4caf50; color: white; }
-    .event-type-clarification { background: #ff9800; color: white; }
-    .event-type-evaluation { background: #9c27b0; color: white; }
+    .event-type-closingdate { background: var(--color-danger); color: var(--color-on-primary); }
+    .event-type-briefing { background: var(--color-primary); color: var(--color-on-primary); }
+    .event-type-sitevisit { background: var(--color-ok); color: var(--color-on-primary); }
+    .event-type-clarification { background: var(--color-warn); color: var(--color-on-primary); }
+    .event-type-evaluation { background: var(--color-cat-purple); color: var(--color-on-primary); }
     .reminder-info {
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
     .reminder-info strong {
-      font-size: 14px;
-      color: #1f2937;
+      font-size: var(--text-md);
+      color: var(--color-text);
     }
     .reminder-meta {
-      font-size: 12px;
-      color: #6b7280;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
     .reminder-emails {
-      font-size: 11px;
-      color: #2563eb;
+      font-size: var(--text-xs);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       gap: 4px;
     }
     .reminder-notes {
-      font-size: 11px;
-      color: #9e9e9e;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       font-style: italic;
     }
     .reminder-actions {
       display: flex;
       align-items: center;
       gap: 4px;
-    }
-    .sent-chip {
-      font-size: 11px !important;
-      min-height: 24px !important;
-      background: #e8f5e9 !important;
-      color: #2e7d32 !important;
-    }
-    .due-chip {
-      font-size: 11px !important;
-      min-height: 24px !important;
-      background: #fff3e0 !important;
-      color: #ef6c00 !important;
-    }
-    .sent-chip mat-icon, .due-chip mat-icon {
-      font-size: 14px !important;
-      width: 14px !important;
-      height: 14px !important;
-      margin-right: 4px;
     }
 
     /* Reminder Dialog Overlay */
@@ -2655,7 +2371,7 @@ interface ArtworkFile {
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--color-scrim);
       z-index: 1100;
       display: flex;
       align-items: center;
@@ -2663,13 +2379,13 @@ interface ArtworkFile {
       backdrop-filter: blur(4px);
     }
     .reminder-dialog {
-      background: white;
-      border-radius: 16px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       width: 520px;
       max-width: 95vw;
       max-height: 90vh;
       overflow-y: auto;
-      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--shadow-lg);
       animation: dialog-in 0.25s ease-out;
     }
     @keyframes dialog-in {
@@ -2681,17 +2397,19 @@ interface ArtworkFile {
       align-items: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-      color: white;
-      border-radius: 16px 16px 0 0;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     }
+    .reminder-dialog-header mat-icon { color: var(--color-primary); }
     .reminder-dialog-header h2 {
       margin: 0;
-      font-size: 18px;
+      font-size: var(--text-xl);
       flex: 1;
     }
     .reminder-dialog-header button {
-      color: white;
+      color: var(--color-text-2);
     }
     .reminder-dialog-body {
       padding: 24px;
@@ -2707,21 +2425,21 @@ interface ArtworkFile {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       border-radius: 8px;
-      font-size: 13px;
-      color: #2e7d32;
+      font-size: var(--text-sm);
+      color: var(--color-ok);
     }
     .reminder-preview mat-icon {
       font-size: 20px;
-      color: #4caf50;
+      color: var(--color-ok);
     }
     .reminder-dialog-actions {
       display: flex;
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 24px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     /* ========== ARTWORK VAULT STYLES ========== */
@@ -2738,12 +2456,12 @@ interface ArtworkFile {
       align-items: center;
       gap: 10px;
       margin: 0;
-      font-size: 24px;
+      font-size: var(--text-3xl);
       font-weight: 700;
-      color: #1a1a2e;
+      color: var(--color-text);
     }
-    .artwork-header-left h2 mat-icon { font-size: 28px; width: 28px; height: 28px; color: #9C27B0; }
-    .artwork-subtitle { margin: 4px 0 0; color: #666; font-size: 14px; }
+    .artwork-header-left h2 mat-icon { font-size: 28px; width: 28px; height: 28px; color: var(--color-cat-purple); }
+    .artwork-subtitle { margin: 4px 0 0; color: var(--color-text-2); font-size: var(--text-md); }
     .artwork-header-actions {
       display: flex;
       gap: 12px;
@@ -2754,13 +2472,6 @@ interface ArtworkFile {
     .artwork-filter-field { width: 160px; }
     .artwork-search .mat-mdc-form-field-subscript-wrapper,
     .artwork-filter-field .mat-mdc-form-field-subscript-wrapper { display: none; }
-    .upload-artwork-btn {
-      background: linear-gradient(135deg, #9C27B0, #7B1FA2) !important;
-      color: white !important;
-      border-radius: 12px !important;
-      padding: 8px 20px !important;
-      font-weight: 600;
-    }
 
     .artwork-stats-row {
       display: flex;
@@ -2772,21 +2483,21 @@ interface ArtworkFile {
       display: flex;
       align-items: center;
       gap: 6px;
-      background: rgba(255,255,255,0.9);
+      background: var(--color-surface);
       padding: 8px 16px;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 500;
-      color: #555;
-      border: 1px solid #e0e0e0;
+      color: var(--color-text-2);
+      border: 1px solid var(--color-line);
     }
-    .artwork-stat-chip mat-icon { font-size: 18px; width: 18px; height: 18px; color: #9C27B0; }
-    .artwork-stat-chip.pending { border-color: #FF9800; }
-    .artwork-stat-chip.pending mat-icon { color: #FF9800; }
-    .artwork-stat-chip.sent { border-color: #4CAF50; }
-    .artwork-stat-chip.sent mat-icon { color: #4CAF50; }
-    .artwork-stat-chip.linked { border-color: #1976D2; }
-    .artwork-stat-chip.linked mat-icon { color: #1976D2; }
+    .artwork-stat-chip mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-cat-purple); }
+    .artwork-stat-chip.pending { border-color: var(--color-warn); }
+    .artwork-stat-chip.pending mat-icon { color: var(--color-warn); }
+    .artwork-stat-chip.sent { border-color: var(--color-ok); }
+    .artwork-stat-chip.sent mat-icon { color: var(--color-ok); }
+    .artwork-stat-chip.linked { border-color: var(--color-primary); }
+    .artwork-stat-chip.linked mat-icon { color: var(--color-primary); }
 
     .artwork-grid {
       display: grid;
@@ -2794,19 +2505,19 @@ interface ArtworkFile {
       gap: 20px;
     }
     .artwork-card {
-      border-radius: 16px !important;
+      border-radius: var(--radius-lg);
       overflow: hidden;
       transition: all 0.3s ease;
       border: 2px solid transparent;
     }
-    .artwork-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
-    .artwork-card.has-annotations { border-color: #FF9800; }
-    .artwork-card.sent-to-marketing { border-color: #4CAF50; }
+    .artwork-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+    .artwork-card.has-annotations { border-color: var(--color-warn); }
+    .artwork-card.sent-to-marketing { border-color: var(--color-ok); }
 
     .artwork-card-preview {
       position: relative;
       height: 180px;
-      background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+      background: var(--color-surface-2);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2818,59 +2529,59 @@ interface ArtworkFile {
       flex-direction: column;
       align-items: center;
       gap: 8px;
-      color: #999;
+      color: var(--color-text-3);
     }
-    .artwork-pdf-thumb mat-icon { font-size: 56px; width: 56px; height: 56px; color: #F44336; }
-    .artwork-img-thumb mat-icon { font-size: 56px; width: 56px; height: 56px; color: #2196F3; }
-    .artwork-pdf-thumb span, .artwork-img-thumb span { font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+    .artwork-pdf-thumb mat-icon { font-size: 56px; width: 56px; height: 56px; color: var(--color-danger); }
+    .artwork-img-thumb mat-icon { font-size: 56px; width: 56px; height: 56px; color: var(--color-primary); }
+    .artwork-pdf-thumb span, .artwork-img-thumb span { font-size: var(--text-xs); font-weight: 700; letter-spacing: 1px; }
 
     .artwork-card-overlay {
       position: absolute;
       inset: 0;
-      background: rgba(0,0,0,0.6);
+      background: var(--color-scrim);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-on-dark);
       opacity: 0;
       transition: opacity 0.3s ease;
       gap: 4px;
     }
     .artwork-card-preview:hover .artwork-card-overlay { opacity: 1; }
     .artwork-card-overlay mat-icon { font-size: 32px; width: 32px; height: 32px; }
-    .artwork-card-overlay span { font-size: 13px; font-weight: 500; }
+    .artwork-card-overlay span { font-size: var(--text-sm); font-weight: 500; }
 
     .annotation-badge {
       position: absolute;
       top: 10px;
       right: 10px;
-      background: #FF9800;
-      color: white;
+      background: var(--color-warn);
+      color: var(--color-on-primary);
       border-radius: 20px;
       padding: 4px 10px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
       display: flex;
       align-items: center;
       gap: 4px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-sm);
     }
     .annotation-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
     .sent-badge {
       position: absolute;
       top: 10px;
       left: 10px;
-      background: #4CAF50;
-      color: white;
+      background: var(--color-ok);
+      color: var(--color-on-primary);
       border-radius: 20px;
       padding: 4px 10px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
       display: flex;
       align-items: center;
       gap: 4px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-sm);
     }
     .sent-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
 
@@ -2878,25 +2589,25 @@ interface ArtworkFile {
       position: absolute;
       top: 10px;
       right: 10px;
-      background: #1976D2;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       border-radius: 20px;
       padding: 4px 10px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
       display: flex;
       align-items: center;
       gap: 4px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-sm);
     }
     .linked-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
 
-    .artwork-card-info { padding: 16px !important; }
+    .artwork-card-info { padding: 16px; }
     .artwork-card-title {
       margin: 0 0 8px;
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 600;
-      color: #1a1a2e;
+      color: var(--color-text);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2907,17 +2618,17 @@ interface ArtworkFile {
       margin-bottom: 8px;
     }
     .artwork-company-chip, .artwork-category-chip {
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 2px 8px;
       border-radius: 10px;
       font-weight: 600;
     }
-    .artwork-category-chip { background: #f3e5f5; color: #9C27B0; }
+    .artwork-category-chip { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
     .artwork-card-details {
       display: flex;
       gap: 12px;
-      font-size: 12px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
     .artwork-detail { display: flex; align-items: center; gap: 4px; }
     .artwork-detail mat-icon { font-size: 14px; width: 14px; height: 14px; }
@@ -2926,35 +2637,20 @@ interface ArtworkFile {
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
-      color: #1976D2;
+      font-size: var(--text-xs);
+      color: var(--color-primary);
       font-weight: 500;
     }
     .artwork-tender-link mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .artwork-card-actions { display: flex; justify-content: flex-end; padding: 4px 8px !important; }
-    .artwork-card-actions .delete-btn { color: #F44336; }
+    .artwork-card-actions { display: flex; justify-content: flex-end; padding: 4px 8px; }
+    .artwork-card-actions .delete-btn { color: var(--color-danger); }
 
-    .artwork-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 80px 20px;
-      text-align: center;
-      color: #888;
-      background: rgba(255,255,255,0.6);
-      border-radius: 20px;
-      border: 2px dashed #ddd;
-    }
-    .artwork-empty mat-icon { font-size: 64px; width: 64px; height: 64px; color: #ccc; margin-bottom: 16px; }
-    .artwork-empty h3 { margin: 0 0 8px; color: #555; font-size: 20px; }
-    .artwork-empty p { max-width: 400px; font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
 
     /* Artwork Overlay Dialogs */
     .artwork-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.5);
+      background: var(--color-scrim);
       z-index: 1002;
       display: flex;
       align-items: center;
@@ -2962,37 +2658,37 @@ interface ArtworkFile {
       backdrop-filter: blur(4px);
     }
     .artwork-upload-dialog, .send-marketing-dialog, .link-tender-dialog {
-      background: white;
-      border-radius: 20px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       width: 90%;
       max-width: 560px;
       max-height: 90vh;
       overflow-y: auto;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.3);
+      box-shadow: var(--shadow-lg);
     }
     .artwork-dialog-header {
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 20px 24px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
     }
-    .artwork-dialog-header mat-icon { font-size: 28px; width: 28px; height: 28px; color: #9C27B0; }
-    .artwork-dialog-header.send-header mat-icon { color: #4CAF50; }
-    .artwork-dialog-header.link-header mat-icon { color: #1976D2; }
-    .artwork-dialog-header h2 { margin: 0; flex: 1; font-size: 20px; font-weight: 700; }
+    .artwork-dialog-header mat-icon { font-size: 28px; width: 28px; height: 28px; color: var(--color-cat-purple); }
+    .artwork-dialog-header.send-header mat-icon { color: var(--color-ok); }
+    .artwork-dialog-header.link-header mat-icon { color: var(--color-primary); }
+    .artwork-dialog-header h2 { margin: 0; flex: 1; font-size: var(--text-2xl); font-weight: 700; }
     .artwork-dialog-body { padding: 24px; }
     .artwork-dialog-body .full-width { width: 100%; }
     .current-link-info {
       display: flex;
       align-items: center;
       gap: 10px;
-      background: #e3f2fd;
-      color: #1565c0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-hover);
       border-radius: 12px;
       padding: 12px 16px;
       margin-bottom: 20px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 500;
     }
     .current-link-info mat-icon { font-size: 20px; width: 20px; height: 20px; }
@@ -3001,26 +2697,26 @@ interface ArtworkFile {
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 24px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
     .artwork-drop-zone {
-      border: 2px dashed #ccc;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 16px;
       padding: 40px 20px;
       text-align: center;
       cursor: pointer;
       transition: all 0.3s ease;
       margin-bottom: 20px;
-      background: #fafafa;
+      background: var(--color-canvas);
     }
     .artwork-drop-zone:hover, .artwork-drop-zone.dragover {
-      border-color: #9C27B0;
-      background: #f3e5f5;
+      border-color: var(--color-cat-purple);
+      background: var(--color-cat-purple-soft);
     }
 
     /* Send to Marketing */
     .send-summary-card {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 20px;
@@ -3030,55 +2726,55 @@ interface ArtworkFile {
       align-items: center;
       gap: 12px;
     }
-    .send-summary-info mat-icon { font-size: 36px; width: 36px; height: 36px; color: #9C27B0; }
+    .send-summary-info mat-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-cat-purple); }
     .send-summary-info div { display: flex; flex-direction: column; }
-    .send-summary-info strong { font-size: 15px; }
-    .send-summary-info span { font-size: 13px; color: #666; }
+    .send-summary-info strong { font-size: var(--text-md); }
+    .send-summary-info span { font-size: var(--text-sm); color: var(--color-text-2); }
 
     .send-annotations-preview {
       margin-bottom: 20px;
       max-height: 200px;
       overflow-y: auto;
     }
-    .send-annotations-preview h4 { margin: 0 0 12px; font-size: 14px; color: #333; }
+    .send-annotations-preview h4 { margin: 0 0 12px; font-size: var(--text-md); color: var(--color-text); }
     .send-annotation-item {
       display: flex;
       align-items: flex-start;
       gap: 10px;
       padding: 8px 12px;
-      border-left: 3px solid #ccc;
+      border-left: 3px solid var(--color-line-strong);
       margin-bottom: 8px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 0 8px 8px 0;
     }
     .send-ann-num {
-      color: white;
+      color: var(--color-on-dark);
       border-radius: 50%;
       width: 24px;
       height: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 700;
       flex-shrink: 0;
     }
-    .send-ann-text { font-size: 13px; color: #555; line-height: 1.4; }
+    .send-ann-text { font-size: var(--text-sm); color: var(--color-text-2); line-height: 1.4; }
 
     .send-progress-section {
       padding: 16px 24px 20px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
     .send-progress-bar {
       height: 8px;
-      background: #e0e0e0;
+      background: var(--color-line);
       border-radius: 4px;
       overflow: hidden;
       margin-bottom: 10px;
     }
     .send-progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #9C27B0, #E040FB);
+      background: var(--color-cat-purple);
       border-radius: 4px;
       transition: width 0.4s ease;
     }
@@ -3088,13 +2784,13 @@ interface ArtworkFile {
       align-items: center;
     }
     .send-progress-status {
-      font-size: 13px;
-      color: #666;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
       font-weight: 500;
     }
     .send-progress-percent {
-      font-size: 13px;
-      color: #9C27B0;
+      font-size: var(--text-sm);
+      color: var(--color-cat-purple);
       font-weight: 700;
     }
 
@@ -3102,7 +2798,7 @@ interface ArtworkFile {
     .artwork-viewer-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.85);
+      background: var(--color-scrim);
       z-index: 1001;
       display: flex;
       flex-direction: column;
@@ -3118,8 +2814,8 @@ interface ArtworkFile {
       justify-content: space-between;
       align-items: center;
       padding: 12px 20px;
-      background: rgba(255,255,255,0.95);
-      border-bottom: 1px solid #eee;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
       z-index: 10;
     }
     .viewer-header-left {
@@ -3127,10 +2823,10 @@ interface ArtworkFile {
       align-items: center;
       gap: 12px;
     }
-    .viewer-header-left mat-icon { font-size: 24px; width: 24px; height: 24px; color: #9C27B0; }
-    .viewer-header-left h3 { margin: 0; font-size: 16px; font-weight: 600; }
+    .viewer-header-left mat-icon { font-size: 24px; width: 24px; height: 24px; color: var(--color-cat-purple); }
+    .viewer-header-left h3 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
     .viewer-company-chip {
-      font-size: 12px;
+      font-size: var(--text-xs);
       padding: 2px 10px;
       border-radius: 10px;
       font-weight: 600;
@@ -3148,8 +2844,8 @@ interface ArtworkFile {
       align-items: center;
       gap: 12px;
       padding: 8px 16px;
-      background: #f5f5f5;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--color-surface-2);
+      border-bottom: 1px solid var(--color-line);
       position: absolute;
       top: 0;
       left: 0;
@@ -3157,7 +2853,7 @@ interface ArtworkFile {
       z-index: 5;
     }
     .tool-group { display: flex; gap: 4px; }
-    .tool-group button.active { background: #9C27B0; color: white; border-radius: 8px; }
+    .tool-group button.active { background: var(--color-cat-purple); color: var(--color-on-primary); border-radius: 8px; }
     .color-picker-field { width: 110px; }
     .color-picker-field .mat-mdc-form-field-subscript-wrapper { display: none; }
     .color-dot {
@@ -3173,16 +2869,16 @@ interface ArtworkFile {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 500;
-      color: #666;
+      color: var(--color-text-2);
     }
     .annotation-count mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
     .artwork-preview-area {
       flex: 1;
       overflow: auto;
-      background: #e0e0e0;
+      background: var(--color-line);
       margin-top: 48px;
     }
     .artwork-preview-area.artwork-preview-full {
@@ -3192,18 +2888,14 @@ interface ArtworkFile {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: #e3f2fd;
-      color: #1976D2;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       padding: 4px 12px;
       border-radius: 16px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
     }
     .viewer-tender-chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    .link-tender-viewer-btn {
-      border-radius: 12px !important;
-      font-weight: 600 !important;
-    }
     .artwork-scroll-content {
       position: relative;
       min-height: 100%;
@@ -3215,8 +2907,8 @@ interface ArtworkFile {
     }
     .pdf-page-canvas {
       display: block;
-      background: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-md);
       max-width: 100%;
     }
     .artwork-image-preview {
@@ -3231,9 +2923,9 @@ interface ArtworkFile {
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 11px;
-      color: #9C27B0;
-      background: rgba(156, 39, 176, 0.08);
+      font-size: var(--text-xs);
+      color: var(--color-cat-purple);
+      background: var(--color-cat-purple-soft);
       padding: 2px 10px;
       border-radius: 12px;
       font-weight: 500;
@@ -3264,8 +2956,8 @@ interface ArtworkFile {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      color: var(--color-on-dark);
+      box-shadow: var(--shadow-md);
       position: relative;
       transition: transform 0.2s ease;
     }
@@ -3275,17 +2967,17 @@ interface ArtworkFile {
       position: absolute;
       top: -6px;
       right: -6px;
-      background: white;
-      color: #333;
+      background: var(--color-surface);
+      color: var(--color-text);
       border-radius: 50%;
       width: 18px;
       height: 18px;
-      font-size: 10px;
+      font-size: var(--text-xs);
       font-weight: 700;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-sm);
     }
 
     .annotation-popup {
@@ -3293,10 +2985,10 @@ interface ArtworkFile {
       top: 36px;
       left: -4px;
       width: 240px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-      border: 2px solid #ccc;
+      box-shadow: var(--shadow-lg);
+      border: 2px solid var(--color-line-strong);
       overflow: hidden;
       z-index: 10;
     }
@@ -3305,16 +2997,16 @@ interface ArtworkFile {
       justify-content: space-between;
       align-items: center;
       padding: 6px 12px;
-      color: white;
-      font-size: 12px;
+      color: var(--color-on-dark);
+      font-size: var(--text-xs);
       font-weight: 600;
     }
-    .annotation-popup-header button { color: white; transform: scale(0.7); }
+    .annotation-popup-header button { color: var(--color-on-dark); transform: scale(0.7); }
     .annotation-text {
       width: 100%;
       border: none;
       padding: 10px 12px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-family: inherit;
       resize: none;
       outline: none;
@@ -3323,25 +3015,25 @@ interface ArtworkFile {
     /* Annotations Side Panel */
     .annotations-panel {
       width: 320px;
-      background: white;
-      border-left: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border-left: 1px solid var(--color-line);
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .annotations-panel-header {
       padding: 16px 20px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
     }
     .annotations-panel-header h4 {
       margin: 0;
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 600;
     }
-    .annotations-panel-header h4 mat-icon { font-size: 20px; width: 20px; height: 20px; color: #9C27B0; }
+    .annotations-panel-header h4 mat-icon { font-size: 20px; width: 20px; height: 20px; color: var(--color-cat-purple); }
     .annotations-list {
       flex: 1;
       overflow-y: auto;
@@ -3350,21 +3042,21 @@ interface ArtworkFile {
     .no-annotations {
       text-align: center;
       padding: 40px 20px;
-      color: #aaa;
+      color: var(--color-text-3);
     }
-    .no-annotations mat-icon { font-size: 40px; width: 40px; height: 40px; color: #ddd; margin-bottom: 12px; }
-    .no-annotations p { font-size: 13px; line-height: 1.6; }
+    .no-annotations mat-icon { font-size: 40px; width: 40px; height: 40px; color: var(--color-line-strong); margin-bottom: 12px; }
+    .no-annotations p { font-size: var(--text-sm); line-height: 1.6; }
 
     .annotation-list-item {
-      border-left: 3px solid #ccc;
+      border-left: 3px solid var(--color-line-strong);
       padding: 12px;
       margin-bottom: 12px;
       border-radius: 0 12px 12px 0;
-      background: #fafafa;
+      background: var(--color-canvas);
       transition: background 0.2s;
       cursor: pointer;
     }
-    .annotation-list-item:hover { background: #f0f0f0; }
+    .annotation-list-item:hover { background: var(--color-surface-2); }
     .annotation-item-header {
       display: flex;
       align-items: center;
@@ -3372,39 +3064,39 @@ interface ArtworkFile {
       margin-bottom: 8px;
     }
     .annotation-item-number {
-      color: white;
+      color: var(--color-on-dark);
       border-radius: 50%;
       width: 24px;
       height: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 700;
     }
-    .annotation-item-type { font-size: 12px; color: #888; flex: 1; }
+    .annotation-item-type { font-size: var(--text-xs); color: var(--color-text-3); flex: 1; }
     .annotation-item-text {
       width: 100%;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       border-radius: 8px;
       padding: 8px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-family: inherit;
       resize: none;
       outline: none;
-      background: white;
+      background: var(--color-surface);
     }
-    .annotation-item-text:focus { border-color: #9C27B0; }
-    .annotation-item-time { font-size: 11px; color: #aaa; margin-top: 6px; display: block; }
+    .annotation-item-text:focus { border-color: var(--color-cat-purple); }
+    .annotation-item-time { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 6px; display: block; }
 
     .annotations-panel-footer {
       padding: 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
     .send-marketing-btn {
       width: 100%;
-      background: linear-gradient(135deg, #4CAF50, #388E3C) !important;
-      color: white !important;
+      background: var(--color-ok) !important;
+      color: var(--color-on-primary) !important;
       border-radius: 12px !important;
       padding: 10px !important;
       font-weight: 600;
@@ -3473,14 +3165,14 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   provinces = ['KZN', 'WC', 'EC', 'GP', 'FS', 'NC', 'NW', 'LP', 'MP'];
 
-  statuses = [
-    { value: 'Draft', label: 'Draft', color: '#4CAF50' },
-    { value: 'Submitted', label: 'Submitted', color: '#2196F3' },
-    { value: 'Clarification', label: 'Clarification', color: '#FF9800' },
-    { value: 'Evaluation', label: 'Evaluation', color: '#9C27B0' },
-    { value: 'Awarded', label: 'Awarded', color: '#FFC107' },
-    { value: 'Lost', label: 'Lost', color: '#F44336' },
-    { value: 'Cancelled', label: 'Cancelled', color: '#212121' }
+  statuses: { value: string; label: string; color: string; tone: ChipTone }[] = [
+    { value: 'Draft', label: 'Draft', color: 'var(--color-warn)', tone: 'warn' },
+    { value: 'Submitted', label: 'Submitted', color: 'var(--color-info)', tone: 'info' },
+    { value: 'Clarification', label: 'Clarification', color: 'var(--color-warn)', tone: 'warn' },
+    { value: 'Evaluation', label: 'Evaluation', color: 'var(--color-info)', tone: 'info' },
+    { value: 'Awarded', label: 'Awarded', color: 'var(--color-ok)', tone: 'ok' },
+    { value: 'Lost', label: 'Lost', color: 'var(--color-danger)', tone: 'danger' },
+    { value: 'Cancelled', label: 'Cancelled', color: 'var(--color-text-3)', tone: 'neutral' }
   ];
 
   workflowStatuses = ['Draft', 'Review', 'Director Signoff', 'Submission Ready'];
@@ -3604,9 +3296,10 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
     private artworkService: ArtworkService,
     private authService: AuthService,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private http: HttpClient,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -3665,7 +3358,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         console.error('Error loading data:', err);
         this.stopLoadingProgress();
         this.loading = false;
-        this.snackBar.open('Error loading tender data', 'Close', { duration: 3000 });
+        this.toast.error('Error loading tender data');
       }
     });
   }
@@ -3723,7 +3416,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
       },
       error: () => {
         this.loading = false;
-        this.snackBar.open('Error filtering tenders', 'Close', { duration: 3000 });
+        this.toast.error('Error filtering tenders');
       }
     });
   }
@@ -3756,8 +3449,18 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
     return this.companies.find(c => c.code === code)?.color || '#666';
   }
 
-  getStatusColor(status: string): string {
-    return this.statuses.find(s => s.value === status)?.color || '#666';
+  getStatusTone(status: string): ChipTone | undefined {
+    return this.statuses.find(s => s.value === status)?.tone;
+  }
+
+  progressTone(status: string | undefined): ChipTone {
+    const tones: { [key: string]: ChipTone } = {
+      'In Progress': 'info',
+      'Submitted': 'warn',
+      'Approved': 'ok',
+      'Rejected': 'danger'
+    };
+    return tones[status || 'Not Started'] || 'neutral';
   }
 
   getDaysUntilClosing(date: Date): number {
@@ -3892,31 +3595,36 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
   updateTenderStatus(tender: Tender, status: string): void {
     this.tenderService.updateStatus(tender.id, status).subscribe({
       next: () => {
-        this.snackBar.open('Status updated', 'Close', { duration: 2000 });
+        this.toast.done('Status updated');
         this.loadData();
       },
-      error: () => this.snackBar.open('Error updating status', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error updating status')
     });
   }
 
   updateTenderWorkflow(tender: Tender, workflow: string): void {
     this.tenderService.updateWorkflow(tender.id, workflow).subscribe({
       next: () => {
-        this.snackBar.open('Workflow updated', 'Close', { duration: 2000 });
+        this.toast.done('Workflow updated');
         this.loadData();
       },
-      error: () => this.snackBar.open('Error updating workflow', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error updating workflow')
     });
   }
 
-  deleteTender(tender: Tender): void {
-    if (confirm(`Are you sure you want to delete tender ${tender.tenderNumber}?`)) {
+  async deleteTender(tender: Tender): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete tender ${tender.tenderNumber}?`,
+      message: 'The tender is deleted and removed from the list.',
+      confirmText: 'Delete tender',
+      danger: true
+    })) {
       this.tenderService.deleteTender(tender.id).subscribe({
         next: () => {
-          this.snackBar.open('Tender deleted', 'Close', { duration: 2000 });
+          this.toast.done('Tender deleted');
           this.loadData();
         },
-        error: () => this.snackBar.open('Error deleting tender', 'Close', { duration: 3000 })
+        error: () => this.toast.error('Error deleting tender')
       });
     }
   }
@@ -3946,7 +3654,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   previewComplianceDoc(doc: ComplianceDocument): void {
     if (!doc.fileName) {
-      this.snackBar.open('No file uploaded for this document', 'Close', { duration: 3000 });
+      this.toast.warn('No file uploaded for this document');
       return;
     }
 
@@ -3956,7 +3664,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         const fileURL = window.URL.createObjectURL(blob);
         window.open(fileURL, '_blank');
       },
-      error: () => this.snackBar.open('Error loading document preview', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error loading document preview')
     });
   }
 
@@ -3987,17 +3695,17 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         a.click();
         window.URL.revokeObjectURL(url);
       },
-      error: () => this.snackBar.open('Error downloading document', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error downloading document')
     });
   }
 
   checkComplianceAlerts(): void {
     this.tenderService.checkAndSendAlerts().subscribe({
       next: (result) => {
-        this.snackBar.open(`${result.alertsCreated} alerts generated`, 'Close', { duration: 3000 });
+        this.toast.done(`${result.alertsCreated} alerts generated`);
         this.loadData();
       },
-      error: () => this.snackBar.open('Error checking alerts', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error checking alerts')
     });
   }
 
@@ -4027,7 +3735,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         this.documentAnalyzed = false;
         this.analyzerMessages = [];
       } else {
-        this.snackBar.open('Please upload a PDF file', 'Close', { duration: 3000 });
+        this.toast.warn('Please upload a PDF file');
       }
     }
   }
@@ -4041,7 +3749,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         this.documentAnalyzed = false;
         this.analyzerMessages = [];
       } else {
-        this.snackBar.open('Please upload a PDF file', 'Close', { duration: 3000 });
+        this.toast.warn('Please upload a PDF file');
       }
     }
   }
@@ -4090,7 +3798,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         console.error('Analysis error:', err);
         this.stopAnalyzerProgress();
         this.analyzingDocument = false;
-        this.snackBar.open('Error analyzing document: ' + (err.error?.error || err.message || 'Unknown error'), 'Close', { duration: 5000 });
+        this.toast.error('Error analyzing document: ' + (err.error?.error || err.message || 'Unknown error'));
       }
     });
   }
@@ -4185,7 +3893,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
       },
       error: () => {
         this.aiThinking = false;
-        this.snackBar.open('Error getting response. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Error getting response. Please try again.');
       }
     });
   }
@@ -4282,25 +3990,30 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
       next: () => {
         this.closeReminderDialog();
         this.loadReminders();
-        this.snackBar.open('✅ Reminder created successfully! Welly will send the email.', 'Close', { duration: 4000 });
+        this.toast.done('Reminder created successfully. Welly will send the email.');
       },
       error: (err) => {
         const msg = err.error || 'Failed to create reminder';
-        this.snackBar.open('Error: ' + msg, 'Close', { duration: 4000 });
+        this.toast.error('Error: ' + msg);
       }
     });
   }
 
-  deleteReminder(reminder: TenderReminder): void {
-    if (!confirm(`Delete this ${this.getEventTypeLabel(reminder.eventType)} reminder?`)) return;
+  async deleteReminder(reminder: TenderReminder): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete this ${this.getEventTypeLabel(reminder.eventType)} reminder?`,
+      message: 'The reminder is deleted.',
+      confirmText: 'Delete reminder',
+      danger: true
+    }))) return;
 
     this.tenderService.deleteReminder(reminder.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.loadReminders();
-        this.snackBar.open('Reminder deleted', 'Close', { duration: 3000 });
+        this.toast.done('Reminder deleted');
       },
       error: () => {
-        this.snackBar.open('Error deleting reminder', 'Close', { duration: 3000 });
+        this.toast.error('Error deleting reminder');
       }
     });
   }
@@ -4309,10 +4022,10 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.tenderService.sendReminderNow(reminder.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: (result) => {
         this.loadReminders();
-        this.snackBar.open(result.success ? '✅ ' + result.message : '❌ ' + result.message, 'Close', { duration: 4000 });
+        if (result.success) this.toast.done(result.message); else this.toast.error(result.message);
       },
       error: (err) => {
-        this.snackBar.open('Failed to send reminder: ' + (err.error?.message || 'Unknown error'), 'Close', { duration: 4000 });
+        this.toast.error('Failed to send reminder: ' + (err.error?.message || 'Unknown error'));
       }
     });
   }
@@ -4322,13 +4035,13 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
       next: (result) => {
         this.loadReminders();
         if (result.sent > 0) {
-          this.snackBar.open(`✅ Sent ${result.sent} of ${result.total} due reminders`, 'Close', { duration: 4000 });
+          this.toast.done(`Sent ${result.sent} of ${result.total} due reminders`);
         } else {
-          this.snackBar.open('No reminders due at this time', 'Close', { duration: 3000 });
+          this.toast.info('No reminders due at this time');
         }
       },
       error: () => {
-        this.snackBar.open('Error checking reminders', 'Close', { duration: 3000 });
+        this.toast.error('Error checking reminders');
       }
     });
   }
@@ -4449,11 +4162,11 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         this.showArtworkUploadDialog = false;
         this.artworkUploadFile = null;
         this.artworkUploadForm = { companyCode: '', category: '', tenderId: 0, notes: '' };
-        this.snackBar.open('✅ Artwork uploaded successfully', 'Close', { duration: 3000 });
+        this.toast.done('Artwork uploaded successfully');
       },
       error: (err) => {
         this.artworkUploading = false;
-        this.snackBar.open('❌ Failed to upload artwork: ' + (err.error?.message || err.message || 'Unknown error'), 'Close', { duration: 4000 });
+        this.toast.error('Failed to upload artwork: ' + (err.error?.message || err.message || 'Unknown error'));
       }
     });
   }
@@ -4497,7 +4210,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         document.body.classList.add('artwork-viewer-open');
       },
       error: () => {
-        this.snackBar.open('File not found on server — it may need to be re-uploaded', 'OK', { duration: 5000 });
+        this.toast.error('File not found on server — it may need to be re-uploaded');
       }
     });
   }
@@ -4587,7 +4300,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         this.filterArtwork();
       },
       error: () => {
-        this.snackBar.open('❌ Failed to save annotation', 'Close', { duration: 3000 });
+        this.toast.error('Failed to save annotation');
       }
     });
   }
@@ -4600,7 +4313,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
   saveAnnotationText(annotation: ArtworkAnnotation): void {
     this.artworkService.updateAnnotation(annotation.id, { text: annotation.text }).subscribe({
       error: () => {
-        this.snackBar.open('❌ Failed to save annotation text', 'Close', { duration: 3000 });
+        this.toast.error('Failed to save annotation text');
       }
     });
   }
@@ -4617,7 +4330,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         this.filterArtwork();
       },
       error: () => {
-        this.snackBar.open('❌ Failed to delete annotation', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delete annotation');
       }
     });
   }
@@ -4628,9 +4341,14 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.removeAnnotation(lastAnnotation);
   }
 
-  clearAnnotations(): void {
+  async clearAnnotations(): Promise<void> {
     if (!this.selectedArtwork) return;
-    if (confirm('Clear all annotations from this artwork?')) {
+    if (await this.confirmDialog.ask({
+      title: `Clear all annotations from ${this.selectedArtwork.fileName}?`,
+      message: `All ${this.selectedArtwork.annotations.length} annotation(s) on this artwork are removed.`,
+      confirmText: 'Clear annotations',
+      danger: true
+    })) {
       this.artworkService.clearAnnotations(this.selectedArtwork.id).subscribe({
         next: () => {
           this.selectedArtwork!.annotations = [];
@@ -4638,7 +4356,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
           this.filterArtwork();
         },
         error: () => {
-          this.snackBar.open('❌ Failed to clear annotations', 'Close', { duration: 3000 });
+          this.toast.error('Failed to clear annotations');
         }
       });
     }
@@ -4678,13 +4396,13 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
           this.selectedArtwork.tenderId = tenderId ?? undefined;
           this.selectedArtwork.tenderNumber = tenderNumber ?? undefined;
         }
-        this.snackBar.open(tenderId ? `Linked to ${tenderNumber}` : 'Unlinked from tender', 'OK', { duration: 3000 });
+        this.toast.done(tenderId ? `Linked to ${tenderNumber}` : 'Unlinked from tender');
         this.linkingTender = false;
         this.showLinkTenderDialog = false;
       },
       error: (err) => {
         this.linkingTender = false;
-        this.snackBar.open('Failed to update tender link', 'Close', { duration: 4000 });
+        this.toast.error('Failed to update tender link');
       }
     });
   }
@@ -4706,19 +4424,19 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
 
     this.sendingToMarketing = true;
     this.sendToMarketingProgress = 0;
-    this.sendToMarketingStatus = '📋 Preparing change request...';
+    this.sendToMarketingStatus = 'Preparing change request...';
     const artwork = this.sendToMarketingArtwork;
     const user = this.authService.currentUserValue;
 
     // Simulate progress stages while waiting for the HTTP response
     const stages = [
-      { delay: 800, progress: 15, status: '📋 Compiling annotations...' },
-      { delay: 2000, progress: 30, status: '📧 Building email template...' },
-      { delay: 3500, progress: 50, status: '📤 Connecting to mail server...' },
-      { delay: 5500, progress: 65, status: '📤 Sending email to recipients...' },
-      { delay: 8000, progress: 78, status: '⏳ Waiting for confirmation...' },
-      { delay: 12000, progress: 85, status: '⏳ Still sending...' },
-      { delay: 18000, progress: 90, status: '⏳ Almost there...' },
+      { delay: 800, progress: 15, status: 'Compiling annotations...' },
+      { delay: 2000, progress: 30, status: 'Building email template...' },
+      { delay: 3500, progress: 50, status: 'Connecting to mail server...' },
+      { delay: 5500, progress: 65, status: 'Sending email to recipients...' },
+      { delay: 8000, progress: 78, status: 'Waiting for confirmation...' },
+      { delay: 12000, progress: 85, status: 'Still sending...' },
+      { delay: 18000, progress: 90, status: 'Almost there...' },
     ];
     const timers: any[] = [];
     stages.forEach(s => {
@@ -4743,7 +4461,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
       next: (result) => {
         this.clearMarketingProgress();
         this.sendToMarketingProgress = 100;
-        this.sendToMarketingStatus = '✅ Email sent successfully!';
+        this.sendToMarketingStatus = 'Email sent successfully.';
         artwork.sentToMarketing = true;
         artwork.sentToMarketingAt = new Date();
         this.filterArtwork();
@@ -4752,7 +4470,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
           this.sendToMarketingProgress = 0;
           this.showSendToMarketingDialog = false;
           this.sendToMarketingArtwork = null;
-          this.snackBar.open(`✅ ${(result as any).message}`, 'Close', { duration: 4000 });
+          this.toast.done(`${(result as any).message}`);
         }, 1200);
       },
       error: (err) => {
@@ -4762,7 +4480,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         const msg = err.name === 'TimeoutError'
           ? 'Request timed out — the email may still be sending in the background'
           : (err.error?.message || err.message || 'Unknown error');
-        this.snackBar.open('❌ Failed to send change request: ' + msg, 'Close', { duration: 5000 });
+        this.toast.error('Failed to send change request: ' + msg);
       }
     });
   }
@@ -4785,22 +4503,27 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
         URL.revokeObjectURL(url);
       },
       error: () => {
-        this.snackBar.open('❌ Error downloading file', 'Close', { duration: 3000 });
+        this.toast.error('Error downloading file');
       }
     });
   }
 
-  deleteArtwork(artwork: ArtworkFile): void {
-    if (!confirm(`Delete artwork "${artwork.fileName}"? This cannot be undone.`)) return;
+  async deleteArtwork(artwork: ArtworkFile): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete artwork ${artwork.fileName}?`,
+      message: 'The artwork file is deleted. This can\'t be undone.',
+      confirmText: 'Delete artwork',
+      danger: true
+    }))) return;
 
     this.artworkService.deleteArtwork(artwork.id).subscribe({
       next: () => {
         this.artworkFiles = this.artworkFiles.filter(a => a.id !== artwork.id);
         this.filterArtwork();
-        this.snackBar.open('✅ Artwork deleted', 'Close', { duration: 3000 });
+        this.toast.done('Artwork deleted');
       },
       error: () => {
-        this.snackBar.open('❌ Failed to delete artwork', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delete artwork');
       }
     });
   }

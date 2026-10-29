@@ -9,6 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { NavbarComponent } from '../../shared/navbar/navbar.component';
 import { environment } from '../../../../environments/environment';
+import { ConfirmService } from '../../../ui/confirm.service';
 
 interface CustomerRow {
   customerNumber: string;
@@ -160,7 +161,7 @@ interface CustomerDetail {
               <h2>{{ d.customerName || d.customerNumber }}</h2>
               <span class="db-dialog-sub">{{ d.customerNumber }} · {{ d.transactionCount }} transactions</span>
             </div>
-            <button class="db-close" (click)="closeDetail()"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" class="db-close" (click)="closeDetail()"><mat-icon>close</mat-icon></button>
           </div>
 
           <div class="db-dialog-metrics">
@@ -186,7 +187,7 @@ interface CustomerDetail {
                         <td>{{ p.paymentReference || '—' }}</td>
                         <td>{{ p.recordedByName || '—' }}</td>
                         <td class="db-collected">{{ p.amount | currency:'ZAR':'symbol':'1.2-2' }}</td>
-                        <td><button class="db-del" (click)="deleteCollection(p, d)"><mat-icon>delete</mat-icon></button></td>
+                        <td><button aria-label="Delete" class="db-del" (click)="deleteCollection(p, d)"><mat-icon>delete</mat-icon></button></td>
                       </tr>
                     }
                   </tbody>
@@ -222,7 +223,7 @@ interface CustomerDetail {
         <div class="db-collect-dialog" (click)="$event.stopPropagation()">
           <div class="db-dialog-head">
             <h2>Record Collection</h2>
-            <button class="db-close" (click)="closeCollect()"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" class="db-close" (click)="closeCollect()"><mat-icon>close</mat-icon></button>
           </div>
           <div class="db-collect-body">
             <p class="db-collect-cust">{{ cf.customerName || cf.customerNumber }} · Outstanding {{ cf.outstanding | currency:'ZAR':'symbol':'1.2-2' }}</p>
@@ -255,7 +256,7 @@ interface CustomerDetail {
     }
   `,
   styles: [`
-    :host { display:block; min-height:100vh; background:linear-gradient(135deg,#059669 0%,#047857 100%); }
+    :host { display:block; min-height:100vh; background:linear-gradient(135deg,var(--color-ok) 0%,#047857 100%); }
     .db-container { max-width:1300px; margin:0 auto; padding:24px 20px 60px; }
     .db-back { display:inline-flex; align-items:center; gap:6px; margin-bottom:16px; padding:8px 16px 8px 12px; border:none; border-radius:10px; background:rgba(255,255,255,.2); color:#fff; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
     .db-back:hover { background:rgba(255,255,255,.32); }
@@ -267,75 +268,75 @@ interface CustomerDetail {
     .db-title h1 { margin:0; color:#fff; font-size:24px; font-weight:700; }
     .db-title p { margin:4px 0 0; color:rgba(255,255,255,.85); font-size:14px; }
 
-    .db-loading { background:#fff; border-radius:14px; padding:60px; display:flex; justify-content:center; }
+    .db-loading { background:var(--color-surface); border-radius:14px; padding:60px; display:flex; justify-content:center; }
     .db-stats { display:grid; grid-template-columns:2fr 1fr 1fr; gap:14px; margin-bottom:16px; }
     .db-hero { background:linear-gradient(135deg,#065f46,#047857); border-radius:16px; padding:24px 28px; display:flex; flex-direction:column; gap:4px; }
     .db-hero-label { color:rgba(255,255,255,.85); font-size:13px; text-transform:uppercase; letter-spacing:.05em; }
     .db-hero-value { color:#fff; font-size:32px; font-weight:800; }
     .db-hero-sub { color:rgba(255,255,255,.7); font-size:13px; }
-    .db-stat { background:#fff; border-radius:14px; padding:20px; display:flex; flex-direction:column; gap:2px; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.1); }
-    .db-stat.collected .db-stat-value { color:#059669; }
-    .db-stat-value { font-size:24px; font-weight:700; color:#111827; }
-    .db-stat-label { font-size:12px; text-transform:uppercase; color:#9ca3af; font-weight:600; }
+    .db-stat { background:var(--color-surface); border-radius:14px; padding:20px; display:flex; flex-direction:column; gap:2px; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.1); }
+    .db-stat.collected .db-stat-value { color:var(--color-ok); }
+    .db-stat-value { font-size:24px; font-weight:700; color:var(--color-text); }
+    .db-stat-label { font-size:12px; text-transform:uppercase; color:var(--color-text-3); font-weight:600; }
 
     .db-companies { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; margin-bottom:20px; }
     .db-company { text-align:left; background:rgba(255,255,255,.9); border:2px solid transparent; border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:3px; cursor:pointer; transition:all .15s; }
-    .db-company:hover { background:#fff; }
-    .db-company.active { border-color:#fff; background:#fff; box-shadow:0 4px 14px rgba(0,0,0,.18); }
+    .db-company:hover { background:var(--color-surface); }
+    .db-company.active { border-color:var(--color-surface); background:var(--color-surface); box-shadow:0 4px 14px rgba(0,0,0,.18); }
     .db-company-name { font-weight:700; color:#065f46; font-size:14px; }
-    .db-company-out { font-size:20px; font-weight:800; color:#111827; }
-    .db-company-meta { font-size:11px; color:#6b7280; }
+    .db-company-out { font-size:20px; font-weight:800; color:var(--color-text); }
+    .db-company-meta { font-size:11px; color:var(--color-text-3); }
 
     .db-filters { margin-bottom:16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-    .db-search { display:flex; align-items:center; gap:8px; background:#fff; padding:12px 16px; border-radius:12px; max-width:420px; flex:1; min-width:260px; }
-    .db-search mat-icon { color:#9ca3af; }
+    .db-search { display:flex; align-items:center; gap:8px; background:var(--color-surface); padding:12px 16px; border-radius:12px; max-width:420px; flex:1; min-width:260px; }
+    .db-search mat-icon { color:var(--color-text-3); }
     .db-search input { border:none; outline:none; font-size:14px; width:100%; }
     .db-toggle { display:flex; align-items:center; gap:6px; color:#fff; font-size:14px; font-weight:600; cursor:pointer; }
 
-    .db-table-wrap { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); }
+    .db-table-wrap { background:var(--color-surface); border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); }
     .db-table { width:100%; border-collapse:collapse; }
-    .db-table th { text-align:left; padding:12px 16px; font-size:12px; text-transform:uppercase; color:#9ca3af; background:#f9fafb; border-bottom:1px solid #eef2f7; }
-    .db-table td { padding:13px 16px; font-size:14px; color:#374151; border-bottom:1px solid #f3f4f6; }
+    .db-table th { text-align:left; padding:12px 16px; font-size:12px; text-transform:uppercase; color:var(--color-text-3); background:var(--color-canvas); border-bottom:1px solid var(--color-line); }
+    .db-table td { padding:13px 16px; font-size:14px; color:var(--color-text-2); border-bottom:1px solid var(--color-surface-2); }
     .db-row { cursor:pointer; transition:background .15s; }
-    .db-row:hover { background:#f0fdf4; }
-    .db-name { font-weight:600; color:#111827; }
-    .db-num { font-family:monospace; color:#6b7280; }
-    .db-amount { font-weight:600; color:#374151; }
-    .db-collected { font-weight:600; color:#059669; }
-    .db-outstanding { font-weight:700; color:#dc2626; }
-    .db-outstanding.zero { color:#9ca3af; }
-    .db-chevron { color:#d1d5db; }
+    .db-row:hover { background:var(--color-ok-soft); }
+    .db-name { font-weight:600; color:var(--color-text); }
+    .db-num { font-family:monospace; color:var(--color-text-3); }
+    .db-amount { font-weight:600; color:var(--color-text-2); }
+    .db-collected { font-weight:600; color:var(--color-ok); }
+    .db-outstanding { font-weight:700; color:var(--color-danger); }
+    .db-outstanding.zero { color:var(--color-text-3); }
+    .db-chevron { color:var(--color-line-strong); }
     .db-prod { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .db-empty { padding:30px; text-align:center; color:#9ca3af; }
+    .db-empty { padding:30px; text-align:center; color:var(--color-text-3); }
 
     .db-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px; }
-    .db-dialog { background:#fff; border-radius:16px; width:900px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
-    .db-dialog-head { display:flex; justify-content:space-between; align-items:flex-start; padding:20px 24px; border-bottom:1px solid #eef2f7; }
+    .db-dialog { background:var(--color-surface); border-radius:16px; width:900px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
+    .db-dialog-head { display:flex; justify-content:space-between; align-items:flex-start; padding:20px 24px; border-bottom:1px solid var(--color-line); }
     .db-dialog-head h2 { margin:0; font-size:19px; }
-    .db-dialog-sub { font-size:13px; color:#6b7280; }
-    .db-close { background:none; border:none; cursor:pointer; color:#9ca3af; }
-    .db-dialog-metrics { display:flex; align-items:center; gap:24px; padding:16px 24px; background:#f9fafb; border-bottom:1px solid #eef2f7; flex-wrap:wrap; }
+    .db-dialog-sub { font-size:13px; color:var(--color-text-3); }
+    .db-close { background:none; border:none; cursor:pointer; color:var(--color-text-3); }
+    .db-dialog-metrics { display:flex; align-items:center; gap:24px; padding:16px 24px; background:var(--color-canvas); border-bottom:1px solid var(--color-line); flex-wrap:wrap; }
     .db-metric { display:flex; flex-direction:column; gap:2px; }
-    .db-metric-label { font-size:11px; text-transform:uppercase; color:#9ca3af; font-weight:600; }
-    .db-metric-value { font-size:18px; font-weight:700; color:#111827; }
-    .db-metric-value.green { color:#059669; }
-    .db-metric-value.red { color:#dc2626; }
-    .db-collect-btn { margin-left:auto; display:inline-flex; align-items:center; gap:6px; background:#059669; color:#fff; border:none; border-radius:10px; padding:10px 18px; font-size:14px; font-weight:600; cursor:pointer; }
+    .db-metric-label { font-size:11px; text-transform:uppercase; color:var(--color-text-3); font-weight:600; }
+    .db-metric-value { font-size:18px; font-weight:700; color:var(--color-text); }
+    .db-metric-value.green { color:var(--color-ok); }
+    .db-metric-value.red { color:var(--color-danger); }
+    .db-collect-btn { margin-left:auto; display:inline-flex; align-items:center; gap:6px; background:var(--color-ok); color:#fff; border:none; border-radius:10px; padding:10px 18px; font-size:14px; font-weight:600; cursor:pointer; }
     .db-collect-btn:hover { background:#047857; }
     .db-dialog-body { padding:0 24px 20px; overflow-y:auto; }
-    .db-section-title { font-size:12px; text-transform:uppercase; color:#6b7280; font-weight:700; margin:18px 0 8px; }
-    .db-del { background:none; border:none; cursor:pointer; color:#dc2626; }
+    .db-section-title { font-size:12px; text-transform:uppercase; color:var(--color-text-3); font-weight:700; margin:18px 0 8px; }
+    .db-del { background:none; border:none; cursor:pointer; color:var(--color-danger); }
     .db-del mat-icon { font-size:18px; width:18px; height:18px; }
 
-    .db-collect-dialog { background:#fff; border-radius:16px; width:460px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+    .db-collect-dialog { background:var(--color-surface); border-radius:16px; width:460px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
     .db-collect-body { padding:20px 24px 24px; display:flex; flex-direction:column; overflow-y:auto; }
-    .db-collect-cust { margin:0 0 12px; font-size:13px; color:#6b7280; }
-    .db-collect-body label { font-size:12px; font-weight:600; color:#374151; margin:10px 0 4px; text-transform:uppercase; }
-    .db-collect-body input, .db-collect-body select, .db-collect-body textarea { border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; font-size:14px; outline:none; }
-    .db-collect-body input:focus, .db-collect-body select:focus, .db-collect-body textarea:focus { border-color:#059669; }
+    .db-collect-cust { margin:0 0 12px; font-size:13px; color:var(--color-text-3); }
+    .db-collect-body label { font-size:12px; font-weight:600; color:var(--color-text-2); margin:10px 0 4px; text-transform:uppercase; }
+    .db-collect-body input, .db-collect-body select, .db-collect-body textarea { border:1px solid var(--color-line-strong); border-radius:8px; padding:10px 12px; font-size:14px; outline:none; }
+    .db-collect-body input:focus, .db-collect-body select:focus, .db-collect-body textarea:focus { border-color:var(--color-ok); }
     .db-collect-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
-    .db-btn-cancel { background:#f3f4f6; color:#374151; border:none; border-radius:8px; padding:10px 18px; font-weight:600; cursor:pointer; }
-    .db-btn-save { background:#059669; color:#fff; border:none; border-radius:8px; padding:10px 18px; font-weight:600; cursor:pointer; }
+    .db-btn-cancel { background:var(--color-surface-2); color:var(--color-text-2); border:none; border-radius:8px; padding:10px 18px; font-weight:600; cursor:pointer; }
+    .db-btn-save { background:var(--color-ok); color:#fff; border:none; border-radius:8px; padding:10px 18px; font-weight:600; cursor:pointer; }
     .db-btn-save:disabled { opacity:.5; cursor:not-allowed; }
   `]
 })
@@ -369,7 +370,7 @@ export class DebtorsComponent implements OnInit {
     return list;
   });
 
-  constructor(private http: HttpClient, private router: Router, private snack: MatSnackBar) {}
+  constructor(private http: HttpClient, private router: Router, private snack: MatSnackBar, private readonly confirmDialog: ConfirmService) {}
 
   goBack(): void { this.router.navigate(['/finance']); }
 
@@ -444,8 +445,13 @@ export class DebtorsComponent implements OnInit {
     });
   }
 
-  deleteCollection(p: PaymentRow, d: CustomerDetail): void {
-    if (!confirm('Remove this collection record?')) return;
+  async deleteCollection(p: PaymentRow, d: CustomerDetail): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: 'Remove this collection record?',
+      message: `The collection is removed from ${d.customerName || d.customerNumber}.`,
+      confirmText: 'Remove collection',
+      danger: true
+    }))) return;
     this.http.delete(`${environment.apiUrl}/finance/debtors/payments/${p.id}`).subscribe({
       next: () => { this.snack.open('Collection removed', 'OK', { duration: 2000 }); this.refreshCustomer(d.customerNumber); this.load(); },
       error: () => this.snack.open('Failed to remove', 'Dismiss', { duration: 3000 })

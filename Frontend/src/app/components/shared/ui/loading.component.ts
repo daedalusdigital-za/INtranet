@@ -19,7 +19,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     </div>
   `,
   styles: [`
-    .ld { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 48px 0; color: #64748b; }
+    .ld { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 48px 0; color: var(--color-text-3); }
     .ld--inline { flex-direction: row; padding: 12px 0; gap: 10px; }
     .ld__msg { margin: 0; font-size: 0.9rem; }
   `]

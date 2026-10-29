@@ -10,6 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NavbarComponent } from '../../shared/navbar/navbar.component';
 import { environment } from '../../../../environments/environment';
+import { ConfirmService } from '../../../ui/confirm.service';
 
 interface Commitment {
   id: number;
@@ -137,11 +138,11 @@ interface Summary {
                   </td>
                   <td>
                     <div class="cm-actions">
-                      <button class="cm-act edit" (click)="openEdit(c)" matTooltip="Edit"><mat-icon>edit</mat-icon></button>
-                      <button class="cm-act toggle" (click)="toggle(c)" [matTooltip]="c.isActive ? 'Pause' : 'Activate'">
+                      <button aria-label="Edit" class="cm-act edit" (click)="openEdit(c)" matTooltip="Edit"><mat-icon>edit</mat-icon></button>
+                      <button [attr.aria-label]="c.isActive ? 'Pause' : 'Activate'" class="cm-act toggle" (click)="toggle(c)" [matTooltip]="c.isActive ? 'Pause' : 'Activate'">
                         <mat-icon>{{ c.isActive ? 'pause_circle' : 'play_circle' }}</mat-icon>
                       </button>
-                      <button class="cm-act del" (click)="remove(c)" matTooltip="Delete"><mat-icon>delete</mat-icon></button>
+                      <button aria-label="Delete" class="cm-act del" (click)="remove(c)" matTooltip="Delete"><mat-icon>delete</mat-icon></button>
                     </div>
                   </td>
                 </tr>
@@ -158,7 +159,7 @@ interface Summary {
         <div class="cm-dialog" (click)="$event.stopPropagation()">
           <div class="cm-dialog-head">
             <h2>{{ editing().id ? 'Edit Commitment' : 'New Commitment' }}</h2>
-            <button class="cm-close" (click)="closeDialog()"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" class="cm-close" (click)="closeDialog()"><mat-icon>close</mat-icon></button>
           </div>
           <div class="cm-dialog-body">
             <div class="cm-field">
@@ -224,10 +225,10 @@ interface Summary {
     }
   `,
   styles: [`
-    :host { display:block; min-height:100vh; background:linear-gradient(135deg,#059669 0%,#0d9488 100%); }
+    :host { display:block; min-height:100vh; background:linear-gradient(135deg,var(--color-ok) 0%,#0d9488 100%); }
     .cm-container { max-width:1300px; margin:0 auto; padding:24px 20px 60px; }
-    .cm-back { display:inline-flex; align-items:center; gap:6px; margin-bottom:16px; padding:8px 16px 8px 12px; border:none; border-radius:10px; background:#eef2ff; color:#4338ca; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
-    .cm-back:hover { background:#e0e7ff; }
+    .cm-back { display:inline-flex; align-items:center; gap:6px; margin-bottom:16px; padding:8px 16px 8px 12px; border:none; border-radius:10px; background:var(--color-primary-soft); color:var(--color-primary-hover); font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
+    .cm-back:hover { background:var(--color-primary-soft); }
     .cm-back mat-icon { font-size:20px; width:20px; height:20px; }
     .cm-header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap; }
     .cm-title { display:flex; align-items:center; gap:16px; }
@@ -237,58 +238,58 @@ interface Summary {
     .cm-title p { margin:4px 0 0; color:rgba(255,255,255,.85); font-size:14px; }
 
     .cm-summary { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; margin-bottom:20px; }
-    .cm-card { background:#fff; border-radius:14px; padding:16px 18px; display:flex; flex-direction:column; gap:2px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .cm-card { background:var(--color-surface); border-radius:14px; padding:16px 18px; display:flex; flex-direction:column; gap:2px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
     .cm-card.total { background:linear-gradient(135deg,#065f46,#047857); }
     .cm-card.total .cm-card-label, .cm-card.total .cm-card-value, .cm-card.total .cm-card-sub { color:#fff; }
-    .cm-card-label { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#9ca3af; font-weight:600; }
-    .cm-card-value { font-size:24px; font-weight:700; color:#111827; }
-    .cm-card-sub { font-size:12px; color:#9ca3af; }
+    .cm-card-label { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--color-text-3); font-weight:600; }
+    .cm-card-value { font-size:24px; font-weight:700; color:var(--color-text); }
+    .cm-card-sub { font-size:12px; color:var(--color-text-3); }
 
-    .cm-filters { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; background:#fff; padding:12px 16px; border-radius:12px; }
+    .cm-filters { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; background:var(--color-surface); padding:12px 16px; border-radius:12px; }
     .cm-search { display:flex; align-items:center; gap:8px; flex:1; min-width:220px; }
-    .cm-search mat-icon { color:#9ca3af; }
+    .cm-search mat-icon { color:var(--color-text-3); }
     .cm-search input { border:none; outline:none; font-size:14px; width:100%; }
-    .cm-filters select { padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; font-size:14px; }
-    .cm-active-toggle { display:flex; align-items:center; gap:6px; font-size:14px; color:#374151; cursor:pointer; }
+    .cm-filters select { padding:8px 10px; border:1px solid var(--color-line); border-radius:8px; font-size:14px; }
+    .cm-active-toggle { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--color-text-2); cursor:pointer; }
 
-    .cm-loading, .cm-empty { background:#fff; border-radius:14px; padding:48px; text-align:center; color:#6b7280; display:flex; flex-direction:column; align-items:center; gap:10px; }
-    .cm-empty mat-icon { font-size:48px; width:48px; height:48px; color:#d1d5db; }
+    .cm-loading, .cm-empty { background:var(--color-surface); border-radius:14px; padding:48px; text-align:center; color:var(--color-text-3); display:flex; flex-direction:column; align-items:center; gap:10px; }
+    .cm-empty mat-icon { font-size:48px; width:48px; height:48px; color:var(--color-line-strong); }
 
-    .cm-table-wrap { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .cm-table-wrap { background:var(--color-surface); border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.08); }
     .cm-table { width:100%; border-collapse:collapse; }
-    .cm-table th { text-align:left; padding:14px 16px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#9ca3af; background:#f9fafb; border-bottom:1px solid #eef2f7; }
-    .cm-table td { padding:14px 16px; font-size:14px; color:#374151; border-bottom:1px solid #f3f4f6; }
+    .cm-table th { text-align:left; padding:14px 16px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--color-text-3); background:var(--color-canvas); border-bottom:1px solid var(--color-line); }
+    .cm-table td { padding:14px 16px; font-size:14px; color:var(--color-text-2); border-bottom:1px solid var(--color-surface-2); }
     .cm-table tr.paused { opacity:.55; }
-    .cm-name { font-weight:600; color:#111827; }
-    .cm-amount { font-weight:700; color:#059669; }
-    .cm-chip { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; background:#eef2ff; color:#4f46e5; }
-    .cm-chip.cat-fibre { background:#e0f2fe; color:#0369a1; }
-    .cm-chip.cat-airtime, .cm-chip.cat-voip { background:#ede9fe; color:#6d28d9; }
+    .cm-name { font-weight:600; color:var(--color-text); }
+    .cm-amount { font-weight:700; color:var(--color-ok); }
+    .cm-chip { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; background:var(--color-primary-soft); color:var(--color-primary); }
+    .cm-chip.cat-fibre { background:var(--color-primary-soft); color:#0369a1; }
+    .cm-chip.cat-airtime, .cm-chip.cat-voip { background:var(--color-cat-purple-soft); color:#6d28d9; }
     .cm-chip.cat-debitorder { background:#fce7f3; color:#be185d; }
-    .cm-chip.cat-rent { background:#fef3c7; color:#b45309; }
-    .cm-chip.cat-insurance { background:#dcfce7; color:#15803d; }
+    .cm-chip.cat-rent { background:var(--color-warn-soft); color:#b45309; }
+    .cm-chip.cat-insurance { background:var(--color-ok-soft); color:#15803d; }
     .cm-status { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
-    .cm-status.on { background:#dcfce7; color:#15803d; }
-    .cm-status.off { background:#fee2e2; color:#b91c1c; }
+    .cm-status.on { background:var(--color-ok-soft); color:#15803d; }
+    .cm-status.off { background:var(--color-danger-soft); color:var(--color-danger); }
     .cm-actions { display:flex; gap:6px; }
     .cm-act { width:32px; height:32px; border:none; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .15s; }
     .cm-act mat-icon { font-size:18px; width:18px; height:18px; }
-    .cm-act.edit { background:rgba(99,102,241,.12); color:#4f46e5; }
-    .cm-act.toggle { background:rgba(245,158,11,.12); color:#d97706; }
-    .cm-act.del { background:rgba(239,68,68,.12); color:#dc2626; }
+    .cm-act.edit { background:rgba(99,102,241,.12); color:var(--color-primary); }
+    .cm-act.toggle { background:rgba(245,158,11,.12); color:var(--color-warn); }
+    .cm-act.del { background:rgba(239,68,68,.12); color:var(--color-danger); }
     .cm-act:hover { transform:scale(1.1); }
 
     .cm-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px; }
-    .cm-dialog { background:#fff; border-radius:16px; width:600px; max-width:95vw; max-height:90vh; overflow-y:auto; }
-    .cm-dialog-head { display:flex; justify-content:space-between; align-items:center; padding:20px 24px; border-bottom:1px solid #eef2f7; }
+    .cm-dialog { background:var(--color-surface); border-radius:16px; width:600px; max-width:95vw; max-height:90vh; overflow-y:auto; }
+    .cm-dialog-head { display:flex; justify-content:space-between; align-items:center; padding:20px 24px; border-bottom:1px solid var(--color-line); }
     .cm-dialog-head h2 { margin:0; font-size:20px; }
-    .cm-close { background:none; border:none; cursor:pointer; color:#9ca3af; }
+    .cm-close { background:none; border:none; cursor:pointer; color:var(--color-text-3); }
     .cm-dialog-body { padding:20px 24px; display:flex; flex-direction:column; gap:14px; }
     .cm-row { display:flex; gap:12px; }
     .cm-field { display:flex; flex-direction:column; gap:6px; flex:1; }
-    .cm-field label { font-size:13px; font-weight:600; color:#374151; }
-    .cm-field input, .cm-field select, .cm-field textarea { padding:9px 10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; font-family:inherit; }
-    .cm-dialog-foot { display:flex; justify-content:flex-end; gap:8px; padding:16px 24px; border-top:1px solid #eef2f7; }
+    .cm-field label { font-size:13px; font-weight:600; color:var(--color-text-2); }
+    .cm-field input, .cm-field select, .cm-field textarea { padding:9px 10px; border:1px solid var(--color-line-strong); border-radius:8px; font-size:14px; font-family:inherit; }
+    .cm-dialog-foot { display:flex; justify-content:flex-end; gap:8px; padding:16px 24px; border-top:1px solid var(--color-line); }
   `]
 })
 export class CommitmentsComponent implements OnInit {
@@ -305,7 +306,7 @@ export class CommitmentsComponent implements OnInit {
 
   categories = ['Fibre', 'Airtime', 'VoIP', 'DebitOrder', 'Rent', 'Insurance', 'Subscription', 'Utility', 'Other'];
 
-  constructor(private http: HttpClient, private snack: MatSnackBar, private router: Router) {}
+  constructor(private http: HttpClient, private snack: MatSnackBar, private router: Router, private readonly confirmDialog: ConfirmService) {}
 
   goBack(): void { this.router.navigate(['/finance']); }
 
@@ -373,8 +374,12 @@ export class CommitmentsComponent implements OnInit {
     });
   }
 
-  remove(c: Commitment): void {
-    if (!confirm(`Delete commitment "${c.name}"?`)) return;
+  async remove(c: Commitment): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete commitment "${c.name}"?`,
+      confirmText: 'Delete commitment',
+      danger: true
+    }))) return;
     this.http.delete(`${environment.apiUrl}/finance/recurring-payments/${c.id}`).subscribe({
       next: () => { this.snack.open('Commitment deleted', 'Close', { duration: 2500 }); this.load(); this.loadSummary(); },
       error: () => this.snack.open('Failed to delete', 'Close', { duration: 3000 })

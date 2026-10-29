@@ -15,11 +15,15 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { CollaborativeDocsService } from '../../services/collaborative-docs.service';
 import { CollaborativeDocument, CreateDocumentDto, DocumentUser } from '../../models/collaborative-doc.model';
 import * as mammoth from 'mammoth';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-collaborative-docs',
@@ -40,91 +44,52 @@ import * as mammoth from 'mammoth';
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
-    MatSnackBarModule,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent
   ],
   template: `
     <app-navbar></app-navbar>
     
     <div class="docs-container">
-      <div class="docs-header">
-        <div class="header-content">
-          <div class="title-section">
-            <mat-icon class="header-icon">description</mat-icon>
-            <div>
-              <h1>Collaborative Documents</h1>
-              <p>Create and edit documents in real-time with your team</p>
-            </div>
-          </div>
-          <div class="header-actions">
-            <button mat-stroked-button (click)="triggerImport()" class="create-btn create-btn-import">
-              <mat-icon>upload_file</mat-icon>
-              Import
-            </button>
-            <button mat-stroked-button (click)="openCreateDialog('sheet')" class="create-btn create-btn-sheet">
-              <mat-icon>table_chart</mat-icon>
-              New Spreadsheet
-            </button>
-            <button mat-raised-button color="primary" (click)="openCreateDialog('doc')" class="create-btn">
-              <mat-icon>add</mat-icon>
-              New Document
-            </button>
-            <input #importInput type="file" hidden
-                   accept=".csv,.txt,.html,.htm,.md,.doc,.docx"
-                   (change)="onImportFilePicked($event)">
-          </div>
-        </div>
-      </div>
-
       <div class="docs-content">
+        <app-page-header class="docs-header" [crumbs]="['Tools', 'Docs']" title="Docs"
+                         subtitle="Documents and spreadsheets you edit together with your team">
+          <button mat-stroked-button (click)="triggerImport()">
+            <mat-icon>upload_file</mat-icon>
+            Import
+          </button>
+          <button mat-stroked-button (click)="openCreateDialog('sheet')">
+            <mat-icon>table_chart</mat-icon>
+            New spreadsheet
+          </button>
+          <button mat-flat-button color="primary" (click)="openCreateDialog('doc')">
+            <mat-icon>add</mat-icon>
+            New document
+          </button>
+          <input #importInput type="file" hidden
+                 accept=".csv,.txt,.html,.htm,.md,.doc,.docx"
+                 (change)="onImportFilePicked($event)">
+        </app-page-header>
+
         @if (loading) {
           <div class="loading-state">
-            <div class="loading-card">
-              <div class="lc-icon-wrap">
-                <mat-icon class="lc-icon pulse-icon">description</mat-icon>
-              </div>
-              <h3>Loading Collaborative Documents</h3>
-              <p class="lc-subtitle">Fetching your team's documents and workspaces</p>
-              <div class="lc-progress-wrap">
-                <div class="lc-progress-track">
-                  <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
-                </div>
-                <div class="lc-progress-info">
-                  <span class="lc-progress-message">{{ loadingMessage }}</span>
-                  <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
-                </div>
-              </div>
-              <div class="lc-steps">
-                @for (step of loadingSteps; track step.label; let i = $index) {
-                  <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
-                    <div class="lc-step-dot">
-                      @if (loadingStage > i) {
-                        <mat-icon>check</mat-icon>
-                      } @else {
-                        <mat-icon>{{ step.icon }}</mat-icon>
-                      }
-                    </div>
-                    <span class="lc-step-label">{{ step.label }}</span>
-                  </div>
-                }
-              </div>
-            </div>
+            <app-skeleton-rows [rows]="5"></app-skeleton-rows>
           </div>
         } @else if (documents.length === 0) {
-          <div class="empty-state">
-            <mat-icon>article</mat-icon>
-            <h2>No Documents Yet</h2>
-            <p>Create your first collaborative document or spreadsheet to get started</p>
-            <div class="empty-actions">
-              <button mat-raised-button color="primary" (click)="openCreateDialog('doc')">
+          <div class="empty-wrap">
+            <app-empty-state icon="article" title="No documents yet"
+                             message="Create your first collaborative document or spreadsheet to get started.">
+              <button mat-flat-button color="primary" (click)="openCreateDialog('doc')">
                 <mat-icon>add</mat-icon>
-                Create Document
+                Create document
               </button>
               <button mat-stroked-button (click)="openCreateDialog('sheet')">
                 <mat-icon>table_chart</mat-icon>
-                Create Spreadsheet
+                Create spreadsheet
               </button>
-            </div>
+            </app-empty-state>
           </div>
         } @else {
           <div class="docs-grid">
@@ -158,7 +123,7 @@ import * as mammoth from 'mammoth';
                     }
                   </div>
                 </div>
-                <button mat-icon-button [matMenuTriggerFor]="docMenu" class="doc-menu-btn" 
+                <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="docMenu" class="doc-menu-btn" 
                         (click)="$event.stopPropagation()">
                   <mat-icon>more_vert</mat-icon>
                 </button>
@@ -189,190 +154,29 @@ import * as mammoth from 'mammoth';
     .docs-container {
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
     .docs-header {
-      padding: 32px 48px;
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
+      margin-bottom: var(--space-5);
     }
 
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .title-section {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      color: white;
-    }
-
-    .header-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-    }
-
-    .title-section h1 {
-      margin: 0;
-      font-size: 28px;
-      font-weight: 600;
-    }
-
-    .title-section p {
-      margin: 4px 0 0 0;
-      opacity: 0.8;
-    }
-
-    .create-btn {
-      padding: 12px 24px !important;
-      font-size: 16px !important;
-    }
-
-    .header-actions {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
-
-    .create-btn-sheet {
-      background: rgba(255,255,255,0.14) !important;
-      color: #fff !important;
-      border-color: rgba(255,255,255,0.35) !important;
-    }
-
-    .empty-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .sheet-card .doc-icon mat-icon { color: #059669; }
+    .sheet-card .doc-icon { background: var(--color-cat-teal-soft); }
+    .sheet-card .doc-icon mat-icon { color: var(--color-cat-teal); }
 
     .docs-content {
-      padding: 32px 48px;
+      padding: var(--space-5) var(--space-8) var(--space-6);
       max-width: 1400px;
       margin: 0 auto;
     }
 
-    .loading-state {
-      display: flex; justify-content: center; padding: 60px 20px;
-    }
-    .loading-card {
-      background: rgba(255,255,255,0.97); border-radius: 20px;
-      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
-      max-width: 520px; width: 100%;
-    }
-    .loading-card h3 { color: #1a1a2e; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
-    .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(30,64,175,0.12));
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(37,99,235,0.15);
-    }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #2563eb; }
-    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.08); }
-    }
-    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
-    .lc-progress-wrap { margin: 8px 0 24px; }
-    .lc-progress-track {
-      height: 8px; border-radius: 4px; background: #f1f5f9;
-      overflow: hidden; position: relative;
-    }
-    .lc-progress-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #2563eb, #60a5fa, #1e40af);
-      background-size: 200% 100%;
-      animation: shimmer 2s ease-in-out infinite;
-      transition: width 0.15s ease-out;
-      position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
-      border-radius: 0 4px 4px 0;
-    }
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-    .lc-progress-info {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-top: 10px; font-size: 12px;
-    }
-    .lc-progress-message { color: #64748b; font-weight: 500; transition: opacity 0.3s ease; }
-    .lc-progress-pct { color: #2563eb; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .lc-steps {
-      display: flex; justify-content: space-between; gap: 4px;
-      padding-top: 4px; border-top: 1px solid #e2e8f0;
-    }
-    .lc-step {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      flex: 1; padding-top: 16px; opacity: 0.35;
-      transition: opacity 0.4s ease, transform 0.3s ease;
-    }
-    .lc-step.active { opacity: 1; transform: translateY(-2px); }
-    .lc-step.done { opacity: 0.65; }
-    .lc-step-dot {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: #f1f5f9; display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
-    }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot {
-      background: linear-gradient(135deg, #2563eb, #1e40af);
-      box-shadow: 0 2px 10px rgba(37,99,235,0.3);
-    }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
-    .lc-step.done .lc-step-dot { background: #dcfce7; }
-    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #2563eb; }
-    .lc-step.done .lc-step-label { color: #16a34a; }
-
-    .empty-state {
-      text-align: center;
-      padding: 80px 40px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    }
-
-    .empty-state mat-icon {
-      font-size: 80px;
-      width: 80px;
-      height: 80px;
-      color: #2563eb;
-      margin-bottom: 16px;
-    }
-
-    .empty-state h2 {
-      margin: 0 0 8px 0;
-      color: #333;
-    }
-
-    .empty-state p {
-      margin: 0 0 24px 0;
-      color: #666;
+    .loading-state, .empty-wrap {
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
     }
 
     .docs-grid {
@@ -383,23 +187,25 @@ import * as mammoth from 'mammoth';
 
     .doc-card {
       position: relative;
-      padding: 24px !important;
-      border-radius: 12px !important;
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-line);
+      box-shadow: var(--shadow-sm);
       cursor: pointer;
       transition: all 0.3s ease;
-      background: white !important;
+      background: var(--color-surface);
     }
 
     .doc-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2) !important;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
     }
 
     .doc-icon {
       width: 48px;
       height: 48px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -407,21 +213,21 @@ import * as mammoth from 'mammoth';
     }
 
     .doc-icon mat-icon {
-      color: white;
+      color: var(--color-primary);
       font-size: 24px;
     }
 
     .doc-content h3 {
       margin: 0 0 8px 0;
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .doc-description {
       margin: 0 0 16px 0;
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
       line-height: 1.5;
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -439,8 +245,8 @@ import * as mammoth from 'mammoth';
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
 
     .meta-item mat-icon {
@@ -456,26 +262,26 @@ import * as mammoth from 'mammoth';
     }
 
     .role-owner {
-      background-color: #2563eb !important;
-      color: white !important;
+      --mdc-chip-elevated-container-color: var(--color-primary-soft);
+      --mdc-chip-label-text-color: var(--color-primary);
     }
 
     .role-editor {
-      background-color: #4caf50 !important;
-      color: white !important;
+      --mdc-chip-elevated-container-color: var(--color-cat-teal-soft);
+      --mdc-chip-label-text-color: var(--color-cat-teal);
     }
 
     .role-viewer {
-      background-color: #ff9800 !important;
-      color: white !important;
+      --mdc-chip-elevated-container-color: var(--color-cat-amber-soft);
+      --mdc-chip-label-text-color: var(--color-cat-amber);
     }
 
     .collaborator-count {
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
     }
 
     .collaborator-count mat-icon {
@@ -491,24 +297,11 @@ import * as mammoth from 'mammoth';
     }
 
     .delete-item {
-      color: #f44336 !important;
+      --mat-menu-item-label-text-color: var(--color-danger);
+      --mat-menu-item-icon-color: var(--color-danger);
     }
 
     @media (max-width: 768px) {
-      .docs-header {
-        padding: 24px;
-      }
-
-      .header-content {
-        flex-direction: column;
-        gap: 16px;
-        text-align: center;
-      }
-
-      .title-section {
-        flex-direction: column;
-      }
-
       .docs-content {
         padding: 24px;
       }
@@ -525,23 +318,12 @@ export class CollaborativeDocsComponent implements OnInit {
   documents: CollaborativeDocument[] = [];
   loading = true;
 
-  // Loading progress
-  loadingProgress = 0;
-  loadingStage = 0;
-  loadingMessage = 'Initializing...';
-  private progressInterval: any;
-  readonly loadingSteps = [
-    { icon: 'lock', label: 'Authenticating', detail: 'Securing connection...' },
-    { icon: 'cloud_download', label: 'Fetching Docs', detail: 'Retrieving documents...' },
-    { icon: 'article', label: 'Processing', detail: 'Organizing workspaces...' },
-    { icon: 'dashboard', label: 'Ready', detail: 'Building document view...' }
-  ];
-
   constructor(
     private docsService: CollaborativeDocsService,
     private router: Router,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private toast: ToastService,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -550,59 +332,17 @@ export class CollaborativeDocsComponent implements OnInit {
 
   loadDocuments(): void {
     this.loading = true;
-    this.startLoadingProgress();
     this.docsService.getDocuments().subscribe({
       next: (docs) => {
-        this.finishLoadingProgress(() => {
-          this.documents = docs;
-          this.loading = false;
-        });
+        this.documents = docs;
+        this.loading = false;
       },
       error: (err) => {
         console.error('Error loading documents:', err);
-        this.stopLoadingProgress();
-        this.snackBar.open('Failed to load documents', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load documents');
         this.loading = false;
       }
     });
-  }
-
-  private startLoadingProgress(): void {
-    this.loadingProgress = 0;
-    this.loadingStage = 0;
-    this.loadingMessage = this.loadingSteps[0].detail;
-    this.progressInterval = setInterval(() => {
-      const max = 88;
-      if (this.loadingProgress < max) {
-        const increment = Math.max(0.3, (max - this.loadingProgress) * 0.06);
-        this.loadingProgress = Math.min(max, this.loadingProgress + increment);
-      }
-      const newStage = this.loadingProgress < 20 ? 0 : this.loadingProgress < 45 ? 1 : this.loadingProgress < 70 ? 2 : 3;
-      if (newStage !== this.loadingStage) {
-        this.loadingStage = newStage;
-        this.loadingMessage = this.loadingSteps[newStage].detail;
-      }
-    }, 120);
-  }
-
-  private finishLoadingProgress(callback: () => void): void {
-    clearInterval(this.progressInterval);
-    this.loadingStage = 3;
-    this.loadingMessage = 'Almost there...';
-    const finish = setInterval(() => {
-      this.loadingProgress = Math.min(100, this.loadingProgress + 4);
-      if (this.loadingProgress >= 100) {
-        clearInterval(finish);
-        this.loadingMessage = 'Complete!';
-        setTimeout(() => callback(), 300);
-      }
-    }, 30);
-  }
-
-  private stopLoadingProgress(): void {
-    clearInterval(this.progressInterval);
-    this.loadingProgress = 0;
-    this.loadingStage = 0;
   }
 
   openDocument(doc: CollaborativeDocument): void {
@@ -652,7 +392,7 @@ export class CollaborativeDocsComponent implements OnInit {
       }
     } catch (err) {
       console.error('Import failed:', err);
-      this.snackBar.open('Could not import that file', 'Close', { duration: 3500 });
+      this.toast.error('Could not import that file');
     }
   }
 
@@ -668,12 +408,12 @@ export class CollaborativeDocsComponent implements OnInit {
           ? `collab-import-sheet-${doc.id}`
           : `collab-import-doc-${doc.id}`;
         try { sessionStorage.setItem(key, content); } catch { /* quota */ }
-        this.snackBar.open('Importing…', 'Close', { duration: 1500 });
+        this.toast.info('Importing…');
         this.router.navigate([documentType === 'sheet' ? '/sheets' : '/docs', doc.id]);
       },
       error: (err) => {
         console.error('Error creating document for import:', err);
-        this.snackBar.open('Failed to import', 'Close', { duration: 3000 });
+        this.toast.error('Failed to import');
       }
     });
   }
@@ -693,7 +433,7 @@ export class CollaborativeDocsComponent implements OnInit {
           next: (doc) => {
             const label = documentType === 'sheet' ? 'Spreadsheet' : 'Document';
             const navigate = () => {
-              this.snackBar.open(`${label} created!`, 'Close', { duration: 2000 });
+              this.toast.done(`${label} created`);
               this.router.navigate([documentType === 'sheet' ? '/sheets' : '/docs', doc.id]);
             };
             if (collaboratorIds.length) {
@@ -710,7 +450,7 @@ export class CollaborativeDocsComponent implements OnInit {
           },
           error: (err) => {
             console.error('Error creating document:', err);
-            this.snackBar.open('Failed to create', 'Close', { duration: 3000 });
+            this.toast.error('Failed to create');
           }
         });
       }
@@ -728,28 +468,32 @@ export class CollaborativeDocsComponent implements OnInit {
       if (result) {
         this.docsService.updateDocument(doc.id, result).subscribe({
           next: () => {
-            this.snackBar.open('Document updated!', 'Close', { duration: 2000 });
+            this.toast.done('Document updated');
             this.loadDocuments();
           },
           error: (err) => {
             console.error('Error updating document:', err);
-            this.snackBar.open('Failed to update document', 'Close', { duration: 3000 });
+            this.toast.error('Failed to update document');
           }
         });
       }
     });
   }
 
-  deleteDocument(doc: CollaborativeDocument): void {
-    if (confirm(`Are you sure you want to delete "${doc.title}"?`)) {
+  async deleteDocument(doc: CollaborativeDocument): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete "${doc.title}"?`,
+      confirmText: 'Delete document',
+      danger: true
+    })) {
       this.docsService.deleteDocument(doc.id).subscribe({
         next: () => {
-          this.snackBar.open('Document deleted', 'Close', { duration: 2000 });
+          this.toast.done('Document deleted');
           this.loadDocuments();
         },
         error: (err) => {
           console.error('Error deleting document:', err);
-          this.snackBar.open('Failed to delete document', 'Close', { duration: 3000 });
+          this.toast.error('Failed to delete document');
         }
       });
     }
@@ -876,7 +620,7 @@ export class CollaborativeDocsComponent implements OnInit {
 
     .collab-section {
       margin-top: 8px;
-      border-top: 1px solid var(--border-color, #e0e0e0);
+      border-top: 1px solid var(--color-line);
       padding-top: 16px;
     }
 
@@ -884,9 +628,9 @@ export class CollaborativeDocsComponent implements OnInit {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
-      color: var(--text-secondary, #555);
+      color: var(--color-text-2);
       margin-bottom: 8px;
     }
 
@@ -910,18 +654,19 @@ export class CollaborativeDocsComponent implements OnInit {
       align-items: center;
       gap: 8px;
       padding: 8px 10px;
-      border: 1px solid var(--border-color, #e0e0e0);
-      border-radius: 8px;
-      background: var(--surface, #fff);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      background: var(--color-surface);
+      color: var(--color-text);
       cursor: pointer;
       text-align: left;
       transition: background .15s ease;
     }
 
-    .collab-result:hover { background: rgba(37, 99, 235, .08); }
-    .collab-result mat-icon { font-size: 18px; width: 18px; height: 18px; color: #2563eb; }
-    .cr-name { font-weight: 600; font-size: 13px; }
-    .cr-email { font-size: 12px; color: #888; margin-left: auto; }
+    .collab-result:hover { background: var(--color-primary-soft); }
+    .collab-result mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); }
+    .cr-name { font-weight: 600; font-size: var(--text-sm); }
+    .cr-email { font-size: var(--text-xs); color: var(--color-text-3); margin-left: auto; }
 
     .collab-chips {
       display: flex;
@@ -934,10 +679,10 @@ export class CollaborativeDocsComponent implements OnInit {
       align-items: center;
       gap: 4px;
       padding: 4px 8px 4px 12px;
-      background: rgba(37, 99, 235, .1);
-      color: #1e40af;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       border-radius: 16px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
     }
 

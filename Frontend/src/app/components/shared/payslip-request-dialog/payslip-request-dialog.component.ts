@@ -32,7 +32,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       <div class="dialog-header">
         <mat-icon class="header-icon">receipt_long</mat-icon>
         <h2>Payslip Request</h2>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -121,7 +121,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       justify-content: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       position: relative;
@@ -169,9 +169,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       align-items: flex-start;
       gap: 12px;
       padding: 16px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 8px;
-      color: #1565c0;
+      color: var(--color-primary-hover);
       font-size: 0.9rem;
       line-height: 1.4;
     }
@@ -189,7 +189,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       justify-content: flex-end;
       gap: 12px;
       padding-top: 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     .dialog-actions button mat-spinner {

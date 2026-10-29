@@ -38,7 +38,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       <div class="dialog-header">
         <mat-icon class="header-icon">meeting_room</mat-icon>
         <h2>Private Meeting Request</h2>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -232,7 +232,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       display: block;
       margin-bottom: 12px;
       font-size: 0.9rem;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .urgency-group {
@@ -257,7 +257,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       align-items: flex-start;
       gap: 12px;
       padding: 16px;
-      background: #f3e5f5;
+      background: var(--color-cat-purple-soft);
       border-radius: 8px;
       color: #7b1fa2;
       font-size: 0.9rem;
@@ -277,7 +277,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       justify-content: flex-end;
       gap: 12px;
       padding-top: 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     .dialog-actions button mat-spinner {

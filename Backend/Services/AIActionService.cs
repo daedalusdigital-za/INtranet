@@ -78,6 +78,31 @@ namespace ProjectTracker.API.Services
             @"\[ACTION:(\w+)\]\s*(\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})\s*\[/ACTION\]",
             RegexOptions.Compiled | RegexOptions.Singleline);
 
+        // Gemma 4 sometimes falls back to its native tool-call syntax:
+        //   <|tool_call>call:SEARCH_WEB {query: "...", numResults: 5}<tool_call|>
+        // Keys may be unquoted. We normalise this into our [ACTION] format.
+        private static readonly Regex NativeToolCallPattern = new(
+            @"<\|tool_call>\s*call:\s*(\w+)\s*(\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})\s*(?:<tool_call\|>|\[/ACTION\])?",
+            RegexOptions.Compiled | RegexOptions.Singleline);
+
+        private static readonly Regex BareJsonKeyPattern = new(
+            @"(?<=[{,]\s*)([A-Za-z_]\w*)\s*:",
+            RegexOptions.Compiled);
+
+        /// <summary>
+        /// Convert any native Gemma tool calls in <paramref name="text"/> into [ACTION:X] {json} [/ACTION] tags.
+        /// </summary>
+        public static string NormalizeActionSyntax(string text)
+        {
+            if (string.IsNullOrEmpty(text) || !text.Contains("<|tool_call>")) return text;
+            return NativeToolCallPattern.Replace(text, m =>
+            {
+                var name = m.Groups[1].Value.ToUpperInvariant();
+                var json = BareJsonKeyPattern.Replace(m.Groups[2].Value, "\"$1\":");
+                return $"[ACTION:{name}] {json} [/ACTION]";
+            });
+        }
+
         public AIActionService(
             IServiceScopeFactory scopeFactory,
             ILogger<AIActionService> logger)
@@ -95,6 +120,7 @@ namespace ProjectTracker.API.Services
 
             if (string.IsNullOrEmpty(aiResponse)) return results;
 
+            aiResponse = NormalizeActionSyntax(aiResponse);
             var matches = ActionPattern.Matches(aiResponse);
             foreach (Match match in matches)
             {
@@ -142,6 +168,9 @@ namespace ProjectTracker.API.Services
                         "CREATE_ANNOUNCEMENT" => await CreateAnnouncementAsync(jsonPayload, user),
                         "BACKUP_DATABASE" => await BackupDatabaseAsync(jsonPayload, user),
                         "SEARCH_WEB" => await SearchWebAsync(jsonPayload),
+                        "CONTROLLER_NIGHT_WATCH" => await ControllerNightWatchAsync(),
+                        "CONTROLLER_MOVEMENT_HISTORY" => await ControllerMovementHistoryAsync(jsonPayload),
+                        "CONTROLLER_GEOFENCES" => await ControllerGeofencesAsync(),
                         _ => new AIActionResult
                         {
                             Success = false,
@@ -187,7 +216,7 @@ namespace ProjectTracker.API.Services
         public string StripActionTags(string aiResponse)
         {
             if (string.IsNullOrEmpty(aiResponse)) return aiResponse;
-            return ActionPattern.Replace(aiResponse, "").Trim();
+            return ActionPattern.Replace(NormalizeActionSyntax(aiResponse), "").Trim();
         }
 
         #region Action Implementations
@@ -1113,6 +1142,214 @@ namespace ProjectTracker.API.Services
                     ActionType = "FLEET_STATUS",
                     Message = $"Failed to get fleet status: {ex.Message}"
                 };
+            }
+        }
+
+        // ── Controller (night watch / curfew monitoring) ──────────────────────────────────
+        private const int CurfewStartHour = 18;
+        private const int CurfewEndHour = 5;
+
+        private static bool IsWithinCurfew(int hour) =>
+            CurfewStartHour > CurfewEndHour ? (hour >= CurfewStartHour || hour < CurfewEndHour)
+                                            : (hour >= CurfewStartHour && hour < CurfewEndHour);
+
+        private static double HaversineMeters(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double R = 6371000;
+            double dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+            double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                       Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        }
+
+        private async Task<AIActionResult> ControllerNightWatchAsync()
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var cartrack = scope.ServiceProvider.GetRequiredService<ICarTrackService>();
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+                var nowSast = DateTime.UtcNow.AddHours(2);
+                var inCurfew = IsWithinCurfew(nowSast.Hour);
+                var fleet = await cartrack.GetFleetStatusAsync();
+                var zones = await db.Geofences.Where(g => g.IsActive && (g.Type == "Parking" || g.Type == "Depot")).ToListAsync();
+
+                int moving = 0, parked = 0, idling = 0, offline = 0, alerts = 0, breaches = 0;
+                var alertLines = new List<string>();
+                var breachLines = new List<string>();
+
+                foreach (var v in fleet.Vehicles)
+                {
+                    var reg = v.RegistrationNumber ?? v.VehicleName ?? v.VehicleId;
+                    var lat = v.Location?.Latitude ?? 0; var lng = v.Location?.Longitude ?? 0;
+                    var isMoving = v.Status == "moving" || v.Speed > 3;
+
+                    bool outside = false; string? nearest = null; double nearestDist = double.MaxValue;
+                    if (zones.Count > 0 && lat != 0 && lng != 0)
+                    {
+                        outside = true;
+                        foreach (var z in zones)
+                        {
+                            var d = HaversineMeters(lat, lng, (double)z.Latitude, (double)z.Longitude);
+                            if (d < nearestDist) { nearestDist = d; nearest = z.Name; }
+                            if (d <= z.RadiusMeters) { outside = false; break; }
+                        }
+                    }
+
+                    if (v.Status == "offline") offline++;
+                    else if (isMoving)
+                    {
+                        moving++;
+                        if (inCurfew)
+                        {
+                            alerts++;
+                            alertLines.Add($"- **{reg}**{(string.IsNullOrEmpty(v.CurrentDriverName) ? "" : $" ({v.CurrentDriverName})")} — {v.Speed:F0} km/h near {v.Location?.Address ?? "unknown"}");
+                        }
+                    }
+                    else if (v.Status == "idling") idling++;
+                    else parked++;
+
+                    if (inCurfew && outside)
+                    {
+                        breaches++;
+                        breachLines.Add($"- **{reg}** — {Math.Round(nearestDist / 1000, 1)} km from {nearest ?? "nearest zone"} ({v.Location?.Address ?? "unknown"})");
+                    }
+                }
+
+                var lines = new List<string>
+                {
+                    $"**🌙 Controller Night Watch** (as of {nowSast:HH:mm} SAST) — curfew {CurfewStartHour:00}:00–{CurfewEndHour:00}:00, currently **{(inCurfew ? "IN CURFEW" : "outside curfew")}**",
+                    "",
+                    "| Metric | Count |",
+                    "|---|---|",
+                    $"| Total vehicles | {fleet.TotalVehicles} |",
+                    $"| 🟢 Moving | {moving} |",
+                    $"| 🟡 Idling | {idling} |",
+                    $"| 🅿️ Parked | {parked} |",
+                    $"| ⚫ Offline | {offline} |",
+                    $"| 🚨 Curfew movement alerts | {alerts} |",
+                    $"| 📍 Geofence breaches | {breaches} |",
+                    $"| Parking/depot zones configured | {zones.Count} |"
+                };
+                if (alertLines.Count > 0) { lines.Add(""); lines.Add("**🚨 Moving during curfew:**"); lines.AddRange(alertLines.Take(15)); }
+                if (breachLines.Count > 0) { lines.Add(""); lines.Add("**📍 Outside parking geofence:**"); lines.AddRange(breachLines.Take(15)); }
+                if (!inCurfew) lines.Add("\n_Alerts and breaches are only raised during curfew hours._");
+
+                return new AIActionResult { Success = true, ActionType = "CONTROLLER_NIGHT_WATCH", Message = string.Join("\n", lines) };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed CONTROLLER_NIGHT_WATCH");
+                return new AIActionResult { Success = false, ActionType = "CONTROLLER_NIGHT_WATCH", Message = $"Failed to load night watch: {ex.Message}" };
+            }
+        }
+
+        private async Task<AIActionResult> ControllerMovementHistoryAsync(string json)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var cartrack = scope.ServiceProvider.GetRequiredService<ICarTrackService>();
+
+                DateTime day = DateTime.UtcNow.AddHours(2).Date;
+                string? registration = null; bool curfewOnly = true;
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    var p = JsonSerializer.Deserialize<JsonElement>(json);
+                    if (p.TryGetProperty("date", out var d) && d.ValueKind == JsonValueKind.String)
+                    {
+                        var s = d.GetString()!.Trim().ToLowerInvariant();
+                        if (s == "yesterday") day = day.AddDays(-1);
+                        else if (s != "today" && DateTime.TryParse(s, out var parsed)) day = parsed.Date;
+                    }
+                    if (p.TryGetProperty("registration", out var r) && r.ValueKind == JsonValueKind.String) registration = r.GetString();
+                    if (p.TryGetProperty("curfewOnly", out var c) && (c.ValueKind == JsonValueKind.True || c.ValueKind == JsonValueKind.False)) curfewOnly = c.GetBoolean();
+                }
+
+                var from = curfewOnly ? day.AddHours(CurfewStartHour) : day;
+                var to = curfewOnly ? day.AddDays(1).AddHours(CurfewEndHour) : day.AddDays(1).AddSeconds(-1);
+
+                var trips = await cartrack.GetAllTripsAsync(from, to);
+                if (!string.IsNullOrWhiteSpace(registration))
+                {
+                    var needle = registration.Replace(" ", "");
+                    trips = trips.Where(t => (t.Registration ?? "").Replace(" ", "").Contains(needle, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+
+                var byVehicle = trips.GroupBy(t => t.Registration ?? "?")
+                    .Select(g => new
+                    {
+                        Reg = g.Key,
+                        Trips = g.Count(),
+                        Km = Math.Round(g.Sum(x => x.TripDistance) / 1000.0, 1),
+                        MaxSpeed = Math.Round(g.Max(x => x.MaxSpeed)),
+                        Harsh = g.Sum(x => x.HarshBrakingEvents + x.HarshCorneringEvents + x.HarshAccelerationEvents),
+                        First = g.Min(x => x.StartTimestamp),
+                        Last = g.Max(x => x.EndTimestamp)
+                    })
+                    .OrderByDescending(x => x.Km).ToList();
+
+                var lines = new List<string>
+                {
+                    $"**🗂️ Movement History — {day:ddd dd MMM yyyy}** ({(curfewOnly ? $"curfew window {CurfewStartHour:00}:00–{CurfewEndHour:00}:00 next day" : "full day")}{(registration != null ? $", vehicle {registration}" : "")})",
+                    $"Trips: **{trips.Count}** · Vehicles that moved: **{byVehicle.Count}** · Total: **{Math.Round(trips.Sum(t => t.TripDistance) / 1000.0, 1)} km**"
+                };
+                if (byVehicle.Count > 0)
+                {
+                    lines.Add("");
+                    lines.Add("| Vehicle | Trips | Km | Max km/h | Harsh events | First move | Last move |");
+                    lines.Add("|---|---|---|---|---|---|---|");
+                    foreach (var v in byVehicle.Take(25))
+                        lines.Add($"| {v.Reg} | {v.Trips} | {v.Km} | {v.MaxSpeed} | {v.Harsh} | {v.First} | {v.Last} |");
+                    if (byVehicle.Count > 25) lines.Add($"_…and {byVehicle.Count - 25} more vehicles_");
+
+                    if (!string.IsNullOrWhiteSpace(registration))
+                    {
+                        lines.Add("");
+                        lines.Add("**Trips:**");
+                        foreach (var t in trips.OrderBy(t => t.StartTimestamp).Take(20))
+                            lines.Add($"- {t.StartTimestamp} → {t.EndTimestamp}: {t.StartLocation} → {t.EndLocation} ({Math.Round(t.TripDistance / 1000.0, 1)} km, max {Math.Round(t.MaxSpeed)} km/h)");
+                    }
+                }
+                else lines.Add("\nNo movement recorded in this window.");
+
+                return new AIActionResult { Success = true, ActionType = "CONTROLLER_MOVEMENT_HISTORY", Message = string.Join("\n", lines) };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed CONTROLLER_MOVEMENT_HISTORY");
+                return new AIActionResult { Success = false, ActionType = "CONTROLLER_MOVEMENT_HISTORY", Message = $"Failed to load movement history: {ex.Message}" };
+            }
+        }
+
+        private async Task<AIActionResult> ControllerGeofencesAsync()
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var zones = await db.Geofences.OrderBy(g => g.Type).ThenBy(g => g.Name).ToListAsync();
+
+                if (zones.Count == 0)
+                    return new AIActionResult { Success = true, ActionType = "CONTROLLER_GEOFENCES", Message = "No geofence zones are configured yet." };
+
+                var lines = new List<string>
+                {
+                    $"**📍 Geofence Zones** ({zones.Count(z => z.IsActive)} active of {zones.Count})",
+                    "",
+                    "| Zone | Type | Region | Radius | Location | Active |",
+                    "|---|---|---|---|---|---|"
+                };
+                foreach (var z in zones)
+                    lines.Add($"| {z.Name} | {z.Type} | {z.Region ?? "-"} | {z.RadiusMeters} m | {z.Latitude:F5}, {z.Longitude:F5} | {(z.IsActive ? "✅" : "❌")} |");
+
+                return new AIActionResult { Success = true, ActionType = "CONTROLLER_GEOFENCES", Message = string.Join("\n", lines) };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed CONTROLLER_GEOFENCES");
+                return new AIActionResult { Success = false, ActionType = "CONTROLLER_GEOFENCES", Message = $"Failed to load geofences: {ex.Message}" };
             }
         }
 

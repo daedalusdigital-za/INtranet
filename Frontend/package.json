@@ -8,6 +8,9 @@
     "build:prod": "ng build --configuration=production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "check:styles": "node tools/check-styles.mjs",
+    "check:a11y": "node tools/check-a11y.mjs",
+    "tokens:material": "node tools/gen-material-tokens.mjs",
     "deploy:frontend": "ng build --configuration=production && cd .. && docker compose build frontend && docker compose up -d --force-recreate frontend"
   },
   "private": true,

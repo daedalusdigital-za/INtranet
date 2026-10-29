@@ -1,9 +1,13 @@
-<!-- Floating Chat Button -->
-<div class="chat-fab" *ngIf="!isOpen" (click)="toggleChat()" title="Chat with Help Desk">
-  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-  </svg>
-  <span class="chat-badge" *ngIf="messages.length === 1">1</span>
+<!-- Floating Welly mascot (replaces the old chat FAB) -->
+<div class="chat-fab chat-fab--mascot" *ngIf="!isOpen">
+  <app-welly-mascot
+    [size]="84"
+    [mood]="mascotMood"
+    [attention]="unreadReplies > 0"
+    [badge]="unreadReplies > 0 ? unreadReplies : (messages.length === 1 ? 1 : null)"
+    title="Chat with Welly"
+    (clicked)="onMascotClick()">
+  </app-welly-mascot>
 </div>
 
 <!-- Chat Window -->
@@ -12,10 +16,7 @@
   <div class="chat-header">
     <div class="chat-header-left">
       <div class="chat-avatar">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-          <circle cx="12" cy="7" r="4"></circle>
-        </svg>
+        <mat-icon aria-hidden="true">support_agent</mat-icon>
       </div>
       <div class="chat-header-info">
         <h3>Welly - IT Support</h3>
@@ -23,52 +24,23 @@
       </div>
     </div>
     <div class="chat-header-actions">
-      <button class="chat-action-btn" *ngIf="ttsSupported" (click)="toggleVoiceOutput()" [class.voice-active]="voiceEnabled" [title]="voiceEnabled ? 'Welly voice: ON (click to mute)' : 'Welly voice: OFF (click to hear replies)'">
-        <svg *ngIf="voiceEnabled" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-        </svg>
-        <svg *ngIf="!voiceEnabled" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-          <line x1="23" y1="9" x2="17" y2="15"></line>
-          <line x1="17" y1="9" x2="23" y2="15"></line>
-        </svg>
+      <button class="chat-action-btn" *ngIf="ttsSupported" (click)="toggleVoiceOutput()" [class.voice-active]="voiceEnabled" [title]="voiceEnabled ? 'Welly voice: ON (click to mute)' : 'Welly voice: OFF (click to hear replies)'" [attr.aria-label]="voiceEnabled ? 'Mute Welly voice' : 'Hear Welly replies'" [attr.aria-pressed]="voiceEnabled">
+        <mat-icon>{{ voiceEnabled ? 'volume_up' : 'volume_off' }}</mat-icon>
       </button>
-      <button class="chat-action-btn" *ngIf="speechSupported" (click)="toggleConversationMode()" [class.voice-active]="conversationMode" [title]="conversationMode ? 'Hands-free conversation: ON' : 'Start hands-free conversation'">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          <line x1="8" y1="10" x2="8" y2="12"></line>
-          <line x1="12" y1="8" x2="12" y2="14"></line>
-          <line x1="16" y1="10" x2="16" y2="12"></line>
-        </svg>
+      <button class="chat-action-btn" *ngIf="speechSupported" (click)="toggleConversationMode()" [class.voice-active]="conversationMode" [title]="conversationMode ? 'Hands-free conversation: ON' : 'Start hands-free conversation'" aria-label="Hands-free conversation" [attr.aria-pressed]="conversationMode">
+        <mat-icon>record_voice_over</mat-icon>
       </button>
-      <button class="chat-action-btn" *ngIf="speechSupported && ttsSupported" (click)="startVoiceMode()" title="Voice conversation">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-          <line x1="12" y1="19" x2="12" y2="23"></line>
-          <line x1="8" y1="23" x2="16" y2="23"></line>
-        </svg>
+      <button class="chat-action-btn" *ngIf="speechSupported && ttsSupported" (click)="startVoiceMode()" title="Voice conversation" aria-label="Voice conversation">
+        <mat-icon>headset_mic</mat-icon>
       </button>
-      <button class="chat-action-btn" (click)="minimizeChat()" *ngIf="!isMinimized" title="Minimize">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
+      <button class="chat-action-btn" (click)="minimizeChat()" *ngIf="!isMinimized" title="Minimize" aria-label="Minimize">
+        <mat-icon>remove</mat-icon>
       </button>
-      <button class="chat-action-btn" (click)="maximizeChat()" *ngIf="isMinimized" title="Maximize">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 3 21 3 21 9"></polyline>
-          <polyline points="9 21 3 21 3 15"></polyline>
-          <line x1="21" y1="3" x2="14" y2="10"></line>
-          <line x1="3" y1="21" x2="10" y2="14"></line>
-        </svg>
+      <button class="chat-action-btn" (click)="maximizeChat()" *ngIf="isMinimized" title="Maximize" aria-label="Maximize">
+        <mat-icon>open_in_full</mat-icon>
       </button>
-      <button class="chat-action-btn close" (click)="closeChat()" title="Close">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
+      <button class="chat-action-btn close" (click)="closeChat()" title="Close" aria-label="Close">
+        <mat-icon>close</mat-icon>
       </button>
     </div>
   </div>
@@ -82,26 +54,38 @@
          [class.action-message]="message.isAction">
       <div class="message-bubble" [class.action-bubble]="message.isAction" [class.action-success]="message.isAction && message.actionSuccess" [class.action-failure]="message.isAction && !message.actionSuccess">
         <div class="message-attachment" *ngIf="message.attachmentName">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-          </svg>
+          <mat-icon aria-hidden="true">description</mat-icon>
           <span>{{ message.attachmentName }}</span>
         </div>
-        <div class="message-text">{{ message.text }}</div>
+        <div class="message-text"><mat-icon *ngIf="message.isAction" class="action-icon" aria-hidden="true">{{ message.actionSuccess ? 'check_circle' : 'error' }}</mat-icon>{{ message.text }}</div>
         <div class="message-time">{{ message.timestamp | date:'shortTime' }}</div>
       </div>
     </div>
 
+    <!-- Welly's reasoning (collapsible) -->
+    <div class="message bot-message thinking-message" *ngIf="currentThinkingText">
+      <div class="message-bubble thinking-bubble" [class.expanded]="thinkingExpanded">
+        <button type="button" class="thinking-toggle" (click)="toggleThinking()" [attr.aria-expanded]="thinkingExpanded">
+          <mat-icon class="thinking-icon" aria-hidden="true">psychology</mat-icon>
+          <span>{{ currentStreamingText ? 'Welly thought it through' : 'Welly is thinking…' }}</span>
+          <mat-icon class="chevron" aria-hidden="true">{{ thinkingExpanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+        </button>
+        <div class="thinking-body" *ngIf="thinkingExpanded">{{ currentThinkingText }}</div>
+      </div>
+    </div>
+
     <!-- Streaming Response -->
-    <div class="message bot-message" *ngIf="currentStreamingText">
+    <div class="message bot-message" *ngIf="displayStreamingText || isEmittingAction">
       <div class="message-bubble">
-        <div class="message-text">{{ currentStreamingText }}<span class="cursor">▊</span></div>
+        <div class="message-text" *ngIf="displayStreamingText">{{ displayStreamingText }}<span class="cursor" *ngIf="!isEmittingAction">▊</span></div>
+        <div class="status-chip" *ngIf="isEmittingAction || currentStatus">
+          <span class="status-dot"></span>{{ currentStatus || 'Working on it…' }}
+        </div>
       </div>
     </div>
 
     <!-- Typing Indicator -->
-    <div class="message bot-message" *ngIf="isTyping && !currentStreamingText">
+    <div class="message bot-message" *ngIf="isTyping && !displayStreamingText && !isEmittingAction && !currentThinkingText">
       <div class="message-bubble typing-indicator">
         <span></span>
         <span></span>
@@ -122,17 +106,11 @@
     <div class="chat-input-container">
       <div class="selected-file-preview" *ngIf="selectedFile">
         <div class="file-info">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-          </svg>
+          <mat-icon aria-hidden="true">description</mat-icon>
           <span>{{ selectedFile.name }}</span>
         </div>
-        <button class="remove-file-btn" (click)="removeSelectedFile()" title="Remove file">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
+        <button class="remove-file-btn" (click)="removeSelectedFile()" title="Remove file" aria-label="Remove file">
+          <mat-icon>close</mat-icon>
         </button>
       </div>
       <div class="file-error" *ngIf="fileInputError">{{ fileInputError }}</div>
@@ -144,23 +122,18 @@
         <button
           class="chat-attach-btn"
           (click)="triggerFileInput()"
-          title="Attach file (PDF, Excel, CSV)">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-          </svg>
+          title="Attach file (PDF, Excel, CSV)"
+          aria-label="Attach file">
+          <mat-icon>attach_file</mat-icon>
         </button>
         <button
           *ngIf="speechSupported"
           class="chat-mic-btn"
           [class.listening]="isListening"
           (click)="toggleListening()"
-          [title]="isListening ? 'Stop listening' : 'Speak to Welly'">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-            <line x1="12" y1="19" x2="12" y2="23"></line>
-            <line x1="8" y1="23" x2="16" y2="23"></line>
-          </svg>
+          [title]="isListening ? 'Stop listening' : 'Speak to Welly'"
+          [attr.aria-label]="isListening ? 'Stop listening' : 'Speak to Welly'">
+          <mat-icon>mic</mat-icon>
         </button>
         <input
           type="text"
@@ -168,16 +141,15 @@
           (keypress)="handleKeyPress($event)"
           placeholder="Type your message or attach a PDF..."
           class="chat-input-field"
+          aria-label="Message Welly"
         />
         <button
           class="chat-send-btn"
           (click)="sendMessage()"
           [disabled]="!userInput.trim() && !selectedFile"
-          title="Send">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13"></line>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-          </svg>
+          title="Send"
+          aria-label="Send">
+          <mat-icon>send</mat-icon>
         </button>
       </div>
     </div>
@@ -190,12 +162,7 @@
 <div class="voice-permission-overlay" *ngIf="showVoicePermission">
   <div class="voice-permission-card">
     <div class="vp-icon">
-      <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-        <line x1="12" y1="19" x2="12" y2="23"></line>
-        <line x1="8" y1="23" x2="16" y2="23"></line>
-      </svg>
+      <mat-icon aria-hidden="true">mic</mat-icon>
     </div>
     <h3>Talk with Welly</h3>
     <p class="vp-sub">Welly needs access to your microphone to hear you. Pick a language and allow the mic when prompted.</p>
@@ -213,8 +180,8 @@
     <div class="vp-error" *ngIf="permissionError">{{ permissionError }}</div>
 
     <div class="vp-actions">
-      <button class="vp-cancel" (click)="cancelVoicePermission()" [disabled]="permissionRequesting">Cancel</button>
-      <button class="vp-allow" (click)="confirmVoicePermission()" [disabled]="permissionRequesting">
+      <button mat-stroked-button class="vp-cancel" (click)="cancelVoicePermission()" [disabled]="permissionRequesting">Cancel</button>
+      <button mat-flat-button color="primary" class="vp-allow" (click)="confirmVoicePermission()" [disabled]="permissionRequesting">
         <span *ngIf="!permissionRequesting">Allow microphone & start</span>
         <span *ngIf="permissionRequesting">Requesting…</span>
       </button>
@@ -226,11 +193,8 @@
 <!-- Immersive Voice Mode (ChatGPT-style overlay) -->
 <!-- ═══════════════════════════════════════════ -->
 <div class="voice-mode-overlay" *ngIf="voiceModeActive" [attr.data-state]="voiceState">
-  <button class="voice-close-btn" (click)="exitVoiceMode()" title="Exit voice mode">
-    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18"></line>
-      <line x1="6" y1="6" x2="18" y2="18"></line>
-    </svg>
+  <button class="voice-close-btn" (click)="exitVoiceMode()" title="Exit voice mode" aria-label="Exit voice mode">
+    <mat-icon>close</mat-icon>
   </button>
 
   <div class="voice-mode-title">Welly</div>
@@ -269,26 +233,11 @@
 
   <!-- Controls -->
   <div class="voice-controls">
-    <button class="voice-ctrl-btn" [class.muted]="voiceMuted" (click)="toggleVoiceMute()" [title]="voiceMuted ? 'Unmute microphone' : 'Mute microphone'">
-      <svg *ngIf="!voiceMuted" xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-        <line x1="12" y1="19" x2="12" y2="23"></line>
-        <line x1="8" y1="23" x2="16" y2="23"></line>
-      </svg>
-      <svg *ngIf="voiceMuted" xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="1" y1="1" x2="23" y2="23"></line>
-        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
-        <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
-        <line x1="12" y1="19" x2="12" y2="23"></line>
-        <line x1="8" y1="23" x2="16" y2="23"></line>
-      </svg>
+    <button class="voice-ctrl-btn" [class.muted]="voiceMuted" (click)="toggleVoiceMute()" [title]="voiceMuted ? 'Unmute microphone' : 'Mute microphone'" [attr.aria-label]="voiceMuted ? 'Unmute microphone' : 'Mute microphone'">
+      <mat-icon>{{ voiceMuted ? 'mic_off' : 'mic' }}</mat-icon>
     </button>
-    <button class="voice-ctrl-btn end" (click)="exitVoiceMode()" title="End conversation">
-      <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
+    <button class="voice-ctrl-btn end" (click)="exitVoiceMode()" title="End conversation" aria-label="End conversation">
+      <mat-icon>close</mat-icon>
     </button>
   </div>
 </div>

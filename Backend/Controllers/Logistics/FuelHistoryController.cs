@@ -141,6 +141,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] int month,
             [FromQuery] int year)
         {
+            if (month < 1 || month > 12 || year < 2000 || year > 2100)
+                return BadRequest(new { message = "month (1-12) and year are required" });
+
             var transactions = await _context.FuelTransactions
                 .Include(f => f.Vehicle)
                     .ThenInclude(v => v!.VehicleType)

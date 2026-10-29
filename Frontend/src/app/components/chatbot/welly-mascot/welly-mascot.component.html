@@ -1,0 +1,40 @@
+<button type="button"
+        class="wm-root"
+        [class]="'wm-root ' + glowClass"
+        [class.attention]="attention"
+        [class.hover]="hovering"
+        [class.pressed]="pressed"
+        [class.busy]="mood === 'thinking' || mood === 'updating'"
+        [style.--wm-size.px]="size"
+        [attr.title]="title"
+        [attr.aria-label]="title"
+        (click)="onClick()"
+        (pointerenter)="onEnter()"
+        (pointerleave)="onLeave()"
+        (pointerdown)="onDown()"
+        (pointerup)="onUp()">
+
+  <!-- Light pulses emanating from behind the head -->
+  <span class="wm-pulses" aria-hidden="true">
+    <span class="wm-pulse p1"></span>
+    <span class="wm-pulse p2"></span>
+    <span class="wm-pulse p3"></span>
+    <span class="wm-glow"></span>
+    <span class="wm-ring"></span>
+  </span>
+
+  <!-- Head: all faces are preloaded & stacked; only the active one is visible, so swaps are instant -->
+  <span class="wm-head" aria-hidden="true">
+    <img *ngFor="let f of faces"
+         class="wm-face"
+         [class.active]="f === face"
+         [src]="'/welly/' + f + '.png'"
+         [attr.alt]="f === face ? 'Welly ' + f : null"
+         draggable="false"
+         decoding="async"
+         loading="eager" />
+    <span class="wm-shine"></span>
+  </span>
+
+  <span class="wm-badge" *ngIf="badge !== null && badge !== undefined && badge !== ''">{{ badge }}</span>
+</button>

@@ -8,13 +8,16 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatChipsModule } from '@angular/material/chips';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import {
   SchoolDeliveryService, ProvinceTheme, SdmStatus
 } from '../../../services/school-delivery.service';
+import { ToastService } from '../../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
+import { StatusChipComponent, ChipTone } from '../../../ui/status-chip/status-chip.component';
 
 @Component({
   selector: 'app-school-delivery',
@@ -22,27 +25,26 @@ import {
   imports: [
     CommonModule, FormsModule, DecimalPipe,
     MatCardModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule,
-    MatTooltipModule, MatTabsModule, MatChipsModule, MatSnackBarModule,
-    MatDialogModule
+    MatTooltipModule, MatTabsModule, MatChipsModule,
+    MatDialogModule, SkeletonRowsComponent, EmptyStateComponent, StatusChipComponent
   ],
   template: `
-    <div class="sdm-wrap" [style.--sdm-primary]="activeProvince?.primary || '#1e3a8a'"
-         [style.--sdm-accent]="activeProvince?.accent || '#3b82f6'">
+    <div class="sdm-wrap">
 
       <!-- Header -->
-      <div class="sdm-hero" [style.background]="activeProvince?.gradient || 'linear-gradient(135deg,#1e3a8a,#3b82f6)'">
-        <button mat-button class="back-btn" (click)="onBack()">
+      <div class="sdm-hero">
+        <button mat-stroked-button class="back-btn" (click)="onBack()">
           <mat-icon>arrow_back</mat-icon> {{ activeProvince ? 'Provinces' : 'Back' }}
         </button>
         <div class="hero-title">
           <div class="hero-icon"><mat-icon>{{ activeProvince?.icon || 'school' }}</mat-icon></div>
           <div>
-            <h1>School Delivery Management</h1>
+            <h2>School Delivery Management</h2>
             <p>Sanitary Pads Dignity Programme{{ activeProvince ? ' — ' + activeProvince.name : '' }}</p>
           </div>
         </div>
         @if (activeProvince) {
-          <button mat-flat-button class="refresh-btn" (click)="loadDashboard()">
+          <button mat-stroked-button class="refresh-btn" (click)="loadDashboard()">
             <mat-icon>refresh</mat-icon> Refresh
           </button>
         }
@@ -52,7 +54,7 @@ import {
       @if (!activeProvince) {
         <div class="province-grid">
           @for (p of svc.provinces; track p.code) {
-            <div class="province-card" [style.background]="p.gradient" (click)="selectProvince(p)">
+            <div class="province-card" (click)="selectProvince(p)">
               <div class="pc-icon"><mat-icon>{{ p.icon }}</mat-icon></div>
               <h2>{{ p.name }}</h2>
               <div class="pc-status">
@@ -72,7 +74,7 @@ import {
                 <div><strong>{{ p.schools | number }}</strong><span>Schools</span></div>
                 <div><strong>{{ p.girlsPerMonth | number }}</strong><span>Girls/month</span></div>
               </div>
-              <button mat-flat-button class="enter-btn">
+              <button mat-stroked-button class="enter-btn">
                 <mat-icon>login</mat-icon> Sign in &amp; Manage
               </button>
             </div>
@@ -94,7 +96,7 @@ import {
               <p>{{ statusMessage }}</p>
             </div>
             @if (reachable) {
-              <button mat-flat-button class="signin-btn" (click)="openLogin()">
+              <button mat-flat-button color="primary" class="signin-btn" (click)="openLogin()">
                 <mat-icon>login</mat-icon> Sign in
               </button>
             }
@@ -140,23 +142,28 @@ import {
           </div>
         </div>
 
-        <mat-tab-group class="sdm-tabs" [style.--sdm-primary]="activeProvince.primary">
+        <mat-tab-group class="sdm-tabs">
           <!-- Deliveries -->
           <mat-tab label="Deliveries">
-            @if (loadingDeliveries) { <div class="loading"><mat-spinner diameter="36"></mat-spinner></div> }
+            @if (loadingDeliveries) { <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows> }
             @else if (deliveries.length === 0) {
-              <div class="empty"><mat-icon>inbox</mat-icon><p>No delivery data available</p></div>
+              <app-empty-state icon="inbox" title="No deliveries to show"
+                               [message]="connected ? 'The ' + activeProvince.name + ' system has no deliveries on record for this region.' : 'Sign in to ' + activeProvince.name + ' to load its live delivery data.'">
+                @if (!connected && reachable) {
+                  <button mat-stroked-button (click)="openLogin()"><mat-icon>login</mat-icon> Sign in</button>
+                }
+              </app-empty-state>
             } @else {
               <div class="table-wrap">
-                <table class="sdm-table">
+                <table class="app-table">
                   <thead><tr><th>Tracking #</th><th>School</th><th>District</th><th>Status</th><th>Priority</th><th>Date</th></tr></thead>
                   <tbody>
                     @for (d of deliveries; track $index) {
                       <tr>
-                        <td>{{ pick(d, ['trackingNumber','tracking','id']) }}</td>
+                        <td class="ref">{{ pick(d, ['trackingNumber','tracking','id']) }}</td>
                         <td>{{ pick(d, ['schoolName','school']) }}</td>
                         <td>{{ pick(d, ['district']) }}</td>
-                        <td><span class="badge" [class]="statusClass(pick(d, ['status']))">{{ pick(d, ['status']) }}</span></td>
+                        <td>@if (pick(d, ['status'])) { <app-status-chip [status]="pick(d, ['status'])" [tone]="chipTone(pick(d, ['status']))"></app-status-chip> }</td>
                         <td>{{ pick(d, ['priority']) }}</td>
                         <td>{{ pick(d, ['deliveryDate','date']) | slice:0:10 }}</td>
                       </tr>
@@ -169,22 +176,27 @@ import {
 
           <!-- Schools -->
           <mat-tab label="Schools">
-            @if (loadingSchools) { <div class="loading"><mat-spinner diameter="36"></mat-spinner></div> }
+            @if (loadingSchools) { <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows> }
             @else if (schools.length === 0) {
-              <div class="empty"><mat-icon>domain</mat-icon><p>No school data available</p></div>
+              <app-empty-state icon="domain" title="No schools to show"
+                               [message]="connected ? 'The ' + activeProvince.name + ' system has no schools on record for this region.' : 'Sign in to ' + activeProvince.name + ' to load its school list.'">
+                @if (!connected && reachable) {
+                  <button mat-stroked-button (click)="openLogin()"><mat-icon>login</mat-icon> Sign in</button>
+                }
+              </app-empty-state>
             } @else {
               <div class="table-wrap">
-                <table class="sdm-table">
-                  <thead><tr><th>EMIS</th><th>School Name</th><th>District</th><th>Students</th><th>Quintile</th><th>Status</th></tr></thead>
+                <table class="app-table">
+                  <thead><tr><th>EMIS</th><th>School Name</th><th>District</th><th class="num">Students</th><th>Quintile</th><th>Status</th></tr></thead>
                   <tbody>
                     @for (s of schools; track $index) {
                       <tr>
-                        <td>{{ pick(s, ['emisNumber','emis']) }}</td>
+                        <td class="ref">{{ pick(s, ['emisNumber','emis']) }}</td>
                         <td>{{ pick(s, ['schoolName','name']) }}</td>
                         <td>{{ pick(s, ['district']) }}</td>
-                        <td>{{ pick(s, ['totalStudents','students']) | number }}</td>
+                        <td class="num">{{ pick(s, ['totalStudents','students']) | number }}</td>
                         <td>{{ pick(s, ['quintile']) }}</td>
-                        <td><span class="badge" [class]="statusClass(pick(s, ['status']))">{{ pick(s, ['status']) }}</span></td>
+                        <td>@if (pick(s, ['status'])) { <app-status-chip [status]="pick(s, ['status'])" [tone]="chipTone(pick(s, ['status']))"></app-status-chip> }</td>
                       </tr>
                     }
                   </tbody>
@@ -200,99 +212,88 @@ import {
   styles: [`
     .sdm-wrap { padding-bottom: 40px; }
     .sdm-hero {
-      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
-      padding: 24px 28px; border-radius: 18px; color: #fff; margin-bottom: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+      margin-bottom: var(--space-5);
     }
-    .back-btn { color: #fff !important; background: rgba(255,255,255,0.15) !important; }
-    .refresh-btn { color: #fff !important; background: rgba(255,255,255,0.2) !important; margin-left: auto; }
-    .hero-title { display: flex; align-items: center; gap: 16px; }
+    .refresh-btn { margin-left: auto; }
+    .hero-title { display: flex; align-items: center; gap: var(--space-3); }
     .hero-icon {
-      width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.2);
+      width: 48px; height: 48px; border-radius: var(--radius-md);
+      background: var(--color-primary-soft); color: var(--color-primary);
       display: flex; align-items: center; justify-content: center;
     }
-    .hero-icon mat-icon { font-size: 30px; width: 30px; height: 30px; }
-    .hero-title h1 { margin: 0; font-size: 24px; font-weight: 700; }
-    .hero-title p { margin: 2px 0 0; opacity: 0.9; font-size: 14px; }
+    .hero-icon mat-icon { font-size: var(--text-3xl); width: 24px; height: 24px; }
+    .hero-title h2 { margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
+    .hero-title p { margin: 2px 0 0; color: var(--color-text-3); font-size: var(--text-md); }
 
     .province-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-5);
     }
     .province-card {
-      border-radius: 18px; padding: 28px; color: #fff; cursor: pointer;
-      box-shadow: 0 8px 28px rgba(0,0,0,0.22); transition: transform 0.25s, box-shadow 0.25s;
+      background: var(--color-surface); border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg); padding: var(--space-5); color: var(--color-text); cursor: pointer;
+      box-shadow: var(--shadow-sm); transition: border-color 0.2s, box-shadow 0.2s;
       display: flex; flex-direction: column; gap: 14px;
     }
-    .province-card:hover { transform: translateY(-6px); box-shadow: 0 16px 44px rgba(0,0,0,0.3); }
+    .province-card:hover { border-color: var(--color-line-strong); box-shadow: var(--shadow-md); }
     .pc-icon {
-      width: 60px; height: 60px; border-radius: 16px; background: rgba(255,255,255,0.2);
+      width: 48px; height: 48px; border-radius: var(--radius-md);
+      background: var(--color-primary-soft); color: var(--color-primary);
       display: flex; align-items: center; justify-content: center;
     }
-    .pc-icon mat-icon { font-size: 34px; width: 34px; height: 34px; }
-    .province-card h2 { margin: 0; font-size: 22px; font-weight: 700; }
-    .pc-status { display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: 0.95; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: #cbd5e1; display: inline-block; }
-    .dot.ok { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-    .dot.bad { background: #ef4444; }
-    .warn-pill { background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+    .pc-icon mat-icon { font-size: var(--text-3xl); width: 24px; height: 24px; }
+    .province-card h2 { margin: 0; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
+    .pc-status { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--color-text-2); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-line-strong); display: inline-block; }
+    .dot.ok { background: var(--color-ok); }
+    .dot.bad { background: var(--color-danger); }
+    .warn-pill { background: var(--color-warn-soft); color: var(--color-warn); padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; }
     .pc-stats { display: flex; gap: 18px; margin-top: 4px; }
     .pc-stats div { display: flex; flex-direction: column; }
-    .pc-stats strong { font-size: 18px; }
-    .pc-stats span { font-size: 11px; opacity: 0.85; }
-    .enter-btn { background: rgba(255,255,255,0.9) !important; color: #111 !important; margin-top: 8px; align-self: flex-start; }
+    .pc-stats strong { font-size: var(--text-xl); color: var(--color-text); }
+    .pc-stats span { font-size: var(--text-xs); color: var(--color-text-3); }
+    .enter-btn { margin-top: 8px; align-self: flex-start; }
     .hint {
       display: flex; align-items: center; gap: 8px; justify-content: center;
-      margin-top: 24px; color: #64748b; font-size: 13px;
+      margin-top: 24px; color: var(--color-text-3); font-size: var(--text-sm);
     }
-    .hint mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .hint mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
 
     .notice {
-      display: flex; align-items: center; gap: 16px; background: #fff7ed; border: 1px solid #fed7aa;
-      border-radius: 14px; padding: 16px 20px; margin-bottom: 20px;
+      display: flex; align-items: center; gap: 16px; background: var(--color-warn-soft); border: 1px solid var(--color-warn-soft);
+      border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 20px;
     }
-    .notice mat-icon { color: #ea580c; font-size: 32px; width: 32px; height: 32px; }
-    .notice h3 { margin: 0; color: #9a3412; font-size: 16px; }
-    .notice p { margin: 4px 0 0; color: #7c2d12; font-size: 13px; }
+    .notice mat-icon { color: var(--color-warn); font-size: var(--text-4xl); width: 32px; height: 32px; }
+    .notice h3 { margin: 0; color: var(--color-warn); font-size: var(--text-lg); }
+    .notice p { margin: 4px 0 0; color: var(--color-text-2); font-size: var(--text-sm); }
     .notice-body { flex: 1; }
-    .notice.ok { background: #f0fdf4; border-color: #bbf7d0; }
-    .notice.ok mat-icon { color: #16a34a; }
-    .notice.ok h3 { color: #166534; }
-    .notice.ok p { color: #15803d; }
-    .signin-btn { background: #ea580c !important; color: #fff !important; }
-    .signout-btn { color: #166534 !important; border-color: #86efac !important; }
+    .notice.ok { background: var(--color-ok-soft); border-color: var(--color-ok-soft); }
+    .notice.ok mat-icon { color: var(--color-ok); }
+    .notice.ok h3 { color: var(--color-ok); }
+    .notice.ok p { color: var(--color-text-2); }
 
     .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
     .stat-card {
-      background: #fff; border-radius: 14px; padding: 18px; display: flex; align-items: center; gap: 14px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-left: 4px solid var(--sdm-primary);
+      background: var(--color-surface); border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg); padding: 18px; display: flex; align-items: center; gap: 14px;
+      box-shadow: var(--shadow-sm);
     }
     .stat-card.wide { grid-column: span 2; }
     .sc-icon {
-      width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
-      background: rgba(30,58,138,0.1); color: var(--sdm-primary);
+      width: 48px; height: 48px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;
+      background: var(--color-primary-soft); color: var(--color-primary);
     }
-    .sc-icon.green { background: rgba(34,197,94,0.12); color: #16a34a; }
-    .sc-icon.amber { background: rgba(245,158,11,0.14); color: #d97706; }
-    .sc-icon.red { background: rgba(239,68,68,0.12); color: #dc2626; }
-    .sc-icon.accent { background: rgba(0,0,0,0.05); color: var(--sdm-accent); }
+    .sc-icon.green { background: var(--color-ok-soft); color: var(--color-ok); }
+    .sc-icon.amber { background: var(--color-warn-soft); color: var(--color-warn); }
+    .sc-icon.red { background: var(--color-danger-soft); color: var(--color-danger); }
+    .sc-icon.accent { background: var(--color-cat-pink-soft); color: var(--color-cat-pink); }
     .sc-body { display: flex; flex-direction: column; }
-    .sc-num { font-size: 24px; font-weight: 700; color: #0f172a; }
-    .sc-label { font-size: 12px; color: #64748b; }
+    .sc-num { font-size: var(--text-3xl); font-weight: 700; color: var(--color-text); }
+    .sc-label { font-size: var(--text-xs); color: var(--color-text-3); }
 
-    .sdm-tabs { background: #fff; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); overflow: hidden; }
-    .loading, .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; color: #94a3b8; gap: 8px; }
-    .empty mat-icon { font-size: 48px; width: 48px; height: 48px; }
-    .table-wrap { padding: 8px 4px 16px; overflow-x: auto; }
-    .sdm-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    .sdm-table th { text-align: left; padding: 12px 16px; color: #64748b; font-weight: 600; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #f1f5f9; }
-    .sdm-table td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; color: #334155; }
-    .sdm-table tr:hover td { background: #f8fafc; }
-    .badge { padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; background: #e2e8f0; color: #475569; }
-    .badge.ok { background: #dcfce7; color: #166534; }
-    .badge.warn { background: #fef3c7; color: #92400e; }
-    .badge.bad { background: #fee2e2; color: #991b1b; }
-    .badge.info { background: #dbeafe; color: #1e40af; }
-    .table-note { padding: 8px 16px; color: #94a3b8; font-size: 12px; }
+    .sdm-tabs { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; }
+    .table-wrap { padding-bottom: 8px; overflow-x: auto; }
+    .table-note { padding: 8px 16px; color: var(--color-text-3); font-size: var(--text-xs); }
   `]
 })
 export class SchoolDeliveryComponent implements OnInit {
@@ -311,7 +312,7 @@ export class SchoolDeliveryComponent implements OnInit {
   loadingDeliveries = false;
   loadingSchools = false;
 
-  constructor(public svc: SchoolDeliveryService, private snack: MatSnackBar, private dialog: MatDialog) {}
+  constructor(public svc: SchoolDeliveryService, private toast: ToastService, private dialog: MatDialog) {}
 
   ngOnInit(): void {
     this.svc.getStatus().subscribe({
@@ -362,7 +363,7 @@ export class SchoolDeliveryComponent implements OnInit {
     ref.afterClosed().subscribe((ok: boolean) => {
       if (ok) {
         // Login + token + data-readiness already confirmed inside the dialog.
-        this.snack.open(`Signed in to ${target.name}`, 'OK', { duration: 2500 });
+        this.toast.done(`Signed in to ${target.name}`);
         this.openProvince(target);
       }
       // If cancelled, stay on the province selection screen (page not opened).
@@ -375,7 +376,7 @@ export class SchoolDeliveryComponent implements OnInit {
     this.svc.logout(region).subscribe({
       next: () => {
         this.connected = false;
-        this.snack.open('Signed out', 'OK', { duration: 2000 });
+        this.toast.done('Signed out');
         this.loadDashboard();
       },
       error: () => { this.connected = false; }
@@ -460,6 +461,11 @@ export class SchoolDeliveryComponent implements OnInit {
     if (/(fail|cancel|closed|inactive)/.test(s)) return 'bad';
     return '';
   }
+
+  chipTone(status: any): ChipTone {
+    const c = this.statusClass(status);
+    return c === 'bad' ? 'danger' : c === '' ? 'neutral' : c as ChipTone;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -473,12 +479,9 @@ export class SchoolDeliveryComponent implements OnInit {
     MatFormFieldModule, MatInputModule, MatProgressSpinnerModule
   ],
   template: `
-    <div class="sdm-login" [style.--sdm-primary]="data.province.primary"
-         [style.--sdm-accent]="data.province.accent">
-      <!-- Decorative header -->
-      <div class="dlg-hero" [style.background]="data.province.gradient">
-        <div class="hero-glow"></div>
-        <button mat-icon-button class="close-x" (click)="ref.close(false)" [disabled]="loading" tabindex="-1">
+    <div class="sdm-login">
+      <div class="dlg-hero">
+        <button aria-label="Close" mat-icon-button class="close-x" (click)="ref.close(false)" [disabled]="loading" tabindex="-1">
           <mat-icon>close</mat-icon>
         </button>
         <div class="hero-badge"><mat-icon>{{ data.province.icon }}</mat-icon></div>
@@ -508,7 +511,7 @@ export class SchoolDeliveryComponent implements OnInit {
                  autocomplete="current-password"
                  (focus)="focus = 'pw'" (blur)="focus = ''"
                  (keyup.enter)="submit()" placeholder="••••••••">
-          <button type="button" class="eye" (click)="showPw = !showPw" tabindex="-1">
+          <button [attr.aria-label]="showPw ? 'Hide password' : 'Show password'" type="button" class="eye" (click)="showPw = !showPw" tabindex="-1">
             <mat-icon>{{ showPw ? 'visibility_off' : 'visibility' }}</mat-icon>
           </button>
         </div>
@@ -517,7 +520,7 @@ export class SchoolDeliveryComponent implements OnInit {
           <div class="dlg-error"><mat-icon>error_outline</mat-icon><span>{{ error }}</span></div>
         }
 
-        <button class="go-btn" (click)="submit()" [disabled]="!email || !password">
+        <button mat-flat-button color="primary" class="go-btn" (click)="submit()" [disabled]="!email || !password">
           <mat-icon>login</mat-icon>
           <span>Sign in</span>
         </button>
@@ -548,7 +551,7 @@ export class SchoolDeliveryComponent implements OnInit {
 
           @if (error) {
             <div class="dlg-error"><mat-icon>error_outline</mat-icon><span>{{ error }}</span></div>
-            <button class="retry-btn" (click)="reset()">
+            <button mat-stroked-button class="retry-btn" (click)="reset()">
               <mat-icon>refresh</mat-icon> Try again
             </button>
           } @else {
@@ -564,123 +567,101 @@ export class SchoolDeliveryComponent implements OnInit {
     .sdm-login { position: relative; }
 
     .dlg-hero {
-      position: relative; overflow: hidden;
-      padding: 34px 32px 30px; color: #fff; text-align: center;
-      margin: 0;
-    }
-    .hero-glow {
-      position: absolute; top: -60px; right: -40px; width: 180px; height: 180px;
-      background: rgba(255,255,255,0.18); border-radius: 50%; filter: blur(10px);
+      position: relative;
+      padding: 28px 32px 20px; color: var(--color-text); text-align: center;
+      margin: 0; background: var(--color-surface); border-bottom: 1px solid var(--color-line);
     }
     .close-x {
-      position: absolute; top: 8px; right: 8px; color: rgba(255,255,255,0.85) !important; z-index: 2;
+      position: absolute; top: 8px; right: 8px; color: var(--color-text-3);
     }
     .hero-badge {
-      width: 68px; height: 68px; border-radius: 20px; margin: 0 auto 14px;
-      background: rgba(255,255,255,0.22); backdrop-filter: blur(4px);
+      width: 56px; height: 56px; border-radius: var(--radius-lg); margin: 0 auto 12px;
+      background: var(--color-primary-soft); color: var(--color-primary);
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.18); position: relative; z-index: 1;
     }
-    .hero-badge mat-icon { font-size: 38px; width: 38px; height: 38px; }
-    .dlg-hero h2 { margin: 0; font-size: 23px; font-weight: 800; letter-spacing: -0.3px; position: relative; z-index: 1; }
-    .dlg-hero p { margin: 4px 0 0; font-size: 13px; opacity: 0.9; position: relative; z-index: 1; }
+    .hero-badge mat-icon { font-size: var(--text-4xl); width: 32px; height: 32px; }
+    .dlg-hero h2 { margin: 0; font-size: var(--text-2xl); font-weight: 800; }
+    .dlg-hero p { margin: 4px 0 0; font-size: var(--text-sm); color: var(--color-text-3); }
 
-    .dlg-body { padding: 26px 30px 24px; }
+    .dlg-body { padding: 24px 30px; }
     .welcome { text-align: center; margin-bottom: 24px; }
-    .welcome h3 { margin: 0; font-size: 20px; font-weight: 700; color: #0f172a; }
-    .welcome p { margin: 6px auto 0; font-size: 13.5px; color: #64748b; max-width: 320px; line-height: 1.5; }
+    .welcome h3 { margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
+    .welcome p { margin: 6px auto 0; font-size: var(--text-sm); color: var(--color-text-3); max-width: 320px; line-height: 1.5; }
 
     .field-label {
-      display: block; font-size: 12.5px; font-weight: 600; color: #475569;
-      margin: 0 0 8px 2px; letter-spacing: 0.2px;
+      display: block; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-2);
+      margin: 0 0 8px 2px;
     }
     .field {
       display: flex; align-items: center; gap: 12px;
-      background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 14px;
-      padding: 0 16px; height: 54px; margin-bottom: 18px;
-      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+      background: var(--color-surface); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control);
+      padding: 0 14px; height: 48px; margin-bottom: 18px;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .field.focused {
-      border-color: var(--sdm-primary); background: #fff;
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--sdm-primary) 12%, transparent);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
     }
-    .field > mat-icon { color: #94a3b8; font-size: 22px; width: 22px; height: 22px; transition: color 0.2s; }
-    .field.focused > mat-icon { color: var(--sdm-primary); }
+    .field > mat-icon { color: var(--color-text-3); font-size: var(--text-2xl); width: 20px; height: 20px; transition: color 0.2s; }
+    .field.focused > mat-icon { color: var(--color-primary); }
     .field input {
       flex: 1; border: none; outline: none; background: transparent;
-      font-size: 15px; color: #0f172a; height: 100%;
+      font-size: var(--text-md); color: var(--color-text); height: 100%;
     }
-    .field input::placeholder { color: #cbd5e1; }
+    .field input::placeholder { color: var(--color-text-3); }
     .eye {
-      border: none; background: transparent; cursor: pointer; color: #94a3b8;
-      display: flex; align-items: center; padding: 4px; border-radius: 8px;
+      border: none; background: transparent; cursor: pointer; color: var(--color-text-3);
+      display: flex; align-items: center; padding: 4px; border-radius: var(--radius-sm);
     }
-    .eye:hover { color: #475569; background: #eef2f7; }
+    .eye:hover { color: var(--color-text-2); background: var(--color-surface-2); }
 
     .dlg-error {
-      display: flex; align-items: center; gap: 10px; background: #fef2f2; color: #b91c1c;
-      border: 1px solid #fecaca; border-radius: 12px; padding: 12px 14px; font-size: 13.5px;
+      display: flex; align-items: center; gap: 10px; background: var(--color-danger-soft); color: var(--color-danger);
+      border-radius: var(--radius-md); padding: 12px 14px; font-size: var(--text-sm);
       margin: 2px 0 18px;
     }
-    .dlg-error mat-icon { font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+    .dlg-error mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; flex-shrink: 0; }
 
-    .go-btn {
-      width: 100%; height: 54px; border: none; border-radius: 14px; cursor: pointer;
-      background: linear-gradient(135deg, var(--sdm-primary), var(--sdm-accent));
-      color: #fff; font-size: 15.5px; font-weight: 700; letter-spacing: 0.3px;
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-      box-shadow: 0 8px 22px color-mix(in srgb, var(--sdm-primary) 40%, transparent);
-      transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
-    }
-    .go-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 30px color-mix(in srgb, var(--sdm-primary) 50%, transparent); }
-    .go-btn:active:not(:disabled) { transform: translateY(0); }
-    .go-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-    .go-btn mat-spinner { --mdc-circular-progress-active-indicator-color: #fff; }
-    .go-btn ::ng-deep circle { stroke: #fff !important; }
+    .go-btn { width: 100%; height: 44px; }
 
     .secure-note {
       display: flex; align-items: center; justify-content: center; gap: 6px;
-      margin: 18px 0 0; font-size: 12px; color: #94a3b8; text-align: center;
+      margin: 18px 0 0; font-size: var(--text-xs); color: var(--color-text-3); text-align: center;
     }
-    .secure-note mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .secure-note mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
 
     /* Progress sequence */
     .progress-panel { padding: 8px 0 4px; }
     .progress-track {
-      height: 8px; background: #eef2f7; border-radius: 999px; overflow: hidden; margin-bottom: 24px;
+      height: 8px; background: var(--color-surface-2); border-radius: 999px; overflow: hidden; margin-bottom: 24px;
     }
     .progress-fill {
       height: 100%; border-radius: 999px; transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
-      background: linear-gradient(90deg, var(--sdm-primary), var(--sdm-accent));
+      background: var(--color-primary);
     }
     .steps { display: flex; flex-direction: column; gap: 6px; }
     .step {
-      display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px;
+      display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--radius-md);
       transition: background 0.3s; opacity: 0.5;
     }
-    .step.active { background: color-mix(in srgb, var(--sdm-primary) 8%, transparent); opacity: 1; }
+    .step.active { background: var(--color-primary-soft); opacity: 1; }
     .step.done { opacity: 1; }
-    .step.failed { opacity: 1; background: #fef2f2; }
+    .step.failed { opacity: 1; background: var(--color-danger-soft); }
     .step-icon {
       width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      background: #eef2f7; color: #94a3b8; transition: background 0.3s, color 0.3s;
+      background: var(--color-surface-2); color: var(--color-text-3); transition: background 0.3s, color 0.3s;
     }
-    .step.active .step-icon { background: color-mix(in srgb, var(--sdm-primary) 15%, #fff); }
-    .step.done .step-icon { background: #dcfce7; color: #16a34a; }
-    .step.failed .step-icon { background: #fee2e2; color: #dc2626; }
-    .step-icon mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .step-icon .dot-idle { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
-    .step-label { font-size: 14.5px; font-weight: 600; color: #334155; }
-    .step.active .step-label { color: var(--sdm-primary); }
+    .step.active .step-icon { background: var(--color-surface); }
+    .step.done .step-icon { background: var(--color-ok-soft); color: var(--color-ok); }
+    .step.failed .step-icon { background: var(--color-danger-soft); color: var(--color-danger); }
+    .step-icon mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
+    .step-icon .dot-idle { width: 8px; height: 8px; border-radius: 50%; background: var(--color-line-strong); }
+    .step-label { font-size: var(--text-md); font-weight: 600; color: var(--color-text-2); }
+    .step.active .step-label { color: var(--color-primary); }
 
-    .progress-hint { text-align: center; color: #94a3b8; font-size: 13px; margin: 22px 0 4px; }
-    .retry-btn {
-      width: 100%; height: 48px; margin-top: 18px; border: 2px solid #e2e8f0; border-radius: 12px;
-      background: #fff; color: #334155; font-size: 14.5px; font-weight: 600; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-    }
-    .retry-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+    .progress-hint { text-align: center; color: var(--color-text-3); font-size: var(--text-sm); margin: 22px 0 4px; }
+    .retry-btn { width: 100%; height: 44px; margin-top: 18px; }
   `]
 })
 export class SdmLoginDialogComponent {

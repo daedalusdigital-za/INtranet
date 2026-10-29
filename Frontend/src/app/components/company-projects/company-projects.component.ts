@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,11 +9,12 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 import { HBA1CDashboardComponent } from './hba1c-dashboard/hba1c-dashboard.component';
 import { CondomsDashboardComponent } from './condoms-dashboard/condoms-dashboard.component';
 import { SanitaryPadsDashboardComponent } from './sanitary-pads-dashboard/sanitary-pads-dashboard.component';
@@ -26,10 +27,10 @@ import { environment } from '../../../environments/environment';
 interface CompanyProject {
   id: string;
   name: string;
+  /** Short name for the page header and breadcrumb, as in the sidebar. */
+  shortName?: string;
   description: string;
   icon: string;
-  color: string;
-  gradient: string;
   status: 'active' | 'planning' | 'on-hold' | 'completed';
   progress: number;
   category: string;
@@ -51,10 +52,11 @@ interface CompanyProject {
     MatChipsModule,
     MatTooltipModule,
     MatDialogModule,
-    MatSnackBarModule,
     MatProgressSpinnerModule,
     MatMenuModule,
     NavbarComponent,
+    PageHeaderComponent,
+    StatusChipComponent,
     HBA1CDashboardComponent,
     CondomsDashboardComponent,
     SanitaryPadsDashboardComponent,
@@ -64,31 +66,9 @@ interface CompanyProject {
     <app-navbar></app-navbar>
 
     <div class="projects-container">
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-text">
-            <h1>
-              <mat-icon class="header-icon">assignment</mat-icon>
-              Company Projects
-            </h1>
-            <p class="subtitle">Active projects and initiatives across the organisation</p>
-          </div>
-          <div class="header-stats">
-            <div class="header-stat">
-              <span class="stat-number">{{ projects.length }}</span>
-              <span class="stat-label">Total Projects</span>
-            </div>
-            <div class="header-stat">
-              <span class="stat-number">{{ getActiveCount() }}</span>
-              <span class="stat-label">Active</span>
-            </div>
-            <div class="header-stat">
-              <span class="stat-number">{{ getAverageProgress() }}%</span>
-              <span class="stat-label">Avg Progress</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <app-page-header class="projects-page-header"
+                       [crumbs]="selectedProject ? ['Operations', 'Company projects', pageTitle] : ['Operations', 'Company projects']"
+                       [title]="pageTitle" [subtitle]="pageSubtitle"></app-page-header>
 
       @if (selectedProject) {
         @if (selectedProject.id === 'condoms') {
@@ -104,19 +84,17 @@ interface CompanyProject {
           <!-- Generic Project Detail View -->
           <div class="project-detail">
           <div class="detail-header">
-            <button mat-raised-button (click)="clearSelection()">
+            <button mat-stroked-button (click)="clearSelection()">
               <mat-icon>arrow_back</mat-icon>
               Back to Projects
             </button>
             <h2>{{ selectedProject.name }}</h2>
-            <mat-chip [class]="'status-chip status-' + selectedProject.status">
-              {{ selectedProject.status | titlecase }}
-            </mat-chip>
+            <app-status-chip [status]="selectedProject.status | titlecase"></app-status-chip>
           </div>
 
           <div class="detail-content">
             <div class="detail-overview">
-              <div class="detail-card" [style.border-left-color]="selectedProject.color">
+              <div class="detail-card">
                 <h3>Project Overview</h3>
                 <p class="detail-description">{{ selectedProject.description }}</p>
                 <div class="detail-meta">
@@ -173,15 +151,12 @@ interface CompanyProject {
         <div class="projects-grid">
           @for (project of projects; track project.id) {
             <div class="project-card" (click)="selectProject(project)">
-              <div class="card-gradient" [style.background]="project.gradient"></div>
               <div class="card-content">
                 <div class="card-header">
-                  <div class="card-icon" [style.background]="project.color + '22'" [style.color]="project.color">
+                  <div class="card-icon">
                     <mat-icon>{{ project.icon }}</mat-icon>
                   </div>
-                  <mat-chip [class]="'status-chip status-' + project.status" size="small">
-                    {{ project.status | titlecase }}
-                  </mat-chip>
+                  <app-status-chip [status]="project.status | titlecase"></app-status-chip>
                 </div>
 
                 <h2 class="card-title">{{ project.name }}</h2>
@@ -208,7 +183,7 @@ interface CompanyProject {
                   <mat-progress-bar mode="determinate" [value]="project.progress" [color]="project.progress >= 75 ? 'primary' : project.progress >= 40 ? 'accent' : 'warn'"></mat-progress-bar>
                 </div>
 
-                <button mat-raised-button class="card-action-btn" [style.background]="project.color" style="color: white;">
+                <button mat-stroked-button class="card-action-btn">
                   <mat-icon>arrow_forward</mat-icon>
                   Open Project
                 </button>
@@ -223,165 +198,47 @@ interface CompanyProject {
     :host {
       display: block;
       min-height: 100vh;
-      position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(236, 72, 153, 0.30) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(14, 165, 233, 0.30) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.25) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
     .projects-container {
-      padding: 48px clamp(20px, 5vw, 64px) 72px;
+      padding: var(--space-5) clamp(20px, 5vw, 64px) 72px;
       max-width: 1440px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
-      position: relative;
-      z-index: 1;
     }
 
-    .page-header {
-      margin-bottom: 40px;
-    }
-
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
-
-    .header-text h1 {
-      font-size: clamp(2rem, 4vw, 2.8rem);
-      font-weight: 800;
-      color: #fff;
-      margin: 0 0 10px 0;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      letter-spacing: -0.5px;
-    }
-
-    .header-icon {
-      font-size: 38px;
-      width: 52px;
-      height: 52px;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 16px;
-      background: linear-gradient(135deg, rgba(99,102,241,0.9), rgba(236,72,153,0.9));
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
-      padding: 7px;
-    }
-
-    .subtitle {
-      color: rgba(226, 232, 240, 0.85);
-      font-size: 1.1rem;
-      margin: 0;
-      font-weight: 400;
-    }
-
-    .header-stats {
-      display: flex;
-      gap: 16px;
-    }
-
-    .header-stat {
-      text-align: center;
-      padding: 16px 24px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 18px;
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      min-width: 108px;
-      transition: transform 0.25s, background 0.25s;
-    }
-
-    .header-stat:hover {
-      transform: translateY(-3px);
-      background: rgba(255, 255, 255, 0.13);
-    }
-
-    .header-stat .stat-number {
-      display: block;
-      font-size: 28px;
-      font-weight: 800;
-      color: #fff;
-      line-height: 1.1;
-    }
-
-    .header-stat .stat-label {
-      font-size: 11px;
-      color: rgba(226, 232, 240, 0.7);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      font-weight: 600;
+    .projects-page-header {
+      margin-bottom: var(--space-5);
     }
 
     /* Projects Grid */
     .projects-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-      gap: 28px;
+      gap: var(--space-5);
     }
 
     .project-card {
-      background: #ffffff;
-      border-radius: 24px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
       cursor: pointer;
-      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s ease;
-      box-shadow: 0 10px 40px rgba(2, 6, 23, 0.35);
-      position: relative;
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
       display: flex;
       flex-direction: column;
     }
 
-    .project-card::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 24px;
-      padding: 1px;
-      background: linear-gradient(135deg, rgba(255,255,255,0.6), transparent 40%);
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      pointer-events: none;
-    }
-
     .project-card:hover {
-      transform: translateY(-10px);
-      box-shadow: 0 26px 60px rgba(2, 6, 23, 0.5);
-    }
-
-    .card-gradient {
-      height: 90px;
-      width: 100%;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .card-gradient::before {
-      content: '';
-      position: absolute;
-      top: -40%; right: -10%;
-      width: 160px; height: 160px;
-      background: rgba(255,255,255,0.18);
-      border-radius: 50%;
-      filter: blur(6px);
+      border-color: var(--color-line-strong);
+      box-shadow: var(--shadow-md);
     }
 
     .card-content {
-      padding: 0 24px 24px;
+      padding: var(--space-5);
       display: flex;
       flex-direction: column;
       flex: 1;
@@ -390,42 +247,38 @@ interface CompanyProject {
     .card-header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
-      margin-top: -34px;
-      margin-bottom: 18px;
-      position: relative;
-      z-index: 2;
+      align-items: center;
+      margin-bottom: var(--space-4);
     }
 
     .card-icon {
-      width: 64px;
-      height: 64px;
-      border-radius: 18px;
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #fff !important;
-      box-shadow: 0 10px 26px rgba(2, 6, 23, 0.22);
-      border: 1px solid rgba(0,0,0,0.05);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
 
     .card-icon mat-icon {
-      font-size: 34px;
-      width: 34px;
-      height: 34px;
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
 
     .card-title {
-      font-size: 21px;
+      font-size: var(--text-xl);
       font-weight: 800;
-      color: #0f172a;
-      margin: 0 0 8px 0;
-      letter-spacing: -0.3px;
+      color: var(--color-text);
+      margin: 0 0 var(--space-2) 0;
+      letter-spacing: -0.01em;
     }
 
     .card-description {
-      color: #64748b;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
       line-height: 1.6;
       margin: 0 0 14px 0;
       display: -webkit-box;
@@ -438,47 +291,55 @@ interface CompanyProject {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
-      color: #6366f1;
-      background: #eef2ff;
-      padding: 5px 12px;
-      border-radius: 20px;
+      color: var(--color-primary);
+      background: var(--color-primary-soft);
+      padding: 4px 10px;
+      border-radius: 999px;
       margin-bottom: 18px;
       align-self: flex-start;
     }
 
     .card-category mat-icon {
-      font-size: 15px;
-      width: 15px;
-      height: 15px;
+      font-size: var(--text-md);
+      width: 14px;
+      height: 14px;
     }
 
     .card-stats {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: var(--space-3);
       margin-bottom: 18px;
     }
 
     .card-stat {
-      background: #f8fafc;
-      border: 1px solid #eef2f7;
-      border-radius: 14px;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 12px 14px;
     }
 
     .card-stat .stat-value {
       display: block;
-      font-size: 19px;
+      font-size: var(--text-xl);
       font-weight: 800;
-      color: #0f172a;
+      color: var(--color-text);
       line-height: 1.15;
     }
 
+    /* Big numbers shrink to fit their card instead of wrapping onto a second line (long rand
+       values, narrow screens). 100cqi is the card's width; the px is its icon and padding. */
+    .card-stats > .card-stat { container-type: inline-size; }
+    .card-stats .card-stat .stat-value {
+      white-space: nowrap;
+      font-size: clamp(13px, calc((100cqi - 30px) / 8.5), 19px);
+    }
+
     .card-stat .stat-label {
-      font-size: 10.5px;
-      color: #94a3b8;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       text-transform: uppercase;
       letter-spacing: 0.6px;
       font-weight: 600;
@@ -493,28 +354,18 @@ interface CompanyProject {
       display: flex;
       justify-content: space-between;
       margin-bottom: 7px;
-      font-size: 13px;
-      color: #64748b;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
       font-weight: 500;
     }
 
     .progress-pct {
       font-weight: 700;
-      color: #0f172a;
+      color: var(--color-text);
     }
 
     .card-action-btn {
       width: 100%;
-      border-radius: 14px !important;
-      font-weight: 700 !important;
-      letter-spacing: 0.3px;
-      height: 48px;
-      box-shadow: 0 8px 22px rgba(2, 6, 23, 0.18) !important;
-      transition: filter 0.2s, transform 0.2s;
-    }
-
-    .card-action-btn:hover {
-      filter: brightness(1.08);
     }
 
     .card-progress ::ng-deep .mat-mdc-progress-bar {
@@ -524,11 +375,11 @@ interface CompanyProject {
       overflow: hidden;
     }
     .card-progress ::ng-deep .mdc-linear-progress__buffer-bar {
-      background: #eef2f7;
+      background: var(--color-surface-2);
     }
 
     @keyframes cardIn {
-      from { opacity: 0; transform: translateY(24px); }
+      from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
     .project-card {
@@ -540,34 +391,6 @@ interface CompanyProject {
     .projects-grid .project-card:nth-child(4) { animation-delay: 0.20s; }
     .projects-grid .project-card:nth-child(5) { animation-delay: 0.26s; }
     .projects-grid .project-card:nth-child(6) { animation-delay: 0.32s; }
-
-    /* Status Chips */
-    .status-chip {
-      font-size: 11px !important;
-      font-weight: 600 !important;
-      min-height: 24px !important;
-      padding: 0 10px !important;
-    }
-
-    .status-active {
-      background: #e8f5e9 !important;
-      color: #2e7d32 !important;
-    }
-
-    .status-planning {
-      background: #fff3e0 !important;
-      color: #ef6c00 !important;
-    }
-
-    .status-on-hold {
-      background: #fce4ec !important;
-      color: #c62828 !important;
-    }
-
-    .status-completed {
-      background: #e3f2fd !important;
-      color: #1565c0 !important;
-    }
 
     /* Project Detail View */
     .project-detail {
@@ -587,44 +410,38 @@ interface CompanyProject {
     }
 
     .detail-header h2 {
-      font-size: 24px;
+      font-size: var(--text-2xl);
       font-weight: 700;
-      color: white;
+      color: var(--color-text);
       margin: 0;
       flex: 1;
-      text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
-    }
-
-    .detail-header button {
-      background: rgba(255,255,255,0.2) !important;
-      color: white !important;
-      backdrop-filter: blur(10px);
     }
 
     .detail-content {
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: var(--space-5);
     }
 
     .detail-card {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 20px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-left: 4px solid var(--color-primary);
+      border-radius: var(--radius-lg);
       padding: 28px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-      border-left: 4px solid;
+      box-shadow: var(--shadow-sm);
     }
 
     .detail-card h3 {
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 700;
-      color: #1a1a2e;
+      color: var(--color-text);
       margin: 0 0 12px 0;
     }
 
     .detail-description {
-      color: #555;
-      font-size: 15px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
       line-height: 1.7;
       margin: 0 0 20px 0;
     }
@@ -640,59 +457,60 @@ interface CompanyProject {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
 
     .meta-item mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .progress-section {
       padding-top: 16px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--color-line);
     }
 
     .progress-header {
       display: flex;
       justify-content: space-between;
       margin-bottom: 8px;
-      font-size: 14px;
-      color: #666;
+      font-size: var(--text-md);
+      color: var(--color-text-2);
     }
 
     .progress-value {
       font-weight: 700;
-      color: #333;
-      font-size: 16px;
+      color: var(--color-text);
+      font-size: var(--text-lg);
     }
 
     .detail-stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 16px;
+      gap: var(--space-4);
     }
 
     .detail-stat-card {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 16px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
       padding: 20px;
       text-align: center;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      box-shadow: var(--shadow-sm);
     }
 
     .detail-stat-card .stat-value {
-      font-size: 22px;
+      font-size: var(--text-2xl);
       font-weight: 700;
-      color: #5c6bc0;
+      color: var(--color-text);
     }
 
     .detail-stat-card .stat-label {
-      font-size: 12px;
-      color: #888;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-top: 4px;
@@ -702,30 +520,29 @@ interface CompanyProject {
       display: flex;
       align-items: center;
       gap: 20px;
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 16px;
+      background: var(--color-surface-2);
+      border-radius: var(--radius-lg);
       padding: 28px;
-      border: 1px dashed rgba(255, 255, 255, 0.4);
-      backdrop-filter: blur(10px);
+      border: 1px dashed var(--color-line-strong);
     }
 
     .coming-soon-banner mat-icon {
-      font-size: 40px;
-      width: 40px;
-      height: 40px;
-      color: white;
+      font-size: var(--text-4xl);
+      width: 32px;
+      height: 32px;
+      color: var(--color-text-3);
     }
 
     .coming-soon-banner h3 {
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 700;
-      color: white;
+      color: var(--color-text);
       margin: 0 0 6px 0;
     }
 
     .coming-soon-banner p {
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
       margin: 0;
       line-height: 1.5;
     }
@@ -734,15 +551,6 @@ interface CompanyProject {
     @media (max-width: 768px) {
       .projects-container {
         padding: 20px;
-      }
-
-      .header-content {
-        flex-direction: column;
-      }
-
-      .header-stats {
-        width: 100%;
-        justify-content: space-between;
       }
 
       .projects-grid {
@@ -761,10 +569,10 @@ export class CompanyProjectsComponent implements OnInit {
 
   constructor(
     private router: Router,
+    private route: ActivatedRoute,
     private http: HttpClient,
     private authService: AuthService,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar,
     private hba1cService: HBA1CService,
     private padsService: SanitaryPadsService,
     private sdmService: SchoolDeliveryService
@@ -774,6 +582,13 @@ export class CompanyProjectsComponent implements OnInit {
     this.loadProjects();
     this.loadHba1cStats();
     this.loadPadsStats();
+
+    // The selected project lives in the URL (?project=condoms) so the sidebar can link
+    // straight to a project and the browser Back button returns to the overview.
+    this.route.queryParamMap.subscribe(params => {
+      const id = params.get('project');
+      this.selectedProject = id ? this.projects.find(p => p.id === id) ?? null : null;
+    });
   }
 
   private loadHba1cStats(): void {
@@ -815,10 +630,9 @@ export class CompanyProjectsComponent implements OnInit {
       {
         id: 'condoms',
         name: 'Condoms Project',
+        shortName: 'Condoms',
         description: 'National condom stock and distribution initiative. Tracking daily stock schedules across all scent variants, batch codes, and product types.',
         icon: 'health_and_safety',
-        color: '#e91e63',
-        gradient: 'linear-gradient(135deg, #e91e63 0%, #ad1457 100%)',
         status: 'active',
         progress: 45,
         category: 'Healthcare Stock',
@@ -835,10 +649,9 @@ export class CompanyProjectsComponent implements OnInit {
       {
         id: 'hba1c',
         name: 'HBA1C Project',
+        shortName: 'HBA1C',
         description: 'Glycated haemoglobin (HbA1c) testing and diabetes management project. National training, equipment distribution, inventory management and sales tracking across 9 provinces.',
         icon: 'biotech',
-        color: '#2196f3',
-        gradient: 'linear-gradient(135deg, #2196f3 0%, #1565c0 100%)',
         status: 'active',
         progress: 41,
         category: 'Medical Diagnostics',
@@ -855,10 +668,9 @@ export class CompanyProjectsComponent implements OnInit {
       {
         id: 'sanitary-pads',
         name: 'Sanitary Pads Project',
+        shortName: 'Sanitary pads',
         description: 'Sanitary Pads Dignity Programme with the Department of Basic Education — managing the delivery of sanitary pads to schools across Western Cape, Eastern Cape and KwaZulu-Natal to keep girls in class every day.',
         icon: 'volunteer_activism',
-        color: '#e91e63',
-        gradient: 'linear-gradient(135deg, #e91e63 0%, #c2185b 100%)',
         status: 'active',
         progress: 65,
         category: 'Social Impact',
@@ -900,11 +712,25 @@ export class CompanyProjectsComponent implements OnInit {
   }
 
   selectProject(project: CompanyProject): void {
-    this.selectedProject = project;
+    this.router.navigate([], { relativeTo: this.route, queryParams: { project: project.id } });
   }
 
   clearSelection(): void {
-    this.selectedProject = null;
+    this.router.navigate([], { relativeTo: this.route, queryParams: { project: null } });
+  }
+
+  /** Page header title: the open project's short name, or the overview. */
+  get pageTitle(): string {
+    const p = this.selectedProject;
+    return p ? (p.shortName ?? p.name) : 'Company projects';
+  }
+
+  /** Page header subtitle: the open project's category and lead, or the overview totals. */
+  get pageSubtitle(): string {
+    const p = this.selectedProject;
+    if (p) return [p.category, p.lead].filter(Boolean).join(' · ');
+    const n = this.projects.length;
+    return `${n} project${n === 1 ? '' : 's'} · ${this.getActiveCount()} active · ${this.getAverageProgress()}% average progress`;
   }
 
   getActiveCount(): number {

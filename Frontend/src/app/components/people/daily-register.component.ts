@@ -5,7 +5,9 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { environment } from '../../../environments/environment';
 
 interface RosterLine {
@@ -24,7 +26,7 @@ interface RosterLine {
 @Component({
   selector: 'app-daily-register',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, SkeletonRowsComponent, EmptyStateComponent],
   template: `
   <div class="reg-wrap">
     <header class="reg-head">
@@ -35,7 +37,7 @@ interface RosterLine {
           <p>For sites that don't clock in — capture who's in, out, or away.</p>
         </div>
       </div>
-      <button mat-icon-button (click)="close()"><mat-icon>close</mat-icon></button>
+      <button aria-label="Close" mat-icon-button (click)="close()"><mat-icon>close</mat-icon></button>
     </header>
 
     <div class="reg-controls">
@@ -55,15 +57,12 @@ interface RosterLine {
     </div>
 
     @if (loading) {
-      <div class="reg-empty"><mat-icon>hourglass_top</mat-icon> Loading roster…</div>
+      <div class="reg-loading"><app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows></div>
     } @else if (!site) {
-      <div class="reg-empty"><mat-icon>arrow_upward</mat-icon> Choose a site to begin.</div>
+      <app-empty-state icon="arrow_upward" title="Choose a site to begin" message="Pick the site and date above to load its roster."></app-empty-state>
     } @else if (roster.length === 0) {
-      <div class="reg-empty">
-        <mat-icon>groups</mat-icon>
-        <p>No employees registered for <b>{{ site }}</b> yet.</p>
-        <span>Add them in the Employee Directory, or add ad-hoc names below.</span>
-      </div>
+      <app-empty-state icon="groups" [title]="'No employees registered for ' + site + ' yet'"
+                       message="Add them in the Employee Directory, or add ad-hoc names below."></app-empty-state>
     } @else {
       <div class="reg-summary">
         <span class="pill present">{{ presentCount() }} in</span>
@@ -107,7 +106,7 @@ interface RosterLine {
             <span class="c-time"><input type="time" [(ngModel)]="r.timeOut"></span>
             <span class="c-notes">
               <input [(ngModel)]="r.notes" placeholder="—">
-              <button mat-icon-button class="rm" (click)="removeAdhoc($index)"><mat-icon>close</mat-icon></button>
+              <button aria-label="Remove person" mat-icon-button class="rm" (click)="removeAdhoc($index)"><mat-icon>close</mat-icon></button>
             </span>
           </div>
         }
@@ -116,7 +115,7 @@ interface RosterLine {
       <div class="reg-actions">
         <button mat-button (click)="addAdhoc()"><mat-icon>person_add</mat-icon> Add person</button>
         <div class="ra-spacer"></div>
-        <button mat-flat-button class="save" (click)="submit()" [disabled]="saving">
+        <button mat-flat-button color="primary" (click)="submit()" [disabled]="saving">
           <mat-icon>save</mat-icon> {{ saving ? 'Saving…' : 'Submit Register' }}
         </button>
       </div>
@@ -124,40 +123,38 @@ interface RosterLine {
   </div>
   `,
   styles: [`
-    .reg-wrap { background:#0f172a; color:#e2e8f0; min-height:60vh; }
-    .reg-head { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #1e293b; }
+    .reg-wrap { background:var(--color-surface); color:var(--color-text); min-height:60vh; }
+    .reg-head { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--color-line); }
     .rh-left { display:flex; align-items:center; gap:14px; }
-    .rh-left mat-icon { font-size:34px; width:34px; height:34px; color:#38bdf8; }
-    .rh-left h2 { margin:0; font-size:20px; }
-    .rh-left p { margin:2px 0 0; font-size:13px; color:#94a3b8; }
+    .rh-left mat-icon { font-size:var(--text-3xl); width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:var(--radius-md); background:var(--color-primary-soft); color:var(--color-primary); }
+    .rh-left h2 { margin:0; font-size:var(--text-2xl); color:var(--color-text); }
+    .rh-left p { margin:2px 0 0; font-size:var(--text-sm); color:var(--color-text-3); }
     .reg-controls { display:flex; align-items:flex-end; gap:16px; padding:18px 24px; flex-wrap:wrap; }
-    .reg-controls label { display:flex; flex-direction:column; font-size:12px; color:#94a3b8; gap:5px; }
-    .reg-controls select, .reg-controls input { background:#1e293b; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:8px 10px; min-width:180px; }
+    .reg-controls label { display:flex; flex-direction:column; font-size:var(--text-xs); color:var(--color-text-2); gap:5px; }
+    .reg-controls select, .reg-controls input { background:var(--color-surface); border:1px solid var(--color-line-strong); color:var(--color-text); border-radius:var(--radius-control); padding:8px 10px; min-width:180px; }
     .rc-spacer { flex:1; }
-    .submitted-tag { display:flex; align-items:center; gap:6px; color:#4ade80; font-size:13px; }
-    .submitted-tag mat-icon { font-size:18px; width:18px; height:18px; }
-    .reg-empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:60px; color:#64748b; text-align:center; }
-    .reg-empty mat-icon { font-size:40px; width:40px; height:40px; }
+    .submitted-tag { display:flex; align-items:center; gap:6px; color:var(--color-ok); font-size:var(--text-sm); }
+    .submitted-tag mat-icon { font-size:var(--text-xl); width:18px; height:18px; }
+    .reg-loading { padding:0 24px; }
     .reg-summary { display:flex; gap:10px; padding:0 24px 12px; }
-    .pill { padding:5px 12px; border-radius:999px; font-size:12px; font-weight:600; }
-    .pill.present { background:rgba(74,222,128,.15); color:#4ade80; }
-    .pill.absent { background:rgba(248,113,113,.15); color:#f87171; }
-    .pill.total { background:#1e293b; color:#94a3b8; }
+    .pill { padding:5px 12px; border-radius:999px; font-size:var(--text-xs); font-weight:600; }
+    .pill.present { background:var(--color-ok-soft); color:var(--color-ok); }
+    .pill.absent { background:var(--color-danger-soft); color:var(--color-danger); }
+    .pill.total { background:var(--color-surface-2); color:var(--color-text-2); }
     .reg-table { padding:0 24px; }
     .rt-head, .rt-row { display:grid; grid-template-columns:1.6fr 1.1fr 1.1fr .8fr .8fr 1.4fr; gap:10px; align-items:center; }
-    .rt-head { padding:8px 4px; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; border-bottom:1px solid #1e293b; }
-    .rt-row { padding:8px 4px; border-bottom:1px solid #16223a; }
+    .rt-head { padding:8px 4px; font-size:var(--text-xs); font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--color-text-2); background:var(--color-surface-2); border-bottom:1px solid var(--color-line); }
+    .rt-row { padding:var(--row-pad-y) 4px; border-bottom:1px solid var(--color-line); }
     .rt-row.away { opacity:.72; }
-    .c-name { display:flex; flex-direction:column; font-size:14px; }
-    .c-name small { color:#64748b; font-size:11px; }
-    .rt-row select, .rt-row input { width:100%; background:#1e293b; border:1px solid #334155; color:#e2e8f0; border-radius:7px; padding:6px 8px; font-size:13px; }
-    .rt-row select[data-s="Absent"] { color:#f87171; }
-    .rt-row select[data-s="On Leave"], .rt-row select[data-s="Sick"] { color:#fbbf24; }
+    .c-name { display:flex; flex-direction:column; font-size:var(--text-md); }
+    .c-name small { color:var(--color-text-3); font-size:var(--text-xs); }
+    .rt-row select, .rt-row input { width:100%; background:var(--color-surface); border:1px solid var(--color-line-strong); color:var(--color-text); border-radius:var(--radius-sm); padding:6px 8px; font-size:var(--text-sm); }
+    .rt-row select[data-s="Absent"] { color:var(--color-danger); }
+    .rt-row select[data-s="On Leave"], .rt-row select[data-s="Sick"] { color:var(--color-warn); }
     .c-notes { display:flex; align-items:center; gap:4px; }
-    .rm mat-icon { font-size:16px; }
+    .rm mat-icon { font-size:var(--text-lg); }
     .reg-actions { display:flex; align-items:center; padding:18px 24px; gap:10px; }
     .ra-spacer { flex:1; }
-    .save { background:#2563eb; color:#fff; }
   `]
 })
 export class DailyRegisterComponent implements OnInit {
@@ -173,7 +170,7 @@ export class DailyRegisterComponent implements OnInit {
 
   constructor(
     private http: HttpClient,
-    private snack: MatSnackBar,
+    private toast: ToastService,
     private dialogRef: MatDialogRef<DailyRegisterComponent>
   ) {}
 
@@ -201,7 +198,7 @@ export class DailyRegisterComponent implements OnInit {
         this.submittedBy = r.submittedBy || null;
         this.loading = false;
       },
-      error: () => { this.loading = false; this.snack.open('Could not load roster.', 'OK', { duration: 3000 }); }
+      error: () => { this.loading = false; this.toast.error('Could not load roster.'); }
     });
   }
 
@@ -232,10 +229,10 @@ export class DailyRegisterComponent implements OnInit {
       .subscribe({
         next: res => {
           this.saving = false;
-          this.snack.open(`Register submitted — ${res.saved} entries.`, 'OK', { duration: 3000 });
+          this.toast.done(`Register submitted — ${res.saved} entries.`);
           this.loadRoster();
         },
-        error: () => { this.saving = false; this.snack.open('Submit failed.', 'OK', { duration: 3000 }); }
+        error: () => { this.saving = false; this.toast.error('Submit failed.'); }
       });
   }
 

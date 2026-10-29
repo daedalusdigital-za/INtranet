@@ -61,11 +61,11 @@ interface UserBirthday {
 
     <div class="calendar-container">
       <div class="calendar-header">
-        <button mat-icon-button (click)="previousMonth()">
+        <button aria-label="Previous" mat-icon-button (click)="previousMonth()">
           <mat-icon>chevron_left</mat-icon>
         </button>
         <h1>{{ monthNames[currentMonth] }} {{ currentYear }}</h1>
-        <button mat-icon-button (click)="nextMonth()">
+        <button aria-label="Next" mat-icon-button (click)="nextMonth()">
           <mat-icon>chevron_right</mat-icon>
         </button>
       </div>
@@ -211,13 +211,13 @@ interface UserBirthday {
       padding: 80px;
       min-height: calc(100vh - 64px);
       position: relative;
-      background: #0f172a;
+      background: var(--color-text);
       background-image:
         radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
         radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
         radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
         radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+        linear-gradient(135deg, var(--color-text) 0%, #1e1b4b 55%, var(--color-text) 100%);
       background-attachment: fixed;
       overflow-x: hidden;
     }
@@ -262,7 +262,7 @@ interface UserBirthday {
       max-width: 1400px;
       margin: 0 auto;
       padding: 0 24px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
       overflow: hidden;
@@ -271,7 +271,7 @@ interface UserBirthday {
     .calendar-weekdays {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       color: white;
     }
 
@@ -288,11 +288,11 @@ interface UserBirthday {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 1px;
-      background: #e0e0e0;
+      background: var(--color-line);
     }
 
     .calendar-day {
-      background: white;
+      background: var(--color-surface);
       min-height: 120px;
       padding: 12px;
       cursor: default;
@@ -305,28 +305,28 @@ interface UserBirthday {
     }
 
     .calendar-day.clickable:hover {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       transform: scale(1.02);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       z-index: 10;
     }
 
     .calendar-day.has-events {
-      border-left: 4px solid #4169e1;
+      border-left: 4px solid var(--color-primary);
     }
 
     .calendar-day.other-month {
-      background: #fafafa;
+      background: var(--color-canvas);
       opacity: 0.5;
     }
 
     .calendar-day.today {
-      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-      border: 2px solid #2196F3;
+      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
+      border: 2px solid var(--color-primary);
     }
 
     .calendar-day.today .day-number {
-      background: #2196F3;
+      background: var(--color-primary);
       color: white;
       border-radius: 50%;
       width: 36px;
@@ -339,7 +339,7 @@ interface UserBirthday {
     .day-number {
       font-size: 1.2rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       margin-bottom: 8px;
     }
 
@@ -361,10 +361,10 @@ interface UserBirthday {
       align-items: center;
       gap: 4px;
       padding: 2px 6px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 4px;
       font-size: 10px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .task-indicator mat-icon {
@@ -374,14 +374,14 @@ interface UserBirthday {
     }
 
     .task-indicator.completed {
-      background: #e8f5e9;
-      color: #388e3c;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
       text-decoration: line-through;
     }
 
     .task-indicator.pending {
-      background: #fff3e0;
-      color: #f57c00;
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
     }
 
     .calendar-day:hover .event-indicator {
@@ -437,7 +437,7 @@ interface UserBirthday {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: white;
+      background: var(--color-surface);
       border-radius: 50%;
     }
 
@@ -472,7 +472,7 @@ interface UserBirthday {
     }
 
     .task-card {
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       transition: all 0.3s ease;
     }
@@ -484,11 +484,11 @@ interface UserBirthday {
 
     .task-card.completed {
       opacity: 0.7;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
     }
 
     .task-card.pending {
-      border-left: 4px solid #ff9800;
+      border-left: 4px solid var(--color-warn);
     }
 
     .task-card mat-card-header {
@@ -503,7 +503,7 @@ interface UserBirthday {
 
     .task-card mat-card-title.completed-text {
       text-decoration: line-through;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .task-meta {
@@ -521,23 +521,23 @@ interface UserBirthday {
       font-weight: 500;
     }
 
-    .priority-low { background: #e3f2fd; color: #1976d2; }
-    .priority-normal { background: #e8f5e9; color: #388e3c; }
-    .priority-high { background: #fff3e0; color: #f57c00; }
-    .priority-urgent { background: #ffebee; color: #d32f2f; }
+    .priority-low { background: var(--color-primary-soft); color: var(--color-primary); }
+    .priority-normal { background: var(--color-ok-soft); color: var(--color-ok); }
+    .priority-high { background: var(--color-warn-soft); color: var(--color-warn); }
+    .priority-urgent { background: var(--color-danger-soft); color: var(--color-danger); }
 
-    .status-pending { background: #fff3e0; color: #f57c00; }
-    .status-accepted { background: #e3f2fd; color: #1976d2; }
-    .status-completed { background: #e8f5e9; color: #388e3c; }
+    .status-pending { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-accepted { background: var(--color-primary-soft); color: var(--color-primary); }
+    .status-completed { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .assigned-by {
       font-size: 12px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .task-description {
       font-size: 13px;
-      color: #666;
+      color: var(--color-text-2);
       margin-top: 8px;
     }
 
@@ -573,11 +573,11 @@ interface UserBirthday {
     .event-card mat-card-title {
       font-size: 1.3rem;
       font-weight: 600;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     .event-card mat-card-subtitle {
-      color: #4169e1;
+      color: var(--color-primary);
       font-size: 1rem;
       margin-top: 4px;
     }
@@ -587,19 +587,19 @@ interface UserBirthday {
       align-items: center;
       gap: 8px;
       margin: 8px 0;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .event-details mat-icon {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #4169e1;
+      color: var(--color-primary);
     }
 
     .event-card p {
       margin: 16px 0 0 0;
-      color: #555;
+      color: var(--color-text-2);
       line-height: 1.6;
     }
 
@@ -1084,7 +1084,7 @@ export class CalendarComponent implements OnInit {
             <p class="date-subtitle">{{ data.date | date:'MMMM d, yyyy' }}</p>
           </div>
         </div>
-        <button mat-icon-button mat-dialog-close class="close-btn">
+        <button aria-label="Close" mat-icon-button mat-dialog-close class="close-btn">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -1233,7 +1233,7 @@ export class CalendarComponent implements OnInit {
   styles: [`
     .modern-dialog-container {
       position: relative;
-      background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+      background: linear-gradient(135deg, #f8f9ff 0%, var(--color-surface) 100%);
     }
 
     .dialog-header {
@@ -1241,7 +1241,7 @@ export class CalendarComponent implements OnInit {
       justify-content: space-between;
       align-items: flex-start;
       padding: 32px 32px 24px 32px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       border-radius: 12px 12px 0 0;
@@ -1327,11 +1327,11 @@ export class CalendarComponent implements OnInit {
       background: linear-gradient(135deg, #2563eb15 0%, #1e40af15 100%);
       border-radius: 12px;
       margin-bottom: 24px;
-      border-left: 4px solid #2563eb;
+      border-left: 4px solid var(--color-primary);
     }
 
     .events-count mat-icon {
-      color: #2563eb;
+      color: var(--color-primary);
       font-size: 24px;
       width: 24px;
       height: 24px;
@@ -1339,7 +1339,7 @@ export class CalendarComponent implements OnInit {
 
     .events-count span {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       font-size: 1rem;
     }
 
@@ -1350,7 +1350,7 @@ export class CalendarComponent implements OnInit {
     }
 
     .event-card {
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       padding: 24px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
@@ -1410,7 +1410,7 @@ export class CalendarComponent implements OnInit {
       margin: 0 0 8px 0;
       font-size: 1.3rem;
       font-weight: 700;
-      color: #1a1a1a;
+      color: var(--color-text);
       letter-spacing: -0.3px;
     }
 
@@ -1419,11 +1419,11 @@ export class CalendarComponent implements OnInit {
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
       border-radius: 8px;
       font-size: 0.9rem;
       font-weight: 600;
-      color: #555;
+      color: var(--color-text-2);
     }
 
     .event-time mat-icon {
@@ -1437,7 +1437,7 @@ export class CalendarComponent implements OnInit {
       flex-direction: column;
       gap: 16px;
       padding-top: 20px;
-      border-top: 2px dashed #e0e0e0;
+      border-top: 2px dashed var(--color-line);
     }
 
     .detail-row {
@@ -1448,7 +1448,7 @@ export class CalendarComponent implements OnInit {
     .detail-icon {
       width: 40px;
       height: 40px;
-      background: linear-gradient(135deg, #f5f5f5 0%, #ececec 100%);
+      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -1460,7 +1460,7 @@ export class CalendarComponent implements OnInit {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .detail-content {
@@ -1474,14 +1474,14 @@ export class CalendarComponent implements OnInit {
     .detail-label {
       font-size: 0.8rem;
       font-weight: 700;
-      color: #999;
+      color: var(--color-text-3);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .detail-value {
       font-size: 1rem;
-      color: #333;
+      color: var(--color-text);
       line-height: 1.5;
       font-weight: 500;
     }
@@ -1492,7 +1492,7 @@ export class CalendarComponent implements OnInit {
       margin: 0 -24px -24px -24px;
       display: flex;
       justify-content: center;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
 
     .modern-close-btn {
@@ -1500,7 +1500,7 @@ export class CalendarComponent implements OnInit {
       height: 48px;
       font-weight: 700;
       font-size: 1rem;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       border-radius: 12px;
       box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
@@ -1521,27 +1521,27 @@ export class CalendarComponent implements OnInit {
     }
 
     ::-webkit-scrollbar-track {
-      background: #f1f1f1;
+      background: var(--color-surface-2);
       border-radius: 4px;
     }
 
     ::-webkit-scrollbar-thumb {
-      background: #4169e1;
+      background: var(--color-primary);
       border-radius: 4px;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #1e90ff;
+      background: var(--color-primary);
     }
 
     /* Task-specific styles */
     .tasks-count {
-      border-left-color: #1976d2;
+      border-left-color: var(--color-primary);
       background: linear-gradient(135deg, rgba(25, 118, 210, 0.08) 0%, rgba(25, 118, 210, 0.04) 100%);
     }
 
     .tasks-count mat-icon {
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .task-card-dialog.task-completed {
@@ -1550,7 +1550,7 @@ export class CalendarComponent implements OnInit {
 
     .task-card-dialog.task-completed h3.completed-title {
       text-decoration: line-through;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .task-badges {
@@ -1568,24 +1568,24 @@ export class CalendarComponent implements OnInit {
       font-weight: 600;
     }
 
-    .task-priority-badge.priority-low { background: #e3f2fd; color: #1976d2; }
-    .task-priority-badge.priority-normal { background: #e8f5e9; color: #388e3c; }
-    .task-priority-badge.priority-high { background: #fff3e0; color: #f57c00; }
-    .task-priority-badge.priority-urgent { background: #ffebee; color: #d32f2f; }
+    .task-priority-badge.priority-low { background: var(--color-primary-soft); color: var(--color-primary); }
+    .task-priority-badge.priority-normal { background: var(--color-ok-soft); color: var(--color-ok); }
+    .task-priority-badge.priority-high { background: var(--color-warn-soft); color: var(--color-warn); }
+    .task-priority-badge.priority-urgent { background: var(--color-danger-soft); color: var(--color-danger); }
 
-    .task-status-badge.status-pending { background: #fff3e0; color: #f57c00; }
-    .task-status-badge.status-accepted { background: #e3f2fd; color: #1976d2; }
-    .task-status-badge.status-completed { background: #e8f5e9; color: #388e3c; }
-    .task-status-badge.status-inprogress { background: #e8eaf6; color: #3f51b5; }
+    .task-status-badge.status-pending { background: var(--color-warn-soft); color: var(--color-warn); }
+    .task-status-badge.status-accepted { background: var(--color-primary-soft); color: var(--color-primary); }
+    .task-status-badge.status-completed { background: var(--color-ok-soft); color: var(--color-ok); }
+    .task-status-badge.status-inprogress { background: var(--color-surface-3); color: #3f51b5; }
 
     .task-action {
       margin-top: 16px;
       padding-top: 16px;
-      border-top: 2px dashed #e0e0e0;
+      border-top: 2px dashed var(--color-line);
     }
 
     .complete-task-btn {
-      background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+      background: linear-gradient(135deg, var(--color-ok) 0%, var(--color-ok) 100%);
       color: white;
       border-radius: 10px;
       font-weight: 600;
@@ -1612,9 +1612,9 @@ export class CalendarComponent implements OnInit {
       gap: 8px;
       margin-top: 16px;
       padding: 12px 16px;
-      background: #fff8e1;
+      background: var(--color-warn-soft);
       border-radius: 10px;
-      color: #f57c00;
+      color: var(--color-warn);
       font-size: 0.9rem;
       font-weight: 500;
     }

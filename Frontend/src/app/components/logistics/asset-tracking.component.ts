@@ -2,12 +2,17 @@ import { Component, ElementRef, OnDestroy, ViewChild, signal, computed, inject }
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import QRCode from 'qrcode';
 import {
   AssetTrackingService, ResolveResult, ScanEvent, CreateTagRequest, AssetTag,
   ManifestResult, ManifestLine
 } from '../../services/asset-tracking.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 
 type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload' | 'Deliver' | 'Verify';
 
@@ -23,24 +28,24 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
 @Component({
   selector: 'app-asset-tracking',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, SkeletonRowsComponent, EmptyStateComponent, StatusChipComponent],
   template: `
   <div class="scan-page">
     <!-- Header -->
     <header class="scan-header">
-      <button class="btn-back" (click)="goBack()"><span class="material-icons">arrow_back</span></button>
+      <button mat-icon-button class="btn-back" aria-label="Back to logistics" (click)="goBack()"><mat-icon>arrow_back</mat-icon></button>
       <div class="scan-header__title">
-        <span class="material-icons">qr_code_scanner</span>
+        <mat-icon>qr_code_scanner</mat-icon>
         <div>
           <h1>Scan &amp; Track</h1>
           <p>Barcode / QR tracking for cargo, assets, stock, invoices &amp; tripsheets</p>
         </div>
       </div>
       <div class="scan-header__tabs">
-        <button [class.on]="tab()==='scan'" (click)="tab.set('scan')"><span class="material-icons">qr_code_scanner</span> Scan</button>
-        <button [class.on]="tab()==='load'" (click)="tab.set('load')"><span class="material-icons">checklist</span> Scan to Load</button>
-        <button [class.on]="tab()==='generate'" (click)="tab.set('generate')"><span class="material-icons">qr_code_2</span> Generate labels</button>
-        <button [class.on]="tab()==='history'" (click)="loadHistory()"><span class="material-icons">history</span> Scan history</button>
+        <button [class.on]="tab()==='scan'" (click)="tab.set('scan')"><mat-icon>qr_code_scanner</mat-icon> Scan</button>
+        <button [class.on]="tab()==='load'" (click)="tab.set('load')"><mat-icon>checklist</mat-icon> Scan to Load</button>
+        <button [class.on]="tab()==='generate'" (click)="tab.set('generate')"><mat-icon>qr_code_2</mat-icon> Generate labels</button>
+        <button [class.on]="tab()==='history'" (click)="loadHistory()"><mat-icon>history</mat-icon> Scan history</button>
       </div>
     </header>
 
@@ -49,7 +54,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
       <div class="scan-grid">
         <!-- Left: scanner + manual entry -->
         <section class="card scanner-card">
-          <div class="card__head"><span class="material-icons">photo_camera</span> Scanner</div>
+          <div class="card__head"><mat-icon>photo_camera</mat-icon> Scanner</div>
 
           <!-- action context -->
           <div class="field-row">
@@ -69,28 +74,28 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
 
           <div class="scanner-actions">
             @if (!scanning()) {
-              <button class="btn btn--primary" (click)="startCamera()">
-                <span class="material-icons">videocam</span> Start camera
+              <button mat-flat-button color="primary" (click)="startCamera()">
+                <mat-icon>videocam</mat-icon> Start camera
               </button>
             } @else {
-              <button class="btn btn--danger" (click)="stopCamera()">
-                <span class="material-icons">videocam_off</span> Stop camera
+              <button mat-stroked-button color="warn" (click)="stopCamera()">
+                <mat-icon>videocam_off</mat-icon> Stop camera
               </button>
             }
           </div>
 
           @if (cameraError()) {
-            <div class="hint hint--warn"><span class="material-icons">info</span> {{ cameraError() }}</div>
+            <div class="hint hint--warn"><mat-icon>info</mat-icon> {{ cameraError() }}</div>
           }
 
           <!-- manual entry fallback -->
           <div class="manual">
-            <div class="manual__head"><span class="material-icons">keyboard</span> Or enter the code manually</div>
+            <div class="manual__head"><mat-icon>keyboard</mat-icon> Or enter the code manually</div>
             <div class="manual__row">
               <input #manualInput type="text" placeholder="Barcode / QR number"
                      [(ngModel)]="manualCode" (keyup.enter)="lookupManual()" />
-              <button class="btn btn--primary" (click)="lookupManual()">
-                <span class="material-icons">search</span> Look up
+              <button mat-flat-button color="primary" (click)="lookupManual()">
+                <mat-icon>search</mat-icon> Look up
               </button>
             </div>
           </div>
@@ -99,32 +104,30 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
         <!-- Right: results -->
         <section class="card results-card">
           <div class="card__head">
-            <span class="material-icons">travel_explore</span> Results
+            <mat-icon>travel_explore</mat-icon> Results
             @if (result()) {
               <span class="code-pill">{{ result()!.code }}</span>
             }
           </div>
 
           @if (loading()) {
-            <div class="empty"><span class="material-icons spin">progress_activity</span><p>Resolving…</p></div>
+            <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
           } @else if (!result()) {
-            <div class="empty">
-              <span class="material-icons">qr_code_scanner</span>
-              <p>Scan a label or enter a code to see the tripsheet, stock, invoices and asset details linked to it.</p>
-            </div>
+            <app-empty-state icon="qr_code_scanner" title="Nothing scanned yet"
+                             message="Scan a label or enter a code to see the tripsheet, stock, invoices and asset details linked to it."></app-empty-state>
           } @else {
             <div class="results">
               @if (!result()!.found) {
                 <div class="unreg">
                   <div class="unreg__msg">
-                    <span class="material-icons">help_outline</span>
+                    <mat-icon>help_outline</mat-icon>
                     <div>
                       <strong>Unregistered code</strong>
                       <p>{{ result()!.message || 'This code is not linked to anything yet.' }}</p>
                     </div>
                   </div>
-                  <button class="btn btn--primary" (click)="openRegister(result()!.code)">
-                    <span class="material-icons">add_link</span> Register this code
+                  <button mat-flat-button color="primary" (click)="openRegister(result()!.code)">
+                    <mat-icon>add_link</mat-icon> Register this code
                   </button>
                 </div>
               }
@@ -132,7 +135,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
               <!-- Tag summary -->
               @if (result()!.tag; as t) {
                 <div class="block">
-                  <div class="block__title"><span class="material-icons">sell</span> Tag</div>
+                  <div class="block__title"><mat-icon>sell</mat-icon> Tag</div>
                   <div class="kv"><span>Type</span><b>{{ t.tagType }}</b></div>
                   @if (t.label) { <div class="kv"><span>Label</span><b>{{ t.label }}</b></div> }
                   @if (t.serialNumber) { <div class="kv"><span>Serial</span><b>{{ t.serialNumber }}</b></div> }
@@ -144,7 +147,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
               <!-- Tripsheets -->
               @if (result()!.tripSheets.length) {
                 <div class="block">
-                  <div class="block__title"><span class="material-icons">local_shipping</span> Tripsheets ({{ result()!.tripSheets.length }})</div>
+                  <div class="block__title"><mat-icon>local_shipping</mat-icon> Tripsheets ({{ result()!.tripSheets.length }})</div>
                   @for (l of result()!.tripSheets; track l.id) {
                     <div class="row-item">
                       <div>
@@ -155,7 +158,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
                           @if (l.vehicle) { · {{ l.vehicle }} }
                         </div>
                       </div>
-                      <span class="chip chip--{{ (l.status || '').toLowerCase() }}">{{ l.status }}</span>
+                      <app-status-chip [status]="l.status"></app-status-chip>
                     </div>
                   }
                 </div>
@@ -164,7 +167,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
               <!-- Stock / inventory -->
               @if (result()!.inventory.length) {
                 <div class="block">
-                  <div class="block__title"><span class="material-icons">inventory_2</span> Live stock</div>
+                  <div class="block__title"><mat-icon>inventory_2</mat-icon> Live stock</div>
                   @for (b of result()!.inventory; track b.id) {
                     <div class="row-item">
                       <div>
@@ -183,7 +186,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
               <!-- Invoices -->
               @if (result()!.invoices.length) {
                 <div class="block">
-                  <div class="block__title"><span class="material-icons">receipt_long</span> Invoices ({{ result()!.invoices.length }})</div>
+                  <div class="block__title"><mat-icon>receipt_long</mat-icon> Invoices ({{ result()!.invoices.length }})</div>
                   @for (i of result()!.invoices; track i.id) {
                     <div class="row-item">
                       <div>
@@ -193,7 +196,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
                           @if (i.deliveryCity) { · {{ i.deliveryCity }} }
                         </div>
                       </div>
-                      <span class="chip">{{ i.status }}</span>
+                      <app-status-chip [status]="i.status"></app-status-chip>
                     </div>
                   }
                 </div>
@@ -202,7 +205,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
               <!-- Asset -->
               @if (result()!.asset; as a) {
                 <div class="block">
-                  <div class="block__title"><span class="material-icons">chair</span> Fixed asset</div>
+                  <div class="block__title"><mat-icon>chair</mat-icon> Fixed asset</div>
                   <div class="kv"><span>Code</span><b>{{ a.assetCode || '—' }}</b></div>
                   <div class="kv"><span>Category</span><b>{{ a.category }}</b></div>
                   @if (a.manufacturer || a.model) { <div class="kv"><span>Make/Model</span><b>{{ a.manufacturer }} {{ a.model }}</b></div> }
@@ -215,7 +218,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
               <!-- Commodity -->
               @if (result()!.commodity; as c) {
                 <div class="block">
-                  <div class="block__title"><span class="material-icons">category</span> Commodity</div>
+                  <div class="block__title"><mat-icon>category</mat-icon> Commodity</div>
                   <div class="kv"><span>Name</span><b>{{ c.name }}</b></div>
                   @if (c.code) { <div class="kv"><span>Code</span><b>{{ c.code }}</b></div> }
                   @if (c.category) { <div class="kv"><span>Category</span><b>{{ c.category }}</b></div> }
@@ -225,10 +228,10 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
               <!-- Recent scans -->
               @if (result()!.recentScans.length) {
                 <div class="block">
-                  <div class="block__title"><span class="material-icons">history</span> Recent scans</div>
+                  <div class="block__title"><mat-icon>history</mat-icon> Recent scans</div>
                   @for (s of result()!.recentScans; track s.id) {
                     <div class="scan-line">
-                      <span class="material-icons">{{ actionIcon(s.action) }}</span>
+                      <mat-icon>{{ actionIcon(s.action) }}</mat-icon>
                       <div>
                         <b>{{ s.action }}</b> — {{ s.scannedByName || 'Unknown' }}
                         <div class="row-sub">{{ s.scannedAt | date:'d MMM y, HH:mm' }}@if (s.location) { · {{ s.location }} }</div>
@@ -240,7 +243,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
 
               @if (result()!.found && action !== 'Lookup') {
                 <div class="hint hint--ok">
-                  <span class="material-icons">check_circle</span>
+                  <mat-icon>check_circle</mat-icon>
                   Scan recorded as “{{ action }}”.
                 </div>
               }
@@ -255,44 +258,45 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
       <div class="scan-grid">
         <!-- Left: open a load + scanner -->
         <section class="card scanner-card">
-          <div class="card__head"><span class="material-icons">local_shipping</span> Open a tripsheet</div>
+          <div class="card__head"><mat-icon>local_shipping</mat-icon> Open a tripsheet</div>
           <div class="manual__row">
             <input type="text" placeholder="Load number or scan header QR"
                    [(ngModel)]="loadCodeInput" (keyup.enter)="openManifest()" />
-            <button class="btn btn--primary" (click)="openManifest()" [disabled]="manifestLoading()">
-              <span class="material-icons">search</span> Open
+            <button mat-flat-button color="primary" (click)="openManifest()" [disabled]="manifestLoading()">
+              <mat-icon>search</mat-icon> Open
             </button>
           </div>
-          @if (manifestError()) { <div class="hint hint--warn"><span class="material-icons">info</span> {{ manifestError() }}</div> }
+          @if (manifestError()) { <div class="hint hint--warn"><mat-icon>info</mat-icon> {{ manifestError() }}</div> }
 
           @if (manifest()) {
-            <div class="card__head" style="margin-top:18px;"><span class="material-icons">photo_camera</span> Scan items onto vehicle</div>
+            <div class="card__head" style="margin-top:18px;"><mat-icon>photo_camera</mat-icon> Scan items onto vehicle</div>
             <div id="load-reader" class="qr-reader" [class.qr-reader--active]="scanning()"></div>
             <div class="scanner-actions">
               @if (!scanning()) {
-                <button class="btn btn--primary" (click)="startLoadCamera()"><span class="material-icons">videocam</span> Start camera</button>
+                <button mat-flat-button color="primary" (click)="startLoadCamera()"><mat-icon>videocam</mat-icon> Start camera</button>
               } @else {
-                <button class="btn btn--danger" (click)="stopCamera()"><span class="material-icons">videocam_off</span> Stop camera</button>
+                <button mat-stroked-button color="warn" (click)="stopCamera()"><mat-icon>videocam_off</mat-icon> Stop camera</button>
               }
             </div>
             <div class="manual">
-              <div class="manual__head"><span class="material-icons">keyboard</span> Or enter an item code manually</div>
+              <div class="manual__head"><mat-icon>keyboard</mat-icon> Or enter an item code manually</div>
               <div class="manual__row">
                 <input type="text" placeholder="Item / invoice code" [(ngModel)]="loadItemInput" (keyup.enter)="markLoadedManual()" />
-                <button class="btn btn--primary" (click)="markLoadedManual()"><span class="material-icons">add_task</span> Mark loaded</button>
+                <button mat-flat-button color="primary" (click)="markLoadedManual()"><mat-icon>add_task</mat-icon> Mark loaded</button>
               </div>
             </div>
-            @if (loadFlash()) { <div class="hint" [class.hint--ok]="loadFlash()!.ok" [class.hint--warn]="!loadFlash()!.ok"><span class="material-icons">{{ loadFlash()!.ok ? 'check_circle' : 'error' }}</span> {{ loadFlash()!.msg }}</div> }
+            @if (loadFlash()) { <div class="hint" [class.hint--ok]="loadFlash()!.ok" [class.hint--warn]="!loadFlash()!.ok"><mat-icon>{{ loadFlash()!.ok ? 'check_circle' : 'error' }}</mat-icon> {{ loadFlash()!.msg }}</div> }
           }
         </section>
 
         <!-- Right: manifest checklist -->
         <section class="card results-card">
           @if (!manifest()) {
-            <div class="empty"><span class="material-icons">checklist</span><p>Open a tripsheet to see its expected items, then scan each one to confirm it's on the truck before departure.</p></div>
+            <app-empty-state icon="checklist" title="No tripsheet open"
+                             message="Open a tripsheet to see its expected items, then scan each one to confirm it's on the truck before departure."></app-empty-state>
           } @else {
             <div class="card__head">
-              <span class="material-icons">checklist</span> {{ manifest()!.loadNumber }}
+              <mat-icon>checklist</mat-icon> {{ manifest()!.loadNumber }}
               <span class="code-pill">{{ manifest()!.loadedLines }} / {{ manifest()!.totalLines }} loaded</span>
             </div>
             <div class="progress"><div class="progress__bar" [style.width.%]="loadedPct()"></div></div>
@@ -305,7 +309,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
             }
 
             @if (allLoaded()) {
-              <div class="depart"><span class="material-icons">verified</span>
+              <div class="depart"><mat-icon>verified</mat-icon>
                 <div><strong>All items loaded — ready to depart.</strong><p>Every expected item has been scanned onto the vehicle.</p></div>
               </div>
             }
@@ -313,7 +317,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
             <div class="checklist">
               @for (ln of manifest()!.lines; track ln.code) {
                 <div class="check-row" [class.check-row--done]="ln.loaded">
-                  <span class="material-icons check-ico">{{ ln.loaded ? 'check_circle' : 'radio_button_unchecked' }}</span>
+                  <mat-icon class="check-ico">{{ ln.loaded ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
                   <div class="check-main">
                     <b>{{ ln.customerName || ln.productDescription || ln.code }}</b>
                     <div class="row-sub">
@@ -325,9 +329,9 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
                     @if (ln.loaded && ln.loadedAt) { <div class="row-sub">Loaded {{ ln.loadedAt | date:'HH:mm' }}@if (ln.loadedBy) { by {{ ln.loadedBy }} }</div> }
                   </div>
                   @if (!ln.loaded) {
-                    <button class="btn btn--primary btn--sm" (click)="markLoaded(ln.code)"><span class="material-icons">add_task</span></button>
+                    <button mat-icon-button color="primary" aria-label="Mark loaded" (click)="markLoaded(ln.code)"><mat-icon>add_task</mat-icon></button>
                   } @else {
-                    <span class="chip chip--delivered">Loaded</span>
+                    <app-status-chip status="Loaded" tone="ok"></app-status-chip>
                   }
                 </div>
               }
@@ -341,7 +345,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
     @if (tab() === 'generate') {
       <div class="scan-grid">
         <section class="card">
-          <div class="card__head"><span class="material-icons">qr_code_2</span> Generate a label</div>
+          <div class="card__head"><mat-icon>qr_code_2</mat-icon> Generate a label</div>
 
           <div class="field-row"><label>Tag type</label>
             <select [(ngModel)]="genType">
@@ -369,14 +373,14 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
             <input type="text" [(ngModel)]="genCode" placeholder="Leave blank to auto-generate" />
           </div>
 
-          <button class="btn btn--primary" (click)="generate()" [disabled]="genBusy()">
-            <span class="material-icons">bolt</span> Create tag &amp; QR
+          <button mat-flat-button color="primary" (click)="generate()" [disabled]="genBusy()">
+            <mat-icon>bolt</mat-icon> Create tag &amp; QR
           </button>
-          @if (genError()) { <div class="hint hint--warn"><span class="material-icons">info</span> {{ genError() }}</div> }
+          @if (genError()) { <div class="hint hint--warn"><mat-icon>info</mat-icon> {{ genError() }}</div> }
         </section>
 
         <section class="card label-preview">
-          <div class="card__head"><span class="material-icons">preview</span> Label preview</div>
+          <div class="card__head"><mat-icon>preview</mat-icon> Label preview</div>
           @if (genQrDataUrl()) {
             <div class="label" #printLabel>
               <img [src]="genQrDataUrl()" alt="QR" />
@@ -384,9 +388,9 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
               @if (genCreated()?.label) { <div class="label__text">{{ genCreated()?.label }}</div> }
               <div class="label__type">{{ genCreated()?.tagType }}</div>
             </div>
-            <button class="btn" (click)="printLabelNow()"><span class="material-icons">print</span> Print label</button>
+            <button mat-stroked-button (click)="printLabelNow()"><mat-icon>print</mat-icon> Print label</button>
           } @else {
-            <div class="empty"><span class="material-icons">qr_code_2</span><p>Create a tag to preview and print its QR label.</p></div>
+            <app-empty-state icon="qr_code_2" title="No label yet" message="Create a tag to preview and print its QR label."></app-empty-state>
           }
         </section>
       </div>
@@ -395,17 +399,17 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
     <!-- ============ HISTORY TAB ============ -->
     @if (tab() === 'history') {
       <section class="card">
-        <div class="card__head"><span class="material-icons">history</span> Scan history</div>
+        <div class="card__head"><mat-icon>history</mat-icon> Scan history</div>
         @if (history().length === 0) {
-          <div class="empty"><span class="material-icons">inbox</span><p>No scans recorded yet.</p></div>
+          <app-empty-state icon="inbox" title="No scans recorded yet" message="Scans and lookups show up here once a code has been scanned."></app-empty-state>
         } @else {
-          <table class="scan-table">
+          <table class="app-table">
             <thead><tr><th>When</th><th>Code</th><th>Action</th><th>Method</th><th>By</th><th>Location</th></tr></thead>
             <tbody>
               @for (s of history(); track s.id) {
                 <tr>
                   <td>{{ s.scannedAt | date:'d MMM, HH:mm' }}</td>
-                  <td class="mono">{{ s.scannedCode }}</td>
+                  <td class="ref">{{ s.scannedCode }}</td>
                   <td><span class="chip">{{ s.action }}</span></td>
                   <td>{{ s.scanMethod }}</td>
                   <td>{{ s.scannedByName }}</td>
@@ -422,8 +426,8 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
     @if (registerOpen()) {
       <div class="modal-backdrop" (click)="registerOpen.set(false)">
         <div class="modal" (click)="$event.stopPropagation()">
-          <div class="modal__head"><span class="material-icons">add_link</span> Register code
-            <button class="btn-x" (click)="registerOpen.set(false)"><span class="material-icons">close</span></button>
+          <div class="modal__head"><mat-icon>add_link</mat-icon> Register code
+            <button mat-icon-button class="btn-x" aria-label="Close" (click)="registerOpen.set(false)"><mat-icon>close</mat-icon></button>
           </div>
           <div class="field-row"><label>Code</label><input type="text" [(ngModel)]="regCode" /></div>
           <div class="field-row"><label>Type</label>
@@ -437,9 +441,9 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
           <div class="field-row"><label>Label</label><input type="text" [(ngModel)]="regLabel" /></div>
           <div class="field-row"><label>Serial no.</label><input type="text" [(ngModel)]="regSerial" /></div>
           <div class="modal__actions">
-            <button class="btn" (click)="registerOpen.set(false)">Cancel</button>
-            <button class="btn btn--primary" (click)="submitRegister()" [disabled]="regBusy()">
-              <span class="material-icons">save</span> Save tag
+            <button mat-button (click)="registerOpen.set(false)">Cancel</button>
+            <button mat-flat-button color="primary" (click)="submitRegister()" [disabled]="regBusy()">
+              <mat-icon>save</mat-icon> Save tag
             </button>
           </div>
           @if (regError()) { <div class="hint hint--warn">{{ regError() }}</div> }
@@ -449,55 +453,55 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
   </div>
   `,
   styles: [`
-    :host { display:block; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --primary:#4f46e5; --primary2:#6366f1; }
+    :host { display:block; --ink:var(--color-text); --muted:var(--color-text-3); --line:var(--color-line); --primary:var(--color-primary); --primary2:var(--color-primary); }
     .scan-page { padding:20px; max-width:1280px; margin:0 auto; }
     .scan-header { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
-    .btn-back { border:1px solid var(--line); background:#fff; width:40px; height:40px; border-radius:12px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+    .btn-back { border:1px solid var(--line); background:var(--color-surface); width:40px; height:40px; border-radius:12px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
     .scan-header__title { display:flex; align-items:center; gap:12px; flex:1 1 auto; }
     .scan-header__title > .material-icons { font-size:34px; color:var(--primary); background:#eef0ff; border-radius:14px; padding:8px; }
     .scan-header__title h1 { margin:0; font-size:1.3rem; color:var(--ink); }
     .scan-header__title p { margin:0; font-size:0.8rem; color:var(--muted); }
     .scan-header__tabs { display:flex; gap:6px; background:#eef0f6; padding:4px; border-radius:12px; }
     .scan-header__tabs button { border:none; background:none; padding:8px 14px; border-radius:9px; cursor:pointer; color:var(--muted); font-weight:600; font-size:0.82rem; display:inline-flex; align-items:center; gap:5px; }
-    .scan-header__tabs button.on { background:#fff; color:var(--primary); box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+    .scan-header__tabs button.on { background:var(--color-surface); color:var(--primary); box-shadow:0 1px 4px rgba(0,0,0,0.08); }
     .scan-header__tabs .material-icons { font-size:18px; }
 
     .scan-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
     @media (max-width:900px){ .scan-grid{ grid-template-columns:1fr; } }
 
-    .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px; }
+    .card { background:var(--color-surface); border:1px solid var(--line); border-radius:16px; padding:16px; }
     .card__head { display:flex; align-items:center; gap:8px; font-weight:700; color:var(--ink); margin-bottom:14px; }
     .card__head .material-icons { color:var(--primary); }
     .code-pill { margin-left:auto; background:#eef0ff; color:var(--primary); font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:999px; font-family:monospace; }
 
     .field-row { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
     .field-row label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); font-weight:700; }
-    .field-row input, .field-row select { padding:9px 12px; border:1px solid #cbd5e1; border-radius:10px; font-size:0.88rem; }
+    .field-row input, .field-row select { padding:9px 12px; border:1px solid var(--color-line-strong); border-radius:10px; font-size:0.88rem; }
     .field-row input:focus, .field-row select:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
 
     .qr-reader { width:100%; min-height:60px; border-radius:12px; overflow:hidden; background:#0b1120; }
     .qr-reader--active { min-height:280px; }
     .scanner-actions { margin-top:12px; }
 
-    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border:1px solid var(--line); border-radius:10px; background:#fff; color:#334155; font-weight:600; font-size:0.84rem; cursor:pointer; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border:1px solid var(--line); border-radius:10px; background:var(--color-surface); color:var(--color-text-2); font-weight:600; font-size:0.84rem; cursor:pointer; }
     .btn .material-icons { font-size:18px; }
-    .btn:hover { background:#f8fafc; }
+    .btn:hover { background:var(--color-canvas); }
     .btn--primary { background:linear-gradient(120deg,var(--primary2),var(--primary)); border-color:transparent; color:#fff; }
-    .btn--danger { color:#dc2626; border-color:#fca5a5; }
+    .btn--danger { color:var(--color-danger); border-color:#fca5a5; }
     .btn[disabled] { opacity:0.5; cursor:not-allowed; }
 
     .manual { margin-top:16px; border-top:1px dashed var(--line); padding-top:14px; }
     .manual__head { display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted); font-weight:600; margin-bottom:8px; }
     .manual__head .material-icons { font-size:18px; }
     .manual__row { display:flex; gap:8px; }
-    .manual__row input { flex:1; padding:9px 12px; border:1px solid #cbd5e1; border-radius:10px; font-size:0.9rem; font-family:monospace; }
+    .manual__row input { flex:1; padding:9px 12px; border:1px solid var(--color-line-strong); border-radius:10px; font-size:0.9rem; font-family:monospace; }
 
     .hint { display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:10px; font-size:0.82rem; margin-top:12px; }
     .hint .material-icons { font-size:18px; }
-    .hint--warn { background:#fffbeb; color:#92400e; }
-    .hint--ok { background:#ecfdf5; color:#047857; }
+    .hint--warn { background:var(--color-warn-soft); color:#92400e; }
+    .hint--ok { background:var(--color-ok-soft); color:#047857; }
 
-    .empty { text-align:center; color:#94a3b8; padding:40px 20px; }
+    .empty { text-align:center; color:var(--color-text-3); padding:40px 20px; }
     .empty .material-icons { font-size:48px; }
     .empty p { margin:8px 0 0; font-size:0.86rem; }
     .spin { animation:spin 1s linear infinite; } @keyframes spin { to { transform:rotate(360deg);} }
@@ -512,15 +516,15 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
     .row-item:first-of-type { border-top:none; }
     .row-sub { font-size:0.74rem; color:var(--muted); margin-top:2px; }
     .qty { text-align:right; } .qty b { font-size:1.05rem; color:var(--ink); } .qty span { display:block; font-size:0.68rem; color:var(--muted); }
-    .chip { font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:999px; background:#eef0f6; color:#475569; text-transform:capitalize; }
-    .chip--delivered { background:#ecfdf5; color:#047857; }
-    .chip--intransit, .chip--assigned { background:#eff6ff; color:#1d4ed8; }
-    .chip--cancelled { background:#fef2f2; color:#dc2626; }
+    .chip { font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:999px; background:#eef0f6; color:var(--color-text-2); text-transform:capitalize; }
+    .chip--delivered { background:var(--color-ok-soft); color:#047857; }
+    .chip--intransit, .chip--assigned { background:var(--color-primary-soft); color:var(--color-primary-hover); }
+    .chip--cancelled { background:var(--color-danger-soft); color:var(--color-danger); }
     .scan-line { display:flex; gap:8px; align-items:center; padding:6px 0; font-size:0.82rem; }
     .scan-line .material-icons { font-size:18px; color:var(--primary); }
 
-    .unreg { background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:10px; }
-    .unreg__msg { display:flex; gap:8px; } .unreg__msg .material-icons { color:#d97706; }
+    .unreg { background:var(--color-warn-soft); border:1px solid #fde68a; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:10px; }
+    .unreg__msg { display:flex; gap:8px; } .unreg__msg .material-icons { color:var(--color-warn); }
     .unreg__msg strong { color:#92400e; } .unreg__msg p { margin:2px 0 0; font-size:0.8rem; color:#78350f; }
 
     .label-preview .label { border:2px solid var(--ink); border-radius:10px; padding:16px; text-align:center; width:220px; margin:0 auto 12px; }
@@ -535,7 +539,7 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
     .mono { font-family:monospace; }
 
     .modal-backdrop { position:fixed; inset:0; background:rgba(15,23,42,0.5); display:flex; align-items:center; justify-content:center; z-index:2000; }
-    .modal { background:#fff; border-radius:16px; padding:20px; width:min(460px,92vw); }
+    .modal { background:var(--color-surface); border-radius:16px; padding:20px; width:min(460px,92vw); }
     .modal__head { display:flex; align-items:center; gap:8px; font-weight:700; margin-bottom:14px; }
     .modal__head .material-icons { color:var(--primary); }
     .btn-x { margin-left:auto; border:none; background:none; cursor:pointer; color:var(--muted); }
@@ -548,11 +552,11 @@ type ScanAction = 'Lookup' | 'CheckIn' | 'CheckOut' | 'LoadOnVehicle' | 'Offload
     .check-row { display:flex; align-items:center; gap:10px; padding:10px 4px; border-top:1px solid var(--line); }
     .check-row:first-child { border-top:none; }
     .check-row--done { opacity:0.72; }
-    .check-ico { color:#cbd5e1; }
-    .check-row--done .check-ico { color:#10b981; }
+    .check-ico { color:var(--color-line-strong); }
+    .check-row--done .check-ico { color:var(--color-ok); }
     .check-main { flex:1; min-width:0; }
-    .depart { display:flex; gap:10px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:12px; padding:12px; margin-bottom:12px; }
-    .depart .material-icons { color:#059669; } .depart strong { color:#047857; } .depart p { margin:2px 0 0; font-size:0.8rem; color:#065f46; }
+    .depart { display:flex; gap:10px; background:var(--color-ok-soft); border:1px solid #a7f3d0; border-radius:12px; padding:12px; margin-bottom:12px; }
+    .depart .material-icons { color:var(--color-ok); } .depart strong { color:#047857; } .depart p { margin:2px 0 0; font-size:0.8rem; color:#065f46; }
   `]
 })
 export class AssetTrackingComponent implements OnDestroy {
@@ -745,8 +749,8 @@ export class AssetTrackingComponent implements OnDestroy {
       <style>body{font-family:sans-serif;text-align:center;padding:20px}
       .label{border:2px solid #000;border-radius:10px;padding:16px;display:inline-block}
       img{width:200px;height:200px}.c{font-family:monospace;font-weight:700;margin-top:8px}
-      .t{font-size:12px;color:#555}</style></head><body>
-      <div class="label"><img src="${this.genQrDataUrl()}"/>
+      .t{font-size:12px;color:var(--color-text-2)}</style></head><body>
+      <div class="label"><img src="${this.genQrDataUrl()}" alt="QR code"/>
       <div class="c">${this.genCreated()?.code}</div>
       <div class="t">${this.genCreated()?.label || ''}</div></div>
       <script>window.onload=()=>{window.print();window.close();}</script>

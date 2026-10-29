@@ -8,13 +8,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatTableModule } from '@angular/material/table';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatInputModule } from '@angular/material/input';
 import { MatDatepickerModule } from '@angular/material/datepicker';
@@ -24,6 +22,10 @@ import { Inject } from '@angular/core';
 import { SanitaryPadsService, PadsDashboard, StockReceived } from '../../../services/sanitary-pads.service';
 import { SchoolDeliveryComponent } from '../school-delivery/school-delivery.component';
 import { environment } from '../../../../environments/environment';
+import { ConfirmService } from '../../../ui/confirm.service';
+import { ToastService } from '../../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-sanitary-pads-dashboard',
@@ -31,19 +33,18 @@ import { environment } from '../../../../environments/environment';
   imports: [
     CommonModule, FormsModule,
     MatCardModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule,
-    MatTooltipModule, MatChipsModule, MatTabsModule, MatSelectModule,
-    MatFormFieldModule, MatTableModule, MatDividerModule, MatSnackBarModule,
+    MatTooltipModule, MatTabsModule, MatSelectModule,
+    MatFormFieldModule, MatTableModule, MatDividerModule,
     MatDialogModule, MatInputModule, MatDatepickerModule, MatNativeDateModule,
     MatMenuModule,
-    SchoolDeliveryComponent
+    SchoolDeliveryComponent, SkeletonRowsComponent, EmptyStateComponent
   ],
   template: `
     <div class="pads-dashboard">
-      <!-- Hero Header -->
+      <!-- Header -->
       <div class="hero-header">
-        <div class="hero-bg"></div>
         <div class="hero-content">
-          <button mat-button (click)="goBack.emit()" class="back-btn">
+          <button mat-stroked-button (click)="goBack.emit()" class="back-btn">
             <mat-icon>arrow_back</mat-icon> Back to Projects
           </button>
           <div class="hero-title-block">
@@ -56,13 +57,13 @@ import { environment } from '../../../../environments/environment';
             </div>
           </div>
           <div class="hero-actions">
-            <button mat-flat-button class="request-delivery-btn" (click)="showSchoolDelivery = true">
+            <button mat-stroked-button (click)="showSchoolDelivery = true">
               <mat-icon>school</mat-icon> School Deliveries
             </button>
-            <button mat-flat-button class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
+            <button mat-flat-button color="primary" (click)="showDeliveryPasswordPrompt()">
               <mat-icon>local_shipping</mat-icon> Request Delivery
             </button>
-            <button mat-flat-button class="refresh-btn" (click)="loadDashboard()" matTooltip="Refresh data">
+            <button mat-stroked-button (click)="loadDashboard()" matTooltip="Refresh data">
               <mat-icon>refresh</mat-icon> Refresh
             </button>
           </div>
@@ -74,16 +75,16 @@ import { environment } from '../../../../environments/environment';
       } @else {
       @if (loading) {
         <div class="loading-state">
-          <div class="loading-card">
-            <div class="loading-icon-ring pulse">
-              <mat-icon>female</mat-icon>
-            </div>
-            <h3>Loading Project Data</h3>
-            <p class="loading-sub">Fetching stock records & analytics...</p>
-            <div class="loading-bar-track">
-              <div class="loading-bar-fill"></div>
-            </div>
-          </div>
+          <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
+        </div>
+      }
+
+      @if (!loading && !dashboard) {
+        <div class="loading-state">
+          <app-empty-state icon="cloud_off" title="The project data could not be loaded"
+                           message="Check your connection, then try again.">
+            <button mat-stroked-button (click)="loadDashboard()"><mat-icon>refresh</mat-icon> Try again</button>
+          </app-empty-state>
         </div>
       }
 
@@ -93,7 +94,6 @@ import { environment } from '../../../../environments/environment';
         <!-- KPI Cards -->
         <div class="kpi-row">
           <div class="kpi-card kpi-received">
-            <div class="kpi-glow"></div>
             <div class="kpi-icon-wrap">
               <mat-icon>inventory_2</mat-icon>
             </div>
@@ -105,7 +105,6 @@ import { environment } from '../../../../environments/environment';
           </div>
 
           <div class="kpi-card kpi-delivered">
-            <div class="kpi-glow"></div>
             <div class="kpi-icon-wrap">
               <mat-icon>local_shipping</mat-icon>
             </div>
@@ -117,7 +116,6 @@ import { environment } from '../../../../environments/environment';
           </div>
 
           <div class="kpi-card kpi-balance">
-            <div class="kpi-glow"></div>
             <div class="kpi-icon-wrap">
               <mat-icon>account_balance</mat-icon>
             </div>
@@ -129,7 +127,6 @@ import { environment } from '../../../../environments/environment';
           </div>
 
           <div class="kpi-card kpi-value">
-            <div class="kpi-glow"></div>
             <div class="kpi-icon-wrap">
               <mat-icon>payments</mat-icon>
             </div>
@@ -154,7 +151,7 @@ import { environment } from '../../../../environments/environment';
                 <div class="quarter-card" *ngFor="let q of dashboard.quarters">
                   <div class="quarter-header">
                     <h3>Quarter {{ q.quarter }}</h3>
-                    <mat-chip class="q-chip">Q{{ q.quarter }}</mat-chip>
+                    <span class="q-badge">Q{{ q.quarter }}</span>
                   </div>
                   <div class="quarter-stats">
                     <div class="q-stat">
@@ -188,8 +185,8 @@ import { environment } from '../../../../environments/environment';
                     <div class="bar-out" [style.width.%]="getBarPercent(q.stockDelivered, q.stockIn + q.stockDelivered)"></div>
                   </div>
                   <div class="bar-legend">
-                    <span class="legend-in">● In</span>
-                    <span class="legend-out">● Out</span>
+                    <span class="legend-in"><i class="legend-dot"></i> In</span>
+                    <span class="legend-out"><i class="legend-dot"></i> Out</span>
                   </div>
                 </div>
               </div>
@@ -221,7 +218,7 @@ import { environment } from '../../../../environments/environment';
               </div>
 
               <div class="table-wrap">
-                <table class="data-table">
+                <table class="app-table">
                   <thead>
                     <tr>
                       <th>Vendor</th>
@@ -232,31 +229,31 @@ import { environment } from '../../../../environments/environment';
                         Date <mat-icon *ngIf="sortBy==='date'" class="sort-icon">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon>
                       </th>
                       <th>UOM</th>
-                      <th (click)="sortReceived('qty')" class="sortable">
+                      <th (click)="sortReceived('qty')" class="sortable num">
                         Qty <mat-icon *ngIf="sortBy==='qty'" class="sort-icon">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon>
                       </th>
-                      <th>Unit Cost</th>
-                      <th (click)="sortReceived('value')" class="sortable">
+                      <th class="num">Unit Cost</th>
+                      <th (click)="sortReceived('value')" class="sortable num">
                         Sub-Total <mat-icon *ngIf="sortBy==='value'" class="sort-icon">{{ sortDir==='asc'?'arrow_upward':'arrow_downward' }}</mat-icon>
                       </th>
-                      <th>Q</th>
-                      <th>Actions</th>
+                      <th class="center">Q</th>
+                      <th class="center">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr *ngFor="let r of stockReceivedList">
                       <td class="vendor-cell">{{ getShortVendor(r.vendorName) }}</td>
-                      <td><span class="mono">{{ r.grnNumber }}</span></td>
-                      <td><span class="mono">{{ r.invoiceNumber || '—' }}</span></td>
+                      <td class="ref">{{ r.grnNumber }}</td>
+                      <td class="ref">{{ r.invoiceNumber || '—' }}</td>
                       <td class="center">{{ r.location || '—' }}</td>
                       <td>{{ r.invoiceDate | date:'dd MMM yy' }}</td>
                       <td class="center">{{ r.uom }}</td>
-                      <td class="right"><strong>{{ r.quantityReceived | number }}</strong></td>
-                      <td class="right">R{{ r.unitCost | number:'1.2-2' }}</td>
-                      <td class="right amount">R{{ r.subTotal | number:'1.0-0' }}</td>
+                      <td class="num"><strong>{{ r.quantityReceived | number }}</strong></td>
+                      <td class="num">R{{ r.unitCost | number:'1.2-2' }}</td>
+                      <td class="num amount">R{{ r.subTotal | number:'1.0-0' }}</td>
                       <td class="center"><span class="q-badge" *ngIf="r.quarter">Q{{ r.quarter }}</span></td>
                       <td class="center">
-                        <button mat-icon-button [matMenuTriggerFor]="rowMenu" matTooltip="Actions">
+                        <button aria-label="Actions" mat-icon-button [matMenuTriggerFor]="rowMenu" matTooltip="Actions">
                           <mat-icon>more_vert</mat-icon>
                         </button>
                         <mat-menu #rowMenu="matMenu">
@@ -266,13 +263,25 @@ import { environment } from '../../../../environments/environment';
                         </mat-menu>
                       </td>
                     </tr>
+                    <tr *ngIf="!stockReceivedList.length" class="empty-row">
+                      <td colspan="11">
+                        <app-empty-state *ngIf="filterQuarter || filterVendor" icon="filter_alt_off" title="No GRNs match these filters"
+                                         message="No stock was received for this quarter and vendor.">
+                          <button mat-stroked-button (click)="clearReceivedFilters()">Clear the filters</button>
+                        </app-empty-state>
+                        <app-empty-state *ngIf="!filterQuarter && !filterVendor" icon="receipt_long" title="No stock received yet"
+                                         message="Goods received notes for the project appear here once they are captured.">
+                          <button mat-stroked-button (click)="openAddGrnDialog()"><mat-icon>add</mat-icon> Add GRN</button>
+                        </app-empty-state>
+                      </td>
+                    </tr>
                   </tbody>
-                  <tfoot>
-                    <tr class="total-row">
-                      <td colspan="6"><strong>Total</strong></td>
-                      <td class="right"><strong>{{ getTotalQty() | number }}</strong></td>
+                  <tfoot *ngIf="stockReceivedList.length">
+                    <tr>
+                      <td colspan="6">Total</td>
+                      <td class="num">{{ getTotalQty() | number }}</td>
                       <td></td>
-                      <td class="right amount"><strong>R{{ getTotalValue() | number:'1.0-0' }}</strong></td>
+                      <td class="num">R{{ getTotalValue() | number:'1.0-0' }}</td>
                       <td colspan="2"></td>
                     </tr>
                   </tfoot>
@@ -288,33 +297,39 @@ import { environment } from '../../../../environments/environment';
             </ng-template>
             <div class="tab-content">
               <div class="table-wrap">
-                <table class="data-table">
+                <table class="app-table">
                   <thead>
                     <tr>
                       <th>Delivery Ref</th>
                       <th>Invoice #</th>
-                      <th>Qty Delivered</th>
-                      <th>UOM</th>
-                      <th>Quarter</th>
+                      <th class="num">Qty Delivered</th>
+                      <th class="center">UOM</th>
+                      <th class="center">Quarter</th>
                       <th>Date</th>
                       <th>Notes</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr *ngFor="let d of stockDeliveredList">
-                      <td><span class="mono">{{ d.deliveryReference || '—' }}</span></td>
-                      <td><span class="mono">{{ d.invoiceNumber || '—' }}</span></td>
-                      <td class="right"><strong>{{ d.quantityDelivered | number }}</strong></td>
+                      <td class="ref">{{ d.deliveryReference || '—' }}</td>
+                      <td class="ref">{{ d.invoiceNumber || '—' }}</td>
+                      <td class="num"><strong>{{ d.quantityDelivered | number }}</strong></td>
                       <td class="center">{{ d.uom }}</td>
                       <td class="center"><span class="q-badge">Q{{ d.quarter }}</span></td>
                       <td>{{ d.deliveryDate | date:'dd MMM yyyy' }}</td>
                       <td class="notes-cell">{{ d.notes || '—' }}</td>
                     </tr>
+                    <tr *ngIf="!stockDeliveredList.length" class="empty-row">
+                      <td colspan="7">
+                        <app-empty-state icon="local_shipping" title="No deliveries recorded yet"
+                                         message="Stock delivered from the project shows here by quarter."></app-empty-state>
+                      </td>
+                    </tr>
                   </tbody>
-                  <tfoot>
-                    <tr class="total-row">
-                      <td colspan="2"><strong>Total Delivered</strong></td>
-                      <td class="right"><strong>{{ getTotalDelivered() | number }}</strong></td>
+                  <tfoot *ngIf="stockDeliveredList.length">
+                    <tr>
+                      <td colspan="2">Total Delivered</td>
+                      <td class="num">{{ getTotalDelivered() | number }}</td>
                       <td colspan="4"></td>
                     </tr>
                   </tfoot>
@@ -434,7 +449,8 @@ import { environment } from '../../../../environments/environment';
                       <span class="ic-date">{{ inv.invoiceDate | date:'dd MMM yyyy' }}</span>
                       <span class="ic-desc">{{ inv.description || '' }}</span>
                     </div>
-                    <div class="ic-empty" *ngIf="!dashboard.invoicesProcessed?.length">No invoices</div>
+                    <app-empty-state *ngIf="!dashboard.invoicesProcessed?.length" [compact]="true" icon="receipt"
+                                     title="No invoices processed yet" message="Invoices processed for the project are listed here."></app-empty-state>
                   </div>
                 </div>
 
@@ -446,7 +462,8 @@ import { environment } from '../../../../environments/environment';
                       <span class="ic-date">{{ cn.creditDate | date:'dd MMM yyyy' }}</span>
                       <span class="ic-desc">{{ cn.description || '' }}</span>
                     </div>
-                    <div class="ic-empty" *ngIf="!dashboard.creditNotes?.length">No credit notes</div>
+                    <app-empty-state *ngIf="!dashboard.creditNotes?.length" [compact]="true" icon="money_off"
+                                     title="No credit notes" message="Credit notes raised against project invoices are listed here."></app-empty-state>
                   </div>
                 </div>
               </div>
@@ -475,7 +492,7 @@ import { environment } from '../../../../environments/environment';
           </mat-form-field>
           <div class="pwd-actions">
             <button mat-stroked-button (click)="cancelDeliveryPassword()">Cancel</button>
-            <button mat-raised-button color="primary" (click)="verifyDeliveryPassword()">
+            <button mat-flat-button color="primary" (click)="verifyDeliveryPassword()">
               <mat-icon>lock_open</mat-icon> Verify
             </button>
           </div>
@@ -496,7 +513,7 @@ import { environment } from '../../../../environments/environment';
                 <p class="dlg-subtitle">Submit a delivery request to logistics</p>
               </div>
             </div>
-            <button class="dlg-close" (click)="closeDeliveryDialog()">
+            <button aria-label="Close" class="dlg-close" (click)="closeDeliveryDialog()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -508,7 +525,7 @@ import { environment } from '../../../../environments/environment';
                 <h3>Delivery Request Submitted!</h3>
                 <p>{{ deliverySuccessMsg }}</p>
                 <div class="dlg-success-actions">
-                  <button mat-flat-button class="btn-another" (click)="resetDeliveryForm()">
+                  <button mat-flat-button color="primary" (click)="resetDeliveryForm()">
                     <mat-icon>add</mat-icon> Request Another
                   </button>
                   <button mat-stroked-button (click)="closeDeliveryDialog()">
@@ -534,7 +551,7 @@ import { environment } from '../../../../environments/environment';
                     <label class="dlg-label">Priority</label>
                     <select class="dlg-select" [(ngModel)]="deliveryForm.priority">
                       <option value="Normal">Normal</option>
-                      <option value="Urgent">🔴 Urgent</option>
+                      <option value="Urgent">Urgent</option>
                     </select>
                   </div>
                 </div>
@@ -592,17 +609,17 @@ import { environment } from '../../../../environments/environment';
                   <div class="dlg-preview">
                     <mat-icon>local_shipping</mat-icon>
                     <span>
-                      @if (deliveryForm.priority === 'Urgent') { 🔴 }
+                      @if (deliveryForm.priority === 'Urgent') { <strong class="urgent-tag">Urgent:</strong> }
                       <strong>{{ deliveryForm.quantity }} {{ deliveryForm.unitOfMeasure }}</strong> —
                       {{ deliveryForm.description }}
-                      @if (deliveryForm.deliveryAddress) { → {{ deliveryForm.deliveryAddress }} }
+                      @if (deliveryForm.deliveryAddress) { to {{ deliveryForm.deliveryAddress }} }
                     </span>
                   </div>
                 }
 
                 <div class="dlg-actions">
                   <button mat-stroked-button (click)="closeDeliveryDialog()" [disabled]="deliverySaving">Cancel</button>
-                  <button mat-flat-button class="btn-submit-delivery" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || !isDeliveryFormValid()">
+                  <button mat-flat-button color="primary" class="btn-submit-delivery" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || !isDeliveryFormValid()">
                     @if (deliverySaving) {
                       <mat-spinner diameter="18" strokeWidth="2"></mat-spinner>
                       Submitting...
@@ -624,382 +641,253 @@ import { environment } from '../../../../environments/environment';
     :host { display: block; }
     .pads-dashboard { max-width: 1440px; margin: 0 auto; padding: 0 24px 40px; }
 
-    /* ── Hero Header ── */
+    /* ── Header ── */
     .hero-header {
-      position: relative;
-      margin: 0 -24px 32px;
-      padding: 32px 40px 36px;
-      overflow: hidden;
-    }
-    .hero-bg {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, #e91e63 0%, #9c27b0 50%, #673ab7 100%);
-      z-index: 0;
-    }
-    .hero-bg::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      margin-bottom: 24px;
     }
     .hero-content {
-      position: relative;
-      z-index: 1;
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 16px;
       flex-wrap: wrap;
     }
-    .back-btn {
-      color: rgba(255,255,255,0.9) !important;
-      border-radius: 12px !important;
-      font-weight: 500 !important;
-    }
-    .back-btn:hover { background: rgba(255,255,255,0.15) !important; }
     .hero-title-block {
       flex: 1;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
+      min-width: 240px;
     }
     .hero-icon-ring {
-      width: 56px;
-      height: 56px;
-      border-radius: 18px;
-      background: rgba(255,255,255,0.2);
-      backdrop-filter: blur(12px);
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      background: var(--color-cat-pink-soft);
+      color: var(--color-cat-pink);
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 1px solid rgba(255,255,255,0.25);
       flex-shrink: 0;
     }
     .hero-icon-ring mat-icon {
-      font-size: 30px;
-      width: 30px;
-      height: 30px;
-      color: white;
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
     }
     .hero-text h1 {
       margin: 0;
-      font-size: 26px;
-      font-weight: 800;
-      color: white;
-      letter-spacing: -0.3px;
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-text);
+      letter-spacing: -0.01em;
     }
     .hero-text p {
-      margin: 4px 0 0;
-      font-size: 14px;
-      color: rgba(255,255,255,0.75);
+      margin: 2px 0 0;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
     }
-    .hero-actions { display: flex; gap: 10px; }
-    .refresh-btn {
-      background: rgba(255,255,255,0.2) !important;
-      color: white !important;
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.2) !important;
-      border-radius: 12px !important;
-      font-weight: 600 !important;
-    }
-    .refresh-btn:hover { background: rgba(255,255,255,0.3) !important; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
     /* ── Loading ── */
     .loading-state {
-      display: flex;
-      justify-content: center;
-      padding: 80px 0;
-    }
-    .loading-card {
-      text-align: center;
-      background: white;
-      border-radius: 24px;
-      padding: 48px 56px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-      border: 1px solid #f0f0f0;
-    }
-    .loading-icon-ring {
-      width: 72px;
-      height: 72px;
-      border-radius: 22px;
-      background: linear-gradient(135deg, #e91e63, #9c27b0);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 20px;
-    }
-    .loading-icon-ring.pulse {
-      animation: pulse-ring 1.8s ease-in-out infinite;
-    }
-    @keyframes pulse-ring {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(233,30,99,0.4); }
-      50% { transform: scale(1.08); box-shadow: 0 0 0 16px rgba(233,30,99,0); }
-    }
-    .loading-icon-ring mat-icon {
-      font-size: 36px;
-      width: 36px;
-      height: 36px;
-      color: white;
-    }
-    .loading-card h3 {
-      margin: 0 0 6px;
-      font-size: 18px;
-      font-weight: 700;
-      color: #1a1a2e;
-    }
-    .loading-sub {
-      margin: 0 0 24px;
-      font-size: 14px;
-      color: #9ca3af;
-    }
-    .loading-bar-track {
-      width: 220px;
-      height: 4px;
-      background: #f0f0f0;
-      border-radius: 2px;
-      margin: 0 auto;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
-    }
-    .loading-bar-fill {
-      width: 40%;
-      height: 100%;
-      background: linear-gradient(90deg, #e91e63, #9c27b0);
-      border-radius: 2px;
-      animation: shimmer 1.5s ease-in-out infinite;
-    }
-    @keyframes shimmer {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(350%); }
     }
 
     /* ── KPI Cards ── */
     .kpi-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 18px;
-      margin-bottom: 28px;
+      gap: 16px;
+      margin-bottom: 24px;
     }
     .kpi-card {
       position: relative;
       display: flex;
       flex-direction: column;
       gap: 14px;
-      background: white;
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-      border: 1px solid #f0f0f0;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--color-line);
       overflow: hidden;
-      transition: transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .kpi-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 28px rgba(0,0,0,0.08);
+      border-color: var(--color-line-strong);
+      box-shadow: var(--shadow-md);
     }
-    .kpi-glow {
-      position: absolute;
-      top: -40px;
-      right: -40px;
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      opacity: 0.12;
-      transition: opacity 0.3s;
-    }
-    .kpi-card:hover .kpi-glow { opacity: 0.2; }
-    .kpi-received .kpi-glow { background: #e91e63; }
-    .kpi-delivered .kpi-glow { background: #9c27b0; }
-    .kpi-balance .kpi-glow { background: #4facfe; }
-    .kpi-value .kpi-glow { background: #43e97b; }
     .kpi-icon-wrap {
       width: 48px;
       height: 48px;
-      border-radius: 16px;
+      border-radius: var(--radius-md);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
-    .kpi-received .kpi-icon-wrap { background: linear-gradient(135deg, #e91e63, #ad1457); }
-    .kpi-delivered .kpi-icon-wrap { background: linear-gradient(135deg, #9c27b0, #6a1b9a); }
-    .kpi-balance .kpi-icon-wrap { background: linear-gradient(135deg, #4facfe, #00b4d8); }
-    .kpi-value .kpi-icon-wrap { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+    .kpi-received .kpi-icon-wrap { background: var(--color-cat-pink-soft); color: var(--color-cat-pink); }
+    .kpi-delivered .kpi-icon-wrap { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .kpi-balance .kpi-icon-wrap { background: var(--color-primary-soft); color: var(--color-primary); }
+    .kpi-value .kpi-icon-wrap { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); }
     .kpi-icon-wrap mat-icon {
-      color: white;
       font-size: 24px;
       width: 24px;
       height: 24px;
     }
     .kpi-info { display: flex; flex-direction: column; gap: 2px; }
     .kpi-info .kpi-value {
-      font-size: 26px;
+      font-size: var(--text-3xl);
       font-weight: 800;
-      color: #1a1a2e;
+      color: var(--color-text);
       line-height: 1.1;
       letter-spacing: -0.5px;
     }
     .kpi-label {
-      font-size: 13px;
-      color: #6b7280;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
     .kpi-sub {
-      font-size: 12px;
-      color: #b0b8c4;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       padding-top: 4px;
-      border-top: 1px dashed #f0f0f0;
+      border-top: 1px dashed var(--color-line);
     }
 
     /* ── Tabs ── */
     .main-tabs {
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.05);
-      border: 1px solid #f0f0f0;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--color-line);
       overflow: hidden;
     }
     .tab-icon { margin-right: 6px; font-size: 18px; width: 18px; height: 18px; }
-    .tab-content { padding: 28px; }
+    .tab-content { padding: 24px; }
 
     /* ── Quarter Cards ── */
-    .quarters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .quarters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
     .quarter-card {
-      background: white;
-      border-radius: 18px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       padding: 22px;
-      border: 1px solid #eee;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
-      transition: transform 0.2s, box-shadow 0.2s;
+      border: 1px solid var(--color-line);
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .quarter-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.07);
+      border-color: var(--color-line-strong);
+      box-shadow: var(--shadow-md);
     }
     .quarter-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-    .quarter-header h3 { margin: 0; font-size: 18px; font-weight: 800; color: #1a1a2e; }
-    .q-chip {
-      font-size: 12px !important;
-      font-weight: 700 !important;
-      background: linear-gradient(135deg, #e91e63, #9c27b0) !important;
-      color: white !important;
-      padding: 2px 12px !important;
-      border-radius: 10px !important;
-    }
+    .quarter-header h3 { margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
     .quarter-stats { display: flex; gap: 20px; margin-bottom: 14px; }
     .q-stat { display: flex; align-items: center; gap: 8px; }
-    .q-stat mat-icon { font-size: 18px; width: 18px; height: 18px; color: #9ca3af; }
+    .q-stat mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-text-3); }
     .q-stat div { display: flex; flex-direction: column; }
-    .q-val { font-size: 18px; font-weight: 700; color: #1a1a2e; }
-    .q-val.negative { color: #ef4444; }
-    .q-lbl { font-size: 11px; color: #b0b8c4; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-    .quarter-value { font-size: 13px; color: #6b7280; margin-bottom: 14px; }
-    .quarter-bar { display: flex; height: 8px; border-radius: 6px; overflow: hidden; background: #f0f0f0; }
-    .bar-in { background: linear-gradient(90deg, #e91e63, #f48fb1); transition: width 0.6s cubic-bezier(.4,0,.2,1); }
-    .bar-out { background: linear-gradient(90deg, #9c27b0, #ce93d8); transition: width 0.6s cubic-bezier(.4,0,.2,1); }
-    .bar-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 11px; color: #b0b8c4; font-weight: 600; }
-    .legend-in { color: #e91e63; }
-    .legend-out { color: #9c27b0; }
+    .q-val { font-size: var(--text-xl); font-weight: 700; color: var(--color-text); font-variant-numeric: tabular-nums; }
+    .q-val.negative { color: var(--color-danger); }
+    .q-lbl { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .quarter-value { font-size: var(--text-sm); color: var(--color-text-3); margin-bottom: 14px; }
+    .quarter-bar { display: flex; height: 8px; border-radius: 6px; overflow: hidden; background: var(--color-surface-2); }
+    .bar-in { background: var(--color-cat-pink); transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+    .bar-out { background: var(--color-cat-purple); transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+    .bar-legend { display: flex; gap: 16px; margin-top: 8px; font-size: var(--text-xs); color: var(--color-text-3); font-weight: 600; }
+    .bar-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .legend-in .legend-dot { background: var(--color-cat-pink); }
+    .legend-out .legend-dot { background: var(--color-cat-purple); }
 
     /* ── Table ── */
     .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px; }
     .table-filters { display: flex; gap: 10px; }
     .filter-select {
       padding: 10px 16px;
-      border: 1.5px solid #e5e7eb;
-      border-radius: 12px;
-      font-size: 13px;
-      background: white;
+      border: 1px solid var(--color-line-strong);
+      border-radius: var(--radius-control);
+      font-size: var(--text-sm);
+      color: var(--color-text);
+      background: var(--color-surface);
       outline: none;
       font-family: inherit;
       cursor: pointer;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .filter-select:focus { border-color: #e91e63; }
+    .filter-select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
 
     .table-wrap {
       overflow-x: auto;
-      border-radius: 16px;
-      border: 1px solid #eee;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-line);
     }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .data-table thead { background: linear-gradient(180deg, #fafafa, #f5f5f5); }
-    .data-table th {
-      padding: 12px 14px;
-      text-align: left;
-      font-weight: 700;
-      color: #374151;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border-bottom: 2px solid #eee;
-      white-space: nowrap;
-    }
-    .data-table td { padding: 12px 14px; border-bottom: 1px solid #f5f5f5; color: #374151; }
-    .data-table tbody tr { transition: background 0.15s; }
-    .data-table tbody tr:hover { background: #fef2f7; }
-    .data-table .right { text-align: right; }
-    .data-table .center { text-align: center; }
-    .data-table .amount { font-weight: 700; color: #059669; }
-    .data-table .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-    .data-table .vendor-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .data-table .notes-cell { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6b7280; font-size: 12px; }
-    .total-row { background: #fdf2f8; font-weight: 600; }
-    .total-row td { border-top: 2px solid #fce7f3; padding: 14px; }
+    .app-table .center { text-align: center; }
+    .app-table .amount { font-weight: 700; }
+    .app-table .vendor-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .app-table .notes-cell { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-3); }
     .sortable { cursor: pointer; user-select: none; transition: color 0.15s; }
-    .sortable:hover { color: #e91e63; }
+    .sortable:hover { color: var(--color-primary); }
     .sort-icon { font-size: 14px; width: 14px; height: 14px; vertical-align: middle; }
+    .empty-row td { padding: 0; }
+    .app-table tbody tr.empty-row:hover td { background: transparent; }
     .q-badge {
-      background: linear-gradient(135deg, #fce4ec, #f8bbd0);
-      color: #880e4f;
+      display: inline-block;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       padding: 3px 10px;
-      border-radius: 10px;
-      font-size: 11px;
+      border-radius: 999px;
+      font-size: var(--text-xs);
       font-weight: 700;
     }
 
     /* ── Warehouse ── */
     .warehouse-grid { display: flex; flex-direction: column; gap: 28px; }
-    .wh-section h3 { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 800; color: #1a1a2e; margin: 0 0 14px; }
-    .wh-section h3 mat-icon { font-size: 20px; width: 20px; height: 20px; color: #e91e63; }
+    .wh-section h3 { display: flex; align-items: center; gap: 8px; font-size: var(--text-lg); font-weight: 700; color: var(--color-text); margin: 0 0 14px; }
+    .wh-section h3 mat-icon { font-size: 20px; width: 20px; height: 20px; color: var(--color-text-3); }
     .wh-cards { display: flex; gap: 14px; flex-wrap: wrap; }
     .wh-card {
-      background: white;
-      border: 1px solid #eee;
-      border-radius: 18px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
       padding: 20px 28px;
       min-width: 160px;
       text-align: center;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .wh-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
-    .wh-card.damaged { border-color: #fbbf24; background: #fffbeb; }
+    .wh-card:hover { border-color: var(--color-line-strong); box-shadow: var(--shadow-md); }
+    .wh-card.damaged { border-color: var(--color-warn); background: var(--color-warn-soft); }
     .wh-card.wh-total {
-      background: linear-gradient(135deg, #fce4ec, #f3e5f5);
-      border-color: #f8bbd0;
+      background: var(--color-surface-2);
+      border-color: var(--color-line-strong);
     }
-    .wh-name { font-size: 12px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .wh-qty { font-size: 30px; font-weight: 800; color: #1a1a2e; }
-    .wh-uom { font-size: 11px; color: #b0b8c4; font-weight: 600; }
-    .wh-damaged { margin-top: 8px; display: flex; align-items: center; gap: 4px; font-size: 12px; color: #d97706; justify-content: center; }
+    .wh-name { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .wh-qty { font-size: var(--text-4xl); font-weight: 800; color: var(--color-text); font-variant-numeric: tabular-nums; }
+    .wh-uom { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 600; }
+    .wh-damaged { margin-top: 8px; display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-warn); justify-content: center; }
     .wh-damaged mat-icon { font-size: 14px; width: 14px; height: 14px; }
 
     .variance-section {
-      background: white;
-      border-radius: 18px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       padding: 24px;
-      border: 1px solid #eee;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+      border: 1px solid var(--color-line);
+      box-shadow: var(--shadow-sm);
     }
     .variance-grid { display: flex; flex-direction: column; gap: 12px; }
     .variance-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
     .variance-item.highlight { padding: 14px 0; }
-    .var-label { font-size: 14px; color: #374151; font-weight: 500; }
-    .var-value { font-size: 17px; font-weight: 800; color: #1a1a2e; }
-    .var-value.warn { color: #d97706; }
-    .var-value.negative { color: #ef4444; }
+    .var-label { font-size: var(--text-md); color: var(--color-text-2); font-weight: 500; }
+    .var-value { font-size: var(--text-lg); font-weight: 800; color: var(--color-text); font-variant-numeric: tabular-nums; }
+    .var-value.warn { color: var(--color-warn); }
+    .var-value.negative { color: var(--color-danger); }
 
     /* ── Vendor Cards ── */
     .vendor-cards { display: flex; flex-direction: column; gap: 14px; }
@@ -1007,76 +895,54 @@ import { environment } from '../../../../environments/environment';
       display: flex;
       align-items: center;
       gap: 16px;
-      background: white;
-      border-radius: 18px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       padding: 20px 24px;
-      border: 1px solid #eee;
-      transition: transform 0.2s, box-shadow 0.2s;
+      border: 1px solid var(--color-line);
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .vendor-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+    .vendor-card:hover { border-color: var(--color-line-strong); box-shadow: var(--shadow-md); }
     .vendor-rank {
-      font-size: 22px;
+      font-size: var(--text-2xl);
       font-weight: 800;
       min-width: 40px;
       text-align: center;
-      background: linear-gradient(135deg, #e91e63, #9c27b0);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--color-primary);
     }
     .vendor-info { flex: 1; }
-    .vendor-info h4 { margin: 0 0 6px; font-size: 15px; font-weight: 700; color: #1a1a2e; }
+    .vendor-info h4 { margin: 0 0 6px; font-size: var(--text-md); font-weight: 700; color: var(--color-text); }
     .vendor-stats { display: flex; gap: 20px; flex-wrap: wrap; }
-    .vs { display: flex; align-items: center; gap: 4px; font-size: 13px; color: #6b7280; }
-    .vs mat-icon { font-size: 16px; width: 16px; height: 16px; color: #b0b8c4; }
-    .vendor-bar { width: 120px; height: 8px; background: #f0f0f0; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
-    .vb-fill { height: 100%; background: linear-gradient(90deg, #e91e63, #9c27b0); border-radius: 6px; transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+    .vs { display: flex; align-items: center; gap: 4px; font-size: var(--text-sm); color: var(--color-text-2); }
+    .vs mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--color-text-3); }
+    .vendor-bar { width: 120px; height: 8px; background: var(--color-surface-2); border-radius: 6px; overflow: hidden; flex-shrink: 0; }
+    .vb-fill { height: 100%; background: var(--color-primary); border-radius: 6px; transition: width 0.6s cubic-bezier(.4,0,.2,1); }
 
     /* ── Invoices & Credit Notes ── */
     .inv-credit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-    .ic-section h3 { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 800; color: #1a1a2e; margin: 0 0 14px; }
-    .ic-section h3 mat-icon { font-size: 20px; width: 20px; height: 20px; color: #e91e63; }
-    .ic-section.credits h3 mat-icon { color: #ef4444; }
+    .ic-section h3 { display: flex; align-items: center; gap: 8px; font-size: var(--text-lg); font-weight: 700; color: var(--color-text); margin: 0 0 14px; }
+    .ic-section h3 mat-icon { font-size: 20px; width: 20px; height: 20px; color: var(--color-text-3); }
     .ic-list { display: flex; flex-direction: column; gap: 8px; }
     .ic-item {
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 14px 18px;
-      background: white;
-      border-radius: 14px;
-      border: 1px solid #eee;
-      transition: background 0.15s, transform 0.15s;
+      background: var(--color-surface);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-line);
+      transition: background 0.15s;
     }
-    .ic-item:hover { background: #fef2f7; transform: translateX(2px); }
-    .ic-ref { font-weight: 700; color: #374151; min-width: 100px; }
-    .ic-date { font-size: 12px; color: #6b7280; min-width: 100px; }
-    .ic-desc { font-size: 12px; color: #b0b8c4; flex: 1; }
-    .ic-empty { color: #b0b8c4; font-size: 13px; padding: 20px; text-align: center; }
-
-    /* ── Request Delivery Button ── */
-    .request-delivery-btn {
-      background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important;
-      color: white !important;
-      border: 1px solid rgba(255,255,255,0.2) !important;
-      border-radius: 12px !important;
-      font-weight: 700 !important;
-      transition: all 0.2s !important;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .request-delivery-btn:hover {
-      background: linear-gradient(135deg, #ff8787, #f0631a) !important;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 14px rgba(238,90,36,0.4) !important;
-    }
+    .ic-item:hover { background: var(--color-surface-2); }
+    .ic-ref { font-weight: 700; color: var(--color-text-2); min-width: 100px; }
+    .mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+    .ic-date { font-size: var(--text-xs); color: var(--color-text-3); min-width: 100px; }
+    .ic-desc { font-size: var(--text-xs); color: var(--color-text-3); flex: 1; }
 
     /* ── Delivery Dialog ── */
     .dlg-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.45);
-      backdrop-filter: blur(4px);
+      background: var(--color-scrim);
       z-index: 1000;
       animation: fadeIn 0.2s ease;
     }
@@ -1093,9 +959,10 @@ import { environment } from '../../../../environments/environment';
       max-width: 95vw;
       max-height: 90vh;
       overflow-y: auto;
-      background: white;
-      border-radius: 24px;
-      box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
       z-index: 1001;
       animation: slideUp 0.25s cubic-bezier(.4,0,.2,1);
     }
@@ -1107,9 +974,9 @@ import { environment } from '../../../../environments/environment';
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 24px 28px;
-      background: linear-gradient(135deg, #e91e63, #9c27b0);
-      border-radius: 24px 24px 0 0;
+      padding: 20px 24px 16px;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
     }
     .dlg-title-group {
       display: flex;
@@ -1117,48 +984,47 @@ import { environment } from '../../../../environments/environment';
       gap: 14px;
     }
     .dlg-icon-ring {
-      width: 48px;
-      height: 48px;
-      border-radius: 16px;
-      background: rgba(255,255,255,0.2);
-      backdrop-filter: blur(8px);
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 1px solid rgba(255,255,255,0.25);
     }
     .dlg-icon-ring mat-icon {
-      color: white;
-      font-size: 26px;
-      width: 26px;
-      height: 26px;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
     }
     .dlg-title {
       margin: 0;
-      font-size: 20px;
-      font-weight: 800;
-      color: white;
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-text);
     }
     .dlg-subtitle {
       margin: 2px 0 0;
-      font-size: 13px;
-      color: rgba(255,255,255,0.7);
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
     }
     .dlg-close {
-      background: rgba(255,255,255,0.15);
-      border: none;
-      border-radius: 12px;
-      width: 40px;
-      height: 40px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      width: 36px;
+      height: 36px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
+      color: var(--color-text-2);
       transition: background 0.15s;
     }
-    .dlg-close:hover { background: rgba(255,255,255,0.25); }
-    .dlg-close mat-icon { color: white; }
-    .dlg-body { padding: 28px; }
+    .dlg-close:hover { background: var(--color-surface-2); color: var(--color-text); }
+    .dlg-close mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .dlg-body { padding: 24px; }
 
     /* ── Dialog Form ── */
     .dlg-form { display: flex; flex-direction: column; gap: 18px; }
@@ -1167,30 +1033,30 @@ import { environment } from '../../../../environments/environment';
     .dlg-row .dlg-field { flex: 1; }
     .dlg-field { display: flex; flex-direction: column; gap: 5px; }
     .dlg-label {
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 700;
-      color: #374151;
+      color: var(--color-text-2);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    .dlg-label .req { color: #ef4444; }
-    .dlg-label .opt { color: #b0b8c4; font-weight: 500; text-transform: none; font-size: 11px; }
+    .dlg-label .req { color: var(--color-danger); }
+    .dlg-label .opt { color: var(--color-text-3); font-weight: 500; text-transform: none; font-size: var(--text-xs); }
     .dlg-input, .dlg-select {
-      padding: 11px 16px;
-      border: 1.5px solid #e5e7eb;
-      border-radius: 12px;
-      font-size: 14px;
-      color: #1a1a2e;
-      background: white;
+      padding: 10px 14px;
+      border: 1px solid var(--color-line-strong);
+      border-radius: var(--radius-control);
+      font-size: var(--text-md);
+      color: var(--color-text);
+      background: var(--color-surface);
       outline: none;
       font-family: inherit;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
     .dlg-input:focus, .dlg-select:focus {
-      border-color: #e91e63;
-      box-shadow: 0 0 0 3px rgba(233,30,99,0.08);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
     }
-    .dlg-input::placeholder { color: #b0b8c4; }
+    .dlg-input::placeholder { color: var(--color-text-3); }
     .dlg-select { cursor: pointer; appearance: auto; }
 
     /* ── Address Input ── */
@@ -1202,20 +1068,21 @@ import { environment } from '../../../../environments/environment';
     .address-icon {
       position: absolute;
       left: 12px;
-      color: #b0b8c4;
+      color: var(--color-text-3);
       font-size: 20px;
       width: 20px;
       height: 20px;
       z-index: 1;
     }
     .address-input {
-      padding-left: 40px !important;
-      padding-right: 40px !important;
+      flex: 1;
+      padding-left: 40px;
+      padding-right: 40px;
     }
     .address-verified {
       position: absolute;
       right: 12px;
-      color: #10b981;
+      color: var(--color-ok);
       font-size: 20px;
       width: 20px;
       height: 20px;
@@ -1229,8 +1096,8 @@ import { environment } from '../../../../environments/environment';
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
-      color: #10b981;
+      font-size: var(--text-xs);
+      color: var(--color-ok);
       font-weight: 600;
       margin-top: 4px;
     }
@@ -1246,18 +1113,19 @@ import { environment } from '../../../../environments/environment';
       align-items: center;
       gap: 10px;
       padding: 14px 18px;
-      background: #fef2f7;
-      border: 1px solid #fce4ec;
-      border-radius: 14px;
-      font-size: 13px;
-      color: #1a1a2e;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      color: var(--color-text);
     }
     .dlg-preview mat-icon {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #e91e63;
+      color: var(--color-primary);
     }
+    .urgent-tag { color: var(--color-danger); }
 
     /* ── Dialog Actions ── */
     .dlg-actions {
@@ -1265,18 +1133,14 @@ import { environment } from '../../../../environments/environment';
       justify-content: flex-end;
       gap: 12px;
       padding-top: 12px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--color-line);
     }
-    .dlg-actions button { border-radius: 12px !important; font-weight: 600 !important; }
-    .btn-submit-delivery {
-      background: linear-gradient(135deg, #e91e63, #9c27b0) !important;
-      color: white !important;
-      display: flex !important;
-      align-items: center !important;
-      gap: 6px !important;
-      padding: 8px 22px !important;
+    .btn-submit-delivery mat-spinner {
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 6px;
+      --mdc-circular-progress-active-indicator-color: currentColor;
     }
-    .btn-submit-delivery:disabled { opacity: 0.5 !important; }
 
     /* ── Dialog Success ── */
     .dlg-success {
@@ -1287,7 +1151,7 @@ import { environment } from '../../../../environments/environment';
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+      background: var(--color-ok-soft);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1297,29 +1161,23 @@ import { environment } from '../../../../environments/environment';
       font-size: 36px;
       width: 36px;
       height: 36px;
-      color: #4caf50;
+      color: var(--color-ok);
     }
     .dlg-success h3 {
-      color: #1a1a2e;
+      color: var(--color-text);
       font-weight: 700;
-      font-size: 18px;
+      font-size: var(--text-xl);
       margin: 0 0 6px;
     }
     .dlg-success p {
-      color: #6b7280;
+      color: var(--color-text-3);
       margin: 0 0 20px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .dlg-success-actions {
       display: flex;
       justify-content: center;
       gap: 12px;
-    }
-    .btn-another {
-      background: linear-gradient(135deg, #e91e63, #9c27b0) !important;
-      color: white !important;
-      border-radius: 12px !important;
-      font-weight: 700 !important;
     }
 
     /* ── Dialog Error ── */
@@ -1328,11 +1186,10 @@ import { environment } from '../../../../environments/environment';
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
-      background: #fef2f2;
-      border: 1px solid #fecaca;
-      border-radius: 12px;
-      color: #ef4444;
-      font-size: 13px;
+      background: var(--color-danger-soft);
+      border-radius: var(--radius-control);
+      color: var(--color-danger);
+      font-size: var(--text-sm);
       margin-bottom: 14px;
     }
     .dlg-error mat-icon {
@@ -1348,8 +1205,7 @@ import { environment } from '../../../../environments/environment';
       .quarters-grid { grid-template-columns: 1fr; }
       .inv-credit-grid { grid-template-columns: 1fr; }
       .quarter-stats { flex-direction: column; gap: 10px; }
-      .hero-header { padding: 20px 24px; }
-      .hero-text h1 { font-size: 20px; }
+      .hero-content { align-items: flex-start; }
     }
     @media (max-width: 480px) {
       .kpi-row { grid-template-columns: 1fr; }
@@ -1359,15 +1215,15 @@ import { environment } from '../../../../environments/environment';
     /* Delivery Password Dialog */
     .pwd-dialog {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: white; border-radius: 16px; padding: 32px; width: 380px; max-width: 90vw;
-      text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 1200;
+      background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: 32px; width: 380px; max-width: 90vw;
+      text-align: center; box-shadow: var(--shadow-lg); z-index: 1200;
     }
-    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: #f57c00; margin-bottom: 12px; }
-    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: 20px; color: #1a1a2e; }
-    .pwd-dialog p { margin: 0 0 20px 0; color: #666; font-size: 14px; }
+    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: var(--color-primary); margin-bottom: 12px; }
+    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: var(--text-2xl); color: var(--color-text); }
+    .pwd-dialog p { margin: 0 0 20px 0; color: var(--color-text-2); font-size: var(--text-md); }
     .pwd-input { width: 100%; margin-bottom: 16px; }
     .pwd-actions { display: flex; gap: 12px; justify-content: center; }
-    .pwd-error { color: #e53935; font-size: 13px; margin: -8px 0 12px 0; }
+    .pwd-error { color: var(--color-danger); font-size: var(--text-sm); margin: -8px 0 12px 0; }
   `]
 })
 export class SanitaryPadsDashboardComponent implements OnInit {
@@ -1400,6 +1256,8 @@ export class SanitaryPadsDashboardComponent implements OnInit {
   addressVerified = false;
   private autocomplete: google.maps.places.Autocomplete | null = null;
   private readonly mapsLoader = inject(GoogleMapsLoaderService);
+  private readonly confirmDialog = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
   deliveryForm = {
     description: '',
     priority: 'Normal',
@@ -1413,7 +1271,6 @@ export class SanitaryPadsDashboardComponent implements OnInit {
 
   constructor(
     private padsService: SanitaryPadsService,
-    private snackBar: MatSnackBar,
     private dialog: MatDialog,
     private http: HttpClient,
     private ngZone: NgZone
@@ -1435,7 +1292,7 @@ export class SanitaryPadsDashboardComponent implements OnInit {
       },
       error: () => {
         this.loading = false;
-        this.snackBar.open('Failed to load dashboard', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load dashboard');
       }
     });
   }
@@ -1448,7 +1305,7 @@ export class SanitaryPadsDashboardComponent implements OnInit {
       sortDir: this.sortDir
     }).subscribe({
       next: (res) => this.stockReceivedList = res.items,
-      error: () => this.snackBar.open('Failed to load stock received', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to load stock received')
     });
   }
 
@@ -1457,6 +1314,12 @@ export class SanitaryPadsDashboardComponent implements OnInit {
       next: (res) => this.stockDeliveredList = res.items,
       error: () => {}
     });
+  }
+
+  clearReceivedFilters(): void {
+    this.filterQuarter = '';
+    this.filterVendor = '';
+    this.loadStockReceived();
   }
 
   sortReceived(col: string): void {
@@ -1639,15 +1502,21 @@ export class SanitaryPadsDashboardComponent implements OnInit {
     });
   }
 
-  deleteGrn(id: number): void {
-    if (!confirm('Delete this GRN record?')) return;
+  async deleteGrn(id: number): Promise<void> {
+    const grnNumber = this.stockReceivedList.find(r => r.id === id)?.grnNumber;
+    if (!(await this.confirmDialog.ask({
+      title: grnNumber ? `Delete GRN ${grnNumber}?` : 'Delete this GRN record?',
+      message: 'The stock received record is removed from the dashboard.',
+      confirmText: 'Delete GRN',
+      danger: true
+    }))) return;
     this.padsService.deleteStockReceived(id).subscribe({
       next: () => {
-        this.snackBar.open('GRN deleted', 'Close', { duration: 2000 });
+        this.toast.done('GRN deleted');
         this.loadDashboard();
         this.loadStockReceived();
       },
-      error: () => this.snackBar.open('Failed to delete', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to delete')
     });
   }
 }
@@ -1722,27 +1591,27 @@ export class SanitaryPadsDashboardComponent implements OnInit {
     </div>
   `,
   styles: [`
-    .grn-dialog { padding: 32px; }
-    .dialog-header { text-align: center; margin-bottom: 24px; }
+    .grn-dialog { padding: 24px; background: var(--color-surface); color: var(--color-text); }
+    .dialog-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
     .header-icon {
-      font-size: 40px; width: 40px; height: 40px;
-      background: linear-gradient(135deg, #e91e63, #9c27b0);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-size: 24px; width: 44px; height: 44px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
-    .dialog-header h2 { margin: 10px 0 0; font-size: 22px; font-weight: 800; color: #1a1a2e; }
+    .dialog-header h2 { margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
     .form-group { display: flex; flex-direction: column; gap: 5px; }
     .form-group.full-width { grid-column: 1 / -1; }
-    .form-group label { font-size: 11px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group label { font-size: var(--text-xs); font-weight: 700; color: var(--color-text-2); text-transform: uppercase; letter-spacing: 0.5px; }
     .form-input {
-      padding: 11px 16px; border: 1.5px solid #e5e7eb; border-radius: 12px;
-      font-size: 14px; outline: none; background: white; font-family: inherit;
+      padding: 10px 14px; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control);
+      font-size: var(--text-md); color: var(--color-text); outline: none; background: var(--color-surface); font-family: inherit;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .form-input:focus { border-color: #e91e63; box-shadow: 0 0 0 3px rgba(233,30,99,0.08); }
-    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 8px; border-top: 1px solid #f0f0f0; }
-    .dialog-actions button { border-radius: 12px !important; font-weight: 600 !important; }
+    .form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 12px; border-top: 1px solid var(--color-line); }
   `]
 })
 export class AddGrnDialog {

@@ -19,6 +19,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { ConfirmService } from '../../ui/confirm.service';
 import { Observable, map, startWith } from 'rxjs';
 
 interface TodoTask {
@@ -109,7 +110,7 @@ interface User {
             <span class="stat-label">Total Tasks</span>
           </div>
         </div>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -191,15 +192,15 @@ interface User {
                     </span>
                   </div>
                   <div class="task-actions">
-                    <button mat-icon-button *ngIf="task.status === 'Pending' && !task.isSelfAssigned" 
+                    <button aria-label="Accept Task" mat-icon-button *ngIf="task.status === 'Pending' && !task.isSelfAssigned" 
                             matTooltip="Accept Task" class="action-accept" (click)="respondToTask(task, true)">
                       <mat-icon>check_circle</mat-icon>
                     </button>
-                    <button mat-icon-button *ngIf="task.status === 'Pending' && !task.isSelfAssigned" 
+                    <button aria-label="Decline Task" mat-icon-button *ngIf="task.status === 'Pending' && !task.isSelfAssigned" 
                             matTooltip="Decline Task" class="action-decline" (click)="respondToTask(task, false)">
                       <mat-icon>cancel</mat-icon>
                     </button>
-                    <button mat-icon-button matTooltip="Delete Task" class="action-delete" (click)="deleteTask(task)">
+                    <button aria-label="Delete Task" mat-icon-button matTooltip="Delete Task" class="action-delete" (click)="deleteTask(task)">
                       <mat-icon>delete_outline</mat-icon>
                     </button>
                   </div>
@@ -258,7 +259,7 @@ interface User {
                     </span>
                   </div>
                   <div class="task-actions">
-                    <button mat-icon-button matTooltip="Delete Task" class="action-delete" (click)="deleteTask(task)">
+                    <button aria-label="Delete Task" mat-icon-button matTooltip="Delete Task" class="action-delete" (click)="deleteTask(task)">
                       <mat-icon>delete_outline</mat-icon>
                     </button>
                   </div>
@@ -356,7 +357,7 @@ interface User {
                 <div class="assignee-chip">
                   <mat-icon>person</mat-icon>
                   <span>{{ selectedAssignee.firstName }} {{ selectedAssignee.lastName }}</span>
-                  <button type="button" mat-icon-button (click)="removeAssignee()">
+                  <button aria-label="Close" type="button" mat-icon-button (click)="removeAssignee()">
                     <mat-icon>close</mat-icon>
                   </button>
                 </div>
@@ -437,14 +438,14 @@ interface User {
       max-height: 85vh;
       display: flex;
       flex-direction: column;
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      background: linear-gradient(135deg, var(--color-canvas) 0%, var(--color-line) 100%);
       border-radius: 16px;
       overflow: hidden;
     }
 
     /* Modern Gradient Header */
     .dialog-header {
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #60a5fa 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 50%, #60a5fa 100%);
       padding: 24px 32px;
       display: flex;
       align-items: center;
@@ -552,8 +553,8 @@ interface User {
       display: flex;
       gap: 8px;
       padding: 16px 24px;
-      background: white;
-      border-bottom: 1px solid #e2e8f0;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
     }
 
     .tab-btn {
@@ -562,22 +563,22 @@ interface User {
       gap: 8px;
       padding: 12px 20px;
       border: none;
-      background: #f1f5f9;
+      background: var(--color-surface-2);
       border-radius: 12px;
       cursor: pointer;
       transition: all 0.3s ease;
       font-size: 14px;
       font-weight: 500;
-      color: #64748b;
+      color: var(--color-text-3);
     }
 
     .tab-btn:hover {
-      background: #e2e8f0;
-      color: #475569;
+      background: var(--color-line);
+      color: var(--color-text-2);
     }
 
     .tab-btn.active {
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
     }
@@ -589,7 +590,7 @@ interface User {
     }
 
     .tab-badge {
-      background: #ef4444;
+      background: var(--color-danger);
       color: white;
       font-size: 11px;
       padding: 2px 8px;
@@ -602,7 +603,7 @@ interface User {
     }
 
     .tab-badge.notification {
-      background: #f59e0b;
+      background: var(--color-warn);
     }
 
     /* Tab Content */
@@ -633,23 +634,23 @@ interface User {
       align-items: center;
       gap: 6px;
       padding: 8px 16px;
-      border: 2px solid #e2e8f0;
-      background: white;
+      border: 2px solid var(--color-line);
+      background: var(--color-surface);
       border-radius: 24px;
       cursor: pointer;
       transition: all 0.2s ease;
       font-size: 13px;
       font-weight: 500;
-      color: #64748b;
+      color: var(--color-text-3);
     }
 
     .filter-chip:hover {
-      border-color: #2563eb;
-      color: #2563eb;
+      border-color: var(--color-primary);
+      color: var(--color-primary);
     }
 
     .filter-chip.active {
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       border-color: transparent;
       color: white;
     }
@@ -668,13 +669,13 @@ interface User {
     }
 
     .task-card {
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       overflow: hidden;
       display: flex;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
       transition: all 0.3s ease;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--color-line);
     }
 
     .task-card:hover {
@@ -691,20 +692,20 @@ interface User {
       flex-shrink: 0;
     }
 
-    .task-priority-indicator.priority-low { background: linear-gradient(180deg, #3b82f6, #60a5fa); }
-    .task-priority-indicator.priority-normal { background: linear-gradient(180deg, #10b981, #34d399); }
-    .task-priority-indicator.priority-high { background: linear-gradient(180deg, #f59e0b, #fbbf24); }
-    .task-priority-indicator.priority-urgent { background: linear-gradient(180deg, #ef4444, #f87171); }
+    .task-priority-indicator.priority-low { background: linear-gradient(180deg, var(--color-primary), #60a5fa); }
+    .task-priority-indicator.priority-normal { background: linear-gradient(180deg, var(--color-ok), #34d399); }
+    .task-priority-indicator.priority-high { background: linear-gradient(180deg, var(--color-warn), #fbbf24); }
+    .task-priority-indicator.priority-urgent { background: linear-gradient(180deg, var(--color-danger), #f87171); }
 
     .task-status-indicator {
       width: 5px;
       flex-shrink: 0;
     }
 
-    .task-status-indicator.status-pending { background: linear-gradient(180deg, #f59e0b, #fbbf24); }
-    .task-status-indicator.status-accepted { background: linear-gradient(180deg, #3b82f6, #60a5fa); }
-    .task-status-indicator.status-declined { background: linear-gradient(180deg, #ef4444, #f87171); }
-    .task-status-indicator.status-completed { background: linear-gradient(180deg, #10b981, #34d399); }
+    .task-status-indicator.status-pending { background: linear-gradient(180deg, var(--color-warn), #fbbf24); }
+    .task-status-indicator.status-accepted { background: linear-gradient(180deg, var(--color-primary), #60a5fa); }
+    .task-status-indicator.status-declined { background: linear-gradient(180deg, var(--color-danger), #f87171); }
+    .task-status-indicator.status-completed { background: linear-gradient(180deg, var(--color-ok), #34d399); }
 
     .task-content {
       flex: 1;
@@ -731,10 +732,10 @@ interface User {
       flex-shrink: 0;
     }
 
-    .status-icon.icon-pending { background: #fef3c7; color: #d97706; }
-    .status-icon.icon-accepted { background: #dbeafe; color: #2563eb; }
-    .status-icon.icon-declined { background: #fee2e2; color: #dc2626; }
-    .status-icon.icon-completed { background: #d1fae5; color: #059669; }
+    .status-icon.icon-pending { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-icon.icon-accepted { background: var(--color-primary-soft); color: var(--color-primary); }
+    .status-icon.icon-declined { background: var(--color-danger-soft); color: var(--color-danger); }
+    .status-icon.icon-completed { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .task-info {
       flex: 1;
@@ -744,18 +745,18 @@ interface User {
     .task-title {
       font-weight: 600;
       font-size: 15px;
-      color: #1e293b;
+      color: var(--color-text);
       margin-bottom: 4px;
     }
 
     .task-title.completed-text {
       text-decoration: line-through;
-      color: #94a3b8;
+      color: var(--color-text-3);
     }
 
     .task-description-preview {
       font-size: 13px;
-      color: #64748b;
+      color: var(--color-text-3);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -766,7 +767,7 @@ interface User {
       align-items: center;
       gap: 6px;
       font-size: 13px;
-      color: #64748b;
+      color: var(--color-text-3);
       margin-top: 4px;
     }
 
@@ -782,7 +783,7 @@ interface User {
       align-items: center;
       margin-top: 12px;
       padding-top: 12px;
-      border-top: 1px solid #f1f5f9;
+      border-top: 1px solid var(--color-surface-2);
     }
 
     .meta-left {
@@ -797,9 +798,9 @@ interface User {
       align-items: center;
       gap: 4px;
       font-size: 12px;
-      color: #64748b;
+      color: var(--color-text-3);
       padding: 4px 10px;
-      background: #f1f5f9;
+      background: var(--color-surface-2);
       border-radius: 6px;
     }
 
@@ -810,8 +811,8 @@ interface User {
     }
 
     .due-date.overdue {
-      background: #fee2e2;
-      color: #dc2626;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
     }
 
     .priority-badge, .status-badge {
@@ -823,15 +824,15 @@ interface User {
       letter-spacing: 0.3px;
     }
 
-    .priority-low { background: #dbeafe; color: #2563eb; }
-    .priority-normal { background: #d1fae5; color: #059669; }
-    .priority-high { background: #fef3c7; color: #d97706; }
-    .priority-urgent { background: #fee2e2; color: #dc2626; }
+    .priority-low { background: var(--color-primary-soft); color: var(--color-primary); }
+    .priority-normal { background: var(--color-ok-soft); color: var(--color-ok); }
+    .priority-high { background: var(--color-warn-soft); color: var(--color-warn); }
+    .priority-urgent { background: var(--color-danger-soft); color: var(--color-danger); }
 
-    .status-pending { background: #fef3c7; color: #d97706; }
-    .status-accepted { background: #dbeafe; color: #2563eb; }
-    .status-declined { background: #fee2e2; color: #dc2626; }
-    .status-completed { background: #d1fae5; color: #059669; }
+    .status-pending { background: var(--color-warn-soft); color: var(--color-warn); }
+    .status-accepted { background: var(--color-primary-soft); color: var(--color-primary); }
+    .status-declined { background: var(--color-danger-soft); color: var(--color-danger); }
+    .status-completed { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .task-actions {
       display: flex;
@@ -850,12 +851,12 @@ interface User {
       height: 18px;
     }
 
-    .action-accept { color: #10b981; }
-    .action-accept:hover { background: #d1fae5; }
-    .action-decline { color: #ef4444; }
-    .action-decline:hover { background: #fee2e2; }
-    .action-delete { color: #94a3b8; }
-    .action-delete:hover { background: #f1f5f9; color: #ef4444; }
+    .action-accept { color: var(--color-ok); }
+    .action-accept:hover { background: var(--color-ok-soft); }
+    .action-decline { color: var(--color-danger); }
+    .action-decline:hover { background: var(--color-danger-soft); }
+    .action-delete { color: var(--color-text-3); }
+    .action-delete:hover { background: var(--color-surface-2); color: var(--color-danger); }
 
     .task-footer {
       margin-top: 12px;
@@ -866,7 +867,7 @@ interface User {
       align-items: center;
       gap: 6px;
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--color-text-3);
     }
 
     .assigned-by mat-icon {
@@ -889,7 +890,7 @@ interface User {
       width: 80px;
       height: 80px;
       border-radius: 24px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -898,12 +899,12 @@ interface User {
     }
 
     .empty-icon.assigned {
-      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
     }
 
     .empty-icon.notifications {
-      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      background: linear-gradient(135deg, var(--color-warn) 0%, var(--color-warn) 100%);
       box-shadow: 0 10px 30px rgba(245, 158, 11, 0.3);
     }
 
@@ -918,13 +919,13 @@ interface User {
       margin: 0 0 8px 0;
       font-size: 18px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--color-text);
     }
 
     .empty-state p {
       margin: 0 0 24px 0;
       font-size: 14px;
-      color: #64748b;
+      color: var(--color-text-3);
     }
 
     /* Create Task Form */
@@ -935,7 +936,7 @@ interface User {
     .create-form-container {
       max-width: 600px;
       margin: 0 auto;
-      background: white;
+      background: var(--color-surface);
       border-radius: 20px;
       padding: 32px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
@@ -947,21 +948,21 @@ interface User {
       gap: 12px;
       margin-bottom: 24px;
       padding-bottom: 16px;
-      border-bottom: 2px solid #f1f5f9;
+      border-bottom: 2px solid var(--color-surface-2);
     }
 
     .form-header mat-icon {
       font-size: 28px;
       width: 28px;
       height: 28px;
-      color: #2563eb;
+      color: var(--color-primary);
     }
 
     .form-header h3 {
       margin: 0;
       font-size: 20px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--color-text);
     }
 
     .full-width {
@@ -977,10 +978,10 @@ interface User {
       flex: 1;
     }
 
-    .priority-option.low { color: #2563eb; }
-    .priority-option.normal { color: #059669; }
-    .priority-option.high { color: #d97706; }
-    .priority-option.urgent { color: #dc2626; }
+    .priority-option.low { color: var(--color-primary); }
+    .priority-option.normal { color: var(--color-ok); }
+    .priority-option.high { color: var(--color-warn); }
+    .priority-option.urgent { color: var(--color-danger); }
 
     .user-option {
       display: flex;
@@ -989,12 +990,12 @@ interface User {
     }
 
     .user-option mat-icon {
-      color: #64748b;
+      color: var(--color-text-3);
     }
 
     .user-email {
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--color-text-3);
       margin-left: auto;
     }
 
@@ -1007,7 +1008,7 @@ interface User {
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       border-radius: 24px;
       font-size: 14px;
@@ -1038,7 +1039,7 @@ interface User {
       gap: 12px;
       margin-top: 24px;
       padding-top: 24px;
-      border-top: 1px solid #f1f5f9;
+      border-top: 1px solid var(--color-surface-2);
     }
 
     .form-actions button {
@@ -1048,7 +1049,7 @@ interface User {
     }
 
     .create-btn {
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%) !important;
       box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
     }
 
@@ -1062,11 +1063,11 @@ interface User {
 
     .notifications-count {
       font-size: 14px;
-      color: #64748b;
+      color: var(--color-text-3);
     }
 
     .mark-read-btn {
-      color: #2563eb;
+      color: var(--color-primary);
     }
 
     .notifications-list {
@@ -1079,11 +1080,11 @@ interface User {
       display: flex;
       gap: 16px;
       padding: 16px 20px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       cursor: pointer;
       transition: all 0.3s ease;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--color-line);
       position: relative;
     }
 
@@ -1107,10 +1108,10 @@ interface User {
       flex-shrink: 0;
     }
 
-    .notification-icon.icon-assigned { background: #dbeafe; color: #2563eb; }
-    .notification-icon.icon-accepted { background: #d1fae5; color: #059669; }
-    .notification-icon.icon-declined { background: #fee2e2; color: #dc2626; }
-    .notification-icon.icon-completed { background: #d1fae5; color: #059669; }
+    .notification-icon.icon-assigned { background: var(--color-primary-soft); color: var(--color-primary); }
+    .notification-icon.icon-accepted { background: var(--color-ok-soft); color: var(--color-ok); }
+    .notification-icon.icon-declined { background: var(--color-danger-soft); color: var(--color-danger); }
+    .notification-icon.icon-completed { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .notification-content {
       flex: 1;
@@ -1118,7 +1119,7 @@ interface User {
 
     .notification-message {
       font-size: 14px;
-      color: #1e293b;
+      color: var(--color-text);
       font-weight: 500;
     }
 
@@ -1127,7 +1128,7 @@ interface User {
       align-items: center;
       gap: 4px;
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--color-text-3);
       margin-top: 6px;
     }
 
@@ -1144,7 +1145,7 @@ interface User {
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       box-shadow: 0 2px 8px rgba(37, 99, 235, 0.5);
     }
 
@@ -1158,17 +1159,17 @@ interface User {
     }
 
     .tab-content::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
+      background: var(--color-line-strong);
       border-radius: 3px;
     }
 
     .tab-content::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
+      background: var(--color-text-3);
     }
 
     /* Form field styling */
     ::ng-deep .mat-mdc-form-field-icon-prefix {
-      color: #94a3b8;
+      color: var(--color-text-3);
       margin-right: 8px;
     }
   `]
@@ -1202,7 +1203,8 @@ export class TodoDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: { userId: number },
     private fb: FormBuilder,
     private http: HttpClient,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private readonly confirmDialog: ConfirmService
   ) {
     this.currentUserId = data.userId;
     this.taskForm = this.fb.group({
@@ -1374,8 +1376,12 @@ export class TodoDialogComponent implements OnInit {
     });
   }
 
-  deleteTask(task: TodoTask): void {
-    if (!confirm('Are you sure you want to delete this task?')) return;
+  async deleteTask(task: TodoTask): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete task "${task.title}"?`,
+      confirmText: 'Delete task',
+      danger: true
+    }))) return;
 
     this.http.delete(`${environment.apiUrl}/todo/${task.id}`).subscribe({
       next: () => {

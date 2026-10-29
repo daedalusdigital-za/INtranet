@@ -153,50 +153,50 @@ interface LiveVehicle {
       position:fixed; inset:0; z-index:1200; background:#0b1220;
       padding:12px; margin:0; overflow:auto;
     }
-    .openmap-wrap.light.maximized { background:#f1f5f9; }
+    .openmap-wrap.light.maximized { background:var(--color-surface-2); }
 
     /* ---------- Light theme overrides ---------- */
-    .light .counter { background:#ffffff; border-color:#e2e8f0; }
-    .light .counter:hover { border-color:#cbd5e1; }
-    .light .counter.on { border-color:#2563eb; box-shadow:0 0 0 1px #2563eb inset; }
-    .light .counter.total .c-val { color:#0f172a; }
-    .light .counter .c-lbl { color:#64748b; }
+    .light .counter { background:var(--color-surface); border-color:var(--color-line); }
+    .light .counter:hover { border-color:var(--color-line-strong); }
+    .light .counter.on { border-color:var(--color-primary); box-shadow:0 0 0 1px var(--color-primary) inset; }
+    .light .counter.total .c-val { color:var(--color-text); }
+    .light .counter .c-lbl { color:var(--color-text-3); }
 
-    .light .veh-list { background:#ffffff; border-color:#e2e8f0; }
-    .light .veh-search { border-bottom-color:#e2e8f0; }
-    .light .veh-search mat-icon { color:#94a3b8; }
-    .light .veh-search input { color:#0f172a; }
-    .light .veh-filter-chips { border-bottom-color:#e2e8f0; }
-    .light .veh-filter-chips button { background:#f8fafc; border-color:#cbd5e1; color:#334155; }
-    .light .veh-item { border-bottom-color:#eef2f7; }
-    .light .veh-item:hover { background:#f1f5f9; }
-    .light .veh-item.sel { background:#e0edff; box-shadow:inset 3px 0 0 #2563eb; }
+    .light .veh-list { background:var(--color-surface); border-color:var(--color-line); }
+    .light .veh-search { border-bottom-color:var(--color-line); }
+    .light .veh-search mat-icon { color:var(--color-text-3); }
+    .light .veh-search input { color:var(--color-text); }
+    .light .veh-filter-chips { border-bottom-color:var(--color-line); }
+    .light .veh-filter-chips button { background:var(--color-canvas); border-color:var(--color-line-strong); color:var(--color-text-2); }
+    .light .veh-item { border-bottom-color:var(--color-line); }
+    .light .veh-item:hover { background:var(--color-surface-2); }
+    .light .veh-item.sel { background:#e0edff; box-shadow:inset 3px 0 0 var(--color-primary); }
     .light .veh-item.alerted { background:rgba(239,68,68,.07); }
-    .light .veh-reg { color:#0f172a; }
-    .light .veh-meta { color:#475569; }
-    .light .veh-zone { color:#64748b; }
-    .light .veh-empty { color:#94a3b8; }
+    .light .veh-reg { color:var(--color-text); }
+    .light .veh-meta { color:var(--color-text-2); }
+    .light .veh-zone { color:var(--color-text-3); }
+    .light .veh-empty { color:var(--color-text-3); }
 
-    .light .map-holder { border-color:#e2e8f0; }
+    .light .map-holder { border-color:var(--color-line); }
     .light .map-toolbar { background:rgba(255,255,255,.9); }
-    .light .map-legend { background:rgba(255,255,255,.9); color:#334155; }
+    .light .map-legend { background:rgba(255,255,255,.9); color:var(--color-text-2); }
 
     .counter-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:10px; }
     .counter {
-      background:#111a2e; border:1px solid #1e293b; border-radius:10px;
+      background:#111a2e; border:1px solid var(--color-text); border-radius:10px;
       padding:10px 12px; display:flex; flex-direction:column; align-items:center;
       cursor:pointer; transition:.15s; user-select:none;
     }
-    .counter:hover { border-color:#334155; }
+    .counter:hover { border-color:var(--color-text-2); }
     .counter.on { border-color:#60a5fa; box-shadow:0 0 0 1px #60a5fa inset; }
     .counter .c-val { font-size:1.5rem; font-weight:800; line-height:1; }
-    .counter .c-lbl { font-size:.72rem; color:#94a3b8; margin-top:4px; text-transform:uppercase; letter-spacing:.04em; }
-    .counter.total .c-val { color:#e2e8f0; }
+    .counter .c-lbl { font-size:.72rem; color:var(--color-text-3); margin-top:4px; text-transform:uppercase; letter-spacing:.04em; }
+    .counter.total .c-val { color:var(--color-line); }
     .counter.moving .c-val { color:#60a5fa; }
-    .counter.alert .c-val { color:#ef4444; }
-    .counter.parked .c-val { color:#22c55e; }
+    .counter.alert .c-val { color:var(--color-danger); }
+    .counter.parked .c-val { color:var(--color-ok); }
     .counter.idling .c-val { color:#fbbf24; }
-    .counter.offline .c-val { color:#94a3b8; }
+    .counter.offline .c-val { color:var(--color-text-3); }
     .counter.pulse { animation:pulse 1.4s infinite; }
     @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5);} 50%{box-shadow:0 0 0 6px rgba(239,68,68,0);} }
 
@@ -204,23 +204,23 @@ interface LiveVehicle {
     .maximized .live-layout { height:calc(100vh - 140px); }
 
     .veh-list {
-      background:#0f172a; border:1px solid #1e293b; border-radius:10px;
+      background:var(--color-text); border:1px solid var(--color-text); border-radius:10px;
       display:flex; flex-direction:column; overflow:hidden;
     }
-    .veh-search { display:flex; align-items:center; gap:6px; padding:8px 10px; border-bottom:1px solid #1e293b; }
-    .veh-search mat-icon { color:#64748b; }
-    .veh-search input { flex:1; background:transparent; border:none; outline:none; color:#e2e8f0; font-size:.9rem; }
-    .veh-filter-chips { display:flex; flex-wrap:wrap; gap:6px; padding:8px 10px; border-bottom:1px solid #1e293b; }
+    .veh-search { display:flex; align-items:center; gap:6px; padding:8px 10px; border-bottom:1px solid var(--color-text); }
+    .veh-search mat-icon { color:var(--color-text-3); }
+    .veh-search input { flex:1; background:transparent; border:none; outline:none; color:var(--color-line); font-size:.9rem; }
+    .veh-filter-chips { display:flex; flex-wrap:wrap; gap:6px; padding:8px 10px; border-bottom:1px solid var(--color-text); }
     .veh-filter-chips button {
-      border:1px solid #334155; background:#111a2e; color:#cbd5e1; border-radius:14px;
+      border:1px solid var(--color-text-2); background:#111a2e; color:var(--color-line-strong); border-radius:14px;
       padding:3px 10px; font-size:.75rem; cursor:pointer; transition:.15s;
     }
-    .veh-filter-chips button.on { background:#1d4ed8; border-color:#1d4ed8; color:#fff; }
-    .veh-filter-chips button.blu.on { background:#2563eb; border-color:#2563eb; }
-    .veh-filter-chips button.red.on { background:#dc2626; border-color:#dc2626; }
-    .veh-filter-chips button.grn.on { background:#16a34a; border-color:#16a34a; }
-    .veh-filter-chips button.amb.on { background:#d97706; border-color:#d97706; }
-    .veh-filter-chips button.off.on { background:#475569; border-color:#475569; }
+    .veh-filter-chips button.on { background:var(--color-primary-hover); border-color:var(--color-primary-hover); color:#fff; }
+    .veh-filter-chips button.blu.on { background:var(--color-primary); border-color:var(--color-primary); }
+    .veh-filter-chips button.red.on { background:var(--color-danger); border-color:var(--color-danger); }
+    .veh-filter-chips button.grn.on { background:var(--color-ok); border-color:var(--color-ok); }
+    .veh-filter-chips button.amb.on { background:var(--color-warn); border-color:var(--color-warn); }
+    .veh-filter-chips button.off.on { background:var(--color-text-2); border-color:var(--color-text-2); }
 
     .veh-list > :last-child { overflow:auto; }
     .veh-loading { display:flex; justify-content:center; padding:24px; }
@@ -232,16 +232,16 @@ interface LiveVehicle {
     .veh-item.sel { background:#17233f; box-shadow:inset 3px 0 0 #60a5fa; }
     .veh-item.alerted { background:rgba(239,68,68,.08); }
     .veh-dot { width:10px; height:10px; border-radius:50%; margin-top:4px; flex:0 0 auto; }
-    .dot-moving { background:#60a5fa; } .dot-parked { background:#22c55e; }
-    .dot-idling { background:#fbbf24; } .dot-offline { background:#6b7280; }
-    .dot-alert { background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.25); }
-    .veh-reg { font-weight:700; color:#e2e8f0; font-size:.9rem; display:flex; align-items:center; gap:4px; }
-    .warn-ic { color:#ef4444; font-size:16px; width:16px; height:16px; }
-    .veh-meta { font-size:.76rem; color:#94a3b8; margin-top:2px; }
-    .veh-zone { font-size:.72rem; color:#64748b; margin-top:2px; }
-    .veh-empty { padding:24px; text-align:center; color:#64748b; font-size:.85rem; }
+    .dot-moving { background:#60a5fa; } .dot-parked { background:var(--color-ok); }
+    .dot-idling { background:#fbbf24; } .dot-offline { background:var(--color-text-3); }
+    .dot-alert { background:var(--color-danger); box-shadow:0 0 0 3px rgba(239,68,68,.25); }
+    .veh-reg { font-weight:700; color:var(--color-line); font-size:.9rem; display:flex; align-items:center; gap:4px; }
+    .warn-ic { color:var(--color-danger); font-size:16px; width:16px; height:16px; }
+    .veh-meta { font-size:.76rem; color:var(--color-text-3); margin-top:2px; }
+    .veh-zone { font-size:.72rem; color:var(--color-text-3); margin-top:2px; }
+    .veh-empty { padding:24px; text-align:center; color:var(--color-text-3); font-size:.85rem; }
 
-    .map-holder { position:relative; border:1px solid #1e293b; border-radius:10px; overflow:hidden; }
+    .map-holder { position:relative; border:1px solid var(--color-text); border-radius:10px; overflow:hidden; }
     .openmap-map { width:100%; height:100%; }
     .map-toolbar {
       position:absolute; top:10px; left:10px; display:flex; gap:8px; flex-wrap:wrap;
@@ -251,12 +251,12 @@ interface LiveVehicle {
     .map-toolbar .max-btn { margin-left:auto; }
     .map-legend {
       position:absolute; bottom:10px; left:10px; display:flex; gap:12px; flex-wrap:wrap;
-      background:rgba(15,23,42,.85); padding:6px 10px; border-radius:8px; font-size:.72rem; color:#cbd5e1;
+      background:rgba(15,23,42,.85); padding:6px 10px; border-radius:8px; font-size:.72rem; color:var(--color-line-strong);
     }
     .map-legend i.lg { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
     .map-legend .lg-ic { font-size:14px; width:14px; height:14px; vertical-align:middle; margin-right:3px; color:#0ea5e9; }
-    .lg.blu{background:#60a5fa;} .lg.amb{background:#fbbf24;} .lg.grn{background:#22c55e;}
-    .lg.gry{background:#6b7280;} .lg.red{background:#ef4444;}
+    .lg.blu{background:#60a5fa;} .lg.amb{background:#fbbf24;} .lg.grn{background:var(--color-ok);}
+    .lg.gry{background:var(--color-text-3);} .lg.red{background:var(--color-danger);}
 
     @media (max-width:900px) {
       .counter-grid { grid-template-columns:repeat(3,1fr); }
@@ -650,9 +650,9 @@ export class OpenMapComponent implements OnInit, AfterViewInit, OnDestroy {
         marker.addListener('click', () => {
           info.setContent(`<div style="color:#111;min-width:220px;font-family:sans-serif">
             <div style="font-weight:700;font-size:.95rem;margin-bottom:4px;">${route.loadNumber}</div>
-            <div style="font-size:.8rem;color:#555;margin-bottom:6px;">${route.customerName || ''}</div>
+            <div style="font-size:.8rem;color:var(--color-text-2);margin-bottom:6px;">${route.customerName || ''}</div>
             <div><strong>${w.type?.toUpperCase() || 'STOP'}</strong>: ${w.label}</div>
-            <div style="font-size:.75rem;margin-top:6px;color:#666;">
+            <div style="font-size:.75rem;margin-top:6px;color:var(--color-text-2);">
               Vehicle: ${route.vehicleReg || 'Unassigned'}<br>
               Driver: ${route.driverName || 'Unassigned'}<br>
               Status: ${route.status}</div></div>`);
@@ -730,10 +730,10 @@ export class OpenMapComponent implements OnInit, AfterViewInit, OnDestroy {
         const parts = [c.address, c.city, c.province].filter((p: string) => !!p).join(', ');
         this.customerInfo.setContent(`<div style="color:#111;min-width:200px;font-family:sans-serif">
           <div style="font-weight:700;font-size:.95rem;margin-bottom:3px;">${c.name}</div>
-          ${c.customerCode ? `<div style="font-size:.72rem;color:#888;margin-bottom:4px;">${c.customerCode}</div>` : ''}
-          <div style="font-size:.8rem;color:#444;">${parts || 'No address'}</div>
-          ${c.contactPerson ? `<div style="font-size:.75rem;color:#666;margin-top:5px;">👤 ${c.contactPerson}</div>` : ''}
-          ${c.phone ? `<div style="font-size:.75rem;color:#666;">📞 ${c.phone}</div>` : ''}
+          ${c.customerCode ? `<div style="font-size:.72rem;color:var(--color-text-3);margin-bottom:4px;">${c.customerCode}</div>` : ''}
+          <div style="font-size:.8rem;color:var(--color-text-2);">${parts || 'No address'}</div>
+          ${c.contactPerson ? `<div style="font-size:.75rem;color:var(--color-text-2);margin-top:5px;">👤 ${c.contactPerson}</div>` : ''}
+          ${c.phone ? `<div style="font-size:.75rem;color:var(--color-text-2);">📞 ${c.phone}</div>` : ''}
         </div>`);
         this.customerInfo.open(this.map, marker);
       });

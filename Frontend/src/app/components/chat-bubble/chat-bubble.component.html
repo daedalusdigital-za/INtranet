@@ -1,6 +1,6 @@
 <div class="chat-bubble-wrapper" [class.minimized]="isMinimized" [class.attention]="attention" [style.right.px]="getBubblePosition()">
   <!-- Minimized Bubble -->
-  <div class="bubble-icon" *ngIf="isMinimized" (click)="toggleMinimize()">
+  <div class="bubble-icon" *ngIf="isMinimized" (click)="toggleMinimize()" role="button" [attr.aria-label]="'Open chat with ' + getChatTitle()">
     <div class="avatar" *ngIf="!getProfileImage()">
       <span class="initials">{{ getInitials() }}</span>
     </div>
@@ -22,20 +22,18 @@
         <span class="user-name">{{ getChatTitle() }}</span>
       </div>
       <div class="header-actions">
-        <button class="action-btn" (click)="toggleMinimize()" title="Minimize">
-          <i class="bi bi-dash-lg"></i>
+        <button class="action-btn" (click)="toggleMinimize()" title="Minimize" aria-label="Minimize">
+          <mat-icon>remove</mat-icon>
         </button>
-        <button class="action-btn close-btn" (click)="closeChat()" title="Close">
-          <i class="bi bi-x-lg"></i>
+        <button class="action-btn close-btn" (click)="closeChat()" title="Close" aria-label="Close">
+          <mat-icon>close</mat-icon>
         </button>
       </div>
     </div>
 
     <!-- Messages Container -->
     <div class="messages-container" #messagesContainer>
-      <div class="loading-spinner" *ngIf="isLoading">
-        <div class="spinner"></div>
-      </div>
+      <app-skeleton-rows *ngIf="isLoading" [rows]="4" [avatar]="false"></app-skeleton-rows>
       
       <div class="messages-list" *ngIf="!isLoading">
         <ng-container *ngFor="let message of messages; let i = index">
@@ -57,21 +55,21 @@
                   <div *ngIf="isImageFile(attachment.mimeType)" class="attachment-image-container" (click)="previewAttachment(attachment)">
                     <img [appSecureSrc]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" class="attachment-image" loading="lazy">
                     <div class="attachment-overlay">
-                      <button class="overlay-btn" (click)="downloadAttachment(attachment); $event.stopPropagation()" title="Download">
-                        <i class="bi bi-download"></i>
+                      <button class="overlay-btn" (click)="downloadAttachment(attachment); $event.stopPropagation()" title="Download" aria-label="Download">
+                        <mat-icon>download</mat-icon>
                       </button>
                     </div>
                   </div>
                   
                   <!-- File Preview (non-image) -->
                   <div *ngIf="!isImageFile(attachment.mimeType)" class="attachment-file" (click)="previewAttachment(attachment)">
-                    <i [class]="getFileIcon(attachment.mimeType)" class="file-icon"></i>
+                    <mat-icon class="file-icon" aria-hidden="true">{{ getFileIcon(attachment.mimeType) }}</mat-icon>
                     <div class="file-details">
                       <span class="file-name">{{ attachment.fileName }}</span>
                       <span class="file-size">{{ formatFileSize(attachment.fileSize) }}</span>
                     </div>
-                    <button class="download-btn" (click)="downloadAttachment(attachment); $event.stopPropagation()" title="Download">
-                      <i class="bi bi-download"></i>
+                    <button class="download-btn" (click)="downloadAttachment(attachment); $event.stopPropagation()" title="Download" aria-label="Download">
+                      <mat-icon>download</mat-icon>
                     </button>
                   </div>
                 </div>
@@ -82,10 +80,8 @@
           </div>
         </ng-container>
         
-        <div class="no-messages" *ngIf="messages.length === 0">
-          <i class="bi bi-chat-dots"></i>
-          <p>No messages yet. Start the conversation!</p>
-        </div>
+        <app-empty-state *ngIf="messages.length === 0" [compact]="true" icon="chat"
+          title="No messages yet" message="Type below to start the conversation."></app-empty-state>
 
         <div class="typing-indicator" *ngIf="typingUser">
           <span class="dot"></span><span class="dot"></span><span class="dot"></span>
@@ -95,20 +91,20 @@
     </div>
 
     <div class="upload-error" *ngIf="uploadError">
-      <i class="bi bi-exclamation-triangle-fill"></i>
+      <mat-icon aria-hidden="true">warning</mat-icon>
       <span>{{ uploadError }}</span>
-      <button class="remove-file" (click)="uploadError = null" title="Dismiss"><i class="bi bi-x"></i></button>
+      <button class="remove-file" (click)="uploadError = null" title="Dismiss" aria-label="Dismiss"><mat-icon>close</mat-icon></button>
     </div>
 
     <!-- Selected File Preview -->
     <div class="selected-file" *ngIf="selectedFile">
       <div class="file-info">
-        <i class="bi bi-file-earmark"></i>
+        <mat-icon aria-hidden="true">description</mat-icon>
         <span class="file-name">{{ selectedFile.name }}</span>
         <span class="file-size">{{ formatFileSize(selectedFile.size) }}</span>
       </div>
-      <button class="remove-file" (click)="removeSelectedFile()">
-        <i class="bi bi-x"></i>
+      <button class="remove-file" (click)="removeSelectedFile()" aria-label="Remove file">
+        <mat-icon>close</mat-icon>
       </button>
     </div>
 
@@ -128,11 +124,11 @@
 
     <!-- Input Area -->
     <div class="input-area">
-      <button class="action-btn emoji-btn" (click)="toggleEmojiPicker()" title="Add emoji" [class.active]="showEmojiPicker">
-        <i class="bi bi-emoji-smile"></i>
+      <button class="action-btn emoji-btn" (click)="toggleEmojiPicker()" title="Add emoji" aria-label="Add emoji" [class.active]="showEmojiPicker">
+        <mat-icon>mood</mat-icon>
       </button>
-      <button class="attach-btn" (click)="triggerFileInput()" title="Attach file">
-        <i class="bi bi-paperclip"></i>
+      <button class="attach-btn" (click)="triggerFileInput()" title="Attach file" aria-label="Attach file">
+        <mat-icon>attach_file</mat-icon>
       </button>
       <input type="file" #fileInput (change)="onFileSelected($event)" hidden>
       <input 
@@ -142,9 +138,10 @@
         (paste)="onPaste($event)"
         placeholder="Type a message..."
         class="message-input"
+        aria-label="Message"
         [disabled]="isSending">
-      <button class="send-btn" (click)="sendMessage()" [disabled]="isSending || (!newMessage.trim() && !selectedFile)">
-        <i class="bi bi-send-fill" *ngIf="!isSending"></i>
+      <button class="send-btn" (click)="sendMessage()" aria-label="Send" [disabled]="isSending || (!newMessage.trim() && !selectedFile)">
+        <mat-icon *ngIf="!isSending">send</mat-icon>
         <div class="send-spinner" *ngIf="isSending"></div>
       </button>
     </div>

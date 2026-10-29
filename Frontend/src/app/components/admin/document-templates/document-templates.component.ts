@@ -5,10 +5,11 @@ import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
 
 interface CatalogueItem {
   companyCode: string;
@@ -40,9 +41,9 @@ interface InvoiceRow {
     FormsModule,
     MatButtonModule,
     MatIconModule,
-    MatProgressSpinnerModule,
-    MatSnackBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    SkeletonRowsComponent,
+    EmptyStateComponent
   ],
   templateUrl: './document-templates.component.html',
   styleUrls: ['./document-templates.component.scss']
@@ -88,7 +89,7 @@ export class DocumentTemplatesComponent implements OnInit {
 
   constructor(
     private http: HttpClient,
-    private snack: MatSnackBar,
+    private toast: ToastService,
     private sanitizer: DomSanitizer
   ) {}
 
@@ -110,7 +111,7 @@ export class DocumentTemplatesComponent implements OnInit {
           this.select(this.companies[0].code, 'invoice');
         }
       },
-      error: () => { this.loading = false; this.snack.open('Failed to load templates', 'Close', { duration: 3000 }); }
+      error: () => { this.loading = false; this.toast.error('Failed to load templates'); }
     });
   }
 
@@ -158,7 +159,7 @@ export class DocumentTemplatesComponent implements OnInit {
   upload(): void {
     if (!this.selectedCompany || !this.selectedType) return;
     if (!this.rptFile && !this.sampleFile) {
-      this.snack.open('Pick a .rpt and/or a sample PDF first', 'Close', { duration: 3000 });
+      this.toast.warn('Pick a .rpt and/or a sample PDF first');
       return;
     }
     const fd = new FormData();
@@ -176,7 +177,7 @@ export class DocumentTemplatesComponent implements OnInit {
         const bits: string[] = [];
         if (res?.rptFileName) bits.push('RPT');
         if (res?.sampleFileName) bits.push('PDF sample');
-        this.snack.open(`Uploaded ${bits.join(' + ') || 'file'} successfully`, 'Close', { duration: 2500 });
+        this.toast.done(`Uploaded ${bits.join(' + ') || 'file'} successfully`);
         // Reload catalogue first, THEN refresh the sample/template so the
         // freshly-saved sample actually renders (avoids stale hasSample).
         this.http.get<any>(this.api).subscribe({
@@ -189,7 +190,7 @@ export class DocumentTemplatesComponent implements OnInit {
       },
       error: (err) => {
         this.uploading = false;
-        this.snack.open(err?.error?.error || 'Upload failed', 'Close', { duration: 5000 });
+        this.toast.error(err?.error?.error || 'Upload failed');
       }
     });
   }
@@ -207,10 +208,10 @@ export class DocumentTemplatesComponent implements OnInit {
     this.http.put(`${this.api}/${this.selectedCompany}/${this.selectedType}/html`, { html: this.templateHtml }).subscribe({
       next: () => {
         this.savingTemplate = false;
-        this.snack.open('Template saved', 'Close', { duration: 2000 });
+        this.toast.done('Template saved');
         this.refreshPreview();
       },
-      error: () => { this.savingTemplate = false; this.snack.open('Failed to save template', 'Close', { duration: 3000 }); }
+      error: () => { this.savingTemplate = false; this.toast.error('Failed to save template'); }
     });
   }
 
@@ -256,13 +257,13 @@ export class DocumentTemplatesComponent implements OnInit {
         const obj = URL.createObjectURL(blob);
         this.previewUrl = this.sanitizer.bypassSecurityTrustResourceUrl(obj);
       },
-      error: () => this.snack.open('Failed to load preview', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to load preview')
     });
   }
 
   generatePdf(): void {
     if (!this.selectedInvoice) {
-      this.snack.open('Pick an invoice to generate', 'Close', { duration: 3000 });
+      this.toast.warn('Pick an invoice to generate');
       return;
     }
     const url = `${this.api}/${this.selectedCompany}/${this.selectedType}/generate/${encodeURIComponent(this.selectedInvoice.transactionNumber)}`;
@@ -271,7 +272,7 @@ export class DocumentTemplatesComponent implements OnInit {
         const obj = URL.createObjectURL(blob);
         window.open(obj, '_blank');
       },
-      error: () => this.snack.open('Failed to generate PDF', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to generate PDF')
     });
   }
 
@@ -282,7 +283,7 @@ export class DocumentTemplatesComponent implements OnInit {
         const obj = URL.createObjectURL(blob);
         window.open(obj, '_blank');
       },
-      error: () => this.snack.open('Failed to open sample', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to open sample')
     });
   }
 
@@ -328,13 +329,13 @@ export class DocumentTemplatesComponent implements OnInit {
       next: () => {
         this.uploadingArt = null;
         input.value = '';
-        this.snack.open(`${role === 'logo' ? 'Logo' : 'Artwork'} uploaded`, 'Close', { duration: 2000 });
+        this.toast.done(`${role === 'logo' ? 'Logo' : 'Artwork'} uploaded`);
         this.loadArtwork();
         this.refreshPreview();
       },
       error: (err) => {
         this.uploadingArt = null;
-        this.snack.open(err?.error?.error || 'Artwork upload failed', 'Close', { duration: 4000 });
+        this.toast.error(err?.error?.error || 'Artwork upload failed');
       }
     });
   }
@@ -356,18 +357,18 @@ export class DocumentTemplatesComponent implements OnInit {
         a.click();
         URL.revokeObjectURL(obj);
       },
-      error: () => this.snack.open(`Failed to download ${role}`, 'Close', { duration: 3000 })
+      error: () => this.toast.error(`Failed to download ${role}`)
     });
   }
 
   removeArt(role: 'logo' | 'banner'): void {
     this.http.delete(`${this.api}/${this.selectedCompany}/${this.selectedType}/artwork/${role}`).subscribe({
       next: () => {
-        this.snack.open(`${role === 'logo' ? 'Logo' : 'Artwork'} removed`, 'Close', { duration: 2000 });
+        this.toast.done(`${role === 'logo' ? 'Logo' : 'Artwork'} removed`);
         this.loadArtwork();
         this.refreshPreview();
       },
-      error: () => this.snack.open('Failed to remove artwork', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to remove artwork')
     });
   }
 }

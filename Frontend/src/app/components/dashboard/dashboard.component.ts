@@ -176,7 +176,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
                               <div class="avatar-small">{{ member.charAt(0) }}</div>
                             }
                           </div>
-                          <button mat-icon-button (click)="openPasswordDialog(project)">
+                          <button aria-label="Forward" mat-icon-button (click)="openPasswordDialog(project)">
                             <mat-icon>arrow_forward</mat-icon>
                           </button>
                         </div>
@@ -246,13 +246,13 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       display: block;
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
+      background: var(--color-text);
       background-image:
         radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
         radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
         radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
         radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
+        linear-gradient(135deg, var(--color-text) 0%, #1e1b4b 55%, var(--color-text) 100%);
       background-attachment: fixed;
       overflow-x: hidden;
     }
@@ -347,7 +347,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .view-controls ::ng-deep .mat-button-toggle-group {
-      background: white;
+      background: var(--color-surface);
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
@@ -357,7 +357,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .view-controls ::ng-deep .mat-button-toggle-checked {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       color: white;
     }
 
@@ -370,7 +370,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .project-list-item {
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       padding: 20px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -401,7 +401,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin: 0;
       font-size: 1.1rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .list-item-details {
@@ -412,7 +412,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .list-item-main p {
       margin: 4px 0 0 0;
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -447,7 +447,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       display: flex;
       gap: 16px;
       font-size: 13px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .resource-inline div {
@@ -486,20 +486,20 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       align-items: center;
       margin-bottom: 16px;
       padding-bottom: 12px;
-      border-bottom: 2px solid #e0e0e0;
+      border-bottom: 2px solid var(--color-line);
     }
 
     .column-header h3 {
       margin: 0;
       font-size: 1rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       text-transform: capitalize;
     }
 
     .column-count {
-      background: #e0e0e0;
-      color: #666;
+      background: var(--color-line);
+      color: var(--color-text-2);
       font-size: 12px;
       font-weight: 600;
       padding: 4px 8px;
@@ -514,7 +514,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .kanban-card {
-      background: white;
+      background: var(--color-surface);
       border-radius: 8px;
       padding: 16px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -543,7 +543,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin: 0;
       font-size: 0.95rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       flex: 1;
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -551,7 +551,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .kanban-description {
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
       margin: 0 0 8px 0;
       display: -webkit-box;
       -webkit-line-clamp: 3;
@@ -595,7 +595,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       align-items: center;
       margin-top: 12px;
       padding-top: 12px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
 
     .team-avatars-small {
@@ -607,7 +607,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       display: flex;
       align-items: center;
@@ -639,7 +639,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       top: 30px;
       bottom: 30px;
       width: 3px;
-      background: linear-gradient(180deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary) 100%);
       border-radius: 2px;
     }
 
@@ -655,29 +655,29 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: white;
-      border: 4px solid #4169e1;
+      background: var(--color-surface);
+      border: 4px solid var(--color-primary);
       box-shadow: 0 0 0 4px rgba(65, 105, 225, 0.2);
       z-index: 2;
     }
 
     .timeline-marker.on-track {
-      border-color: #4CAF50;
+      border-color: var(--color-ok);
       box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.2);
     }
 
     .timeline-marker.at-risk {
-      border-color: #FF9800;
+      border-color: var(--color-warn);
       box-shadow: 0 0 0 4px rgba(255, 152, 0, 0.2);
     }
 
     .timeline-marker.delayed {
-      border-color: #F44336;
+      border-color: var(--color-danger);
       box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.2);
     }
 
     .timeline-card {
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       padding: 20px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -708,7 +708,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       margin: 0;
       font-size: 1.2rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       flex: 1;
     }
 
@@ -720,7 +720,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .timeline-header p {
       margin: 4px 0 0 0;
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
       word-wrap: break-word;
       overflow-wrap: break-word;
       display: -webkit-box;
@@ -736,7 +736,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       gap: 24px;
       margin: 12px 0;
       font-size: 13px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .date-item {
@@ -749,7 +749,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #4169e1;
+      color: var(--color-primary);
     }
 
     /* Responsive Design */
@@ -824,7 +824,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       right: 100px;
       width: 420px;
       max-height: 600px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
       z-index: 1000;
@@ -838,15 +838,15 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      border-bottom: 1px solid #e0e0e0;
-      background: #f5f5f5;
+      border-bottom: 1px solid var(--color-line);
+      background: var(--color-surface-2);
     }
 
     .notification-header h3 {
       margin: 0;
       font-size: 18px;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .notification-list {
@@ -861,7 +861,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #9e9e9e;
+      color: var(--color-text-3);
       text-align: center;
     }
 
@@ -877,17 +877,17 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       display: flex;
       gap: 12px;
       padding: 16px 20px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--color-line);
       transition: background-color 0.2s;
       cursor: pointer;
     }
 
     .notification-item:hover {
-      background-color: #fafafa;
+      background-color: var(--color-canvas);
     }
 
     .notification-item.unread {
-      background-color: #e3f2fd;
+      background-color: var(--color-primary-soft);
     }
 
     .notification-item.unread:hover {
@@ -912,26 +912,26 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .notification-title {
       font-weight: 600;
       font-size: 14px;
-      color: #333;
+      color: var(--color-text);
       margin: 0 0 4px 0;
     }
 
     .notification-message {
       font-size: 13px;
-      color: #666;
+      color: var(--color-text-2);
       margin: 0 0 8px 0;
       line-height: 1.4;
     }
 
     .notification-time {
       font-size: 12px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .notification-footer {
       padding: 12px 20px;
-      border-top: 1px solid #e0e0e0;
-      background: #f5f5f5;
+      border-top: 1px solid var(--color-line);
+      background: var(--color-surface-2);
       text-align: center;
     }
 
@@ -1368,7 +1368,7 @@ export class DashboardComponent implements OnInit {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #1e90ff;
+      color: var(--color-primary);
       margin: 0;
     }
 
@@ -1379,13 +1379,13 @@ export class DashboardComponent implements OnInit {
     }
 
     .info-text {
-      color: #333;
+      color: var(--color-text);
       font-size: 15px;
       margin: 0 0 8px 0;
     }
 
     .contact-text {
-      color: #666;
+      color: var(--color-text-2);
       font-size: 14px;
       font-style: italic;
       margin: 0;
@@ -1395,11 +1395,11 @@ export class DashboardComponent implements OnInit {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #d32f2f;
+      color: var(--color-danger);
       font-size: 14px;
       margin: 8px 0 0 0;
       padding: 8px;
-      background: #ffebee;
+      background: var(--color-danger-soft);
       border-radius: 4px;
     }
 

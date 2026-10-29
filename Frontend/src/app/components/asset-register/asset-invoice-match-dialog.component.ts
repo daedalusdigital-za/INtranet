@@ -7,10 +7,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { WellyActivityService } from '../../services/welly-activity.service';
+import { ToastService } from '../../ui/toast.service';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 export interface AssetMatchDialogData {
   locationId: number | null;
@@ -51,7 +52,7 @@ interface SupplierOption { supplierName: string; invoiceCount: number; }
 @Component({
   selector: 'app-asset-invoice-match-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatProgressBarModule, MatTooltipModule],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatProgressBarModule, MatTooltipModule, EmptyStateComponent],
   template: `
     <div class="match-dialog">
       <div class="match-header">
@@ -181,10 +182,8 @@ interface SupplierOption { supplierName: string; invoiceCount: number; }
               }
             </div>
           } @else {
-            <div class="no-matches">
-              <mat-icon>search_off</mat-icon>
-              <p>No confident matches found. Try scanning more invoices, or confirm more invoices in Books first.</p>
-            </div>
+            <app-empty-state icon="search_off" title="No confident matches found"
+                             message="Try scanning more invoices, or confirm more invoices in Books first."></app-empty-state>
           }
 
           @if (result()!.unmatchedAssets.length) {
@@ -215,73 +214,70 @@ interface SupplierOption { supplierName: string; invoiceCount: number; }
   styles: [`
     .match-dialog { display: flex; flex-direction: column; gap: 16px; padding: 20px; width: 720px; max-width: 95vw; max-height: 88vh; overflow-y: auto; }
     .match-header .mh-title { display: flex; gap: 12px; align-items: flex-start; }
-    .match-header mat-icon { color: #7c3aed; font-size: 28px; width: 28px; height: 28px; }
-    .match-header h2 { margin: 0 0 4px; font-size: 20px; }
-    .match-header p { margin: 0; color: #6b7280; font-size: 13px; }
+    .match-header mat-icon { color: var(--color-cat-purple); font-size: var(--text-3xl); width: 24px; height: 24px; }
+    .match-header h2 { margin: 0 0 4px; font-size: var(--text-2xl); color: var(--color-text); }
+    .match-header p { margin: 0; color: var(--color-text-3); font-size: var(--text-sm); }
 
     .match-setup { display: flex; flex-direction: column; gap: 16px; }
     .setup-row { display: flex; flex-direction: column; gap: 6px; }
-    .setup-row label { font-weight: 600; font-size: 13px; color: #374151; }
-    .setup-row select { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
-    .field-hint { font-size: 12px; color: #9ca3af; }
-    .scope-note { font-size: 14px; color: #4b5563; }
-    .pill { display: inline-block; background: #ede9fe; color: #6d28d9; border-radius: 999px; padding: 2px 10px; font-size: 12px; margin-left: 6px; }
-    .hint { display: flex; gap: 8px; align-items: center; background: #f9fafb; border: 1px solid #eef2f7; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #6b7280; margin: 0; }
-    .hint mat-icon { font-size: 18px; width: 18px; height: 18px; color: #9ca3af; }
+    .setup-row label { font-weight: 600; font-size: var(--text-sm); color: var(--color-text-2); }
+    .setup-row select { padding: 8px 10px; border: 1px solid var(--color-line-strong); border-radius: 8px; font-size: var(--text-md); background: var(--color-surface); color: var(--color-text); }
+    .field-hint { font-size: var(--text-xs); color: var(--color-text-3); }
+    .scope-note { font-size: var(--text-md); color: var(--color-text-2); }
+    .pill { display: inline-block; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); border-radius: 999px; padding: 2px 10px; font-size: var(--text-xs); margin-left: 6px; }
+    .hint { display: flex; gap: 8px; align-items: center; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 8px; padding: 10px 12px; font-size: var(--text-xs); color: var(--color-text-3); margin: 0; }
+    .hint mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-text-3); }
     .setup-actions, .results-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
     .results-actions .spacer { flex: 1; }
 
     .match-running { display: flex; flex-direction: column; gap: 12px; padding: 32px 20px; }
     .prog-head { display: flex; justify-content: space-between; align-items: baseline; }
-    .prog-title { font-weight: 600; color: #374151; font-size: 14px; }
-    .prog-pct { font-weight: 700; color: #7c3aed; font-size: 16px; }
+    .prog-title { font-weight: 600; color: var(--color-text-2); font-size: var(--text-md); }
+    .prog-pct { font-weight: 700; color: var(--color-cat-purple); font-size: var(--text-lg); }
     .match-running mat-progress-bar { border-radius: 6px; height: 8px; }
-    .prog-status { display: flex; gap: 8px; align-items: center; color: #4b5563; font-size: 13px; }
-    .prog-status mat-icon { color: #7c3aed; font-size: 18px; width: 18px; height: 18px; }
+    .prog-status { display: flex; gap: 8px; align-items: center; color: var(--color-text-2); font-size: var(--text-sm); }
+    .prog-status mat-icon { color: var(--color-cat-purple); font-size: var(--text-xl); width: 18px; height: 18px; }
     .prog-status .pulse { animation: pulse 1.2s ease-in-out infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-    .prog-sub { font-size: 12px; color: #9ca3af; }
+    .prog-sub { font-size: var(--text-xs); color: var(--color-text-3); }
     .cancel-run { align-self: flex-start; margin-top: 4px; }
 
     .result-stats { display: flex; gap: 10px; flex-wrap: wrap; }
-    .stat { flex: 1; min-width: 90px; background: #f9fafb; border: 1px solid #eef2f7; border-radius: 10px; padding: 10px; text-align: center; }
-    .stat .num { display: block; font-size: 22px; font-weight: 700; color: #111827; }
-    .stat .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #9ca3af; }
-    .stat.good .num { color: #059669; }
-    .stat.warn .num { color: #d97706; }
+    .stat { flex: 1; min-width: 90px; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 10px; text-align: center; }
+    .stat .num { display: block; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
+    .stat .lbl { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); }
+    .stat.good .num { color: var(--color-ok); }
+    .stat.warn .num { color: var(--color-warn); }
 
-    .select-bar { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; padding: 8px 4px; }
-    .sel-all { display: flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
-    .sel-count { font-size: 12px; color: #6b7280; }
+    .select-bar { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--color-line); border-bottom: 1px solid var(--color-line); padding: 8px 4px; }
+    .sel-all { display: flex; gap: 6px; align-items: center; font-size: var(--text-sm); cursor: pointer; }
+    .sel-count { font-size: var(--text-xs); color: var(--color-text-3); }
 
     .suggestions { display: flex; flex-direction: column; gap: 8px; }
-    .sugg { display: flex; gap: 10px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 10px; align-items: flex-start; }
-    .sugg.picked { border-color: #7c3aed; background: #faf5ff; }
+    .sugg { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--color-line); border-radius: 10px; align-items: flex-start; }
+    .sugg.picked { border-color: var(--color-cat-purple); background: var(--color-cat-purple-soft); }
     .sugg input[type=checkbox] { margin-top: 4px; }
-    .overwrite-opt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6b7280; cursor: pointer; }
+    .overwrite-opt { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--color-text-3); cursor: pointer; }
     .sugg-body { flex: 1; min-width: 0; }
     .sugg-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .sugg-line .asset { font-weight: 600; color: #111827; font-size: 14px; }
-    .sugg-line .arrow { font-size: 16px; width: 16px; height: 16px; color: #9ca3af; }
-    .sugg-line .inv { display: inline-flex; gap: 4px; align-items: center; color: #6d28d9; font-weight: 600; font-size: 13px; }
-    .sugg-line .inv mat-icon { font-size: 16px; width: 16px; height: 16px; }
-    .sugg-meta { font-size: 12px; color: #6b7280; margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-    .sugg-meta .matched-item { font-style: italic; color: #4b5563; }
-    .sugg-meta .book-value { color: #059669; font-weight: 600; }
-    .sugg-meta .dot { color: #d1d5db; }
-    .sugg-reason { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: 12px; }
-    .conf { font-weight: 700; border-radius: 6px; padding: 1px 7px; font-size: 11px; }
-    .conf.high { background: #d1fae5; color: #065f46; }
-    .conf.mid { background: #fef3c7; color: #92400e; }
-    .conf.low { background: #fee2e2; color: #991b1b; }
-    .reason { color: #6b7280; }
-    .assigned { color: #9ca3af; }
+    .sugg-line .asset { font-weight: 600; color: var(--color-text); font-size: var(--text-md); }
+    .sugg-line .arrow { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-text-3); }
+    .sugg-line .inv { display: inline-flex; gap: 4px; align-items: center; color: var(--color-cat-purple); font-weight: 600; font-size: var(--text-sm); }
+    .sugg-line .inv mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
+    .sugg-meta { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .sugg-meta .matched-item { font-style: italic; color: var(--color-text-2); }
+    .sugg-meta .book-value { color: var(--color-ok); font-weight: 600; }
+    .sugg-meta .dot { color: var(--color-line-strong); }
+    .sugg-reason { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: var(--text-xs); }
+    .conf { font-weight: 700; border-radius: 6px; padding: 1px 7px; font-size: var(--text-xs); }
+    .conf.high { background: var(--color-ok-soft); color: var(--color-ok); }
+    .conf.mid { background: var(--color-warn-soft); color: var(--color-warn); }
+    .conf.low { background: var(--color-danger-soft); color: var(--color-danger); }
+    .reason { color: var(--color-text-3); }
+    .assigned { color: var(--color-text-3); }
 
-    .no-matches { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 30px; text-align: center; color: #9ca3af; }
-    .no-matches mat-icon { font-size: 36px; width: 36px; height: 36px; }
-
-    .unmatched-list { font-size: 13px; color: #6b7280; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 12px; }
-    .unmatched-list summary { cursor: pointer; font-weight: 600; color: #92400e; }
+    .unmatched-list { font-size: var(--text-sm); color: var(--color-text-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn-soft); border-radius: 8px; padding: 8px 12px; }
+    .unmatched-list summary { cursor: pointer; font-weight: 600; color: var(--color-warn); }
     .unmatched-list ul { margin: 8px 0 0; padding-left: 18px; }
     .unmatched-list li { margin: 2px 0; }
   `]
@@ -310,7 +306,7 @@ export class AssetInvoiceMatchDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: AssetMatchDialogData,
     private dialogRef: MatDialogRef<AssetInvoiceMatchDialogComponent>,
     private http: HttpClient,
-    private snack: MatSnackBar,
+    private toast: ToastService,
     private wellyActivity: WellyActivityService
   ) {}
 
@@ -410,7 +406,7 @@ export class AssetInvoiceMatchDialogComponent implements OnInit {
               this.progressPercent.set(100);
               this.result.set(res);
             } else if (json.error) {
-              this.snack.open(json.error || 'Matching failed.', 'Close', { duration: 5000 });
+              this.toast.error(json.error || 'Matching failed.');
             }
           } catch {
             // ignore partial/invalid JSON
@@ -419,7 +415,7 @@ export class AssetInvoiceMatchDialogComponent implements OnInit {
       }
     } catch (err: any) {
       if (err?.name !== 'AbortError') {
-        this.snack.open('Matching failed. Please try again.', 'Close', { duration: 5000 });
+        this.toast.error('Matching failed. Please try again.');
       }
     } finally {
       this.stopTimer();
@@ -433,7 +429,7 @@ export class AssetInvoiceMatchDialogComponent implements OnInit {
     this.abortController?.abort();
     this.stopTimer();
     this.running.set(false);
-    this.snack.open('Matching cancelled.', 'Close', { duration: 2500 });
+    this.toast.info('Matching cancelled.');
   }
 
   private stopTimer() {
@@ -455,12 +451,12 @@ export class AssetInvoiceMatchDialogComponent implements OnInit {
           const valueMsg = res.valuesApplied > 0
             ? ` · R${(res.totalBookValueApplied || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} book value added`
             : '';
-          this.snack.open(`${res.applied || 0} asset(s) linked${valueMsg}`, 'Close', { duration: 5000 });
+          this.toast.done(`${res.applied || 0} asset(s) linked${valueMsg}`);
           this.dialogRef.close({ applied: res.applied || 0 });
         },
         error: (err) => {
           this.applying.set(false);
-          this.snack.open(err.error?.error || 'Failed to link matches.', 'Close', { duration: 5000 });
+          this.toast.error(err.error?.error || 'Failed to link matches.');
         }
       });
   }

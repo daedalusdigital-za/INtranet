@@ -23,9 +23,11 @@ import { MessageService, Conversation, Message, User, SendMessageRequest, Messag
 import { WellyActivityService } from '../../services/welly-activity.service';
 import { UserSearchPopupComponent } from '../user-search-popup/user-search-popup.component';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { environment } from '../../../environments/environment';
 import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 import { SecureSrcDirective } from '../../directives/secure-src.directive';
+import { ConfirmService } from '../../ui/confirm.service';
 
 @Component({
   selector: 'app-messages',
@@ -49,6 +51,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
     MatCheckboxModule,
     UserSearchPopupComponent,
     NavbarComponent,
+    PageHeaderComponent,
     PickerComponent,
     SecureSrcDirective
   ],
@@ -56,35 +59,14 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
     <app-navbar></app-navbar>
     
     <div class="messages-page">
-      <!-- Modern Header -->
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-icon">
-            <mat-icon>forum</mat-icon>
-          </div>
-          <div class="header-text">
-            <h1>Messages</h1>
-            <p>Stay connected with your team</p>
-          </div>
-        </div>
-        <div class="header-stats">
-          <div class="stat-card">
-            <span class="stat-value">{{ conversations.length }}</span>
-            <span class="stat-label">Conversations</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value">{{ getTotalUnread() }}</span>
-            <span class="stat-label">Unread</span>
-          </div>
-        </div>
-      </div>
+      <app-page-header [crumbs]="['Workspace', 'Messages']" title="Messages"></app-page-header>
 
       <div class="messages-container">
         <!-- Sidebar - Conversations List -->
         <div class="conversations-sidebar">
           <div class="sidebar-header">
             <h2>Conversations</h2>
-            <button mat-mini-fab class="new-chat-btn" (click)="showNewConversation = true" matTooltip="New Message">
+            <button aria-label="New Message" mat-mini-fab class="new-chat-btn" (click)="showNewConversation = true" matTooltip="New Message">
               <mat-icon>edit</mat-icon>
             </button>
           </div>
@@ -189,13 +171,13 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
                 </div>
               </div>
               <div class="chat-actions">
-                <button mat-icon-button matTooltip="Voice Call" class="action-btn">
+                <button aria-label="Voice Call" mat-icon-button matTooltip="Voice Call" class="action-btn">
                   <mat-icon>call</mat-icon>
                 </button>
-                <button mat-icon-button matTooltip="Video Call" class="action-btn">
+                <button aria-label="Video Call" mat-icon-button matTooltip="Video Call" class="action-btn">
                   <mat-icon>videocam</mat-icon>
                 </button>
-                <button mat-icon-button [matMenuTriggerFor]="chatMenu" class="action-btn">
+                <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="chatMenu" class="action-btn">
                   <mat-icon>more_vert</mat-icon>
                 </button>
                 <mat-menu #chatMenu="matMenu">
@@ -239,7 +221,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
                         <div *ngIf="isImageFile(attachment.mimeType)" class="attachment-image-container">
                           <img [appSecureSrc]="getAttachmentUrl(attachment)" [alt]="attachment.fileName" (click)="previewAttachment(attachment)" class="attachment-image" loading="lazy">
                           <div class="attachment-overlay">
-                            <button mat-mini-fab (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download">
+                            <button aria-label="Download" mat-mini-fab (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download">
                               <mat-icon>download</mat-icon>
                             </button>
                           </div>
@@ -252,7 +234,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
                             <span class="file-name">{{ attachment.fileName }}</span>
                             <span class="file-size">{{ formatFileSize(attachment.fileSize) }}</span>
                           </div>
-                          <button mat-mini-fab (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download" class="download-btn">
+                          <button aria-label="Download" mat-mini-fab (click)="downloadAttachment(attachment); $event.stopPropagation()" matTooltip="Download" class="download-btn">
                             <mat-icon>download</mat-icon>
                           </button>
                         </div>
@@ -266,7 +248,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
                     </div>
                   </div>
                   
-                  <button mat-icon-button class="message-menu-btn" [matMenuTriggerFor]="messageMenu" *ngIf="!message.isDeleted">
+                  <button aria-label="More actions" mat-icon-button class="message-menu-btn" [matMenuTriggerFor]="messageMenu" *ngIf="!message.isDeleted">
                     <mat-icon>more_horiz</mat-icon>
                   </button>
                   <mat-menu #messageMenu="matMenu">
@@ -299,7 +281,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
                   <span class="reply-message">{{ replyingTo.content }}</span>
                 </div>
               </div>
-              <button mat-icon-button (click)="replyingTo = null">
+              <button aria-label="Close" mat-icon-button (click)="replyingTo = null">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -310,7 +292,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
                 <mat-icon>{{ getFileIconByName(file.name) }}</mat-icon>
                 <span class="file-name">{{ file.name }}</span>
                 <span class="file-size">{{ formatFileSize(file.size) }}</span>
-                <button mat-icon-button (click)="removePendingAttachment(i)">
+                <button aria-label="Close" mat-icon-button (click)="removePendingAttachment(i)">
                   <mat-icon>close</mat-icon>
                 </button>
               </div>
@@ -320,13 +302,13 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
             <div class="message-input-area">
               <input type="file" #fileInput hidden multiple (change)="onFilesSelected($event)" 
                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv">
-              <button mat-icon-button class="input-action" (click)="fileInput.click()" matTooltip="Attach file">
+              <button aria-label="Attach file" mat-icon-button class="input-action" (click)="fileInput.click()" matTooltip="Attach file">
                 <mat-icon>attach_file</mat-icon>
               </button>
-              <button mat-icon-button class="input-action" (click)="toggleEmojiPicker()" matTooltip="Add emoji" [class.active]="showEmojiPicker">
+              <button aria-label="Add emoji" mat-icon-button class="input-action" (click)="toggleEmojiPicker()" matTooltip="Add emoji" [class.active]="showEmojiPicker">
                 <mat-icon>sentiment_satisfied_alt</mat-icon>
               </button>
-              <button mat-icon-button class="input-action welly-msg-btn" [matMenuTriggerFor]="wellyMsgMenu" matTooltip="Ask Welly AI">
+              <button aria-label="Ask Welly AI" mat-icon-button class="input-action welly-msg-btn" [matMenuTriggerFor]="wellyMsgMenu" matTooltip="Ask Welly AI">
                 <mat-icon class="welly-sparkle-icon">auto_awesome</mat-icon>
               </button>
               <mat-menu #wellyMsgMenu="matMenu">
@@ -350,7 +332,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
                        [(ngModel)]="newMessage"
                        (keyup.enter)="sendMessage()">
               </div>
-              <button mat-fab class="send-btn" (click)="sendMessage()" [disabled]="!newMessage.trim() && pendingAttachments.length === 0">
+              <button aria-label="Send" mat-fab class="send-btn" (click)="sendMessage()" [disabled]="!newMessage.trim() && pendingAttachments.length === 0">
                 <mat-icon>send</mat-icon>
               </button>
             </div>
@@ -385,7 +367,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
             <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
             <h3>Welly Message Assistant</h3>
           </div>
-          <button mat-icon-button (click)="showWellyPanel = false">
+          <button aria-label="Close" mat-icon-button (click)="showWellyPanel = false">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -435,10 +417,10 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         <div class="preview-header">
           <h3>{{ previewingAttachment.fileName }}</h3>
           <div class="preview-actions">
-            <button mat-icon-button (click)="downloadAttachment(previewingAttachment)" matTooltip="Download">
+            <button aria-label="Download" mat-icon-button (click)="downloadAttachment(previewingAttachment)" matTooltip="Download">
               <mat-icon>download</mat-icon>
             </button>
-            <button mat-icon-button (click)="closePreview()" matTooltip="Close">
+            <button aria-label="Close" mat-icon-button (click)="closePreview()" matTooltip="Close">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -466,119 +448,35 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
     </div>
   `,
   styles: [`
-    /* Main Page Layout */
+    /* Main Page Layout: fills the window below the top bar. The header takes its natural
+       height and the chat container takes the rest, so there is no page scrollbar. */
     .messages-page {
-      min-height: calc(100vh - 64px);
-      background: linear-gradient(135deg, #e8f4fc 0%, #d1e8f5 50%, #c5dff0 100%);
-    }
-
-    /* Modern Gradient Header */
-    .page-header {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 50%, #1a5fb4 100%);
-      padding: 24px 32px;
+      box-sizing: border-box;
+      height: calc(100vh - var(--shell-topbar-height));
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .page-header::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-      opacity: 0.5;
-    }
-
-    .header-content {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      z-index: 1;
-    }
-
-    .header-icon {
-      width: 56px;
-      height: 56px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .header-icon mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-      color: white;
-    }
-
-    .header-text h1 {
-      margin: 0;
-      color: white;
-      font-size: 24px;
-      font-weight: 600;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .header-text p {
-      margin: 4px 0 0 0;
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 14px;
-    }
-
-    .header-stats {
-      display: flex;
-      gap: 16px;
-      z-index: 1;
-    }
-
-    .stat-card {
-      text-align: center;
-      padding: 12px 20px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      min-width: 100px;
-    }
-
-    .stat-value {
-      display: block;
-      font-size: 24px;
-      font-weight: 700;
-      color: white;
-    }
-
-    .stat-label {
-      display: block;
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.85);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      flex-direction: column;
+      gap: var(--space-4);
+      padding: var(--space-5);
+      background: var(--color-canvas);
     }
 
     /* Messages Container */
     .messages-container {
+      /* The phone layout lays the conversation list over this panel (position: absolute). */
+      position: relative;
       display: flex;
-      height: calc(100vh - 64px - 104px);
-      margin: 20px;
-      border-radius: 20px;
+      flex: 1;
+      min-height: 320px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
       overflow: hidden;
-      box-shadow: 0 10px 40px rgba(30, 144, 255, 0.15);
+      box-shadow: var(--shadow-sm);
     }
 
     /* Sidebar */
     .conversations-sidebar {
       width: 360px;
-      background: white;
+      background: var(--color-surface);
       display: flex;
       flex-direction: column;
       border-right: 1px solid #e8f4fc;
@@ -601,7 +499,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
     }
 
     .new-chat-btn {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       color: white;
       box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
     }
@@ -614,13 +512,13 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       background: #f8fbff;
 
       .search-icon {
-        color: #94a3b8;
+        color: var(--color-text-3);
       }
 
       input {
         flex: 1;
         border: none;
-        background: white;
+        background: var(--color-surface);
         padding: 12px 16px;
         border-radius: 12px;
         font-size: 14px;
@@ -629,7 +527,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
         &:focus {
           outline: none;
-          border-color: #1e90ff;
+          border-color: var(--color-primary);
           box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.1);
         }
       }
@@ -645,7 +543,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       align-items: center;
       padding: 14px 20px;
       cursor: pointer;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--color-surface-2);
       transition: all 0.2s ease;
 
       &:hover {
@@ -654,7 +552,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
       &.active {
         background: linear-gradient(90deg, rgba(30, 144, 255, 0.1) 0%, rgba(30, 144, 255, 0.05) 100%);
-        border-left: 4px solid #1e90ff;
+        border-left: 4px solid var(--color-primary);
       }
 
       &.unread {
@@ -670,7 +568,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         width: 48px;
         height: 48px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -697,9 +595,9 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
           right: 2px;
           width: 12px;
           height: 12px;
-          background: #22c55e;
+          background: var(--color-ok);
           border-radius: 50%;
-          border: 2px solid white;
+          border: 2px solid var(--color-surface);
         }
       }
 
@@ -715,7 +613,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
           .name {
             font-weight: 500;
-            color: #1e293b;
+            color: var(--color-text);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -723,14 +621,14 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
           .time {
             font-size: 11px;
-            color: #94a3b8;
+            color: var(--color-text-3);
             white-space: nowrap;
           }
         }
 
         .last-message {
           font-size: 13px;
-          color: #64748b;
+          color: var(--color-text-3);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -743,7 +641,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         gap: 8px;
 
         .unread-badge {
-          background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
           color: white;
           font-size: 11px;
           padding: 3px 8px;
@@ -764,11 +662,11 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       background: #f8fbff;
 
       .select-btn {
-        color: #64748b;
+        color: var(--color-text-3);
       }
 
       .delete-btn {
-        color: #ef4444;
+        color: var(--color-danger);
       }
     }
 
@@ -778,13 +676,13 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #64748b;
+      color: var(--color-text-3);
 
       .empty-icon {
         width: 80px;
         height: 80px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #e8f4fc 0%, #d1e8f5 100%);
+        background: linear-gradient(135deg, var(--color-primary-soft) 0%, #d1e8f5 100%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -794,7 +692,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
           font-size: 36px;
           width: 36px;
           height: 36px;
-          color: #1e90ff;
+          color: var(--color-primary);
         }
       }
 
@@ -804,7 +702,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       }
 
       .start-chat-btn {
-        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
         color: white;
         border-radius: 12px;
         padding: 0 24px;
@@ -823,7 +721,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       flex: 1;
       display: flex;
       flex-direction: column;
-      background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+      background: linear-gradient(180deg, #f8fbff 0%, var(--color-surface) 100%);
     }
 
     .no-conversation-selected {
@@ -832,14 +730,14 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #64748b;
+      color: var(--color-text-3);
       padding: 40px;
 
       .welcome-illustration {
         width: 120px;
         height: 120px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #e8f4fc 0%, #d1e8f5 100%);
+        background: linear-gradient(135deg, var(--color-primary-soft) 0%, #d1e8f5 100%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -849,14 +747,14 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
           font-size: 56px;
           width: 56px;
           height: 56px;
-          color: #1e90ff;
+          color: var(--color-primary);
         }
       }
 
       h3 {
         margin: 0 0 8px;
         font-weight: 600;
-        color: #1e293b;
+        color: var(--color-text);
         font-size: 20px;
       }
 
@@ -866,7 +764,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       }
 
       .primary-btn {
-        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
         color: white;
         border-radius: 12px;
         padding: 0 28px;
@@ -888,7 +786,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: white;
+      background: var(--color-surface);
       border-bottom: 1px solid #e8f4fc;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
 
@@ -900,7 +798,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
           width: 48px;
           height: 48px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -925,9 +823,9 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
             right: 2px;
             width: 12px;
             height: 12px;
-            background: #22c55e;
+            background: var(--color-ok);
             border-radius: 50%;
-            border: 2px solid white;
+            border: 2px solid var(--color-surface);
           }
         }
 
@@ -936,12 +834,12 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
             margin: 0;
             font-size: 16px;
             font-weight: 600;
-            color: #1e293b;
+            color: var(--color-text);
           }
 
           .participants {
             font-size: 13px;
-            color: #64748b;
+            color: var(--color-text-3);
           }
         }
       }
@@ -951,11 +849,11 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         gap: 4px;
 
         .action-btn {
-          color: #64748b;
+          color: var(--color-text-3);
           transition: all 0.2s ease;
 
           &:hover {
-            color: #1e90ff;
+            color: var(--color-primary);
             background: rgba(30, 144, 255, 0.1);
           }
         }
@@ -970,7 +868,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       display: flex;
       flex-direction: column;
       gap: 16px;
-      background: linear-gradient(180deg, #f8fbff 0%, #ffffff 50%, #f8fbff 100%);
+      background: linear-gradient(180deg, #f8fbff 0%, var(--color-surface) 50%, #f8fbff 100%);
     }
 
     .loading-messages {
@@ -990,7 +888,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         flex-direction: row-reverse;
 
         .message-bubble {
-          background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
           color: white;
           border-radius: 20px 20px 6px 20px;
           box-shadow: 0 4px 15px rgba(30, 144, 255, 0.25);
@@ -1009,8 +907,8 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         align-self: flex-start;
 
         .message-bubble {
-          background: white;
-          color: #1e293b;
+          background: var(--color-surface);
+          color: var(--color-text);
           border-radius: 20px 20px 20px 6px;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
           border: 1px solid #e8f4fc;
@@ -1019,8 +917,8 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
       &.deleted {
         .message-bubble {
-          background: #f1f5f9 !important;
-          color: #94a3b8 !important;
+          background: var(--color-surface-2) !important;
+          color: var(--color-text-3) !important;
           font-style: italic;
           box-shadow: none !important;
         }
@@ -1030,7 +928,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         width: 34px;
         height: 34px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1059,7 +957,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         .message-sender {
           font-size: 12px;
           font-weight: 600;
-          color: #1e90ff;
+          color: var(--color-primary);
           margin-bottom: 4px;
         }
 
@@ -1080,7 +978,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
             gap: 4px;
             margin-top: 6px;
             font-size: 11px;
-            color: #94a3b8;
+            color: var(--color-text-3);
 
             .edited-icon, .read-icon {
               font-size: 14px;
@@ -1089,7 +987,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
             }
 
             .read-icon {
-              color: #22c55e;
+              color: var(--color-ok);
             }
           }
         }
@@ -1097,7 +995,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         .message-menu-btn {
           opacity: 0;
           transition: opacity 0.2s;
-          color: #94a3b8;
+          color: var(--color-text-3);
         }
       }
 
@@ -1112,14 +1010,14 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       align-items: center;
       justify-content: center;
       flex: 1;
-      color: #64748b;
+      color: var(--color-text-3);
       padding: 40px;
 
       .no-messages-icon {
         width: 80px;
         height: 80px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #e8f4fc 0%, #d1e8f5 100%);
+        background: linear-gradient(135deg, var(--color-primary-soft) 0%, #d1e8f5 100%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1129,7 +1027,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
           font-size: 36px;
           width: 36px;
           height: 36px;
-          color: #1e90ff;
+          color: var(--color-primary);
         }
       }
 
@@ -1146,7 +1044,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       justify-content: space-between;
       padding: 12px 20px;
       background: linear-gradient(90deg, rgba(30, 144, 255, 0.1) 0%, rgba(30, 144, 255, 0.05) 100%);
-      border-left: 4px solid #1e90ff;
+      border-left: 4px solid var(--color-primary);
       margin: 0 20px;
       border-radius: 0 8px 8px 0;
 
@@ -1156,7 +1054,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         gap: 12px;
 
         mat-icon {
-          color: #1e90ff;
+          color: var(--color-primary);
         }
 
         .reply-text {
@@ -1166,12 +1064,12 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
           .reply-sender {
             font-size: 12px;
             font-weight: 600;
-            color: #1e90ff;
+            color: var(--color-primary);
           }
 
           .reply-message {
             font-size: 13px;
-            color: #64748b;
+            color: var(--color-text-3);
             max-width: 300px;
             white-space: nowrap;
             overflow: hidden;
@@ -1187,16 +1085,16 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       align-items: center;
       gap: 12px;
       padding: 16px 24px;
-      background: white;
+      background: var(--color-surface);
       border-top: 1px solid #e8f4fc;
       position: relative;
 
       .input-action {
-        color: #64748b;
+        color: var(--color-text-3);
         transition: all 0.2s ease;
 
         &:hover, &.active {
-          color: #1e90ff;
+          color: var(--color-primary);
           background: rgba(30, 144, 255, 0.1);
         }
       }
@@ -1215,8 +1113,8 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
           &:focus {
             outline: none;
-            border-color: #1e90ff;
-            background: white;
+            border-color: var(--color-primary);
+            background: var(--color-surface);
             box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.1);
           }
         }
@@ -1225,11 +1123,11 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       .send-btn {
         width: 48px;
         height: 48px;
-        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
         box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
 
         &:disabled {
-          background: #e2e8f0;
+          background: var(--color-line);
           box-shadow: none;
         }
       }
@@ -1244,7 +1142,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
       border-radius: 12px;
       overflow: hidden;
-      background: white;
+      background: var(--color-surface);
     }
 
     /* Attachment Styles */
@@ -1282,7 +1180,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         transition: opacity 0.2s;
 
         button {
-          background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
           width: 36px;
           height: 36px;
@@ -1313,7 +1211,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         font-size: 28px;
         width: 28px;
         height: 28px;
-        color: #1e90ff;
+        color: var(--color-primary);
       }
 
       .file-info {
@@ -1332,14 +1230,14 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
         .file-size {
           font-size: 11px;
-          color: #64748b;
+          color: var(--color-text-3);
         }
       }
 
       .download-btn {
         width: 36px;
         height: 36px;
-        background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
       }
     }
 
@@ -1371,7 +1269,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 20px;
       border: 1px solid #e8f4fc;
 
@@ -1379,7 +1277,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         font-size: 18px;
         width: 18px;
         height: 18px;
-        color: #1e90ff;
+        color: var(--color-primary);
       }
 
       .file-name {
@@ -1392,7 +1290,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
       .file-size {
         font-size: 11px;
-        color: #64748b;
+        color: var(--color-text-3);
       }
     }
 
@@ -1411,7 +1309,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
     }
 
     .preview-container {
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       max-width: 90vw;
       max-height: 90vh;
@@ -1425,7 +1323,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
 
       h3 {
         margin: 0;
@@ -1454,7 +1352,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #1e293b;
+      background: var(--color-text);
       min-width: 400px;
       min-height: 300px;
 
@@ -1467,7 +1365,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       iframe {
         width: 80vw;
         height: 80vh;
-        background: white;
+        background: var(--color-surface);
       }
 
       .no-preview {
@@ -1480,7 +1378,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
           width: 72px;
           height: 72px;
           margin-bottom: 16px;
-          color: #64748b;
+          color: var(--color-text-3);
         }
 
         h4 {
@@ -1490,7 +1388,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
         p {
           margin: 0 0 8px;
-          color: #94a3b8;
+          color: var(--color-text-3);
         }
 
         .file-size {
@@ -1513,13 +1411,13 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
     .conversations-list::-webkit-scrollbar-thumb,
     .messages-area::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
+      background: var(--color-line-strong);
       border-radius: 3px;
     }
 
     .conversations-list::-webkit-scrollbar-thumb:hover,
     .messages-area::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
+      background: var(--color-text-3);
     }
 
     @media (max-width: 768px) {
@@ -1532,15 +1430,15 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
         height: 100%;
       }
 
-      .messages-container {
-        margin: 10px;
-        height: calc(100vh - 64px - 104px - 20px);
+      .messages-page {
+        padding: var(--space-3);
+        gap: var(--space-3);
       }
     }
 
     /* Welly Message Assistant Styles */
     .welly-msg-btn .welly-sparkle-icon {
-      background: linear-gradient(135deg, #2563eb, #1e40af);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -1564,7 +1462,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
     }
 
     .welly-panel {
-      background: white;
+      background: var(--color-surface);
       border-radius: 16px;
       width: 520px;
       max-width: 90vw;
@@ -1580,7 +1478,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
       align-items: center;
       justify-content: space-between;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
     }
 
@@ -1619,13 +1517,13 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
     }
 
     .welly-loading p {
-      color: #666;
+      color: var(--color-text-2);
       font-size: 14px;
     }
 
     .welly-result-text {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
       border-radius: 10px;
       padding: 16px;
       font-size: 14px;
@@ -1649,13 +1547,13 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
     .welly-draft-form p, .welly-translate-form p {
       margin: 0;
-      color: #555;
+      color: var(--color-text-2);
       font-size: 14px;
     }
 
     .welly-draft-form textarea {
       width: 100%;
-      border: 1px solid #ddd;
+      border: 1px solid var(--color-line);
       border-radius: 8px;
       padding: 12px;
       font-size: 14px;
@@ -1665,7 +1563,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
     }
 
     .welly-draft-form textarea:focus {
-      border-color: #2563eb;
+      border-color: var(--color-primary);
     }
 
     .welly-draft-form-actions {
@@ -1719,7 +1617,8 @@ export class MessagesComponent implements OnInit, OnDestroy {
     private router: Router,
     private sanitizer: DomSanitizer,
     private http: HttpClient,
-    private wellyActivity: WellyActivityService
+    private wellyActivity: WellyActivityService,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -2005,8 +1904,13 @@ export class MessagesComponent implements OnInit, OnDestroy {
     this.replyingTo = message;
   }
 
-  deleteMessage(message: Message): void {
-    if (!confirm('Are you sure you want to delete this message?')) return;
+  async deleteMessage(message: Message): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: 'Delete this message?',
+      message: 'It will show as "This message was deleted" in the conversation.',
+      confirmText: 'Delete message',
+      danger: true
+    }))) return;
 
     this.messageService.deleteMessage(message.messageId, this.currentUserId).subscribe({
       next: () => {
@@ -2031,14 +1935,19 @@ export class MessagesComponent implements OnInit, OnDestroy {
     return Object.values(this.selectedForDelete).some(v => v);
   }
 
-  deleteSelectedConversations(): void {
+  async deleteSelectedConversations(): Promise<void> {
     const selectedIds = Object.entries(this.selectedForDelete)
       .filter(([_, selected]) => selected)
       .map(([id, _]) => parseInt(id));
 
     if (selectedIds.length === 0) return;
 
-    if (!confirm('Are you sure you want to permanently delete ' + selectedIds.length + ' conversation(s)? All messages will be lost.')) return;
+    if (!(await this.confirmDialog.ask({
+      title: `Permanently delete ${selectedIds.length} ${selectedIds.length === 1 ? 'conversation' : 'conversations'}?`,
+      message: 'All messages in them will be lost.',
+      confirmText: selectedIds.length === 1 ? 'Delete conversation' : 'Delete conversations',
+      danger: true
+    }))) return;
 
     let completed = 0;
     let failed = 0;
@@ -2070,8 +1979,13 @@ export class MessagesComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteConversation(conversation: Conversation): void {
-    if (!confirm('Are you sure you want to permanently delete this conversation? All messages will be lost.')) return;
+  async deleteConversation(conversation: Conversation): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Permanently delete the conversation with ${this.getConversationName(conversation)}?`,
+      message: 'All messages will be lost.',
+      confirmText: 'Delete conversation',
+      danger: true
+    }))) return;
 
     this.messageService.deleteConversation(conversation.conversationId, this.currentUserId).subscribe({
       next: () => {

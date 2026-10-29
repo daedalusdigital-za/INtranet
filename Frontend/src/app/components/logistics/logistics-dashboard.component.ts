@@ -1,6 +1,6 @@
 import { Component, OnInit, signal, computed, AfterViewInit, OnDestroy, ViewChild, ElementRef, Inject, Injector, inject, NgZone } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule, Router } from '@angular/router';
+import { CommonModule, Location } from '@angular/common';
+import { RouterModule, Router, ActivatedRoute, NavigationEnd, Params } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -30,9 +30,8 @@ import { CdkDragDrop, CdkDrag, CdkDropList, CdkDragHandle, moveItemInArray } fro
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { forkJoin, of, Subject } from 'rxjs';
-import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { forkJoin, of, Subject, Subscription } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, filter, switchMap } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { GoogleMapsLoaderService } from '../../services/google-maps-loader.service';
 import { WellyActivityService } from '../../services/welly-activity.service';
@@ -43,7 +42,14 @@ import { PumaGarageDialog } from './puma-garage-dialog.component';
 import { OpenMapComponent } from './open-map.component';
 import { OpenMapDialogComponent } from './open-map-dialog.component';
 import { LogisticsReportsComponent } from './logistics-reports.component';
+import { OverbergTripsheetsComponent } from './overberg-tripsheets/overberg-tripsheets.component';
 import { AssetTrackingService, ResolveResult } from '../../services/asset-tracking.service';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { SubNavComponent } from '../../ui/sub-nav/sub-nav.component';
+import { formatDay, isFilterRecord, parseDay, queryText, recordFilters, toQuery } from '../../ui/sub-pages';
+import { LOGISTICS_SECTIONS, LogisticsSlug, logisticsSection } from './logistics-sections';
 import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord, DeliveryRequest, DeliveryRequestSummary, DeliveredWithoutPodRow } from './logistics.models';
 import { UploadPODDialog, UploadPodDocumentDialog, LinkTripsheetDialog, EditPodDialog, LinkInvoiceDialog, InvoiceDetailsDialog, FleetMapDialogComponent, NewLoadDialogComponent, LogisticsPodInvoicesDialog, TripSheetPreviewDialog, TripsheetDocumentPreviewDialog, TripsheetEmailRecipientsDialog, MaintenanceExportScopeDialog, SyncResultDialogComponent, SuggestedTripsDialog, TfnOrdersListDialog, TfnOrderDetailsDialog, IncomingRequestsDialog, AddressIssuesDialog, TfnDepotsMapDialog, AddDeliveryNoteDialog, CreateTripsheetDialog, TripsheetTypeDialog, ManualTripsheetDialog, InternalTransferDialog, ImportTripsheetDialog, AddMaintenanceDialog, VehicleDialogComponent, AssignDriverDialogComponent, LinkVehicleDialogComponent, AssignTripsheetDialog, CompleteMaintenanceDialog, UpdateLoadStatusDialog, ViewLoadDetailsDialog, ViewRouteMapDialog, LogisticsReportsDialog, LiveStreamingDialog, ReassignLoadDialog, RescheduleTripsheetDialog, ReassignProvinceDialog, VehicleStatusDialog, WellyTripsheetWizardDialog, WellySuggestsDialog, AiTripsheetBuilderDialog, FuelHistoryDialog, VehicleMaintenanceHistoryDialog, TodayHistoryDialog, FuelHealthDialog, BarcodeLookupDialog } from './logistics-dashboard-dialogs.component';
 
@@ -75,15 +81,18 @@ import { UploadPODDialog, UploadPodDocumentDialog, LinkTripsheetDialog, EditPodD
     MatButtonToggleModule,
     FormsModule,
     NavbarComponent,
+    PageHeaderComponent,
+    SubNavComponent,
     ControllerMonitoringComponent,
     OpenMapComponent,
     LogisticsReportsComponent,
+    OverbergTripsheetsComponent,
     PumaGarageDialog
   ],
   templateUrl: './logistics-dashboard.component.html',
   styleUrls: ['./logistics-dashboard.component.scss']
 })
-export class LogisticsDashboardComponent implements OnInit {
+export class LogisticsDashboardComponent implements OnInit, OnDestroy {
   apiUrl = environment.apiUrl;
   Math = Math; // Expose Math for template
 
@@ -116,6 +125,23 @@ export class LogisticsDashboardComponent implements OnInit {
     upcomingMaintenance: 0,
     pendingInvoices: 0,
     overdueInvoices: 0
+  });
+
+  /** One line of context under the page title, for the sub-page being shown. */
+  readonly sectionSubtitle = computed(() => {
+    if (this.initialLoading()) return 'Loading…';
+    switch (this.section()) {
+      case 'loads': {
+        const { inTransit, pending } = this.stats();
+        return `${inTransit} ${inTransit === 1 ? 'load' : 'loads'} in transit · ${pending} pending`;
+      }
+      case 'fleet': {
+        const { availableVehicles, totalVehicles } = this.stats();
+        return `${availableVehicles} of ${totalVehicles} vehicles available`;
+      }
+      default:
+        return this.currentSection()?.hint ?? '';
+    }
   });
 
   activeLoads = signal<ActiveLoad[]>([]);
@@ -349,13 +375,14 @@ export class LogisticsDashboardComponent implements OnInit {
 
   constructor(
     private http: HttpClient,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private dialog: MatDialog
   ) {}
 
   private readonly router = inject(Router);
   private readonly assetTracking = inject(AssetTrackingService);
   private readonly mapsLoader = inject(GoogleMapsLoaderService);
+  private readonly confirmDialog = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
 
   // Quick barcode lookup (header search bar)
   barcodeQuery = '';
@@ -378,7 +405,7 @@ export class LogisticsDashboardComponent implements OnInit {
       },
       error: () => {
         this.barcodeBusy.set(false);
-        this.snackBar.open('Barcode lookup failed. Check your connection.', 'Dismiss', { duration: 4000 });
+        this.toast.error('Barcode lookup failed. Check your connection.');
       }
     });
   }
@@ -386,6 +413,11 @@ export class LogisticsDashboardComponent implements OnInit {
   /** Navigate to the Scan & Track (barcode / QR) page. */
   openScanTrack(): void {
     this.router.navigate(['/logistics/scan']);
+  }
+
+  /** Navigate to client bookings / shipment lifecycle back office. */
+  openClientBookings(): void {
+    this.router.navigate(['/logistics/bookings']);
   }
 
   /** Open the live fleet map in a large dialog (map's own Maximize still works). */
@@ -400,7 +432,308 @@ export class LogisticsDashboardComponent implements OnInit {
     });
   }
 
+  // ---------- Sub-pages with their own addresses (design review D-12) ----------
+  // /logistics/<section>?<filters> picks the sub-page and its filters, and /logistics/loads/<load>
+  // or /logistics/trip-sheets/<trip sheet> opens one item. Moving between sub-pages adds to the
+  // browser history, so Back works; changing a filter replaces the current entry instead.
+
+  readonly sections = LOGISTICS_SECTIONS;
+  readonly section = signal<LogisticsSlug>('loads');
+  readonly currentSection = computed(() => logisticsSection(this.section()));
+  /** Each sub-page's filters as last used, so its link in the sub-navigation brings them back. */
+  readonly sectionQuery = signal<Partial<Record<LogisticsSlug, Params>>>({});
+
+  private readonly route = inject(ActivatedRoute);
+  private readonly location = inject(Location);
+  private readonly subscriptions = new Subscription();
+  private readonly filterWrites = new Subject<void>();
+  /** A load or trip sheet named in the address, waiting for its list to arrive. */
+  private pendingRef: { section: LogisticsSlug; ref: string } | null = null;
+  private refDialog: MatDialogRef<unknown> | null = null;
+  private refDialogKey: string | null = null;
+  /** True when this page added the item's address to the history, so closing the item can go Back. */
+  private refAddedHere = false;
+  private loadsArrived = false;
+  private tripsheetsArrived = false;
+  /** A fuel month from the address, kept until the list of months arrives. */
+  private pendingFuelPeriod: string | null = null;
+
+  /** Call after any filter on the current sub-page changes; the address follows a moment later. */
+  filterChanged(): void {
+    this.filterWrites.next();
+  }
+
+  /** POD filters also reload the list, from the first page. */
+  podFilterChanged(): void {
+    this.podCurrentPage = 1;
+    this.loadPodDocuments();
+    this.filterChanged();
+  }
+
+  /** Opens a load through its own address, so the address can be shared and Back closes it. */
+  openLoad(load: ActiveLoad): void {
+    this.refAddedHere = true;
+    this.router.navigate(['/logistics/loads', load.loadNumber || load.id], { queryParamsHandling: 'preserve' });
+  }
+
+  openTripsheet(trip: any): void {
+    this.refAddedHere = true;
+    this.router.navigate(['/logistics/trip-sheets', this.tripsheetRef(trip)], { queryParamsHandling: 'preserve' });
+  }
+
+  /** Copies the address of a load or trip sheet, to paste into an email or chat. */
+  copyLink(commands: (string | number)[]): void {
+    const url = window.location.origin + this.router.serializeUrl(this.router.createUrlTree(commands));
+    navigator.clipboard.writeText(url).then(
+      () => this.toast.done('Link copied'),
+      () => this.toast.error('The link could not be copied. Open the item and copy the address bar instead.')
+    );
+  }
+
+  tripsheetRef(trip: any): string | number {
+    return trip.tripsheetNo || trip.loadNumber || trip.id;
+  }
+
+  fuelPeriodKey(period: any): string {
+    return `${period.reportYear}-${period.reportMonth}`;
+  }
+
+  /** Reads the sub-page, its filters and any item from the address. Runs after every navigation. */
+  private applyUrl(): void {
+    const child = this.route.snapshot.firstChild;
+    const section = logisticsSection(child?.paramMap.get('section'));
+    if (!section) {
+      // An old or mistyped address: show Loads rather than an empty page.
+      this.router.navigate(['/logistics/loads'], { replaceUrl: true });
+      return;
+    }
+    this.section.set(section.slug);
+    const query = this.route.snapshot.queryParams;
+    if (!isFilterRecord(this.router)) {
+      this.applyFilters(section.slug, query);
+    }
+    this.sectionQuery.update(all => ({ ...all, [section.slug]: query }));
+
+    const ref = child?.paramMap.get('ref');
+    if (ref) {
+      this.pendingRef = { section: section.slug, ref };
+      this.openPendingRef();
+    } else {
+      this.pendingRef = null;
+      this.closeRefDialog();
+    }
+  }
+
+  /** Sets a sub-page's filters from the address. Filters missing from it go back to their defaults. */
+  private applyFilters(slug: LogisticsSlug, q: Params): void {
+    const text = (key: string): string => queryText(q, key);
+    const pick = (key: string, fallback: string): string => text(key) || fallback;
+    switch (slug) {
+      case 'fleet':
+        this.fleetSearch.set(text('q'));
+        break;
+      case 'maintenance':
+        this.maintenanceSearch = text('q');
+        this.maintenanceVehicleFilter = pick('vehicle', 'all');
+        this.maintenanceStatusFilter = pick('status', 'all');
+        this.maintenanceTypeFilter = pick('type', 'all');
+        this.maintenanceAssignedToFilter = pick('assignee', 'all');
+        break;
+      case 'trip-sheets': {
+        const before = this.tripsheetFilterKey();
+        this.tripsheetSearch = text('q');
+        this.tripsheetWarehouseFilter = pick('warehouse', 'all');
+        this.tripsheetStatusFilter = pick('status', 'all');
+        this.tripsheetFromDate = parseDay(text('from'));
+        this.tripsheetToDate = parseDay(text('to'));
+        if (this.tripsheetFilterKey() !== before) {
+          this.tripsheetPageIndex.set(0);
+          this.tripsheets.update(trips => [...trips]);
+        }
+        break;
+      }
+      case 'pods': {
+        const next = [text('region'), text('month'), text('driver'), text('link')];
+        const now = [this.podRegionFilter, this.podMonthFilter, this.podDriverFilter, this.podLinkFilter];
+        if (next.join('|') !== now.join('|')) {
+          [this.podRegionFilter, this.podMonthFilter, this.podDriverFilter, this.podLinkFilter] = next;
+          this.podCurrentPage = 1;
+          this.loadPodDocuments();
+        }
+        break;
+      }
+      case 'fuel':
+        this.fuelViewMode = pick('view', 'summary');
+        this.fuelSearchTerm = text('q');
+        this.fuelAssignmentFilter = text('assignment');
+        this.fuelSourceFilter = text('source');
+        this.filterFuelTransactions();
+        this.selectFuelPeriod(text('period'));
+        break;
+      case 'requisitions': {
+        this.reqSearch.set(text('q'));
+        this.reqStatusFilter.set(pick('status', 'all'));
+        const first = this.reqPeriods()[0];
+        const period = text('period') || (first ? `${first.year}-${first.month}` : this.reqPeriod());
+        if (period !== this.reqPeriod()) {
+          this.reqPeriod.set(period);
+          // Before the months arrive, loadRequisitionPeriods() loads this month itself.
+          if (this.reqPeriods().length) this.loadRequisitions();
+        }
+        break;
+      }
+    }
+  }
+
+  /** The current sub-page's filters as address parameters, leaving out the defaults. */
+  private filterParams(slug: LogisticsSlug): Params {
+    let values: Record<string, string | null> = {};
+    switch (slug) {
+      case 'fleet':
+        values = { q: this.fleetSearch() };
+        break;
+      case 'maintenance':
+        values = {
+          q: this.maintenanceSearch, vehicle: this.maintenanceVehicleFilter, status: this.maintenanceStatusFilter,
+          type: this.maintenanceTypeFilter, assignee: this.maintenanceAssignedToFilter
+        };
+        break;
+      case 'trip-sheets':
+        values = {
+          q: this.tripsheetSearch, warehouse: this.tripsheetWarehouseFilter, status: this.tripsheetStatusFilter,
+          from: formatDay(this.tripsheetFromDate), to: formatDay(this.tripsheetToDate)
+        };
+        break;
+      case 'pods':
+        values = { region: this.podRegionFilter, month: this.podMonthFilter, driver: this.podDriverFilter, link: this.podLinkFilter };
+        break;
+      case 'fuel': {
+        const latest = this.fuelPeriods()[0];
+        const chosen = this.selectedFuelPeriod;
+        values = {
+          period: chosen && chosen !== latest ? this.fuelPeriodKey(chosen) : null,
+          view: this.fuelViewMode, q: this.fuelSearchTerm, assignment: this.fuelAssignmentFilter, source: this.fuelSourceFilter
+        };
+        break;
+      }
+      case 'requisitions': {
+        const first = this.reqPeriods()[0];
+        const latest = first ? `${first.year}-${first.month}` : '';
+        values = { period: this.reqPeriod() !== latest ? this.reqPeriod() : null, q: this.reqSearch(), status: this.reqStatusFilter() };
+        break;
+      }
+    }
+    return toQuery(values, {
+      vehicle: 'all', status: 'all', type: 'all', assignee: 'all', warehouse: 'all', view: 'summary'
+    });
+  }
+
+  private writeFilters(): void {
+    const slug = this.section();
+    const params = this.filterParams(slug);
+    this.sectionQuery.update(all => ({ ...all, [slug]: params }));
+    recordFilters(this.router, this.route, params);
+  }
+
+  private tripsheetFilterKey(): string {
+    return [this.tripsheetSearch, this.tripsheetWarehouseFilter, this.tripsheetStatusFilter,
+      formatDay(this.tripsheetFromDate), formatDay(this.tripsheetToDate)].join('|');
+  }
+
+  /** Shows the fuel month from the address (or the latest), once the months have arrived. */
+  private selectFuelPeriod(key: string): void {
+    const periods = this.fuelPeriods();
+    if (!periods.length) {
+      this.pendingFuelPeriod = key || null;
+      return;
+    }
+    const wanted = (key && periods.find(p => this.fuelPeriodKey(p) === key)) || periods[0];
+    if (wanted !== this.selectedFuelPeriod) {
+      this.selectedFuelPeriod = wanted;
+      this.loadFuelMonthlyReport();
+    }
+  }
+
+  /** Opens the load or trip sheet named in the address, once its list has arrived. */
+  private openPendingRef(): void {
+    const pending = this.pendingRef;
+    if (!pending) return;
+    const key = `${pending.section}/${pending.ref}`;
+    if (this.refDialog && this.refDialogKey === key) {
+      this.pendingRef = null;
+      return;
+    }
+    if (pending.section === 'loads') {
+      const load = this.activeLoads().find(l => l.loadNumber === pending.ref || String(l.id) === pending.ref);
+      // A number is a load id (the barcode lookup links that way); it also opens loads that are no longer active.
+      if (load || /^\d+$/.test(pending.ref)) {
+        this.pendingRef = null;
+        this.viewLoadDetails(load ?? ({ id: Number(pending.ref) } as ActiveLoad), key);
+      } else if (this.loadsArrived) {
+        this.refNotFound(`Load ${pending.ref} isn't in the active loads.`);
+      }
+    } else if (pending.section === 'trip-sheets') {
+      const trip = this.tripsheets().find(t => [t.tripsheetNo, t.loadNumber, t.tripNumber, String(t.id)].includes(pending.ref));
+      if (trip) {
+        this.pendingRef = null;
+        this.viewTripsheet(trip, key);
+      } else if (this.tripsheetsArrived) {
+        this.refNotFound(`Trip sheet ${pending.ref} wasn't found.`);
+      }
+    } else {
+      // Only loads and trip sheets open a single item.
+      this.pendingRef = null;
+      this.router.navigate(['/logistics', pending.section], { replaceUrl: true, queryParamsHandling: 'preserve' });
+    }
+  }
+
+  private refNotFound(message: string): void {
+    this.pendingRef = null;
+    this.toast.warn(message);
+    this.router.navigate(['/logistics', this.section()], { replaceUrl: true, queryParamsHandling: 'preserve' });
+  }
+
+  /** Ties a load or trip sheet dialog to the address: closing the dialog leaves the item's address. */
+  private trackRefDialog(dialogRef: MatDialogRef<unknown>, key: string): void {
+    // The browser's own address, not the router's: Back closes the dialog before the router catches up.
+    const atItem = () => decodeURIComponent(this.location.path().split('?')[0]) === `/logistics/${key}`;
+    if (!atItem()) {
+      // The address moved on while the item was loading.
+      dialogRef.close();
+      return;
+    }
+    this.refDialog = dialogRef;
+    this.refDialogKey = key;
+    dialogRef.afterClosed().subscribe(() => {
+      if (this.refDialog !== dialogRef) return;
+      this.refDialog = null;
+      this.refDialogKey = null;
+      // Closed with its own button. (When Back closed it, the address has already moved on.)
+      if (!atItem()) return;
+      if (this.refAddedHere) {
+        this.refAddedHere = false;
+        this.location.back();
+      } else {
+        this.router.navigate(['/logistics', this.section()], { replaceUrl: true, queryParamsHandling: 'preserve' });
+      }
+    });
+  }
+
+  private closeRefDialog(): void {
+    const dialogRef = this.refDialog;
+    this.refDialog = null;
+    this.refDialogKey = null;
+    this.refAddedHere = false;
+    dialogRef?.close();
+  }
+
   ngOnInit(): void {
+    // Read the address first, so the first requests already use any filters in it.
+    this.applyUrl();
+    this.subscriptions.add(this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => this.applyUrl()));
+    this.subscriptions.add(this.filterWrites.pipe(debounceTime(250)).subscribe(() => this.writeFilters()));
     this.startLoadingProgress();
     this.loadDashboardData();
     this.loadTripsheets();
@@ -421,6 +754,10 @@ export class LogisticsDashboardComponent implements OnInit {
     this.loadDeliveredWithoutPod();
     this.loadSleepOuts();
     this.loadRequisitionPeriods();
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
   }
 
   private checkInitialLoadComplete(): void {
@@ -630,12 +967,11 @@ export class LogisticsDashboardComponent implements OnInit {
           a.click();
           document.body.removeChild(a);
           window.URL.revokeObjectURL(url);
-          this.snackBar.open(
-            scope === 'filtered' ? 'Filtered fleet repairs exported to Excel' : 'All fleet repairs exported to Excel',
-            'Close', { duration: 3000 });
+          this.toast.done(
+            scope === 'filtered' ? 'Filtered fleet repairs exported to Excel' : 'All fleet repairs exported to Excel');
         },
         error: () => {
-          this.snackBar.open('Failed to export maintenance records', 'Close', { duration: 4000 });
+          this.toast.error('Failed to export maintenance records');
         }
       });
   }
@@ -867,7 +1203,7 @@ export class LogisticsDashboardComponent implements OnInit {
             },
             error: (err) => {
               console.error('File upload error:', err);
-              this.snackBar.open('Failed to upload files', 'Close', { duration: 3000 });
+              this.toast.error('Failed to upload files');
             }
           });
         } else {
@@ -894,11 +1230,11 @@ export class LogisticsDashboardComponent implements OnInit {
           } : r)
         );
         this.updateMaintenanceStats();
-        this.snackBar.open('Maintenance marked as complete', 'Close', { duration: 3000 });
+        this.toast.done('Maintenance marked as complete');
       },
       error: (err) => {
         console.error('Complete error:', err);
-        this.snackBar.open('Failed to mark maintenance as complete', 'Close', { duration: 3000 });
+        this.toast.error('Failed to mark maintenance as complete');
       }
     });
   }
@@ -928,8 +1264,13 @@ export class LogisticsDashboardComponent implements OnInit {
     });
   }
 
-  deleteMaintenance(record: MaintenanceRecord): void {
-    if (confirm(`Are you sure you want to delete this maintenance record for ${record.vehicleReg}?`)) {
+  async deleteMaintenance(record: MaintenanceRecord): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete maintenance record for ${record.vehicleReg}?`,
+      message: 'The record and its attached files will be deleted. This can\'t be undone.',
+      confirmText: 'Delete record',
+      danger: true
+    })) {
       this.http.delete(`${this.apiUrl}/logistics/maintenance/${record.id}`).subscribe({
         next: () => {
           this.maintenanceRecords.update(records => records.filter(r => r.id !== record.id));
@@ -959,11 +1300,11 @@ export class LogisticsDashboardComponent implements OnInit {
           records.map(r => r.id === record.id ? { ...r, status: newStatus } : r)
         );
         this.updateMaintenanceStats();
-        this.snackBar.open(`Maintenance status changed to ${newStatus}`, 'Close', { duration: 3000 });
+        this.toast.done(`Maintenance status changed to ${newStatus}`);
       },
       error: (err) => {
         console.error('Status change error:', err);
-        this.snackBar.open('Failed to change status', 'Close', { duration: 3000 });
+        this.toast.error('Failed to change status');
       }
     });
   }
@@ -997,10 +1338,7 @@ Cost: ${record.cost ? 'R' + record.cost.toFixed(2) : 'N/A'}
 Notes: ${record.notes || 'No notes'}
     `.trim();
     
-    this.snackBar.open(details, 'Close', { 
-      duration: 10000,
-      panelClass: 'maintenance-details-snackbar'
-    });
+    this.toast.info(details);
   }
 
   scheduleLicenseRenewal(record: MaintenanceRecord): void {
@@ -1073,6 +1411,7 @@ Notes: ${record.notes || 'No notes'}
     this.maintenanceStatusFilter = 'all';
     this.maintenanceTypeFilter = 'all';
     this.maintenanceAssignedToFilter = 'all';
+    this.filterChanged();
   }
 
   // === Maintenance Attachments ===
@@ -1136,11 +1475,11 @@ Notes: ${record.notes || 'No notes'}
         this.maintenanceUploading = false;
         this.loadMaintenanceAttachmentsForRecord(this.selectedMaintenanceRecord!.id);
         this.loadMaintenanceAttachmentCounts();
-        this.snackBar.open(`${files.length} file(s) uploaded successfully`, 'Close', { duration: 3000 });
+        this.toast.done(`${files.length} file(s) uploaded successfully`);
       },
       error: (err) => {
         this.maintenanceUploading = false;
-        this.snackBar.open('Failed to upload files', 'Close', { duration: 3000 });
+        this.toast.error('Failed to upload files');
       }
     });
   }
@@ -1155,20 +1494,25 @@ Notes: ${record.notes || 'No notes'}
         a.click();
         window.URL.revokeObjectURL(url);
       },
-      error: () => this.snackBar.open('Failed to download file', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to download file')
     });
   }
 
-  deleteMaintenanceAttachment(att: any): void {
-    if (!confirm(`Delete "${att.fileName}"?`)) return;
+  async deleteMaintenanceAttachment(att: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete "${att.fileName}"?`,
+      message: 'The file will be removed from this maintenance record. This can\'t be undone.',
+      confirmText: 'Delete file',
+      danger: true
+    }))) return;
 
     this.http.delete(`${this.apiUrl}/logistics/maintenance-attachments/${att.id}`).subscribe({
       next: () => {
         this.maintenanceAttachments.update(list => list.filter(a => a.id !== att.id));
         this.loadMaintenanceAttachmentCounts();
-        this.snackBar.open('File deleted', 'Close', { duration: 3000 });
+        this.toast.done('File deleted');
       },
-      error: () => this.snackBar.open('Failed to delete file', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to delete file')
     });
   }
 
@@ -1220,11 +1564,15 @@ Notes: ${record.notes || 'No notes'}
             pending: loads.filter(l => l.status === 'Pending' || l.status === 'Scheduled').length
           }));
           this.checkInitialLoadComplete();
+          this.loadsArrived = true;
+          this.openPendingRef();
         },
         error: () => {
           // Use sample data if API fails
           this.loadSampleData();
           this.checkInitialLoadComplete();
+          this.loadsArrived = true;
+          this.openPendingRef();
         }
       });
 
@@ -1506,13 +1854,13 @@ Notes: ${record.notes || 'No notes'}
           // Refresh the dashboard data
           this.loadDashboardData();
         } else {
-          alert('Sync failed: ' + result.message);
+          this.toast.error('CarTrack sync failed: ' + result.message);
         }
       },
       error: (err) => {
         this.syncing.set(false);
         console.error('CarTrack sync error:', err);
-        alert('Failed to sync from CarTrack. Check console for details.');
+        this.toast.error('Failed to sync from CarTrack. Check the browser console for details.');
       }
     });
   }
@@ -1547,7 +1895,8 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
-  viewLoadDetails(load: ActiveLoad): void {
+  /** linkKey is set when the load was opened from its address (see openPendingRef). */
+  viewLoadDetails(load: ActiveLoad, linkKey?: string): void {
     // Fetch full load details from API
     this.http.get<any>(`${environment.apiUrl}/logistics/loads/${load.id}`).subscribe({
       next: (loadDetails) => {
@@ -1556,10 +1905,15 @@ Notes: ${record.notes || 'No notes'}
           maxHeight: '90vh',
           data: loadDetails
         });
+        if (linkKey) this.trackRefDialog(dialogRef, linkKey);
       },
       error: (error) => {
         console.error('Error fetching load details:', error);
-        this.snackBar.open('Failed to load details', 'Close', { duration: 3000 });
+        if (linkKey) {
+          this.refNotFound('That load could not be opened.');
+          return;
+        }
+        this.toast.error('Failed to load details');
       }
     });
   }
@@ -1582,10 +1936,10 @@ Notes: ${record.notes || 'No notes'}
                   liveTracking: tracking
                 }
               });
-            }).catch(() => this.snackBar.open('Google Maps could not be loaded', 'Close', { duration: 4000 }));
+            }).catch(() => this.toast.error('Google Maps could not be loaded'));
           },
           error: () => {
-            this.snackBar.open('Failed to load route details', 'Close', { duration: 3000 });
+            this.toast.error('Failed to load route details');
           }
         });
       },
@@ -1593,7 +1947,7 @@ Notes: ${record.notes || 'No notes'}
         // No CarTrack or vehicle not linked — fall back to showing route on map
         this.viewRouteOnMap(load);
         if (err.status === 400) {
-          this.snackBar.open('Live tracking unavailable — vehicle not linked to CarTrack. Showing route map.', 'Close', { duration: 5000 });
+          this.toast.warn('Live tracking unavailable — vehicle not linked to CarTrack. Showing route map.');
         }
       }
     });
@@ -1613,7 +1967,7 @@ Notes: ${record.notes || 'No notes'}
             this.activeLoads.update(loads => 
               loads.map(l => l.id === load.id ? { ...l, status: result.status } : l)
             );
-            this.snackBar.open(`Load status updated to ${result.status}`, 'Close', { duration: 3000 });
+            this.toast.done(`Load status updated to ${result.status}`);
             if (result.status === 'Delivered' || result.status === 'Completed') this.loadDeliveredWithoutPod();
           },
           error: (err) => {
@@ -1621,7 +1975,7 @@ Notes: ${record.notes || 'No notes'}
             const msg = err?.status === 409 && err?.error?.error
               ? err.error.error + (err.error.missingInvoices?.length ? ` Missing: ${err.error.missingInvoices.slice(0, 5).join(', ')}${err.error.missingInvoices.length > 5 ? '…' : ''}` : '')
               : 'Failed to update load status';
-            this.snackBar.open(msg, 'Close', { duration: 8000 });
+            this.toast.error(msg);
           }
         });
       }
@@ -1654,12 +2008,12 @@ Notes: ${record.notes || 'No notes'}
                 driverName: updatedLoad.driver ? `${updatedLoad.driver.firstName} ${updatedLoad.driver.lastName}` : l.driverName
               } : l)
             );
-            this.snackBar.open('Load reassigned successfully', 'Close', { duration: 3000 });
+            this.toast.done('Load reassigned successfully');
             this.refreshData(); // Refresh data
           },
           error: (err) => {
             console.error('Error reassigning load:', err);
-            this.snackBar.open('Failed to reassign load', 'Close', { duration: 3000 });
+            this.toast.error('Failed to reassign load');
           }
         });
       }
@@ -1749,12 +2103,12 @@ Notes: ${record.notes || 'No notes'}
         this.http.put(`${this.apiUrl}/fleet/vehicles/${vehicle.id}/province`, { province: result.province })
           .subscribe({
             next: () => {
-              this.snackBar.open(`Province updated to ${result.province}`, 'Close', { duration: 3000 });
+              this.toast.done(`Province updated to ${result.province}`);
               this.loadVehiclesFromDatabase();
             },
             error: (err) => {
               console.error('Error updating province:', err);
-              this.snackBar.open('Failed to update province', 'Close', { duration: 3000 });
+              this.toast.error('Failed to update province');
             }
           });
       }
@@ -1775,8 +2129,13 @@ Notes: ${record.notes || 'No notes'}
     this.openLinkDialog(vehicle, 'cartrack');
   }
 
-  unlinkCarTrack(vehicle: Vehicle): void {
-    if (confirm(`Unlink CarTrack from ${vehicle.registrationNumber}?`)) {
+  async unlinkCarTrack(vehicle: Vehicle): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Unlink CarTrack from ${vehicle.registrationNumber}?`,
+      message: 'The vehicle stops receiving CarTrack updates and its last known location is cleared. You can link it again later.',
+      confirmText: 'Unlink CarTrack',
+      danger: true
+    })) {
       this.http.post<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}/unlink-cartrack`, {}).subscribe({
         next: () => {
           this.loadVehiclesFromDatabase();
@@ -1790,8 +2149,13 @@ Notes: ${record.notes || 'No notes'}
     this.openLinkDialog(vehicle, 'tfn');
   }
 
-  unlinkTfn(vehicle: Vehicle): void {
-    if (confirm(`Unlink TruckFuelNet from ${vehicle.registrationNumber}?`)) {
+  async unlinkTfn(vehicle: Vehicle): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Unlink TruckFuelNet from ${vehicle.registrationNumber}?`,
+      message: 'You can link it again later.',
+      confirmText: 'Unlink TruckFuelNet',
+      danger: true
+    })) {
       this.http.post<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}/unlink-tfn`, {}).subscribe({
         next: () => {
           this.loadVehiclesFromDatabase();
@@ -1831,8 +2195,13 @@ Notes: ${record.notes || 'No notes'}
     });
   }
 
-  deleteVehicle(vehicle: Vehicle): void {
-    if (confirm(`Are you sure you want to delete vehicle ${vehicle.registrationNumber}? This action cannot be undone.`)) {
+  async deleteVehicle(vehicle: Vehicle): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete vehicle ${vehicle.registrationNumber}?`,
+      message: 'The vehicle will be removed from the fleet. This can\'t be undone.',
+      confirmText: 'Delete vehicle',
+      danger: true
+    })) {
       this.http.delete<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}`).subscribe({
         next: () => {
           this.loadVehiclesFromDatabase();
@@ -2066,7 +2435,7 @@ Notes: ${record.notes || 'No notes'}
       },
       error: (err) => {
         console.error('Failed to load invoices:', err);
-        this.snackBar.open('Failed to load invoices', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load invoices');
       }
     });
   }
@@ -2104,7 +2473,7 @@ Notes: ${record.notes || 'No notes'}
   createTripsheetFromInvoices(): void {
     const pendingInvoices = this.importedInvoices().filter(i => i.status === 'Pending');
     if (pendingInvoices.length === 0) {
-      alert('No pending invoices to create tripsheet from');
+      this.toast.warn('There are no pending invoices to create a tripsheet from.');
       return;
     }
     
@@ -2116,13 +2485,13 @@ Notes: ${record.notes || 'No notes'}
       notes: 'Auto-generated from imported invoices'
     }).subscribe({
       next: (result) => {
-        alert(`Tripsheet ${result.load?.loadNumber} created with ${result.stopsCreated} stops!`);
+        this.toast.done(`Tripsheet ${result.load?.loadNumber} created with ${result.stopsCreated} stops.`);
         this.loadImportedInvoices();
         this.loadTripsheets();
       },
       error: (err) => {
         console.error('Failed to create tripsheet:', err);
-        alert('Failed to create tripsheet: ' + (err.error?.message || err.message));
+        this.toast.error('Failed to create tripsheet: ' + (err.error?.message || err.message));
       }
     });
   }
@@ -2243,6 +2612,8 @@ Notes: ${record.notes || 'No notes'}
       next: (trips) => {
         this.tripsheets.set(trips);
         this.checkInitialLoadComplete();
+        this.tripsheetsArrived = true;
+        this.openPendingRef();
       },
       error: () => {
         // Sample data for testing
@@ -2252,6 +2623,8 @@ Notes: ${record.notes || 'No notes'}
           { id: 3, loadId: 3, tripNumber: 'TS-2026-003', loadNumber: 'LD-000003', driverName: 'Mike Johnson', vehicleReg: 'WC 333-444', origin: 'CPT', destination: 'PE', totalStops: 4, totalDistance: 760, estimatedTime: '12h 0m', date: new Date(), status: 'Pending' }
         ]);
         this.checkInitialLoadComplete();
+        this.tripsheetsArrived = true;
+        this.openPendingRef();
       }
     });
   }
@@ -2259,12 +2632,14 @@ Notes: ${record.notes || 'No notes'}
   onTripsheetFilterChange(): void {
     this.tripsheetPageIndex.set(0);
     this.tripsheets.update(trips => [...trips]);
+    this.filterChanged();
   }
 
   onTripsheetDateFilterChange(): void {
     // Trigger computed re-evaluation by updating the signal
     this.tripsheetPageIndex.set(0);
     this.tripsheets.update(trips => [...trips]);
+    this.filterChanged();
   }
 
   clearTripsheetDateFilter(): void {
@@ -2272,6 +2647,7 @@ Notes: ${record.notes || 'No notes'}
     this.tripsheetToDate = null;
     this.tripsheetPageIndex.set(0);
     this.tripsheets.update(trips => [...trips]);
+    this.filterChanged();
   }
 
   clearAllTripsheetFilters(): void {
@@ -2282,6 +2658,7 @@ Notes: ${record.notes || 'No notes'}
     this.tripsheetToDate = null;
     this.tripsheetPageIndex.set(0);
     this.tripsheets.update(trips => [...trips]);
+    this.filterChanged();
   }
 
   get hasActiveTripsheetFilters(): boolean {
@@ -2317,15 +2694,17 @@ Notes: ${record.notes || 'No notes'}
     }
   }
 
-  viewTripsheet(trip: any): void {
+  /** linkKey is set when the trip sheet was opened from its address (see openPendingRef). */
+  viewTripsheet(trip: any, linkKey?: string): void {
     // Open the generated trip sheet document (exact same format as print/email)
-    this.dialog.open(TripsheetDocumentPreviewDialog, {
+    const dialogRef = this.dialog.open(TripsheetDocumentPreviewDialog, {
       width: '95vw',
       maxWidth: '1600px',
       height: '90vh',
       panelClass: 'tripsheet-landscape-dialog',
       data: { loadId: trip.loadId || trip.id, loadNumber: trip.tripsheetNo || trip.loadNumber, mode: 'tripsheet' }
     });
+    if (linkKey) this.trackRefDialog(dialogRef, linkKey);
   }
 
   viewPickingSlip(trip: any): void {
@@ -2344,7 +2723,7 @@ Notes: ${record.notes || 'No notes'}
     const loadId = trip.loadId || trip.id;
     
     if (!loadId) {
-      this.snackBar.open('Invalid load ID', 'Close', { duration: 3000 });
+      this.toast.error('Invalid load ID');
       return;
     }
 
@@ -2352,12 +2731,12 @@ Notes: ${record.notes || 'No notes'}
       next: (loadDetails) => {
         // Check if we have warehouse and stops
         if (!loadDetails.warehouse && !loadDetails.warehouseId) {
-          this.snackBar.open('Load does not have warehouse information', 'Close', { duration: 3000 });
+          this.toast.warn('Load does not have warehouse information');
           return;
         }
         
         if (!loadDetails.stops || loadDetails.stops.length === 0) {
-          this.snackBar.open('Load does not have any stops', 'Close', { duration: 3000 });
+          this.toast.warn('Load does not have any stops');
           return;
         }
 
@@ -2369,11 +2748,11 @@ Notes: ${record.notes || 'No notes'}
             height: '85vh',
             data: { load: loadDetails }
           });
-        }).catch(() => this.snackBar.open('Google Maps could not be loaded', 'Close', { duration: 4000 }));
+        }).catch(() => this.toast.error('Google Maps could not be loaded'));
       },
       error: (error) => {
         console.error('Error fetching load details:', error);
-        this.snackBar.open(`Failed to load route details: ${error.message || 'Unknown error'}`, 'Close', { duration: 5000 });
+        this.toast.error(`Failed to load route details: ${error.message || 'Unknown error'}`);
       }
     });
   }
@@ -2639,7 +3018,7 @@ Notes: ${record.notes || 'No notes'}
   // Continue editing a draft tripsheet - opens in edit mode
   continueDraft(trip: any): void {
     // Drafts use editTripsheet - the dialog will detect edit mode and allow completion
-    this.snackBar.open('Opening draft tripsheet...', '', { duration: 2000 });
+    this.toast.info('Opening draft tripsheet...');
     this.editTripsheet(trip);
   }
 
@@ -2731,7 +3110,7 @@ Notes: ${record.notes || 'No notes'}
       },
       error: (err) => {
         console.error('Failed to load tripsheet for editing:', err);
-        this.snackBar.open('Failed to load tripsheet for editing: ' + (err.error?.message || err.message || 'Unknown error'), 'Close', { duration: 5000 });
+        this.toast.error('Failed to load tripsheet for editing: ' + (err.error?.message || err.message || 'Unknown error'));
       }
     });
   }
@@ -2809,11 +3188,11 @@ Notes: ${record.notes || 'No notes'}
         }).subscribe({
           next: () => {
             this.loadTripsheets();
-            this.snackBar.open('Driver and vehicle assigned successfully!', 'Close', { duration: 3000 });
+            this.toast.done('Driver and vehicle assigned successfully');
           },
           error: (err) => {
             console.error('Failed to assign tripsheet:', err);
-            this.snackBar.open('Failed to assign driver/vehicle', 'Close', { duration: 3000 });
+            this.toast.error('Failed to assign driver/vehicle');
           }
         });
       }
@@ -2854,11 +3233,11 @@ Notes: ${record.notes || 'No notes'}
         this.http.put(`${this.apiUrl}/logistics/tripsheet/${loadId}/assign`, updateData).subscribe({
           next: () => {
             this.loadTripsheets();
-            this.snackBar.open('Tripsheet reassigned successfully!', 'Close', { duration: 3000 });
+            this.toast.done('Tripsheet reassigned successfully');
           },
           error: (err) => {
             console.error('Error reassigning tripsheet:', err);
-            this.snackBar.open('Failed to reassign tripsheet', 'Close', { duration: 3000 });
+            this.toast.error('Failed to reassign tripsheet');
           }
         });
       }
@@ -2902,23 +3281,33 @@ Notes: ${record.notes || 'No notes'}
           next: () => {
             this.loadTripsheets();
             this.loadDashboardData();
-            this.snackBar.open('Tripsheet rescheduled successfully!', 'Close', { duration: 3000 });
+            this.toast.done('Tripsheet rescheduled successfully');
           },
           error: (err) => {
             console.error('Error rescheduling tripsheet:', err);
-            this.snackBar.open('Failed to reschedule tripsheet', 'Close', { duration: 3000 });
+            this.toast.error('Failed to reschedule tripsheet');
           }
         });
       }
     });
   }
 
-  deleteTripsheet(trip: any): void {
+  async deleteTripsheet(trip: any): Promise<void> {
     const loadId = trip.loadId || trip.id;
     const tripsheetNo = trip.tripsheetNo || `TS-${loadId}`;
-    
+
     // Confirm deletion
-    if (!confirm(`Are you sure you want to delete tripsheet ${tripsheetNo}?\n\nThis will remove the load and reset all associated invoices back to Pending status.`)) {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete tripsheet ${tripsheetNo}?`,
+      message: 'This can\'t be undone.',
+      details: [
+        'The load and its stops are removed.',
+        'All associated invoices go back to Pending status.'
+      ],
+      confirmText: 'Delete tripsheet',
+      cancelText: 'Keep tripsheet',
+      danger: true
+    }))) {
       return;
     }
     
@@ -2926,11 +3315,11 @@ Notes: ${record.notes || 'No notes'}
       next: () => {
         this.loadTripsheets();
         this.loadImportedInvoices();
-        this.snackBar.open(`Tripsheet ${tripsheetNo} deleted successfully!`, 'Close', { duration: 3000 });
+        this.toast.done(`Tripsheet ${tripsheetNo} deleted successfully`);
       },
       error: (err) => {
         console.error('Failed to delete tripsheet:', err);
-        this.snackBar.open('Failed to delete tripsheet: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
+        this.toast.error('Failed to delete tripsheet: ' + (err.error?.message || err.message));
       }
     });
   }
@@ -2955,52 +3344,54 @@ Notes: ${record.notes || 'No notes'}
     recipientsRef.afterClosed().subscribe((result: { emails: string[]; ccSelf: boolean; attachPickingSlip: boolean } | undefined) => {
       if (!result || !result.emails?.length) return;
 
-      this.snackBar.open(`Sending trip sheet ${tripsheetNo}...`, undefined, { duration: 10000 });
+      this.toast.info(`Sending trip sheet ${tripsheetNo}...`);
       this.http.post(`${this.apiUrl}/logistics/tripsheet/${loadId}/email`, {
         recipientEmails: result.emails,
         ccSelf: result.ccSelf,
         attachPickingSlip: result.attachPickingSlip
       }).subscribe({
         next: () => {
-          this.snackBar.open(
-            `Trip sheet ${tripsheetNo} emailed to ${result.emails.length} recipient${result.emails.length === 1 ? '' : 's'}`,
-            'Close',
-            { duration: 5000 }
+          this.toast.done(
+            `Trip sheet ${tripsheetNo} emailed to ${result.emails.length} recipient${result.emails.length === 1 ? '' : 's'}`
           );
         },
         error: (err) => {
           console.error('Failed to email trip sheet:', err);
-          this.snackBar.open(err?.error?.error || 'Failed to send trip sheet email', 'Close', { duration: 6000 });
+          this.toast.error(err?.error?.error || 'Failed to send trip sheet email');
         }
       });
     });
   }
 
-  activateTripsheet(trip: any): void {
+  async activateTripsheet(trip: any): Promise<void> {
     const loadId = trip.loadId || trip.id;
     const tripsheetNo = trip.tripsheetNo || `TS-${loadId}`;
     
     // Check if driver and vehicle are assigned
     if (!trip.driverId || !trip.vehicleId) {
-      this.snackBar.open('Please assign a driver and vehicle before activating the tripsheet.', 'Close', { duration: 4000 });
+      this.toast.warn('Please assign a driver and vehicle before activating the tripsheet.');
       // Open the assign dialog
       this.assignTripsheet(trip);
       return;
     }
     
     // Confirm activation
-    if (!confirm(`Generate load for tripsheet ${tripsheetNo}?\n\nThis will change the status to Active and the driver will be ready to depart.`)) {
+    if (!(await this.confirmDialog.ask({
+      title: `Generate load for tripsheet ${tripsheetNo}?`,
+      message: 'The status changes to Active and the driver will be ready to depart.',
+      confirmText: 'Generate load'
+    }))) {
       return;
     }
     
     this.http.post(`${this.apiUrl}/logistics/tripsheet/${loadId}/activate`, {}).subscribe({
       next: () => {
         this.loadTripsheets();
-        this.snackBar.open(`Tripsheet ${tripsheetNo} is now Active! Driver can depart.`, 'Close', { duration: 3000 });
+        this.toast.done(`Tripsheet ${tripsheetNo} is now active. Driver can depart.`);
       },
       error: (err) => {
         console.error('Failed to activate tripsheet:', err);
-        this.snackBar.open('Failed to activate tripsheet: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
+        this.toast.error('Failed to activate tripsheet: ' + (err.error?.message || err.message));
       }
     });
   }
@@ -3031,15 +3422,15 @@ Notes: ${record.notes || 'No notes'}
         const transactions = result.transactionsResult?.synced ?? 0;
 
         if (result.hasError) {
-          alert(`Fuel data synced with errors.\nVehicles: ${vehicles}\nOrders: ${orders}\nTransactions: ${transactions}\n\nDetails: ${result.errorMessage || 'Unknown error'}`);
+          this.toast.error(`Fuel data synced with errors (vehicles: ${vehicles}, orders: ${orders}, transactions: ${transactions}). Details: ${result.errorMessage || 'Unknown error'}`);
         } else {
-          alert(`Fuel data synced successfully!\nVehicles: ${vehicles}\nOrders: ${orders}\nTransactions: ${transactions}`);
+          this.toast.done(`Fuel data synced: ${vehicles} vehicles, ${orders} orders, ${transactions} transactions.`);
         }
       },
       error: (err) => {
         console.error('Failed to sync fuel data:', err);
         this.syncingFuel.set(false);
-        alert('Failed to sync fuel data. Please check console for details.');
+        this.toast.error('Failed to sync fuel data. Check the browser console for details.');
       }
     });
   }
@@ -3127,9 +3518,10 @@ Notes: ${record.notes || 'No notes'}
     this.http.get<any[]>(`${environment.apiUrl}/fuelhistory/periods`).subscribe({
       next: (periods) => {
         this.fuelPeriods.set(periods);
-        // Auto-select latest period
+        // Select the month named in the address, or else the latest
         if (periods.length > 0 && !this.selectedFuelPeriod) {
-          this.selectedFuelPeriod = periods[0];
+          this.selectedFuelPeriod = periods.find(p => this.fuelPeriodKey(p) === this.pendingFuelPeriod) ?? periods[0];
+          this.pendingFuelPeriod = null;
           this.loadFuelMonthlyReport();
         }
       },
@@ -3152,15 +3544,19 @@ Notes: ${record.notes || 'No notes'}
           // Refresh periods and current report
           this.selectedFuelPeriod = null;
           this.loadFuelPeriods();
-          alert(`✅ Synced ${imported} new fuel transactions from TFN\n${skipped > 0 ? `(${skipped} duplicates skipped)` : ''}\n\n${result.monthBreakdown?.map((m: any) => `${m.month}: ${m.count} transactions, ${m.litres?.toFixed(0)}L, R${m.amount?.toFixed(2)}`).join('\n') || ''}`);
+          const breakdown = result.monthBreakdown?.map((m: any) => `${m.month}: ${m.count} transactions, ${m.litres?.toFixed(0)}L, R${m.amount?.toFixed(2)}`).join('; ') || '';
+          this.toast.done(
+            `Synced ${imported} new fuel transactions from TFN${skipped > 0 ? ` (${skipped} duplicates skipped)` : ''}.${breakdown ? ' ' + breakdown : ''}`,
+            { duration: 8000 }
+          );
         } else {
-          alert(`ℹ️ ${result.message || 'No new transactions to sync'}\n\nPeriod checked: ${result.periodChecked || 'N/A'}`);
+          this.toast.info(`${result.message || 'No new transactions to sync'} (period checked: ${result.periodChecked || 'N/A'})`);
         }
       },
       error: (err) => {
         this.fuelSyncing = false;
         console.error('Failed to sync fuel from TFN:', err);
-        alert('❌ Failed to sync fuel data from TFN. Check the console for details.');
+        this.toast.error('Failed to sync fuel data from TFN. Check the browser console for details.');
       }
     });
   }
@@ -3313,7 +3709,7 @@ Notes: ${record.notes || 'No notes'}
       }).sort((a, b) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime());
 
       if (filtered.length === 0) {
-        this.snackBar.open('No fuel transactions found for the selected date range', 'Close', { duration: 3000 });
+        this.toast.warn('No fuel transactions found for the selected date range');
         this.fuelExportGenerating = false;
         return;
       }
@@ -3462,11 +3858,11 @@ Notes: ${record.notes || 'No notes'}
       const filename = `Fuel_History_${fromStr.replace(/\//g, '-')}_to_${toStr.replace(/\//g, '-')}.xlsx`;
       XLSX.writeFile(workbook, filename);
 
-      this.snackBar.open(`Exported ${filtered.length} transactions to Excel`, 'Close', { duration: 3000 });
+      this.toast.done(`Exported ${filtered.length} transactions to Excel`);
       this.closeFuelExportDialog();
     } catch (err) {
       console.error('Fuel export failed:', err);
-      this.snackBar.open('Failed to export fuel data', 'Close', { duration: 3000 });
+      this.toast.error('Failed to export fuel data');
     } finally {
       this.fuelExportGenerating = false;
     }
@@ -3534,6 +3930,7 @@ Notes: ${record.notes || 'No notes'}
     const p = periods[target];
     this.reqPeriod.set(`${p.year}-${p.month}`);
     this.loadRequisitions();
+    this.filterChanged();
   }
 
   loadRequisitionPeriods(): void {
@@ -3636,27 +4033,32 @@ Notes: ${record.notes || 'No notes'}
       : this.http.post(`${this.apiUrl}/logistics/requisitions`, payload);
     req$.subscribe({
       next: () => {
-        this.snackBar.open(this.editingRequisition ? 'Requisition updated' : 'Requisition created', 'Close', { duration: 2500 });
+        this.toast.done(this.editingRequisition ? 'Requisition updated' : 'Requisition created');
         this.closeRequisitionDialog();
         this.loadRequisitionPeriods();
       },
       error: (err) => {
         console.error('Failed to save requisition:', err);
-        this.snackBar.open('Failed to save requisition', 'Close', { duration: 3000 });
+        this.toast.error('Failed to save requisition');
       }
     });
   }
 
-  deleteRequisition(req: any): void {
-    if (!confirm(`Delete requisition${req.rfNumber ? ' RF ' + req.rfNumber : ''} for ${req.paidTo}?`)) return;
+  async deleteRequisition(req: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete requisition${req.rfNumber ? ' RF ' + req.rfNumber : ''} for ${req.paidTo}?`,
+      message: 'This can\'t be undone.',
+      confirmText: 'Delete requisition',
+      danger: true
+    }))) return;
     this.http.delete(`${this.apiUrl}/logistics/requisitions/${req.id}`).subscribe({
       next: () => {
-        this.snackBar.open('Requisition deleted', 'Close', { duration: 2500 });
+        this.toast.done('Requisition deleted');
         this.loadRequisitionPeriods();
       },
       error: (err) => {
         console.error('Failed to delete requisition:', err);
-        this.snackBar.open('Failed to delete requisition', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delete requisition');
       }
     });
   }
@@ -3680,7 +4082,7 @@ Notes: ${record.notes || 'No notes'}
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 210mm; min-height: 297mm; }
   body {
-    font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #222;
+    font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: var(--color-text);
     /* Company letterhead template as the page background */
     background: #fff url('${templateUrl}') no-repeat top center;
     background-size: 210mm 297mm;
@@ -3689,21 +4091,21 @@ Notes: ${record.notes || 'No notes'}
     padding: 52mm 18mm 30mm 18mm;
   }
   .doc-title-bar { text-align: center; margin-bottom: 16px; }
-  .doc-title { font-size: 17px; font-weight: 800; color: #033142; letter-spacing: 2.5px; text-transform: uppercase; }
+  .doc-title { font-size: 17px; font-weight: 800; color: var(--color-brand); letter-spacing: 2.5px; text-transform: uppercase; }
   .rf-badge { display: inline-block; background: #033142; color: #fff; padding: 7px 20px; border-radius: 20px; font-size: 17px; font-weight: 700; margin-top: 8px; }
   .status { display: inline-block; margin-left: 10px; padding: 3px 14px; border-radius: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; vertical-align: middle; }
-  .status.active { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
-  .status.cancelled { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+  .status.active { background: var(--color-ok-soft); color: #2e7d32; border: 1px solid #a5d6a7; }
+  .status.cancelled { background: var(--color-danger-soft); color: #c62828; border: 1px solid #ef9a9a; }
   table.details { width: 100%; border-collapse: collapse; margin-bottom: 20px; background: rgba(255,255,255,0.92); }
-  table.details td { padding: 10px 14px; border: 1px solid #ccc; vertical-align: top; }
-  table.details td.label { width: 32%; background: rgba(244,246,248,0.95); font-weight: 700; color: #033142; text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.5px; }
+  table.details td { padding: 10px 14px; border: 1px solid var(--color-line-strong); vertical-align: top; }
+  table.details td.label { width: 32%; background: rgba(244,246,248,0.95); font-weight: 700; color: var(--color-brand); text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.5px; }
   .amount-row td.value { font-size: 17px; font-weight: 700; }
-  .total-row td { background: rgba(224,236,240,0.95); font-size: 18px; font-weight: 800; color: #033142; }
+  .total-row td { background: rgba(224,236,240,0.95); font-size: 18px; font-weight: 800; color: var(--color-brand); }
   .sign-row { display: table; width: 100%; margin-top: 34px; border-spacing: 18px 0; }
   .sign-box { display: table-cell; width: 33%; text-align: center; }
   .sign-line { border-bottom: 1.5px solid #333; height: 40px; margin-bottom: 6px; }
-  .sign-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.6px; }
-  .print-meta { margin-top: 20px; font-size: 10.5px; color: #777; text-align: center; }
+  .sign-label { font-size: 11px; color: var(--color-text-2); text-transform: uppercase; letter-spacing: 0.6px; }
+  .print-meta { margin-top: 20px; font-size: 10.5px; color: var(--color-text-2); text-align: center; }
   .watermark { position: fixed; top: 40%; left: 0; right: 0; text-align: center; font-size: 90px; font-weight: 900; color: rgba(198,40,40,0.14); transform: rotate(-20deg); pointer-events: none; }
   @page { size: A4; margin: 0; }
   @media print { body { padding: 52mm 18mm 30mm 18mm; } }
@@ -3754,7 +4156,7 @@ Notes: ${record.notes || 'No notes'}
       w.document.write(html);
       w.document.close();
     } else {
-      this.snackBar.open('Pop-up blocked — allow pop-ups to print', 'Close', { duration: 4000 });
+      this.toast.warn('Pop-up blocked — allow pop-ups to print');
     }
   }
 
@@ -3766,7 +4168,7 @@ Notes: ${record.notes || 'No notes'}
   /** Export the currently filtered requisitions list to Excel. */
   exportAllRequisitionsExcel(): void {
     const rows = this.filteredRequisitions();
-    if (!rows.length) { this.snackBar.open('No requisitions to export', 'Close', { duration: 3000 }); return; }
+    if (!rows.length) { this.toast.warn('No requisitions to export'); return; }
     const period = this.reqPeriod() ? String(this.reqPeriod()).replace('/', '-') : 'all';
     this.exportRequisitionsToExcel(rows, `Requisitions-${period}.xlsx`);
   }
@@ -3799,7 +4201,7 @@ Notes: ${record.notes || 'No notes'}
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Requisitions');
     XLSX.writeFile(wb, fileName);
-    this.snackBar.open(`Exported ${rows.length} requisition${rows.length === 1 ? '' : 's'} to Excel`, 'Close', { duration: 3000 });
+    this.toast.done(`Exported ${rows.length} requisition${rows.length === 1 ? '' : 's'} to Excel`);
   }
 
   // ─── Sleep Out Methods ─────────────────────────────────────────
@@ -3896,7 +4298,7 @@ Notes: ${record.notes || 'No notes'}
 
   saveSleepOut(): void {
     if (!this.sleepOutForm.driverId || !this.sleepOutForm.amount) {
-      this.snackBar.open('Please select a tripsheet and enter an amount', 'Close', { duration: 3000 });
+      this.toast.warn('Please select a tripsheet and enter an amount');
       return;
     }
 
@@ -3914,67 +4316,79 @@ Notes: ${record.notes || 'No notes'}
     if (this.editingSleepOut) {
       this.http.put(`${this.apiUrl}/logistics/sleepouts/${this.editingSleepOut.id}`, payload).subscribe({
         next: () => {
-          this.snackBar.open('Sleep out updated', 'Close', { duration: 3000 });
+          this.toast.done('Sleep out updated');
           this.closeSleepOutDialog();
           this.loadSleepOuts();
         },
         error: (err) => {
-          this.snackBar.open(err.error?.error || 'Failed to update sleep out', 'Close', { duration: 3000 });
+          this.toast.error(err.error?.error || 'Failed to update sleep out');
         }
       });
     } else {
       this.http.post(`${this.apiUrl}/logistics/sleepouts`, payload).subscribe({
         next: () => {
-          this.snackBar.open('Sleep out request submitted', 'Close', { duration: 3000 });
+          this.toast.done('Sleep out request submitted');
           this.closeSleepOutDialog();
           this.loadSleepOuts();
         },
         error: (err) => {
-          this.snackBar.open(err.error?.error || 'Failed to create sleep out', 'Close', { duration: 3000 });
+          this.toast.error(err.error?.error || 'Failed to create sleep out');
         }
       });
     }
   }
 
-  approveSleepOut(row: any, approved: boolean): void {
+  async approveSleepOut(row: any, approved: boolean): Promise<void> {
     const action = approved ? 'approve' : 'reject';
-    if (!confirm(`Are you sure you want to ${action} this sleep out for ${row.driverName}?`)) return;
+    if (!(await this.confirmDialog.ask({
+      title: `${approved ? 'Approve' : 'Reject'} sleep out for ${row.driverName}?`,
+      confirmText: approved ? 'Approve sleep out' : 'Reject sleep out',
+      danger: !approved
+    }))) return;
 
     this.http.post(`${this.apiUrl}/logistics/sleepouts/${row.id}/approve`, { approved, notes: '' }).subscribe({
       next: () => {
-        this.snackBar.open(`Sleep out ${approved ? 'approved' : 'rejected'}`, 'Close', { duration: 3000 });
+        this.toast.done(`Sleep out ${approved ? 'approved' : 'rejected'}`);
         this.loadSleepOuts();
       },
       error: (err) => {
-        this.snackBar.open(err.error?.error || `Failed to ${action} sleep out`, 'Close', { duration: 3000 });
+        this.toast.error(err.error?.error || `Failed to ${action} sleep out`);
       }
     });
   }
 
-  markSleepOutPaid(row: any): void {
-    if (!confirm(`Mark sleep out for ${row.driverName} (R${row.amount}) as paid?`)) return;
+  async markSleepOutPaid(row: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Mark sleep out for ${row.driverName} (R${row.amount}) as paid?`,
+      confirmText: 'Mark as paid'
+    }))) return;
 
     this.http.post(`${this.apiUrl}/logistics/sleepouts/${row.id}/mark-paid`, {}).subscribe({
       next: () => {
-        this.snackBar.open('Sleep out marked as paid', 'Close', { duration: 3000 });
+        this.toast.done('Sleep out marked as paid');
         this.loadSleepOuts();
       },
       error: (err) => {
-        this.snackBar.open(err.error?.error || 'Failed to mark as paid', 'Close', { duration: 3000 });
+        this.toast.error(err.error?.error || 'Failed to mark as paid');
       }
     });
   }
 
-  deleteSleepOut(row: any): void {
-    if (!confirm(`Delete sleep out request for ${row.driverName}?`)) return;
+  async deleteSleepOut(row: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete sleep out request for ${row.driverName}?`,
+      message: 'This can\'t be undone.',
+      confirmText: 'Delete request',
+      danger: true
+    }))) return;
 
     this.http.delete(`${this.apiUrl}/logistics/sleepouts/${row.id}`).subscribe({
       next: () => {
-        this.snackBar.open('Sleep out deleted', 'Close', { duration: 3000 });
+        this.toast.done('Sleep out deleted');
         this.loadSleepOuts();
       },
       error: (err) => {
-        this.snackBar.open(err.error?.error || 'Failed to delete sleep out', 'Close', { duration: 3000 });
+        this.toast.error(err.error?.error || 'Failed to delete sleep out');
       }
     });
   }
@@ -3990,10 +4404,10 @@ Notes: ${record.notes || 'No notes'}
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
-        this.snackBar.open('PDF downloaded', 'Close', { duration: 3000 });
+        this.toast.done('PDF downloaded');
       },
       error: (err) => {
-        this.snackBar.open('Failed to download PDF', 'Close', { duration: 3000 });
+        this.toast.error('Failed to download PDF');
       }
     });
   }
@@ -4049,10 +4463,8 @@ Notes: ${record.notes || 'No notes'}
         this.podReconciling = false;
         const linked = res?.podsLinked ?? 0;
         const examined = res?.podsExamined ?? 0;
-        this.snackBar.open(
-          res?.message || `Linked ${linked} POD(s) to tripsheets (examined ${examined})`,
-          'Close',
-          { duration: 6000 }
+        this.toast.done(
+          res?.message || `Linked ${linked} POD(s) to tripsheets (examined ${examined})`
         );
         this.loadPodDocuments();
         this.loadPodSummary();
@@ -4060,7 +4472,7 @@ Notes: ${record.notes || 'No notes'}
       error: (err) => {
         this.podReconciling = false;
         console.error('Failed to reconcile PODs to tripsheets:', err);
-        this.snackBar.open('Failed to reconcile PODs to tripsheets', 'Close', { duration: 5000 });
+        this.toast.error('Failed to reconcile PODs to tripsheets');
       }
     });
   }
@@ -4075,7 +4487,7 @@ Notes: ${record.notes || 'No notes'}
       },
       error: (err) => {
         console.error('Failed to view POD:', err);
-        this.snackBar.open('Failed to open POD document', 'Close', { duration: 3000 });
+        this.toast.error('Failed to open POD document');
       }
     });
   }
@@ -4085,7 +4497,7 @@ Notes: ${record.notes || 'No notes'}
   previewTripsheetFromPod(pod: any): void {
     const loadId = pod?.loadId;
     if (!loadId) {
-      this.snackBar.open('This POD is not linked to a tripsheet', 'Close', { duration: 3000 });
+      this.toast.warn('This POD is not linked to a tripsheet');
       return;
     }
     this.http.get(`${this.apiUrl}/logistics/tripsheet/${loadId}/pdf`, { responseType: 'text' }).subscribe({
@@ -4098,7 +4510,7 @@ Notes: ${record.notes || 'No notes'}
       },
       error: (err) => {
         console.error('Failed to load tripsheet preview:', err);
-        this.snackBar.open('Failed to load tripsheet', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load tripsheet');
       }
     });
   }
@@ -4126,7 +4538,7 @@ Notes: ${record.notes || 'No notes'}
       },
       error: (err) => {
         console.error('Failed to download POD:', err);
-        this.snackBar.open('Failed to download POD', 'Close', { duration: 3000 });
+        this.toast.error('Failed to download POD');
       }
     });
   }
@@ -4136,29 +4548,33 @@ Notes: ${record.notes || 'No notes'}
     this.podReconciling = true;
     const url = `${this.apiUrl}/logistics/loads/pod-reconcile`;
     this.http.post<any>(`${url}?apply=false`, {}).subscribe({
-      next: p => {
+      next: async p => {
         this.podReconciling = false;
         const sample = (p.closable || []).slice(0, 15).map((c: any) => c.loadNumber).join(', ');
-        const msg = `POD ↔ Tripsheet reconciliation preview:\n\n`
-          + `• ${p.tripsheetsClosable} open tripsheet(s) have a POD for EVERY invoice → will be marked Delivered\n`
-          + `• ${p.tripsheetsPartial} open tripsheet(s) have PODs for only some invoices (left open)\n`
-          + `• ${p.podsLinkedToTripsheets} POD(s) will be linked to their tripsheet\n`
-          + `• ${p.invoicesLinkedToTripsheets} invoice(s) will be linked to their tripsheet\n`
-          + `• ${p.podLinksNumberFilled} POD link(s) missing an invoice number will be repaired\n`
-          + (sample ? `\nTripsheets to close: ${sample}${p.tripsheetsClosable > 15 ? ', …' : ''}\n` : '')
-          + `\nApply these changes?`;
-        if (!confirm(msg)) return;
+        if (!(await this.confirmDialog.ask({
+          title: 'Apply POD and tripsheet reconciliation?',
+          message: 'Matching PODs to tripsheets by invoice number will make these changes:',
+          details: [
+            `${p.tripsheetsClosable} open tripsheet(s) have a POD for every invoice and will be marked Delivered`,
+            `${p.tripsheetsPartial} open tripsheet(s) have PODs for only some invoices and stay open`,
+            `${p.podsLinkedToTripsheets} POD(s) will be linked to their tripsheet`,
+            `${p.invoicesLinkedToTripsheets} invoice(s) will be linked to their tripsheet`,
+            `${p.podLinksNumberFilled} POD link(s) missing an invoice number will be repaired`,
+            ...(sample ? [`Tripsheets to close: ${sample}${p.tripsheetsClosable > 15 ? ', …' : ''}`] : [])
+          ],
+          confirmText: 'Apply changes'
+        }))) return;
         this.podReconciling = true;
         this.http.post<any>(`${url}?apply=true`, {}).subscribe({
           next: r => {
             this.podReconciling = false;
-            this.snackBar.open(`Reconciled: ${r.tripsheetsClosable} tripsheets delivered, ${r.podsLinkedToTripsheets} PODs and ${r.invoicesLinkedToTripsheets} invoices linked`, 'Close', { duration: 8000 });
+            this.toast.done(`Reconciled: ${r.tripsheetsClosable} tripsheets delivered, ${r.podsLinkedToTripsheets} PODs and ${r.invoicesLinkedToTripsheets} invoices linked`);
             this.loadDeliveredWithoutPod();
           },
-          error: e => { this.podReconciling = false; this.snackBar.open(e?.error?.message || 'Reconciliation failed', 'Close', { duration: 5000 }); }
+          error: e => { this.podReconciling = false; this.toast.error(e?.error?.message || 'Reconciliation failed'); }
         });
       },
-      error: e => { this.podReconciling = false; this.snackBar.open(e?.error?.message || 'Reconciliation preview failed', 'Close', { duration: 5000 }); }
+      error: e => { this.podReconciling = false; this.toast.error(e?.error?.message || 'Reconciliation preview failed'); }
     });
   }
 
@@ -4202,7 +4618,7 @@ Notes: ${record.notes || 'No notes'}
         this.loadPodDocuments();
         this.loadPodSummary();
         this.loadDeliveredWithoutPod();
-        this.snackBar.open(`POD uploaded for ${row.loadNumber}`, 'Close', { duration: 3000 });
+        this.toast.done(`POD uploaded for ${row.loadNumber}`);
       }
     });
   }
@@ -4221,8 +4637,8 @@ Notes: ${record.notes || 'No notes'}
         const linked = result.linkedInvoiceCount ?? 0;
         const msg = linked > 0
           ? `POD uploaded — Welly linked ${linked} invoice${linked === 1 ? '' : 's'}${result.loadNumber ? ' → tripsheet ' + result.loadNumber : ''}`
-          : 'POD uploaded successfully!';
-        this.snackBar.open(msg, 'Close', { duration: 4000 });
+          : 'POD uploaded successfully';
+        this.toast.done(msg);
       }
     });
   }
@@ -4245,23 +4661,28 @@ Notes: ${record.notes || 'No notes'}
       if (result?.linked) {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open(`POD linked to ${result.loadNumber}`, 'Close', { duration: 3000 });
+        this.toast.done(`POD linked to ${result.loadNumber}`);
       }
     });
   }
 
-  delinkPod(pod: any): void {
-    if (!confirm(`Delink this POD from tripsheet ${pod.loadNumber || ''}?`)) return;
+  async delinkPod(pod: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: pod.loadNumber ? `Delink this POD from tripsheet ${pod.loadNumber}?` : 'Delink this POD from its tripsheet?',
+      message: 'The POD document is kept. You can link it to a tripsheet again later.',
+      confirmText: 'Delink POD',
+      danger: true
+    }))) return;
 
     this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink`, {}).subscribe({
       next: () => {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open('POD delinked from tripsheet', 'Close', { duration: 3000 });
+        this.toast.done('POD delinked from tripsheet');
       },
       error: (err) => {
         console.error('Failed to delink POD:', err);
-        this.snackBar.open('Failed to delink POD', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delink POD');
       }
     });
   }
@@ -4278,24 +4699,29 @@ Notes: ${record.notes || 'No notes'}
         this.loadPodDocuments();
         this.loadPodSummary();
         const count = result.linkedInvoiceCount || (result.invoiceNumbers?.length ?? 0) || 1;
-        this.snackBar.open(`POD linked to ${count} invoice(s) → Status set to Delivered`, 'Close', { duration: 4500 });
+        this.toast.done(`POD linked to ${count} invoice(s) → Status set to Delivered`);
       }
     });
   }
 
-  delinkInvoice(pod: any): void {
+  async delinkInvoice(pod: any): Promise<void> {
     const linkedCount = pod.invoiceLinks?.length || (pod.invoiceId ? 1 : 0);
-    if (!confirm(`Delink this POD from ${linkedCount} invoice(s)? Invoice status will revert to Pending only where not linked by another POD.`)) return;
+    if (!(await this.confirmDialog.ask({
+      title: `Delink this POD from ${linkedCount} invoice${linkedCount === 1 ? '' : 's'}?`,
+      message: 'Invoice status reverts to Pending, except for invoices that another POD is still linked to.',
+      confirmText: 'Delink invoices',
+      danger: true
+    }))) return;
 
     this.http.put(`${this.apiUrl}/PodDocuments/${pod.id}/delink-invoice`, {}).subscribe({
       next: () => {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open('POD delinked from invoices', 'Close', { duration: 4000 });
+        this.toast.done('POD delinked from invoices');
       },
       error: (err) => {
         console.error('Failed to delink invoice:', err);
-        this.snackBar.open('Failed to delink from invoice', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delink from invoice');
       }
     });
   }
@@ -4311,7 +4737,7 @@ Notes: ${record.notes || 'No notes'}
       if (result?.updated) {
         this.loadPodDocuments();
         this.loadPodSummary();
-        this.snackBar.open('POD details updated', 'Close', { duration: 3000 });
+        this.toast.done('POD details updated');
       }
     });
   }
@@ -4530,14 +4956,14 @@ Notes: ${record.notes || 'No notes'}
     dialogRef.afterClosed().subscribe(result => {
       if (result?.uploaded) {
         this.loadCompletedTripsheets();
-        this.snackBar.open('POD uploaded successfully!', 'Close', { duration: 3000 });
+        this.toast.done('POD uploaded successfully');
       }
     });
   }
 
   viewPOD(trip: any): void {
     if (!trip.podFilePath) {
-      this.snackBar.open('No POD file available', 'Close', { duration: 3000 });
+      this.toast.warn('No POD file available');
       return;
     }
 
@@ -4548,7 +4974,7 @@ Notes: ${record.notes || 'No notes'}
 
   downloadPOD(trip: any): void {
     if (!trip.podFilePath) {
-      this.snackBar.open('No POD file available', 'Close', { duration: 3000 });
+      this.toast.warn('No POD file available');
       return;
     }
 
@@ -4566,7 +4992,7 @@ Notes: ${record.notes || 'No notes'}
       },
       error: (err) => {
         console.error('Failed to download POD:', err);
-        this.snackBar.open('Failed to download POD', 'Close', { duration: 3000 });
+        this.toast.error('Failed to download POD');
       }
     });
   }

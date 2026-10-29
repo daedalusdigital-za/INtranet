@@ -18,6 +18,26 @@ namespace ProjectTracker.API.Services
         IAsyncEnumerable<string> ChatStreamingWithSessionAsync(string sessionId, string userMessage, ChatUserContext? userContext, string? pageContext, string? pageContent, CancellationToken cancellationToken = default);
         Task<string> AnalyzeDocumentAsync(string systemPrompt, string userPrompt, CancellationToken cancellationToken = default);
         Task<bool> IsAvailableAsync();
+
+        /// <summary>
+        /// Rich streaming: yields content tokens AND (when enabled) the model's reasoning tokens separately.
+        /// Thinking is switched on automatically for analytical questions (see <see cref="LocalLlmService.ShouldThink"/>).
+        /// </summary>
+        IAsyncEnumerable<LlmStreamEvent> ChatStreamingWithSessionRichAsync(string sessionId, string userMessage, ChatUserContext? userContext, string? pageContext, string? pageContent, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Tool loop: feed the results of executed [ACTION] tags back to the model so it can
+        /// reason over them and produce a final, natural answer (or request another step).
+        /// </summary>
+        IAsyncEnumerable<LlmStreamEvent> ContinueWithToolResultsAsync(string sessionId, string toolResults, ChatUserContext? userContext, bool enableThinking, CancellationToken cancellationToken = default);
+    }
+
+    public enum LlmStreamEventKind { Content, Thinking }
+
+    public readonly record struct LlmStreamEvent(LlmStreamEventKind Kind, string Text)
+    {
+        public static LlmStreamEvent ContentOf(string t) => new(LlmStreamEventKind.Content, t);
+        public static LlmStreamEvent ThinkingOf(string t) => new(LlmStreamEventKind.Thinking, t);
     }
 
     public class LocalLlmService : ILocalLlmService
@@ -35,6 +55,8 @@ namespace ProjectTracker.API.Services
         private const int MaxContextTokens = 6000;
         private const int ApproxCharsPerToken = 4;
         private const int MaxResponseTokens = 2048;
+        // When reasoning is enabled the budget must cover thinking + the visible answer
+        private const int MaxResponseTokensWithThinking = 4096;
 
         public LocalLlmService(
             ILogger<LocalLlmService> logger,
@@ -497,10 +519,46 @@ Be concise, professional, and friendly. Use the provided database context when a
             string? pageContent,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            await foreach (var ev in ChatStreamingWithSessionRichAsync(sessionId, userMessage, userContext, pageContext, pageContent, cancellationToken))
+            {
+                if (ev.Kind == LlmStreamEventKind.Content)
+                    yield return ev.Text;
+            }
+        }
+
+        /// <summary>
+        /// Heuristic: enable model reasoning for analytical / multi-step requests only,
+        /// so simple chat stays fast on CPU inference.
+        /// </summary>
+        public static bool ShouldThink(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return false;
+            var q = message.ToLowerInvariant();
+            var words = q.Split(new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            if (words >= 40) return true;
+
+            string[] triggers =
+            {
+                "analy", "compare", "comparison", "why ", "plan", "summar", "report", "calculate",
+                "how many", "trend", "best ", "optimi", "tripsheet", "trip sheet", "suggest", "recommend",
+                "explain", "breakdown", "break down", "forecast", "which ", "should i", "should we",
+                "what if", "risk", "prioriti", "schedule", "route", "efficien", "cost", "total", "average"
+            };
+            return triggers.Any(t => q.Contains(t));
+        }
+
+        public async IAsyncEnumerable<LlmStreamEvent> ChatStreamingWithSessionRichAsync(
+            string sessionId,
+            string userMessage,
+            ChatUserContext? userContext,
+            string? pageContext,
+            string? pageContent,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
             _conversationMemory.AddMessage(sessionId, "user", userMessage);
 
             var history = _conversationMemory.GetHistory(sessionId);
-            var systemContent = _systemPrompt + BuildUserContextBlock(userContext);
+            var systemContent = _systemPrompt + BuildDateBlock() + BuildUserContextBlock(userContext);
 
             // Add page awareness to system prompt
             if (!string.IsNullOrEmpty(pageContext))
@@ -521,27 +579,98 @@ Be concise, professional, and friendly. Use the provided database context when a
             }
 
             var messages = BuildMessages(systemContent, history);
+            var think = ShouldThink(userMessage);
+            _logger.LogInformation("LocalLLM: session {SessionId} thinking={Think}", sessionId, think);
+
+            await foreach (var ev in StreamCompletionAsync(sessionId, messages, think, cancellationToken))
+                yield return ev;
+        }
+
+        public async IAsyncEnumerable<LlmStreamEvent> ContinueWithToolResultsAsync(
+            string sessionId,
+            string toolResults,
+            ChatUserContext? userContext,
+            bool enableThinking,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            // Tool results are injected as a user-role message (Gemma's chat template has no
+            // tool role). It is clearly framed so the model treats it as data, not as the user.
+            var toolMessage =
+                "[TOOL RESULTS — not visible to the user]\n" +
+                "These are the results of the action(s) you just requested. Use them to answer the user's " +
+                "ORIGINAL request naturally and concisely: summarise, highlight what matters, keep IDs/numbers/names " +
+                "the user needs, and use a table for lists. Do not mention 'tool results' or repeat raw JSON. " +
+                "Only emit another [ACTION:...] tag if a further step is genuinely required to complete the request.\n\n" +
+                toolResults;
+
+            _conversationMemory.AddMessage(sessionId, "user", toolMessage);
+
+            var history = _conversationMemory.GetHistory(sessionId);
+            var systemContent = _systemPrompt + BuildDateBlock() + BuildUserContextBlock(userContext);
+            var messages = BuildMessages(systemContent, history);
+
+            await foreach (var ev in StreamCompletionAsync(sessionId, messages, enableThinking, cancellationToken))
+                yield return ev;
+        }
+
+        private static string BuildDateBlock()
+        {
+            var now = DateTime.Now;
+            return $"\n## Current Date/Time\n{now:dddd, dd MMMM yyyy HH:mm} (South Africa). Use this for 'today', 'tomorrow', 'this week', etc.\n";
+        }
+
+        /// <summary>
+        /// Core streaming call. Separates reasoning (<c>reasoning_content</c> deltas or inline
+        /// &lt;think&gt; blocks) from visible content, and stores the visible answer in session memory.
+        /// </summary>
+        private async IAsyncEnumerable<LlmStreamEvent> StreamCompletionAsync(
+            string sessionId,
+            List<OpenAIChatMessage> messages,
+            bool enableThinking,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            if (enableThinking)
+            {
+                // Gemma 4's template puts <|think|> at the top of the system turn; with a long system
+                // prompt the model usually ignores it. Repeating the token at the very end of the
+                // last user turn reliably opens the thought channel. Done on a copy so session
+                // memory never contains the control token.
+                var last = messages.LastOrDefault(m => m.Role == "user");
+                if (last != null)
+                {
+                    messages = messages.Select(m => ReferenceEquals(m, last)
+                        ? new OpenAIChatMessage { Role = m.Role, Content = m.Content.TrimEnd() + "\n<|think|>" }
+                        : m).ToList();
+                }
+            }
 
             var request = new OpenAIChatRequest
             {
                 Model = _model,
-                MaxTokens = MaxResponseTokens,
+                MaxTokens = enableThinking ? MaxResponseTokensWithThinking : MaxResponseTokens,
                 Stream = true,
-                Temperature = 0.7f,
-                Messages = messages
+                Temperature = enableThinking ? 0.5f : 0.7f,
+                Messages = messages,
+                // llama.cpp: per-request override of the server's --reasoning default
+                ChatTemplateKwargs = enableThinking ? new Dictionary<string, object> { ["enable_thinking"] = true } : null,
+                ReasoningFormat = enableThinking ? "deepseek" : null
             };
 
             var json = JsonSerializer.Serialize(request, _jsonOptions);
-            var httpContent = new StringContent(json, Encoding.UTF8, "application/json");
             var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
             {
-                Content = httpContent
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
             };
 
             var fullResponse = new StringBuilder();
+            var thinkingChars = 0;
             HttpResponseMessage? response = null;
             Stream? stream = null;
             StreamReader? reader = null;
+
+            // Inline <think>...</think> handling (in case the server doesn't split reasoning for us)
+            var inThink = false;
+            var pending = new StringBuilder();
 
             try
             {
@@ -551,7 +680,7 @@ Be concise, professional, and friendly. Use the provided database context when a
                 {
                     var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
                     _logger.LogError("LocalLLM session chat returned {StatusCode}: {ErrorBody}", response.StatusCode, errorBody);
-                    yield return $"AI service returned an error. Please try again.";
+                    yield return LlmStreamEvent.ContentOf("AI service returned an error. Please try again.");
                     _conversationMemory.AddMessage(sessionId, "assistant", "Sorry, I encountered an error. Please try again.");
                     yield break;
                 }
@@ -568,30 +697,100 @@ Be concise, professional, and friendly. Use the provided database context when a
                     if (data == "[DONE]") break;
 
                     string? rawToken = null;
+                    string? reasoningToken = null;
                     try
                     {
-                        var eventDoc = JsonDocument.Parse(data);
+                        using var eventDoc = JsonDocument.Parse(data);
                         var choices = eventDoc.RootElement.GetProperty("choices");
                         if (choices.GetArrayLength() > 0)
                         {
                             var delta = choices[0].GetProperty("delta");
                             if (delta.TryGetProperty("content", out var contentProp))
-                            {
                                 rawToken = contentProp.GetString();
-                            }
+                            if (delta.TryGetProperty("reasoning_content", out var reasoningProp))
+                                reasoningToken = reasoningProp.GetString();
                         }
                     }
                     catch (JsonException ex)
                     {
-                        // Malformed SSE chunk from llama.cpp — skip it but leave a trace
                         _logger.LogDebug(ex, "Skipping malformed LLM stream event: {Data}", data);
                     }
 
-                    if (!string.IsNullOrEmpty(rawToken))
+                    if (!string.IsNullOrEmpty(reasoningToken))
                     {
-                        fullResponse.Append(rawToken);
-                        yield return rawToken;
+                        thinkingChars += reasoningToken.Length;
+                        yield return LlmStreamEvent.ThinkingOf(reasoningToken);
                     }
+
+                    if (string.IsNullOrEmpty(rawToken)) continue;
+
+                    // Route inline <think> blocks to the thinking channel
+                    pending.Append(rawToken);
+                    while (pending.Length > 0)
+                    {
+                        var text = pending.ToString();
+                        if (!inThink)
+                        {
+                            var open = text.IndexOf("<think>", StringComparison.Ordinal);
+                            if (open < 0)
+                            {
+                                // Hold back a possible partial "<think" prefix at the tail
+                                var hold = PartialTagSuffix(text, "<think>");
+                                var emit = text.Substring(0, text.Length - hold);
+                                if (emit.Length > 0)
+                                {
+                                    fullResponse.Append(emit);
+                                    yield return LlmStreamEvent.ContentOf(emit);
+                                }
+                                pending.Clear();
+                                pending.Append(text.Substring(text.Length - hold));
+                                break;
+                            }
+                            var before = text.Substring(0, open);
+                            if (before.Length > 0)
+                            {
+                                fullResponse.Append(before);
+                                yield return LlmStreamEvent.ContentOf(before);
+                            }
+                            pending.Clear();
+                            pending.Append(text.Substring(open + 7));
+                            inThink = true;
+                        }
+                        else
+                        {
+                            var close = text.IndexOf("</think>", StringComparison.Ordinal);
+                            if (close < 0)
+                            {
+                                var hold = PartialTagSuffix(text, "</think>");
+                                var emit = text.Substring(0, text.Length - hold);
+                                if (emit.Length > 0)
+                                {
+                                    thinkingChars += emit.Length;
+                                    yield return LlmStreamEvent.ThinkingOf(emit);
+                                }
+                                pending.Clear();
+                                pending.Append(text.Substring(text.Length - hold));
+                                break;
+                            }
+                            var inner = text.Substring(0, close);
+                            if (inner.Length > 0)
+                            {
+                                thinkingChars += inner.Length;
+                                yield return LlmStreamEvent.ThinkingOf(inner);
+                            }
+                            pending.Clear();
+                            pending.Append(text.Substring(close + 8));
+                            inThink = false;
+                        }
+                    }
+                }
+
+                // Flush any held-back tail
+                if (pending.Length > 0)
+                {
+                    var tail = pending.ToString();
+                    if (inThink) yield return LlmStreamEvent.ThinkingOf(tail);
+                    else { fullResponse.Append(tail); yield return LlmStreamEvent.ContentOf(tail); }
                 }
             }
             finally
@@ -601,10 +800,31 @@ Be concise, professional, and friendly. Use the provided database context when a
                 response?.Dispose();
             }
 
+            if (thinkingChars > 0)
+                _logger.LogInformation("LocalLLM: session {SessionId} reasoned for ~{Tokens} tokens", sessionId, thinkingChars / ApproxCharsPerToken);
+
+            if (fullResponse.Length == 0 && thinkingChars > 0)
+            {
+                const string note = "I ran out of room while working through that — could you narrow the question a little?";
+                fullResponse.Append(note);
+                yield return LlmStreamEvent.ContentOf(note);
+            }
+
             if (fullResponse.Length > 0)
             {
                 _conversationMemory.AddMessage(sessionId, "assistant", fullResponse.ToString());
             }
+        }
+
+        /// <summary>Length of the longest suffix of <paramref name="text"/> that is a proper prefix of <paramref name="tag"/>.</summary>
+        private static int PartialTagSuffix(string text, string tag)
+        {
+            var max = Math.Min(text.Length, tag.Length - 1);
+            for (var len = max; len > 0; len--)
+            {
+                if (string.CompareOrdinal(text, text.Length - len, tag, 0, len) == 0) return len;
+            }
+            return 0;
         }
 
         public async Task<string> AnalyzeDocumentAsync(string systemPrompt, string userPrompt, CancellationToken cancellationToken = default)
@@ -678,6 +898,9 @@ Be concise, professional, and friendly. Use the provided database context when a
         public int? MaxTokens { get; set; }
         public float? Temperature { get; set; }
         public bool? Stream { get; set; }
+        // llama.cpp extensions (ignored by servers that don't support them)
+        public Dictionary<string, object>? ChatTemplateKwargs { get; set; }
+        public string? ReasoningFormat { get; set; }
     }
 
     public class OpenAIChatMessage

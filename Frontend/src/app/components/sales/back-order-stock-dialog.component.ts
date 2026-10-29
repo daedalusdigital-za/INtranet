@@ -76,26 +76,26 @@ import { BackOrderItem } from './back-orders-data';
     .item { margin-bottom:14px; }
     .code { font-family:monospace; font-weight:700; color:#37474f; }
     .name { font-size:1.05rem; font-weight:600; }
-    .meta { color:#666; font-size:.85rem; margin-top:2px; }
-    .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:12px; border-radius:8px; margin-bottom:14px; background:#f5f5f5; }
-    .summary.full { background:#e8f5e9; }
-    .summary.partial { background:#fff8e1; }
+    .meta { color:var(--color-text-2); font-size:.85rem; margin-top:2px; }
+    .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:12px; border-radius:8px; margin-bottom:14px; background:var(--color-surface-2); }
+    .summary.full { background:var(--color-ok-soft); }
+    .summary.partial { background:var(--color-warn-soft); }
     .cell { display:flex; flex-direction:column; }
-    .lbl { font-size:.75rem; color:#666; text-transform:uppercase; letter-spacing:.3px; }
+    .lbl { font-size:.75rem; color:var(--color-text-2); text-transform:uppercase; letter-spacing:.3px; }
     .val { font-size:1.2rem; font-weight:700; }
-    .val small { font-size:.75rem; font-weight:500; color:#777; }
+    .val small { font-size:.75rem; font-weight:500; color:var(--color-text-3); }
     table.wh { width:100%; border-collapse:collapse; font-size:.9rem; }
-    .wh th { text-align:left; padding:8px; border-bottom:2px solid #e0e0e0; color:#555; font-weight:600; }
-    .wh td { padding:8px; border-bottom:1px solid #eee; vertical-align:middle; }
+    .wh th { text-align:left; padding:8px; border-bottom:2px solid var(--color-line); color:var(--color-text-2); font-weight:600; }
+    .wh td { padding:8px; border-bottom:1px solid var(--color-line); vertical-align:middle; }
     .wh td mat-icon { vertical-align:-3px; margin-right:4px; color:#78909c; }
     .num { text-align:right; white-space:nowrap; }
-    .num small { color:#888; }
-    .num.ok { color:#2e7d32; font-weight:600; }
+    .num small { color:var(--color-text-3); }
+    .num.ok { color:var(--color-ok); font-weight:600; }
     .bar { width:140px; }
     .track { height:8px; background:#eceff1; border-radius:4px; overflow:hidden; }
     .fill { height:100%; background:#ffb300; }
-    .fill.ok { background:#43a047; }
-    .empty { display:flex; align-items:center; gap:8px; color:#777; padding:16px 0; }
+    .fill.ok { background:var(--color-ok); }
+    .empty { display:flex; align-items:center; gap:8px; color:var(--color-text-3); padding:16px 0; }
     mat-dialog-content { min-width:520px; }
   `]
 })

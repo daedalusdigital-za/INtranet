@@ -13,6 +13,10 @@
 
 import { Routes } from '@angular/router';
 import { authGuard, moduleGuard, adminGuard } from '../guards/auth.guard';
+import { subPageRoutes } from '../ui/sub-pages';
+import { LOGISTICS_SECTIONS } from '../components/logistics/logistics-sections';
+import { SALES_SECTIONS } from '../components/sales/sales-sections';
+import { STOCK_SECTIONS } from '../components/stock-management/stock-sections';
 
 // ============================================================================
 // MODULE KEYS - All available module permission keys
@@ -32,6 +36,7 @@ export const MODULE_KEYS = {
   CALENDAR: 'calendar',
   FINANCE: 'finance',
   MANAGEMENT: 'management',
+  FLOWS: 'flows',
   SETTINGS: 'settings'
 } as const;
 
@@ -226,6 +231,17 @@ export const MODULES: ModuleConfig[] = [
     showInDashboard: true
   },
   {
+    key: 'flows',
+    name: 'Flows',
+    description: 'Automated business processes: triggers, Welly analysis, tasks, approvals and audit trails',
+    icon: 'account_tree',
+    route: '/flows',
+    color: '#7c3aed',
+    requiresPermission: true,
+    showInNavbar: true,
+    showInDashboard: true
+  },
+  {
     key: 'settings',
     name: 'Settings',
     description: 'User preferences and system settings',
@@ -284,12 +300,28 @@ export function getModuleRoutes(): Routes {
     { path: '', redirectTo: '/login', pathMatch: 'full' },
     { 
       path: 'login', 
+      title: 'Sign in',
       loadComponent: () => import('../components/login/login.component').then(m => m.LoginComponent) 
     },
+    // Public shipment tracking (QR code on the waybill) — no sign-in, no personal data shown
+    {
+      path: 't/:token',
+      title: 'Track shipment',
+      loadComponent: () => import('../components/public/public-tracking.component').then(m => m.PublicTrackingComponent)
+    },
     
-    // Dashboard - Home
+    // Home: the signed-in person's day
     { 
       path: 'dashboard', 
+      title: 'Home',
+      loadComponent: () => import('../components/home/home.component').then(m => m.HomeComponent),
+      canActivate: [authGuard] 
+    },
+
+    // Company feed: news, birthdays, gallery (was the home page)
+    { 
+      path: 'welcome', 
+      title: 'Company news',
       loadComponent: () => import('../components/projects/projects.component').then(m => m.ProjectsComponent),
       canActivate: [authGuard] 
     },
@@ -297,20 +329,24 @@ export function getModuleRoutes(): Routes {
     // Sales Module
     { 
       path: 'sales', 
+      title: 'Sales',
       loadComponent: () => import('../components/sales/sales-dashboard.component').then(m => m.SalesDashboardComponent),
       canActivate: [authGuard, moduleGuard], 
-      data: { module: 'sales' } 
+      data: { module: 'sales' },
+      children: subPageRoutes(SALES_SECTIONS, 'Sales')
     },
     
     // Project Management Module
     { 
       path: 'departments', 
+      title: 'Project boards',
       loadComponent: () => import('../components/dashboard/dashboard.component').then(m => m.DashboardComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'project_management' } 
     },
     { 
       path: 'board/:id', 
+      title: 'Project board',
       loadComponent: () => import('../components/board/board.component').then(m => m.BoardComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'project_management' } 
@@ -319,6 +355,7 @@ export function getModuleRoutes(): Routes {
     // Calendar (available to all)
     { 
       path: 'calendar', 
+      title: 'Calendar',
       loadComponent: () => import('../components/calendar/calendar.component').then(m => m.CalendarComponent),
       canActivate: [authGuard] 
     },
@@ -327,6 +364,7 @@ export function getModuleRoutes(): Routes {
     // Asset Register (IT) — available to authenticated users
     { 
       path: 'asset-register', 
+      title: 'Asset register',
       loadComponent: () => import('../components/asset-register/asset-register.component').then(m => m.AssetRegisterComponent),
       canActivate: [authGuard] 
     },
@@ -334,6 +372,7 @@ export function getModuleRoutes(): Routes {
     // Human Resource Module
     { 
       path: 'people', 
+      title: 'People',
       loadComponent: () => import('../components/people/people.component').then(m => m.PeopleComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'human_resource' } 
@@ -342,14 +381,17 @@ export function getModuleRoutes(): Routes {
     // Stock Management Module
     { 
       path: 'stock-management', 
+      title: 'Stock',
       loadComponent: () => import('../components/stock-management/stock-management.component').then(m => m.StockManagementComponent),
       canActivate: [authGuard, moduleGuard], 
-      data: { module: 'stock_management' } 
+      data: { module: 'stock_management' },
+      children: subPageRoutes(STOCK_SECTIONS, 'Stock')
     },
     
     // Warehouse 3D View
     { 
       path: 'warehouse-3d', 
+      title: 'Warehouse 3D',
       loadComponent: () => import('../components/warehouse-3d/warehouse-3d.component').then(m => m.Warehouse3DComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'stock_management' } 
@@ -358,6 +400,7 @@ export function getModuleRoutes(): Routes {
     // Company Projects Module
     { 
       path: 'company-projects', 
+      title: 'Company projects',
       loadComponent: () => import('../components/company-projects/company-projects.component').then(m => m.CompanyProjectsComponent),
       canActivate: [authGuard] 
     },
@@ -365,6 +408,7 @@ export function getModuleRoutes(): Routes {
     // Support Tickets Module
     { 
       path: 'support-ticket', 
+      title: 'Support',
       loadComponent: () => import('../components/support-ticket/support-ticket.component').then(m => m.SupportTicketComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'support_tickets' } 
@@ -373,18 +417,21 @@ export function getModuleRoutes(): Routes {
     // Documents Module
     { 
       path: 'documents', 
+      title: 'Documents',
       loadComponent: () => import('../components/documents/documents.component').then(m => m.DocumentsComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'documents' } 
     },
     { 
       path: 'documents/shared', 
+      title: 'Shared with me',
       loadComponent: () => import('../components/shared-with-me/shared-with-me.component').then(m => m.SharedWithMeComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'documents' } 
     },
     { 
       path: 'documents/:department', 
+      title: 'Department documents',
       loadComponent: () => import('../components/department-hub/department-hub.component').then(m => m.DepartmentHubComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'documents' } 
@@ -393,28 +440,43 @@ export function getModuleRoutes(): Routes {
     // Logistics — standalone Open Map page (opened in its own tab from the map dialog)
     {
       path: 'logistics/open-map',
+      title: 'Live map',
       loadComponent: () => import('../components/logistics/open-map-page.component').then(m => m.OpenMapPageComponent),
       canActivate: [authGuard, moduleGuard],
       data: { module: 'logistics' }
     },
 
     // Logistics Module
+    {
+      path: 'logistics/bookings',
+      title: 'Client bookings',
+      loadComponent: () => import('../components/logistics/client-bookings/client-bookings.component').then(m => m.ClientBookingsComponent),
+      canActivate: [authGuard, moduleGuard],
+      data: { module: 'logistics' }
+    },
     { 
       path: 'logistics/scan', 
+      title: 'Scan assets',
       loadComponent: () => import('../components/logistics/asset-tracking.component').then(m => m.AssetTrackingComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'logistics' } 
     },
-    { 
-      path: 'logistics', 
+    // Each sub-page (/logistics/loads, /logistics/trip-sheets, …) is a child of one dashboard,
+    // so moving between them keeps the data that's already loaded. The children have no
+    // component of their own: the dashboard reads the section and item from the address.
+    {
+      path: 'logistics',
+      title: 'Logistics',
       loadComponent: () => import('../components/logistics/logistics-dashboard.component').then(m => m.LogisticsDashboardComponent),
-      canActivate: [authGuard, moduleGuard], 
-      data: { module: 'logistics' } 
+      canActivate: [authGuard, moduleGuard],
+      data: { module: 'logistics' },
+      children: subPageRoutes(LOGISTICS_SECTIONS, 'Logistics', true)
     },
 
     // Tenders Module
     { 
       path: 'tenders', 
+      title: 'Tenders',
       loadComponent: () => import('../components/tenders/tenders.component').then(m => m.TendersComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'tenders' } 
@@ -423,54 +485,63 @@ export function getModuleRoutes(): Routes {
     // Finance Module
     { 
       path: 'finance', 
+      title: 'Finance',
       loadComponent: () => import('../components/finance/finance.component').then(m => m.FinanceComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
     { 
       path: 'finance/creditors', 
+      title: 'Creditors',
       loadComponent: () => import('../components/finance/creditors/creditors.component').then(m => m.CreditorsComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
     { 
       path: 'finance/debtors', 
+      title: 'Debtors',
       loadComponent: () => import('../components/finance/debtors/debtors.component').then(m => m.DebtorsComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
     { 
       path: 'finance/budgets', 
+      title: 'Budgets',
       loadComponent: () => import('../components/finance/budgets/budgets.component').then(m => m.BudgetsComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
     { 
       path: 'finance/expenses', 
+      title: 'Expenses',
       loadComponent: () => import('../components/finance/expenses/expenses.component').then(m => m.ExpensesComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
     { 
       path: 'finance/purchase-orders', 
+      title: 'Purchase orders',
       loadComponent: () => import('../components/finance/purchase-orders/purchase-orders.component').then(m => m.PurchaseOrdersComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
     { 
       path: 'finance/payments', 
+      title: 'Payments',
       loadComponent: () => import('../components/finance/payments/payments.component').then(m => m.PaymentsComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
     { 
       path: 'finance/categories', 
+      title: 'Finance categories',
       loadComponent: () => import('../components/finance/categories/categories.component').then(m => m.CategoriesComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
     { 
       path: 'finance/commitments', 
+      title: 'Monthly commitments',
       loadComponent: () => import('../components/finance/commitments/commitments.component').then(m => m.CommitmentsComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
@@ -479,6 +550,7 @@ export function getModuleRoutes(): Routes {
     // Books - Paid Invoice Management (managers)
     { 
       path: 'books', 
+      title: 'Books',
       loadComponent: () => import('../components/books/books.component').then(m => m.BooksComponent),
       canActivate: [authGuard] 
     },
@@ -486,11 +558,13 @@ export function getModuleRoutes(): Routes {
     // User Profile & Settings (available to all)
     { 
       path: 'profile', 
+      title: 'Profile',
       loadComponent: () => import('../components/profile/profile.component').then(m => m.ProfileComponent),
       canActivate: [authGuard] 
     },
     { 
       path: 'user-management', 
+      title: 'Users',
       loadComponent: () => import('../components/user-management/user-management.component').then(m => m.UserManagementComponent),
       canActivate: [authGuard, adminGuard] 
     },
@@ -498,6 +572,7 @@ export function getModuleRoutes(): Routes {
     // Messaging Module
     { 
       path: 'messages', 
+      title: 'Messages',
       loadComponent: () => import('../components/messages/messages.component').then(m => m.MessagesComponent),
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'messaging' } 
@@ -506,6 +581,7 @@ export function getModuleRoutes(): Routes {
     // Email Viewer
     {
       path: 'emails',
+      title: 'Email',
       loadComponent: () => import('../components/email-viewer/email-viewer.component').then(m => m.EmailViewerComponent),
       canActivate: [authGuard]
     },
@@ -513,6 +589,7 @@ export function getModuleRoutes(): Routes {
     // Archives (NAS PST email archives)
     {
       path: 'archives',
+      title: 'Email archives',
       loadComponent: () => import('../components/archives/archives.component').then(m => m.ArchivesComponent),
       canActivate: [authGuard]
     },
@@ -520,6 +597,7 @@ export function getModuleRoutes(): Routes {
     // Settings
     { 
       path: 'settings', 
+      title: 'Admin settings',
       loadComponent: () => import('../components/settings/settings.component').then(m => m.SettingsComponent),
       canActivate: [authGuard, adminGuard] 
     },
@@ -527,24 +605,37 @@ export function getModuleRoutes(): Routes {
     // Management / Executive Oversight Module
     {
       path: 'management',
+      title: 'Management',
       loadComponent: () => import('../components/management/management.component').then(m => m.ManagementComponent),
       canActivate: [authGuard, moduleGuard],
       data: { module: 'management' }
     },
 
+    // Flows — automated business processes. Any signed-in user can open it (to see/complete
+    // tasks assigned to them); designing flows is gated server-side by the 'flows' permission.
+    {
+      path: 'flows',
+      title: 'Flows',
+      loadComponent: () => import('../components/flows/flows.component').then(m => m.FlowsComponent),
+      canActivate: [authGuard]
+    },
+
     // Collaborative Documents Module
     { 
       path: 'docs', 
+      title: 'Docs',
       loadComponent: () => import('../components/collaborative-docs/collaborative-docs.component').then(m => m.CollaborativeDocsComponent),
       canActivate: [authGuard] 
     },
     { 
       path: 'docs/:id', 
+      title: 'Document',
       loadComponent: () => import('../components/collaborative-docs/doc-editor/doc-editor.component').then(m => m.DocEditorComponent),
       canActivate: [authGuard] 
     },
     { 
       path: 'sheets/:id', 
+      title: 'Sheet',
       loadComponent: () => import('../components/collaborative-docs/sheet-editor/sheet-editor.component').then(m => m.SheetEditorComponent),
       canActivate: [authGuard] 
     },
@@ -552,6 +643,7 @@ export function getModuleRoutes(): Routes {
     // 404 Page - must be last
     { 
       path: '404', 
+      title: 'Page not found',
       loadComponent: () => import('../components/not-found/not-found.component').then(m => m.NotFoundComponent) 
     },
     { 

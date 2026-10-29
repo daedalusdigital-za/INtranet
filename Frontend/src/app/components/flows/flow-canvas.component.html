@@ -1,0 +1,91 @@
+<div #viewport class="fc-viewport" [class.readonly]="readonly" [class.linking]="linking()"
+     (mousedown)="onBgDown($event)" (wheel)="onWheel($event)" (dragover)="onDragOver($event)" (drop)="onDrop($event)">
+
+  <div class="fc-grid" [style.background-position]="pan.x + 'px ' + pan.y + 'px'" [style.background-size]="(24 * zoom) + 'px ' + (24 * zoom) + 'px'"></div>
+
+  <div class="fc-world" [style.transform]="'translate(' + pan.x + 'px,' + pan.y + 'px) scale(' + zoom + ')'">
+
+    <!-- edges -->
+    <svg class="fc-edges">
+      <defs>
+        <marker id="fc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker>
+      </defs>
+      @for (e of edges(); track e.id) {
+        <g class="fc-edge" [class.sel]="selectedEdge() === e.id" [class.done]="stateOf(e.from) === 'done' && stateOf(e.to)" (mousedown)="selectEdge(e, $event)">
+          <path class="hit" [attr.d]="e.path" />
+          <path class="line" [attr.d]="e.path" marker-end="url(#fc-arrow)" />
+          @if (selectedEdge() === e.id && !readonly) {
+            <g class="fc-edge-del" [attr.transform]="'translate(' + e.mx + ',' + e.my + ')'" (mousedown)="$event.stopPropagation(); removeEdge(e)">
+              <circle r="10" /><path d="M -4 -4 L 4 4 M 4 -4 L -4 4" />
+            </g>
+          }
+        </g>
+      }
+      @if (linking(); as l) { <path class="fc-edge-temp" [attr.d]="l.path" /> }
+    </svg>
+
+    <!-- trigger node -->
+    <div class="fc-node fc-trigger" [class.sel]="selectedId === '__trigger__'"
+         [style.left.px]="trigger().x" [style.top.px]="trigger().y" [style.width.px]="NODE_W"
+         (mousedown)="$event.stopPropagation(); select('__trigger__')"
+         (dragover)="onDragOver($event)" (drop)="onDrop($event)">
+      <div class="fc-head"><mat-icon>{{ triggerIcon() }}</mat-icon><b>Trigger</b></div>
+      <div class="fc-meta">{{ triggerLabel || 'Click to configure' }}</div>
+      <div class="fc-port fc-out" [class.dangling]="!startStepId" style="top: 20px" matTooltip="Drag to the first step"
+           (mousedown)="onPortDown($event, '__trigger__', 'next', 0)"></div>
+    </div>
+
+    <!-- step nodes -->
+    @for (s of steps; track s.id) {
+      <div class="fc-node" [class.sel]="selectedId === s.id" [class.hover]="hoverNode === s.id && linking()"
+           [attr.data-type]="s.type" [attr.data-state]="stateOf(s.id)"
+           [style.left.px]="s.x ?? 0" [style.top.px]="s.y ?? 0" [style.width.px]="NODE_W" [style.border-left-color]="colors[s.type]"
+           (mousedown)="onNodeDown($event, s)" (mouseenter)="hoverNode = s.id" (mouseleave)="hoverNode = null"
+           (dragover)="onDragOver($event)" (drop)="onDrop($event, s)">
+        <div class="fc-port fc-in" matTooltip="Drop a connection here"></div>
+        <div class="fc-head">
+          <mat-icon [style.color]="colors[s.type]">{{ stepType(s.type)?.icon }}</mat-icon>
+          <div class="fc-title"><b>{{ s.name || s.id }}</b><small>{{ stepType(s.type)?.name }}</small></div>
+          @if (stateOf(s.id); as st) {
+            <mat-icon class="fc-state" [attr.data-state]="st">{{ st === 'done' ? 'check_circle' : st === 'failed' ? 'error' : st === 'waiting' ? 'hourglass_top' : 'play_circle' }}</mat-icon>
+          } @else if (!readonly && selectedId === s.id) {
+            <button type="button" class="fc-mini" matTooltip="Duplicate" (mousedown)="$event.stopPropagation()" (click)="duplicate(s)"><mat-icon>content_copy</mat-icon></button>
+            <button type="button" class="fc-mini danger" matTooltip="Delete" (mousedown)="$event.stopPropagation()" (click)="removeStep(s.id)"><mat-icon>delete</mat-icon></button>
+          }
+        </div>
+        <div class="fc-meta" [title]="meta(s)">{{ meta(s) }}</div>
+        @for (p of ports(s); track p.key; let i = $index) {
+          <div class="fc-port-row">
+            <span>{{ p.label }}</span>
+            <div class="fc-port fc-out" [class.dangling]="isDangling(s, p.key)" [attr.data-port]="p.key"
+                 [matTooltip]="isDangling(s, p.key) ? 'Not connected — ends the flow. Drag to connect.' : 'Drag to re-connect'"
+                 (mousedown)="onPortDown($event, s.id, p.key, i)"></div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- quick add popover (after dropping a connection on empty space) -->
+  @if (quickAdd(); as q) {
+    <div class="fc-quick" [style.left.px]="q.x" [style.top.px]="q.y" (mousedown)="$event.stopPropagation()">
+      <div class="fc-quick-title">Add a connected step</div>
+      @for (t of catalog.stepTypes; track t.type) {
+        <button type="button" (click)="quickAddPick(t.type)"><mat-icon [style.color]="colors[t.type]">{{ t.icon }}</mat-icon><span>{{ t.name }}</span></button>
+      }
+    </div>
+  }
+
+  <!-- controls -->
+  <div class="fc-controls" (mousedown)="$event.stopPropagation()">
+    <button mat-icon-button type="button" matTooltip="Zoom in" (click)="zoomBy(1.2)"><mat-icon>add</mat-icon></button>
+    <button mat-icon-button type="button" matTooltip="Zoom out" (click)="zoomBy(1 / 1.2)"><mat-icon>remove</mat-icon></button>
+    <button mat-icon-button type="button" matTooltip="Fit to screen" (click)="fit()"><mat-icon>fit_screen</mat-icon></button>
+    @if (!readonly) { <button mat-icon-button type="button" matTooltip="Tidy up layout" (click)="autoLayout()"><mat-icon>auto_fix_high</mat-icon></button> }
+    <span class="fc-zoom">{{ (zoom * 100) | number:'1.0-0' }}%</span>
+  </div>
+
+  @if (!steps.length && !readonly) {
+    <div class="fc-empty"><mat-icon>account_tree</mat-icon><b>Drag a step from the left</b><span>or drag from the Trigger's port into empty space</span></div>
+  }
+</div>

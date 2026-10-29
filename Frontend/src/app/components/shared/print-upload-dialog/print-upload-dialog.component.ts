@@ -24,7 +24,7 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
     <div class="print-upload-dialog">
       <div class="dialog-header" [style.background]="data.printer.color">
         <h2>{{ data.printer.name }}</h2>
-        <button mat-icon-button (click)="close()">
+        <button aria-label="Close" mat-icon-button (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -139,7 +139,7 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
       margin-bottom: 20px;
     }
@@ -148,7 +148,7 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
       font-size: 32px;
       width: 32px;
       height: 32px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .printer-info div {
@@ -158,12 +158,12 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
 
     .printer-label {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .printer-ip {
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
       font-family: monospace;
     }
 
@@ -185,18 +185,18 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
     }
 
     .printer-status.online {
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
     }
 
     .printer-status.offline {
-      background: #ffebee;
-      color: #c62828;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
     }
 
     .printer-status.unknown {
-      background: #fff3e0;
-      color: #ef6c00;
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
     }
 
     .printer-status .spin {
@@ -209,31 +209,31 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
     }
 
     .upload-zone {
-      border: 2px dashed #ccc;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 12px;
       padding: 40px 20px;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s ease;
-      background: #fafafa;
+      background: var(--color-canvas);
       margin-bottom: 20px;
     }
 
     .upload-zone:hover {
-      border-color: #1e90ff;
+      border-color: var(--color-primary);
       background: #f0f8ff;
     }
 
     .upload-zone.drag-over {
-      border-color: #1e90ff;
-      background: #e3f2fd;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
     }
 
     .upload-icon {
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #1e90ff;
+      color: var(--color-primary);
       margin-bottom: 12px;
     }
 
@@ -241,45 +241,45 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #4caf50;
+      color: var(--color-ok);
       margin-bottom: 12px;
     }
 
     .upload-text {
       font-size: 1.1rem;
-      color: #333;
+      color: var(--color-text);
       margin: 0 0 4px 0;
     }
 
     .upload-hint {
       font-size: 0.9rem;
-      color: #666;
+      color: var(--color-text-2);
       margin: 0 0 8px 0;
     }
 
     .upload-formats {
       font-size: 0.8rem;
-      color: #999;
+      color: var(--color-text-3);
       margin: 0;
     }
 
     .file-name {
       font-size: 1rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       margin: 0 0 4px 0;
       word-break: break-all;
     }
 
     .file-size {
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
       margin: 0;
     }
 
     .uploading-text {
       text-align: center;
-      color: #1e90ff;
+      color: var(--color-primary);
       margin: 12px 0 0 0;
       font-size: 0.9rem;
     }
@@ -290,7 +290,7 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
       gap: 12px;
       margin-top: 20px;
       padding-top: 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     .dialog-actions button mat-icon {

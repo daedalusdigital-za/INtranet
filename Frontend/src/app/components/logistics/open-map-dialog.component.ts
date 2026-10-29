@@ -31,7 +31,7 @@ import { OpenMapComponent } from './open-map.component';
                   matTooltip="Open as a separate page / tab">
             <mat-icon>open_in_new</mat-icon> Open in new tab
           </button>
-          <button mat-icon-button (click)="close()" matTooltip="Close">
+          <button aria-label="Close" mat-icon-button (click)="close()" matTooltip="Close">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -46,7 +46,7 @@ import { OpenMapComponent } from './open-map.component';
     .omd-header {
       display:flex; align-items:center; justify-content:space-between;
       padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.1);
-      background:#0f172a; flex-shrink:0;
+      background:var(--color-text); flex-shrink:0;
     }
     .omd-title { display:flex; align-items:center; gap:10px; color:#fff; font-size:16px; font-weight:600; }
     .omd-title mat-icon { color:#60a5fa; }

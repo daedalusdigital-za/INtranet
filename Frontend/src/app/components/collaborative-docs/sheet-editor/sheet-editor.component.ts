@@ -5,7 +5,6 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subscription } from 'rxjs';
 import * as Y from 'yjs';
@@ -13,6 +12,8 @@ import { NavbarComponent } from '../../shared/navbar/navbar.component';
 import { CollaborativeDocsService } from '../../../services/collaborative-docs.service';
 import { AuthService } from '../../../services/auth.service';
 import { DocumentDetail, UserPresence } from '../../../models/collaborative-doc.model';
+import { ToastService } from '../../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
 
 interface RemoteSelection {
   userId: number;
@@ -30,9 +31,9 @@ interface RemoteSelection {
     MatIconModule,
     MatButtonModule,
     MatTooltipModule,
-    MatSnackBarModule,
     MatProgressSpinnerModule,
-    NavbarComponent
+    NavbarComponent,
+    SkeletonRowsComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -40,13 +41,12 @@ interface RemoteSelection {
     <div class="sheet-shell">
       @if (loading) {
         <div class="sheet-loading">
-          <mat-spinner diameter="42"></mat-spinner>
-          <p>Opening spreadsheet…</p>
+          <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows>
         </div>
       } @else {
         <!-- Toolbar -->
         <div class="sheet-toolbar">
-          <button mat-icon-button class="back-btn" (click)="goBack()" matTooltip="Back to documents">
+          <button aria-label="Back to documents" mat-icon-button class="back-btn" (click)="goBack()" matTooltip="Back to documents">
             <mat-icon>arrow_back</mat-icon>
           </button>
           <mat-icon class="sheet-glyph">table_chart</mat-icon>
@@ -142,82 +142,84 @@ interface RemoteSelection {
   `,
   styles: [`
     :host { display: block; }
-    .sheet-shell { height: calc(100vh - 64px); display: flex; flex-direction: column; background: var(--canvas, #f5f7fa); }
+    .sheet-shell { height: calc(100vh - 64px); display: flex; flex-direction: column; background: var(--color-canvas); }
 
-    .sheet-loading { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--ink-500, #64748b); }
+    .sheet-loading { margin: var(--space-4); background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); overflow: hidden; }
 
     .sheet-toolbar {
       display: flex; align-items: center; gap: 12px;
-      padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--ink-100, #eef2f7);
+      padding: 10px 16px; background: var(--color-surface); border-bottom: 1px solid var(--color-line);
     }
-    .sheet-glyph { color: #059669; }
+    .sheet-glyph { color: var(--color-cat-teal); }
     .title-block { display: flex; flex-direction: column; line-height: 1.15; }
-    .sheet-title { font-family: var(--font-heading, inherit); font-weight: 700; font-size: 16px; color: var(--ink-900, #0f172a); }
-    .sheet-sub { font-size: 12px; color: var(--ink-500, #64748b); display: flex; align-items: center; gap: 6px; }
-    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
-    .sync-dot.online { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.18); }
+    .sheet-title { font-family: var(--font-heading); font-weight: 700; font-size: var(--text-lg); color: var(--color-text); }
+    .sheet-sub { font-size: var(--text-xs); color: var(--color-text-3); display: flex; align-items: center; gap: 6px; }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-line-strong); }
+    .sync-dot.online { background: var(--color-ok); box-shadow: 0 0 0 3px var(--color-ok-soft); }
     .spacer { flex: 1; }
 
     .presence-stack { display: flex; }
     .presence-avatar {
       width: 30px; height: 30px; border-radius: 50%; margin-left: -8px;
       display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 12px; font-weight: 700; border: 2px solid #fff;
+      color: var(--color-on-dark); font-size: var(--text-xs); font-weight: 700; border: 2px solid var(--color-surface);
     }
 
     .save-btn { margin-left: 8px; }
 
     .formula-bar {
       display: flex; align-items: center; gap: 10px;
-      padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--ink-100, #eef2f7);
+      padding: 8px 16px; background: var(--color-surface); border-bottom: 1px solid var(--color-line);
     }
     .cell-ref {
-      min-width: 48px; text-align: center; font-weight: 700; font-size: 13px;
-      color: var(--ink-700, #334155); background: var(--ink-100, #f1f5f9);
-      border-radius: 6px; padding: 4px 8px; font-variant-numeric: tabular-nums;
+      min-width: 48px; text-align: center; font-weight: 700; font-size: var(--text-sm);
+      color: var(--color-text-2); background: var(--color-surface-2);
+      border-radius: var(--radius-sm); padding: 4px 8px; font-variant-numeric: tabular-nums;
     }
-    .fx { color: var(--ink-500, #64748b); font-size: 20px; }
+    .fx { color: var(--color-text-3); font-size: 20px; }
     .formula-input {
-      flex: 1; border: 1px solid var(--ink-300, #cbd5e1); border-radius: 8px;
-      padding: 8px 12px; font-size: 14px; outline: none; font-family: var(--font-body, inherit);
+      flex: 1; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control);
+      padding: 8px 12px; font-size: var(--text-md); outline: none; font-family: var(--font-body);
+      background: var(--color-surface); color: var(--color-text);
     }
-    .formula-input:focus { border-color: var(--brand-500, #3b82f6); box-shadow: 0 0 0 3px var(--brand-100, #dbeafe); }
+    .formula-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
 
     .grid-scroll { flex: 1; overflow: auto; }
     .grid { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 
-    .grid th, .grid td { border-right: 1px solid #e6ebf2; border-bottom: 1px solid #e6ebf2; }
+    .grid th, .grid td { border-right: 1px solid var(--color-line); border-bottom: 1px solid var(--color-line); }
 
-    .corner { width: 46px; position: sticky; left: 0; top: 0; z-index: 3; background: #f1f5f9; }
+    .corner { width: 46px; position: sticky; left: 0; top: 0; z-index: 3; background: var(--color-surface-2); }
     thead th { position: sticky; top: 0; z-index: 2; }
     .col-head {
-      width: 104px; height: 26px; background: #f1f5f9; color: #475569;
-      font-size: 12px; font-weight: 600; text-align: center;
+      width: 104px; height: 26px; background: var(--color-surface-2); color: var(--color-text-2);
+      font-size: var(--text-xs); font-weight: 600; text-align: center;
     }
     .row-head {
-      width: 46px; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600;
+      width: 46px; background: var(--color-surface-2); color: var(--color-text-2); font-size: var(--text-xs); font-weight: 600;
       text-align: center; position: sticky; left: 0; z-index: 1;
     }
-    .active-head { background: #dbeafe; color: #1d4ed8; }
+    .active-head { background: var(--color-primary-soft); color: var(--color-primary-hover); }
 
     .cell {
-      width: 104px; height: 26px; padding: 0; background: #fff;
+      width: 104px; height: 26px; padding: 0; background: var(--color-surface);
       position: relative; cursor: cell; overflow: hidden;
     }
     .cell-val {
-      display: block; padding: 3px 6px; font-size: 13px; color: #0f172a;
+      display: block; padding: 3px 6px; font-size: var(--text-sm); color: var(--color-text);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px;
     }
     .cell.numeric .cell-val { text-align: right; font-variant-numeric: tabular-nums; }
-    .cell.selected { outline: 2px solid var(--brand-600, #2563eb); outline-offset: -2px; z-index: 1; }
+    .cell.selected { outline: 2px solid var(--color-primary); outline-offset: -2px; z-index: 1; }
 
     .cell-input {
       width: 100%; height: 100%; border: none; outline: none; padding: 3px 6px;
-      font-size: 13px; font-family: var(--font-body, inherit); box-sizing: border-box;
+      font-size: var(--text-sm); font-family: var(--font-body); box-sizing: border-box;
+      background: var(--color-surface); color: var(--color-text);
     }
 
     .remote-tag {
-      position: absolute; top: -1px; right: -1px; font-size: 9px; color: #fff;
+      position: absolute; top: -1px; right: -1px; font-size: 9px; color: var(--color-on-dark);
       padding: 1px 4px; border-radius: 0 0 0 4px; font-weight: 700; pointer-events: none;
       max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
@@ -268,7 +270,7 @@ export class SheetEditorComponent implements OnInit, OnDestroy {
     private router: Router,
     private docsService: CollaborativeDocsService,
     private authService: AuthService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private zone: NgZone
   ) {
     for (let r = 0; r < this.ROWS; r++) this.rows.push(r);
@@ -292,7 +294,7 @@ export class SheetEditorComponent implements OnInit, OnDestroy {
         this.applyImportSeedIfAny();
       },
       error: () => {
-        this.snackBar.open('Could not open spreadsheet', 'Close', { duration: 3000 });
+        this.toast.error('Could not open spreadsheet');
         this.router.navigate(['/docs']);
       }
     });
@@ -423,7 +425,7 @@ export class SheetEditorComponent implements OnInit, OnDestroy {
   }
 
   manualSave(): void {
-    this.saveSnapshot().then(() => this.snackBar.open('Version saved', 'Close', { duration: 1500 }));
+    this.saveSnapshot().then(() => this.toast.done('Version saved'));
   }
 
   // ---------------- Selection & editing ----------------
@@ -539,7 +541,7 @@ export class SheetEditorComponent implements OnInit, OnDestroy {
         if (v !== undefined && v !== '') { if (r > maxR) maxR = r; if (c > maxC) maxC = c; }
       }
     }
-    if (maxR < 0) { this.snackBar.open('Sheet is empty — nothing to download', 'Close', { duration: 2500 }); return; }
+    if (maxR < 0) { this.toast.info('Sheet is empty — nothing to download'); return; }
 
     const escape = (val: string): string => {
       const s = val ?? '';
@@ -586,7 +588,7 @@ export class SheetEditorComponent implements OnInit, OnDestroy {
           }
         }
       });
-      this.snackBar.open(`Imported ${Math.min(rows.length, this.ROWS)} row(s)`, 'Close', { duration: 3000 });
+      this.toast.done(`Imported ${Math.min(rows.length, this.ROWS)} row(s)`);
     } catch { /* ignore malformed seed */ }
   }
 
@@ -600,7 +602,7 @@ export class SheetEditorComponent implements OnInit, OnDestroy {
       try {
         const text = String(reader.result || '');
         const rows = this.parseCsv(text);
-        if (rows.length === 0) { this.snackBar.open('No rows found in CSV', 'Close', { duration: 2500 }); return; }
+        if (rows.length === 0) { this.toast.warn('No rows found in CSV'); return; }
         // Write into the shared doc in a single transaction starting at A1.
         this.ydoc.transact(() => {
           for (let r = 0; r < rows.length && r < this.ROWS; r++) {
@@ -613,9 +615,9 @@ export class SheetEditorComponent implements OnInit, OnDestroy {
             }
           }
         });
-        this.snackBar.open(`Imported ${Math.min(rows.length, this.ROWS)} row(s) from ${file.name}`, 'Close', { duration: 3500 });
+        this.toast.done(`Imported ${Math.min(rows.length, this.ROWS)} row(s) from ${file.name}`);
       } catch {
-        this.snackBar.open('Could not read that CSV file', 'Close', { duration: 3000 });
+        this.toast.error('Could not read that CSV file');
       }
     };
     reader.readAsText(file);

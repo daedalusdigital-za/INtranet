@@ -124,12 +124,12 @@ interface EmailDetail {
                      [(ngModel)]="searchQuery"
                      (keydown.enter)="searchEmails()">
               @if (searchQuery) {
-                <button class="clear-search" (click)="clearSearch()">
+                <button aria-label="Close" class="clear-search" (click)="clearSearch()">
                   <mat-icon>close</mat-icon>
                 </button>
               }
             </div>
-            <button class="refresh-btn" (click)="loadEmails()" matTooltip="Refresh">
+            <button aria-label="Refresh" class="refresh-btn" (click)="loadEmails()" matTooltip="Refresh">
               <mat-icon [class.spinning]="emailsLoading">refresh</mat-icon>
             </button>
           </div>
@@ -186,7 +186,7 @@ interface EmailDetail {
           <!-- Pagination -->
           @if (totalPages > 1) {
             <div class="pagination">
-              <button class="page-btn" [disabled]="currentPage <= 1" (click)="goToPage(currentPage - 1)">
+              <button aria-label="Previous" class="page-btn" [disabled]="currentPage <= 1" (click)="goToPage(currentPage - 1)">
                 <mat-icon>chevron_left</mat-icon>
               </button>
               <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
@@ -522,7 +522,7 @@ interface EmailDetail {
 
     .detail-avatar {
       width: 40px; height: 40px; border-radius: 50%;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       display: flex; align-items: center; justify-content: center;
       color: white; font-size: 14px; font-weight: 700;
       flex-shrink: 0;

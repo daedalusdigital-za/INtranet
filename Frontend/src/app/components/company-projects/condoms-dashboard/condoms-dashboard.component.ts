@@ -15,6 +15,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule } from '@angular/forms';
 import { environment } from '../../../../environments/environment';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
 
 interface DailyQty {
   date: string;
@@ -75,13 +77,15 @@ interface DashboardData {
     MatSelectModule,
     MatFormFieldModule,
     DatePipe,
-    DecimalPipe
+    DecimalPipe,
+    SkeletonRowsComponent,
+    EmptyStateComponent
   ],
   template: `
     <div class="dashboard-container">
       <!-- Back Button -->
       <div class="back-row">
-        <button mat-raised-button (click)="goBack.emit()" class="back-btn">
+        <button mat-stroked-button (click)="goBack.emit()" class="back-btn">
           <mat-icon>arrow_back</mat-icon>
           Back to Projects
         </button>
@@ -92,11 +96,11 @@ interface DashboardData {
           Condoms Stock Schedule
         </h2>
         <div class="title-actions">
-          <button mat-raised-button class="capture-btn" (click)="openCaptureDialog()">
+          <button mat-flat-button color="primary" class="capture-btn" (click)="openCaptureDialog()">
             <mat-icon>add_circle</mat-icon>
             Capture Stock
           </button>
-          <button mat-raised-button class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
+          <button mat-stroked-button class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
             <mat-icon>local_shipping</mat-icon>
             Request Delivery
           </button>
@@ -109,36 +113,7 @@ interface DashboardData {
 
       @if (loading) {
         <div class="loading-state">
-          <div class="loading-card">
-            <div class="lc-icon-wrap">
-              <mat-icon class="lc-icon pulse-icon">health_and_safety</mat-icon>
-            </div>
-            <h3>Loading Stock Schedule</h3>
-            <p class="lc-subtitle">Fetching batch data and daily quantities</p>
-            <div class="lc-progress-wrap">
-              <div class="lc-progress-track">
-                <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
-              </div>
-              <div class="lc-progress-info">
-                <span class="lc-progress-message">{{ loadingMessage }}</span>
-                <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
-              </div>
-            </div>
-            <div class="lc-steps">
-              @for (step of loadingSteps; track step.label; let i = $index) {
-                <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
-                  <div class="lc-step-dot">
-                    @if (loadingStage > i) {
-                      <mat-icon>check</mat-icon>
-                    } @else {
-                      <mat-icon>{{ step.icon }}</mat-icon>
-                    }
-                  </div>
-                  <span class="lc-step-label">{{ step.label }}</span>
-                </div>
-              }
-            </div>
-          </div>
+          <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
         </div>
       } @else if (error) {
         <div class="error-container">
@@ -158,7 +133,6 @@ interface DashboardData {
               <span class="kpi-number">{{ dashboard?.summary?.totalBatches || 0 }}</span>
               <span class="kpi-label">Total Batches</span>
             </div>
-            <div class="kpi-accent"></div>
           </div>
           <div class="kpi-card kpi-purple clickable" (click)="openKpiDialog('female')">
             <div class="kpi-icon-wrap"><mat-icon>female</mat-icon></div>
@@ -166,7 +140,6 @@ interface DashboardData {
               <span class="kpi-number">{{ scheduleSummary?.femaleBatches || 0 }}</span>
               <span class="kpi-label">Female Batches</span>
             </div>
-            <div class="kpi-accent"></div>
           </div>
           <div class="kpi-card kpi-blue clickable" (click)="openKpiDialog('male')">
             <div class="kpi-icon-wrap"><mat-icon>male</mat-icon></div>
@@ -174,7 +147,6 @@ interface DashboardData {
               <span class="kpi-number">{{ scheduleSummary?.maleBatches || 0 }}</span>
               <span class="kpi-label">Male Batches</span>
             </div>
-            <div class="kpi-accent"></div>
           </div>
           <div class="kpi-card kpi-orange clickable" (click)="openKpiDialog('scents')">
             <div class="kpi-icon-wrap"><mat-icon>palette</mat-icon></div>
@@ -182,7 +154,6 @@ interface DashboardData {
               <span class="kpi-number">{{ dashboard?.summary?.totalScents || 0 }}</span>
               <span class="kpi-label">Scent Variants</span>
             </div>
-            <div class="kpi-accent"></div>
           </div>
           <div class="kpi-card kpi-green">
             <div class="kpi-icon-wrap"><mat-icon>assessment</mat-icon></div>
@@ -190,7 +161,6 @@ interface DashboardData {
               <span class="kpi-number">{{ (dashboard?.summary?.grandTotal || 0) | number }}</span>
               <span class="kpi-label">Total Units</span>
             </div>
-            <div class="kpi-accent"></div>
           </div>
         </div>
 
@@ -227,7 +197,7 @@ interface DashboardData {
                   </p>
                 </div>
               </div>
-              <button class="dialog-close" (click)="closeDialog()">
+              <button aria-label="Close" class="dialog-close" (click)="closeDialog()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -255,32 +225,32 @@ interface DashboardData {
                 </div>
                 <h4 class="dialog-section-title"><mat-icon>table_chart</mat-icon> Batches by Scent & Type</h4>
                 <div class="dialog-table-wrap">
-                  <table class="dialog-table">
-                    <thead><tr><th>Scent</th><th>Type</th><th class="right">Batches</th><th class="right">Total Units</th><th class="right">Avg/Batch</th></tr></thead>
+                  <table class="app-table">
+                    <thead><tr><th>Scent</th><th>Type</th><th class="num">Batches</th><th class="num">Total Units</th><th class="num">Avg/Batch</th></tr></thead>
                     <tbody>
                       @for (group of scheduleGroups; track group.scentGroup) {
                         <tr>
                           <td class="primary-cell">
                             <span class="scent-dot" [style.background]="getScentColor(group.scent)"></span>
-                            {{ getScentEmoji(group.scent) }} {{ group.scent }}
+                            {{ group.scent }}
                           </td>
                           <td>
                             <span class="type-pill" [class.type-pill-f]="group.type === 'Female'" [class.type-pill-m]="group.type === 'Male'">
                               {{ group.type }}
                             </span>
                           </td>
-                          <td class="right mono-text">{{ group.batches.length }}</td>
-                          <td class="right mono-text">{{ getGroupTotal(group) | number }}</td>
-                          <td class="right mono-text">{{ getGroupAvg(group) | number:'1.0-0' }}</td>
+                          <td class="num">{{ group.batches.length }}</td>
+                          <td class="num">{{ getGroupTotal(group) | number }}</td>
+                          <td class="num">{{ getGroupAvg(group) | number:'1.0-0' }}</td>
                         </tr>
                       }
                     </tbody>
                     <tfoot>
-                      <tr class="total-row">
-                        <td colspan="2"><strong>Grand Total</strong></td>
-                        <td class="right mono-text"><strong>{{ dashboard?.summary?.totalBatches || 0 }}</strong></td>
-                        <td class="right mono-text"><strong>{{ (dashboard?.summary?.grandTotal || 0) | number }}</strong></td>
-                        <td class="right mono-text"><strong>—</strong></td>
+                      <tr>
+                        <td colspan="2">Grand Total</td>
+                        <td class="num">{{ dashboard?.summary?.totalBatches || 0 }}</td>
+                        <td class="num">{{ (dashboard?.summary?.grandTotal || 0) | number }}</td>
+                        <td class="num">—</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -307,26 +277,26 @@ interface DashboardData {
                 <div class="dialog-province-bars">
                   @for (group of getFemaleGroups(); track group.scentGroup) {
                     <div class="bar-row">
-                      <span class="bar-row-label">{{ getScentEmoji(group.scent) }} {{ group.scent }}</span>
+                      <span class="bar-row-label">{{ group.scent }}</span>
                       <div class="bar-track">
-                        <div class="bar-fill" [style.width.%]="getGroupBarPercent(group, 'Female')" [style.background]="'linear-gradient(90deg, ' + getScentColor(group.scent) + ', ' + getScentColorLight(group.scent) + ')'"></div>
+                        <div class="bar-fill" [style.width.%]="getGroupBarPercent(group, 'Female')" [style.background]="getScentColor(group.scent)"></div>
                       </div>
                       <span class="bar-row-value">{{ group.batches.length }} batches</span>
                     </div>
                   }
                 </div>
-                <h4 class="dialog-section-title" style="margin-top: 20px"><mat-icon>list_alt</mat-icon> Batch Detail</h4>
+                <h4 class="dialog-section-title spaced"><mat-icon>list_alt</mat-icon> Batch Detail</h4>
                 <div class="dialog-table-wrap">
-                  <table class="dialog-table">
-                    <thead><tr><th>Batch Code</th><th>Scent</th><th>UOM</th><th class="right">Total Qty</th></tr></thead>
+                  <table class="app-table">
+                    <thead><tr><th>Batch Code</th><th>Scent</th><th>UOM</th><th class="num">Total Qty</th></tr></thead>
                     <tbody>
                       @for (group of getFemaleGroups(); track group.scentGroup) {
                         @for (batch of group.batches; track batch.batchCode) {
                           <tr>
-                            <td class="primary-cell mono-text">{{ batch.batchCode }}</td>
-                            <td>{{ getScentEmoji(group.scent) }} {{ group.scent }}</td>
+                            <td class="primary-cell ref">{{ batch.batchCode }}</td>
+                            <td><span class="scent-dot" [style.background]="getScentColor(group.scent)"></span>{{ group.scent }}</td>
                             <td>{{ batch.uom }}</td>
-                            <td class="right mono-text">{{ getBatchTotal(batch) | number }}</td>
+                            <td class="num">{{ getBatchTotal(batch) | number }}</td>
                           </tr>
                         }
                       }
@@ -355,26 +325,26 @@ interface DashboardData {
                 <div class="dialog-province-bars">
                   @for (group of getMaleGroups(); track group.scentGroup) {
                     <div class="bar-row">
-                      <span class="bar-row-label">{{ getScentEmoji(group.scent) }} {{ group.scent }}</span>
+                      <span class="bar-row-label">{{ group.scent }}</span>
                       <div class="bar-track">
-                        <div class="bar-fill" [style.width.%]="getGroupBarPercent(group, 'Male')" [style.background]="'linear-gradient(90deg, ' + getScentColor(group.scent) + ', ' + getScentColorLight(group.scent) + ')'"></div>
+                        <div class="bar-fill" [style.width.%]="getGroupBarPercent(group, 'Male')" [style.background]="getScentColor(group.scent)"></div>
                       </div>
                       <span class="bar-row-value">{{ group.batches.length }} batches</span>
                     </div>
                   }
                 </div>
-                <h4 class="dialog-section-title" style="margin-top: 20px"><mat-icon>list_alt</mat-icon> Batch Detail</h4>
+                <h4 class="dialog-section-title spaced"><mat-icon>list_alt</mat-icon> Batch Detail</h4>
                 <div class="dialog-table-wrap">
-                  <table class="dialog-table">
-                    <thead><tr><th>Batch Code</th><th>Scent</th><th>UOM</th><th class="right">Total Qty</th></tr></thead>
+                  <table class="app-table">
+                    <thead><tr><th>Batch Code</th><th>Scent</th><th>UOM</th><th class="num">Total Qty</th></tr></thead>
                     <tbody>
                       @for (group of getMaleGroups(); track group.scentGroup) {
                         @for (batch of group.batches; track batch.batchCode) {
                           <tr>
-                            <td class="primary-cell mono-text">{{ batch.batchCode }}</td>
-                            <td>{{ getScentEmoji(group.scent) }} {{ group.scent }}</td>
+                            <td class="primary-cell ref">{{ batch.batchCode }}</td>
+                            <td><span class="scent-dot" [style.background]="getScentColor(group.scent)"></span>{{ group.scent }}</td>
                             <td>{{ batch.uom }}</td>
-                            <td class="right mono-text">{{ getBatchTotal(batch) | number }}</td>
+                            <td class="num">{{ getBatchTotal(batch) | number }}</td>
                           </tr>
                         }
                       }
@@ -404,18 +374,17 @@ interface DashboardData {
                   @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
                     <div class="scent-detail-card" [style.border-left-color]="getScentColor(sb.scent)">
                       <div class="sdc-header">
-                        <span class="sdc-emoji">{{ getScentEmoji(sb.scent) }}</span>
                         <div class="sdc-info">
                           <span class="sdc-name">{{ sb.scent }}</span>
                           <span class="sdc-types">{{ sb.types.join(' & ') }}</span>
                         </div>
-                        <div class="sdc-badge" [style.background]="getScentColor(sb.scent) + '20'" [style.color]="getScentColor(sb.scent)">
+                        <div class="sdc-badge" [style.background]="getScentSoft(sb.scent)" [style.color]="getScentColor(sb.scent)">
                           {{ sb.batchCount }} batches
                         </div>
                       </div>
                       <div class="sdc-bar-wrapper">
                         <div class="sdc-bar">
-                          <div class="sdc-bar-fill" [style.width.%]="getScentPercent(sb.totalUnits)" [style.background]="'linear-gradient(90deg, ' + getScentColor(sb.scent) + ', ' + getScentColorLight(sb.scent) + ')'"></div>
+                          <div class="sdc-bar-fill" [style.width.%]="getScentPercent(sb.totalUnits)" [style.background]="getScentColor(sb.scent)"></div>
                         </div>
                         <span class="sdc-units">{{ sb.totalUnits | number }} units</span>
                       </div>
@@ -441,7 +410,7 @@ interface DashboardData {
                   <p class="dialog-subtitle">Add a new stock entry to the condoms project</p>
                 </div>
               </div>
-              <button class="dialog-close" (click)="closeCaptureDialog()">
+              <button aria-label="Close" class="dialog-close" (click)="closeCaptureDialog()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -453,7 +422,7 @@ interface DashboardData {
                   <h3>Stock Entry Created!</h3>
                   <p>{{ captureSuccessMsg }}</p>
                   <div class="success-actions">
-                    <button mat-flat-button class="btn-add-another" (click)="resetCaptureForm()">
+                    <button mat-flat-button color="primary" (click)="resetCaptureForm()">
                       <mat-icon>add</mat-icon> Add Another
                     </button>
                     <button mat-stroked-button (click)="closeCaptureDialog()">
@@ -475,11 +444,11 @@ interface DashboardData {
                       <label class="form-label">Scent <span class="required">*</span></label>
                       <select class="form-select" [(ngModel)]="captureForm.scent">
                         <option value="">Select Scent</option>
-                        <option value="Vanilla">🍦 Vanilla</option>
-                        <option value="Strawberry">🍓 Strawberry</option>
-                        <option value="Banana">🍌 Banana</option>
-                        <option value="Grape">🍇 Grape</option>
-                        <option value="Plain">📦 Plain</option>
+                        <option value="Vanilla">Vanilla</option>
+                        <option value="Strawberry">Strawberry</option>
+                        <option value="Banana">Banana</option>
+                        <option value="Grape">Grape</option>
+                        <option value="Plain">Plain</option>
                       </select>
                     </div>
                     <div class="form-group">
@@ -527,7 +496,7 @@ interface DashboardData {
                   <div class="form-preview" *ngIf="captureForm.scent && captureForm.type && captureForm.batchCode && captureForm.quantity">
                     <mat-icon>preview</mat-icon>
                     <span>
-                      {{ getScentEmoji(captureForm.scent) }} <strong>{{ captureForm.batchCode }}</strong> —
+                      <strong>{{ captureForm.batchCode }}</strong> —
                       {{ captureForm.scent }} {{ captureForm.type }} —
                       {{ captureForm.quantity }} {{ captureForm.uom }}
                       @if (captureForm.scheduleDate) { on {{ captureForm.scheduleDate }} }
@@ -536,7 +505,7 @@ interface DashboardData {
 
                   <div class="form-actions">
                     <button mat-stroked-button (click)="closeCaptureDialog()" [disabled]="captureSaving">Cancel</button>
-                    <button mat-flat-button class="btn-submit" (click)="submitStock()" [disabled]="captureSaving || !isCaptureFormValid()">
+                    <button mat-flat-button color="primary" class="btn-submit" (click)="submitStock()" [disabled]="captureSaving || !isCaptureFormValid()">
                       @if (captureSaving) {
                         <mat-spinner diameter="18" strokeWidth="2"></mat-spinner>
                         Saving...
@@ -570,7 +539,7 @@ interface DashboardData {
             </mat-form-field>
             <div class="pwd-actions">
               <button mat-stroked-button (click)="cancelDeliveryPassword()">Cancel</button>
-              <button mat-raised-button color="primary" (click)="verifyDeliveryPassword()">
+              <button mat-flat-button color="primary" (click)="verifyDeliveryPassword()">
                 <mat-icon>lock_open</mat-icon> Verify
               </button>
             </div>
@@ -591,7 +560,7 @@ interface DashboardData {
                   <p class="dialog-subtitle">Submit a delivery request to logistics</p>
                 </div>
               </div>
-              <button class="dialog-close" (click)="closeDeliveryDialog()">
+              <button aria-label="Close" class="dialog-close" (click)="closeDeliveryDialog()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -603,7 +572,7 @@ interface DashboardData {
                   <h3>Delivery Request Submitted!</h3>
                   <p>{{ deliverySuccessMsg }}</p>
                   <div class="success-actions">
-                    <button mat-flat-button class="btn-add-another" (click)="resetDeliveryForm()">
+                    <button mat-flat-button color="primary" (click)="resetDeliveryForm()">
                       <mat-icon>add</mat-icon> Request Another
                     </button>
                     <button mat-stroked-button (click)="closeDeliveryDialog()">
@@ -629,7 +598,7 @@ interface DashboardData {
                       <label class="form-label">Priority</label>
                       <select class="form-select" [(ngModel)]="deliveryForm.priority">
                         <option value="Normal">Normal</option>
-                        <option value="Urgent">🔴 Urgent</option>
+                        <option value="Urgent">Urgent</option>
                       </select>
                     </div>
                   </div>
@@ -639,11 +608,11 @@ interface DashboardData {
                       <label class="form-label">Scent <span class="optional">(optional)</span></label>
                       <select class="form-select" [(ngModel)]="deliveryForm.scent">
                         <option value="">Any Scent</option>
-                        <option value="Vanilla">🍦 Vanilla</option>
-                        <option value="Strawberry">🍓 Strawberry</option>
-                        <option value="Banana">🍌 Banana</option>
-                        <option value="Grape">🍇 Grape</option>
-                        <option value="Plain">📦 Plain</option>
+                        <option value="Vanilla">Vanilla</option>
+                        <option value="Strawberry">Strawberry</option>
+                        <option value="Banana">Banana</option>
+                        <option value="Grape">Grape</option>
+                        <option value="Plain">Plain</option>
                       </select>
                     </div>
                     <div class="form-group">
@@ -691,7 +660,7 @@ interface DashboardData {
                         }
                       </div>
                       @if (addressVerified) {
-                        <span class="address-confirmed-text">✓ Address verified via Google</span>
+                        <span class="address-confirmed-text">Address verified via Google</span>
                       }
                     </div>
                   </div>
@@ -706,7 +675,7 @@ interface DashboardData {
                   <div class="form-preview" *ngIf="deliveryForm.description && deliveryForm.quantity > 0">
                     <mat-icon>local_shipping</mat-icon>
                     <span>
-                      @if (deliveryForm.priority === 'Urgent') { 🔴 }
+                      @if (deliveryForm.priority === 'Urgent') { <strong class="urgent-tag">Urgent:</strong> }
                       <strong>{{ deliveryForm.quantity }} {{ deliveryForm.unitOfMeasure }}</strong> —
                       {{ deliveryForm.description }}
                       @if (deliveryForm.invoiceNumber) { ({{ deliveryForm.invoiceNumber }}) }
@@ -715,7 +684,7 @@ interface DashboardData {
 
                   <div class="form-actions">
                     <button mat-stroked-button (click)="closeDeliveryDialog()" [disabled]="deliverySaving">Cancel</button>
-                    <button mat-flat-button class="btn-submit delivery-submit" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || !isDeliveryFormValid()">
+                    <button mat-flat-button color="primary" class="btn-submit" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || !isDeliveryFormValid()">
                       @if (deliverySaving) {
                         <mat-spinner diameter="18" strokeWidth="2"></mat-spinner>
                         Submitting...
@@ -736,10 +705,10 @@ interface DashboardData {
           <div class="scent-pod-header">
             <h3 class="scent-pod-title"><mat-icon>palette</mat-icon> Scent Breakdown</h3>
             <div class="scent-pod-view-toggle">
-              <button class="view-toggle-btn" [class.active]="scentPodView === 'list'" (click)="scentPodView = 'list'" matTooltip="List view">
+              <button aria-label="List view" class="view-toggle-btn" [class.active]="scentPodView === 'list'" (click)="scentPodView = 'list'" matTooltip="List view">
                 <mat-icon>view_list</mat-icon>
               </button>
-              <button class="view-toggle-btn" [class.active]="scentPodView === 'grid'" (click)="scentPodView = 'grid'" matTooltip="Grid view">
+              <button aria-label="Grid view" class="view-toggle-btn" [class.active]="scentPodView === 'grid'" (click)="scentPodView = 'grid'" matTooltip="Grid view">
                 <mat-icon>grid_view</mat-icon>
               </button>
             </div>
@@ -750,7 +719,6 @@ interface DashboardData {
               @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
                 <div class="scent-card" [style.border-left-color]="getScentColor(sb.scent)">
                   <div class="scent-card-header">
-                    <span class="scent-emoji">{{ getScentEmoji(sb.scent) }}</span>
                     <span class="scent-name">{{ sb.scent }}</span>
                   </div>
                   <div class="scent-card-stats">
@@ -775,7 +743,6 @@ interface DashboardData {
               @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
                 <div class="scent-list-item" [style.border-left-color]="getScentColor(sb.scent)">
                   <div class="scent-list-left">
-                    <span class="scent-emoji">{{ getScentEmoji(sb.scent) }}</span>
                     <span class="scent-name">{{ sb.scent }}</span>
                   </div>
                   <div class="scent-list-stats">
@@ -837,7 +804,7 @@ interface DashboardData {
                 <mat-select [(value)]="filterScent" (selectionChange)="applyFilter()">
                   <mat-option value="all">All Scents</mat-option>
                   @for (s of allScents; track s) {
-                    <mat-option [value]="s">{{ getScentEmoji(s) }} {{ s }}</mat-option>
+                    <mat-option [value]="s">{{ s }}</mat-option>
                   }
                 </mat-select>
               </mat-form-field>
@@ -853,7 +820,7 @@ interface DashboardData {
           </div>
 
           <div class="schedule-table-wrapper">
-            <table class="schedule-table">
+            <table class="app-table schedule-table">
               <thead>
                 <tr>
                   <th class="col-scent">Scent</th>
@@ -861,7 +828,7 @@ interface DashboardData {
                   <th class="col-batch">Batch</th>
                   <th class="col-uom">UOM</th>
                   @for (d of scheduleDates; track d) {
-                    <th class="col-day" [class.weekend]="isWeekend(d)">
+                    <th class="col-day num" [class.weekend]="isWeekend(d)">
                       <div class="date-header">
                         <span class="day-name">{{ d | date:'EEE' }}</span>
                         <span class="day-num">{{ d | date:'dd' }}</span>
@@ -869,18 +836,18 @@ interface DashboardData {
                       </div>
                     </th>
                   }
-                  <th class="col-total">Total</th>
+                  <th class="col-total num">Total</th>
                 </tr>
               </thead>
               <tbody>
                 @for (group of filteredGroups; track group.scentGroup) {
                   <!-- Scent group header -->
-                  <tr class="group-header-row" [style.background]="getScentColor(group.scent) + '18'" (click)="toggleGroupCollapse(group.scentGroup)" style="cursor: pointer;">
+                  <tr class="group-header-row" [style.background]="getScentSoft(group.scent)" (click)="toggleGroupCollapse(group.scentGroup)">
                     <td [attr.colspan]="4 + scheduleDates.length + 1" class="group-header-cell">
                       <mat-icon class="group-chevron" [class.chevron-collapsed]="collapsedGroups.has(group.scentGroup)">expand_more</mat-icon>
-                      <span class="group-emoji">{{ getScentEmoji(group.scent) }}</span>
+                      <span class="scent-dot" [style.background]="getScentColor(group.scent)"></span>
                       <strong>{{ group.scent }}</strong>
-                      <span class="group-type-badge" [style.background]="group.type === 'Female' ? '#e91e63' : '#2196f3'">
+                      <span class="type-pill" [class.type-pill-f]="group.type === 'Female'" [class.type-pill-m]="group.type === 'Male'">
                         {{ group.type }}
                       </span>
                       <span class="group-count">{{ group.batches.length }} batches &bull; {{ getGroupTotal(group) | number }} units</span>
@@ -888,7 +855,7 @@ interface DashboardData {
                   </tr>
                   @if (!collapsedGroups.has(group.scentGroup)) {
                     @for (batch of group.batches; track batch.batchCode; let i = $index) {
-                      <tr class="batch-row" [class.even-row]="i % 2 === 0">
+                      <tr class="batch-row">
                         <td class="col-scent">
                           @if (i === 0) {
                             {{ group.scent }}
@@ -896,15 +863,15 @@ interface DashboardData {
                         </td>
                         <td class="col-type">
                           @if (i === 0) {
-                            <span class="type-badge" [class.type-female]="group.type === 'Female'" [class.type-male]="group.type === 'Male'">
+                            <span class="type-pill" [class.type-pill-f]="group.type === 'Female'" [class.type-pill-m]="group.type === 'Male'">
                               {{ group.type }}
                             </span>
                           }
                         </td>
-                        <td class="col-batch"><code>{{ batch.batchCode }}</code></td>
+                        <td class="col-batch ref">{{ batch.batchCode }}</td>
                         <td class="col-uom">{{ batch.uom }}</td>
                         @for (dq of batch.dailyQuantities; track dq.date) {
-                          <td class="col-day" [class.zero-qty]="dq.quantity === 0" [class.has-note]="dq.note">
+                          <td class="col-day num" [class.zero-qty]="dq.quantity === 0" [class.has-note]="dq.note">
                             @if (dq.note) {
                               <span [matTooltip]="dq.note">{{ dq.quantity }}</span>
                             } @else {
@@ -912,18 +879,34 @@ interface DashboardData {
                             }
                           </td>
                         }
-                        <td class="col-total"><strong>{{ getBatchTotal(batch) | number }}</strong></td>
+                        <td class="col-total num"><strong>{{ getBatchTotal(batch) | number }}</strong></td>
                       </tr>
                     }
                     <!-- Group subtotal -->
-                    <tr class="subtotal-row" [style.background]="getScentColor(group.scent) + '10'">
+                    <tr class="subtotal-row">
                       <td colspan="4" class="subtotal-label">{{ group.scent }} {{ group.type }} Subtotal</td>
                       @for (d of scheduleDates; track d) {
-                        <td class="col-day subtotal-val">{{ getGroupDayTotal(group, d) | number }}</td>
+                        <td class="col-day num">{{ getGroupDayTotal(group, d) | number }}</td>
                       }
-                      <td class="col-total subtotal-val"><strong>{{ getGroupTotal(group) | number }}</strong></td>
+                      <td class="col-total num">{{ getGroupTotal(group) | number }}</td>
                     </tr>
                   }
+                } @empty {
+                  <tr class="empty-row">
+                    <td [attr.colspan]="4 + scheduleDates.length + 1">
+                      @if (scheduleGroups.length === 0) {
+                        <app-empty-state icon="inventory_2" title="No stock scheduled yet"
+                                         message="Stock captured for the condoms project appears here, grouped by scent and type.">
+                          <button mat-stroked-button (click)="openCaptureDialog()"><mat-icon>add_circle</mat-icon> Capture Stock</button>
+                        </app-empty-state>
+                      } @else {
+                        <app-empty-state icon="filter_alt_off" title="No batches match these filters"
+                                         message="None of the scheduled batches have this scent and type.">
+                          <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
+                        </app-empty-state>
+                      }
+                    </td>
+                  </tr>
                 }
               </tbody>
             </table>
@@ -934,85 +917,59 @@ interface DashboardData {
   `,
   styles: [`
     :host {
-      --surface: #ffffff;
-      --surface-hover: #f8fafc;
-      --border: #e2e8f0;
-      --text-primary: #1e293b;
-      --text-secondary: #64748b;
-      --text-muted: #94a3b8;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-      --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
-      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
-      --radius: 16px;
-      --radius-sm: 12px;
-      --pink: #e91e63;
-      --pink-soft: #fce4ec;
-      --pink-mid: #f8bbd0;
-      --pink-light: #f48fb1;
-      --purple: #9c27b0;
-      --purple-soft: #f3e5f5;
-      --purple-mid: #e1bee7;
-      --purple-light: #ce93d8;
-      --blue: #2196f3;
-      --blue-soft: #e3f2fd;
-      --blue-mid: #bbdefb;
-      --blue-light: #64b5f6;
-      --orange: #ff9800;
-      --orange-soft: #fff3e0;
-      --orange-mid: #ffe0b2;
-      --orange-light: #ffb74d;
-      --green: #4caf50;
-      --green-soft: #e8f5e9;
-      --green-mid: #c8e6c9;
-      --green-light: #81c784;
+      --surface: var(--color-surface);
+      --surface-hover: var(--color-canvas);
+      --border: var(--color-line);
+      --text-primary: var(--color-text);
+      --text-secondary: var(--color-text-3);
+      --text-muted: var(--color-text-3);
+      --radius: var(--radius-lg);
+      --pink: var(--color-cat-pink);
+      --pink-soft: var(--color-cat-pink-soft);
+      --purple: var(--color-cat-purple);
+      --purple-soft: var(--color-cat-purple-soft);
+      --blue: var(--color-primary);
+      --blue-soft: var(--color-primary-soft);
+      --orange: var(--color-cat-amber);
+      --orange-soft: var(--color-cat-amber-soft);
+      --green: var(--color-cat-teal);
+      --green-soft: var(--color-cat-teal-soft);
     }
 
     .dashboard-container {
-      padding: 0 24px 40px;
+      padding: 0 0 var(--space-6);
     }
 
     /* ── Back Row ── */
     .back-row {
       display: flex;
       align-items: center;
-      gap: 16px;
-      margin-bottom: 28px;
+      gap: var(--space-4);
+      margin-bottom: var(--space-5);
       flex-wrap: wrap;
     }
 
-    .back-btn {
-      background: rgba(255, 255, 255, 0.12) !important;
-      color: white !important;
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.15) !important;
-      border-radius: 12px !important;
-      transition: all 0.2s !important;
-    }
-    .back-btn:hover {
-      background: rgba(255, 255, 255, 0.22) !important;
-    }
-
     .dashboard-title {
-      color: white;
+      color: var(--color-text);
       margin: 0;
-      font-size: 1.7rem;
-      font-weight: 800;
+      font-size: var(--text-xl);
+      font-weight: 700;
       display: flex;
       align-items: center;
       gap: 12px;
       flex: 1;
-      letter-spacing: -0.3px;
+      letter-spacing: -0.01em;
     }
 
     .title-icon-wrap {
       width: 40px;
       height: 40px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.15);
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      backdrop-filter: blur(8px);
     }
     .title-icon-wrap mat-icon {
       font-size: 22px;
@@ -1022,6 +979,8 @@ interface DashboardData {
 
     .title-actions {
       display: flex;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
     }
 
@@ -1029,13 +988,12 @@ interface DashboardData {
       display: flex;
       align-items: center;
       gap: 6px;
-      background: rgba(255, 255, 255, 0.12);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(8px);
-      color: white;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      color: var(--color-text-2);
       padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 0.8rem;
+      border-radius: 999px;
+      font-size: var(--text-xs);
       font-weight: 600;
     }
     .date-pill mat-icon {
@@ -1046,75 +1004,24 @@ interface DashboardData {
 
     /* ── Loading ── */
     .loading-state {
-      display: flex; justify-content: center; padding: 60px 20px;
+      background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm); overflow: hidden;
     }
-    .loading-card {
-      background: var(--surface, #fff); border-radius: 20px;
-      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.08);
-      max-width: 520px; width: 100%;
-    }
-    .loading-card h3 { color: var(--text-primary, #1a1a2e); margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: var(--text-secondary, #64748b); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
-    .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(236,72,153,0.12), rgba(244,114,182,0.12));
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(236,72,153,0.15);
-    }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #ec4899; }
-    .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
-    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
-    .lc-progress-wrap { margin: 8px 0 24px; }
-    .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
-    .lc-progress-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #ec4899, #f472b6, #a855f7);
-      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
-      transition: width 0.15s ease-out; position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4)); border-radius: 0 4px 4px 0;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
-    .lc-progress-message { color: #64748b; font-weight: 500; }
-    .lc-progress-pct { color: #ec4899; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
-    .lc-step {
-      display: flex; flex-direction: column; align-items: center; gap: 6px;
-      flex: 1; padding-top: 16px; opacity: 0.35; transition: opacity 0.4s ease, transform 0.3s ease;
-    }
-    .lc-step.active { opacity: 1; transform: translateY(-2px); }
-    .lc-step.done { opacity: 0.65; }
-    .lc-step-dot {
-      width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
-    }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #ec4899, #a855f7); box-shadow: 0 2px 10px rgba(236,72,153,0.3); }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
-    .lc-step.done .lc-step-dot { background: #dcfce7; }
-    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #ec4899; }
-    .lc-step.done .lc-step-label { color: #16a34a; }
 
     .error-container {
       background: var(--surface);
+      border: 1px solid var(--color-line);
       border-radius: var(--radius);
       padding: 48px;
       text-align: center;
-      box-shadow: var(--shadow-lg);
+      box-shadow: var(--shadow-sm);
     }
     .error-icon-wrap {
       width: 64px; height: 64px; border-radius: 50%;
-      background: #fef2f2; display: flex; align-items: center; justify-content: center;
+      background: var(--color-danger-soft); display: flex; align-items: center; justify-content: center;
       margin: 0 auto 16px;
     }
-    .error-icon-wrap mat-icon { font-size: 32px; width: 32px; height: 32px; color: #ef4444; }
+    .error-icon-wrap mat-icon { font-size: 32px; width: 32px; height: 32px; color: var(--color-danger); }
     .error-container h3 { color: var(--text-primary); margin: 0 0 8px; }
     .error-container p { color: var(--text-secondary); margin: 0 0 20px; }
 
@@ -1128,78 +1035,53 @@ interface DashboardData {
 
     .kpi-card {
       background: var(--surface);
+      border: 1px solid var(--color-line);
       border-radius: var(--radius);
       padding: 22px 20px;
       display: flex;
       align-items: center;
       gap: 14px;
-      box-shadow: var(--shadow-md);
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-      overflow: hidden;
-      border: 1px solid transparent;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
     }
 
     .kpi-card.clickable { cursor: pointer; }
 
     .kpi-card.clickable:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-lg);
+      border-color: var(--color-line-strong);
+      box-shadow: var(--shadow-md);
     }
-
-    .kpi-card.kpi-pink.clickable:hover { border-color: var(--pink-mid); }
-    .kpi-card.kpi-purple.clickable:hover { border-color: var(--purple-mid); }
-    .kpi-card.kpi-blue.clickable:hover { border-color: var(--blue-mid); }
-    .kpi-card.kpi-orange.clickable:hover { border-color: var(--orange-mid); }
-
-    .kpi-accent {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-    }
-
-    .kpi-pink .kpi-accent { background: linear-gradient(90deg, var(--pink), var(--pink-light)); }
-    .kpi-purple .kpi-accent { background: linear-gradient(90deg, var(--purple), var(--purple-light)); }
-    .kpi-blue .kpi-accent { background: linear-gradient(90deg, var(--blue), var(--blue-light)); }
-    .kpi-orange .kpi-accent { background: linear-gradient(90deg, var(--orange), var(--orange-light)); }
-    .kpi-green .kpi-accent { background: linear-gradient(90deg, var(--green), var(--green-light)); }
 
     .kpi-icon-wrap {
       width: 48px;
       height: 48px;
-      border-radius: 14px;
+      border-radius: var(--radius-md);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
-    .kpi-icon-wrap mat-icon { font-size: 24px; width: 24px; height: 24px; color: white; }
-
-    .kpi-pink .kpi-icon-wrap { background: linear-gradient(135deg, var(--pink), #c2185b); }
-    .kpi-purple .kpi-icon-wrap { background: linear-gradient(135deg, var(--purple), #7b1fa2); }
-    .kpi-blue .kpi-icon-wrap { background: linear-gradient(135deg, var(--blue), #1565c0); }
-    .kpi-orange .kpi-icon-wrap { background: linear-gradient(135deg, var(--orange), #e65100); }
-    .kpi-green .kpi-icon-wrap { background: linear-gradient(135deg, var(--green), #2e7d32); }
+    .kpi-icon-wrap mat-icon { font-size: 24px; width: 24px; height: 24px; }
 
     .kpi-body { display: flex; flex-direction: column; }
-    .kpi-number { font-size: 1.65rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; letter-spacing: -0.5px; }
-    .kpi-label { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+    .kpi-number { font-size: var(--text-3xl); font-weight: 800; color: var(--text-primary); line-height: 1.2; letter-spacing: -0.5px; }
+    .kpi-label { font-size: var(--text-xs); color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
 
     /* ============================== */
     /*  KPI DIALOG OVERLAY            */
     /* ============================== */
     .dialog-backdrop {
-      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
-      backdrop-filter: blur(4px); z-index: 1000;
+      position: fixed; inset: 0; background: var(--color-scrim);
+      z-index: 1000;
       animation: fadeIn 0.2s ease;
     }
     .dialog-panel {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 94vw; max-width: 720px; max-height: 85vh;
-      background: var(--surface); border-radius: 20px;
-      box-shadow: 0 25px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1);
+      background: var(--surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
       z-index: 1001; display: flex; flex-direction: column;
       animation: dialogSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       overflow: hidden;
@@ -1211,35 +1093,33 @@ interface DashboardData {
     }
 
     .dialog-header {
-      padding: 24px 28px 20px; display: flex; align-items: center;
+      padding: 20px 24px 16px; display: flex; align-items: center;
       justify-content: space-between; border-bottom: 1px solid var(--border);
+      background: var(--color-surface);
       flex-shrink: 0;
     }
-    .dh-batches { background: linear-gradient(135deg, var(--pink-soft), var(--pink-mid)); }
-    .dh-female { background: linear-gradient(135deg, var(--purple-soft), var(--purple-mid)); }
-    .dh-male { background: linear-gradient(135deg, var(--blue-soft), var(--blue-mid)); }
-    .dh-scents { background: linear-gradient(135deg, var(--orange-soft), var(--orange-mid)); }
 
     .dialog-title-group { display: flex; align-items: center; gap: 14px; }
     .dialog-icon-ring {
-      width: 46px; height: 46px; border-radius: 14px;
+      width: 44px; height: 44px; border-radius: var(--radius-md);
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      background: var(--color-primary-soft); color: var(--color-primary);
     }
-    .dialog-batches .dialog-icon-ring { background: var(--pink); color: white; }
-    .dialog-female .dialog-icon-ring { background: var(--purple); color: white; }
-    .dialog-male .dialog-icon-ring { background: var(--blue); color: white; }
-    .dialog-scents .dialog-icon-ring { background: var(--orange); color: white; }
+    .dialog-batches .dialog-icon-ring { background: var(--pink-soft); color: var(--pink); }
+    .dialog-female .dialog-icon-ring { background: var(--purple-soft); color: var(--purple); }
+    .dialog-male .dialog-icon-ring { background: var(--blue-soft); color: var(--blue); }
+    .dialog-scents .dialog-icon-ring { background: var(--orange-soft); color: var(--orange); }
     .dialog-icon-ring mat-icon { font-size: 24px; width: 24px; height: 24px; }
 
-    .dialog-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
-    .dialog-subtitle { font-size: 12px; color: var(--text-secondary); margin: 3px 0 0; }
+    .dialog-title { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
+    .dialog-subtitle { font-size: var(--text-xs); color: var(--text-secondary); margin: 3px 0 0; }
 
     .dialog-close {
-      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+      width: 36px; height: 36px; border-radius: var(--radius-control); border: 1px solid var(--border);
       background: var(--surface); display: flex; align-items: center; justify-content: center;
       cursor: pointer; transition: all 0.15s; color: var(--text-secondary); flex-shrink: 0;
     }
-    .dialog-close:hover { background: #fef2f2; color: #ef4444; border-color: #fecaca; }
+    .dialog-close:hover { background: var(--color-surface-2); color: var(--color-text); }
     .dialog-close mat-icon { font-size: 20px; width: 20px; height: 20px; }
 
     .dialog-body {
@@ -1252,7 +1132,7 @@ interface DashboardData {
       gap: 12px; margin-bottom: 24px;
     }
     .dialog-stat {
-      padding: 16px 18px; border-radius: 14px; text-align: center;
+      padding: 16px 18px; border-radius: var(--radius-md); text-align: center;
       display: flex; flex-direction: column; gap: 4px;
     }
     .dialog-stat.pink { background: var(--pink-soft); }
@@ -1260,44 +1140,27 @@ interface DashboardData {
     .dialog-stat.blue { background: var(--blue-soft); }
     .dialog-stat.orange { background: var(--orange-soft); }
     .dialog-stat.green { background: var(--green-soft); }
-    .ds-val { font-size: 22px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
-    .ds-lbl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
+    .ds-val { font-size: var(--text-2xl); font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+    .ds-lbl { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
 
     .dialog-section-title {
       display: flex; align-items: center; gap: 8px;
-      font-size: 14px; font-weight: 700; color: var(--text-primary);
+      font-size: var(--text-md); font-weight: 700; color: var(--text-primary);
       margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
     }
+    .dialog-section-title.spaced { margin-top: 20px; }
     .dialog-section-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--text-secondary); }
 
     /* Dialog Table */
-    .dialog-table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
-    .dialog-table {
-      width: 100%; border-collapse: collapse; font-size: 13px;
-    }
-    .dialog-table thead { background: #f8fafc; }
-    .dialog-table th {
-      padding: 10px 16px; font-size: 11px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);
-      border-bottom: 1px solid var(--border); white-space: nowrap;
-    }
-    .dialog-table td {
-      padding: 10px 16px; border-bottom: 1px solid #f1f5f9; color: var(--text-primary);
-    }
-    .dialog-table tbody tr:last-child td { border-bottom: none; }
-    .dialog-table tbody tr:hover { background: #f8fafc; }
-    .dialog-table .right { text-align: right; }
-    .dialog-table .mono-text { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
-    .dialog-table .primary-cell { font-weight: 600; }
-    .dialog-table tfoot td { border-top: 2px solid var(--border); background: #f8fafc; }
-    .total-row td { font-size: 13px; }
+    .dialog-table-wrap { overflow-x: auto; border-radius: var(--radius-md); border: 1px solid var(--border); }
+    .primary-cell { font-weight: 600; }
 
     .scent-dot {
-      display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
+      display: inline-block; flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
     }
 
     .type-pill {
-      display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+      display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700;
     }
     .type-pill-f { background: var(--pink-soft); color: var(--pink); }
     .type-pill-m { background: var(--blue-soft); color: var(--blue); }
@@ -1305,39 +1168,39 @@ interface DashboardData {
     /* Dialog Bar Chart rows */
     .dialog-province-bars { display: flex; flex-direction: column; gap: 10px; }
     .bar-row { display: flex; align-items: center; gap: 12px; }
-    .bar-row-label { width: 120px; font-size: 13px; font-weight: 600; color: var(--text-primary); text-align: right; flex-shrink: 0; }
-    .bar-track { flex: 1; height: 26px; background: #f1f5f9; border-radius: 8px; overflow: hidden; }
-    .bar-fill { height: 100%; border-radius: 8px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); min-width: 4px; }
-    .bar-row-value { width: 90px; font-size: 13px; font-weight: 700; color: var(--text-primary); font-family: 'SF Mono', monospace; }
+    .bar-row-label { width: 120px; font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); text-align: right; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 26px; background: var(--color-surface-2); border-radius: var(--radius-control); overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: var(--radius-control); transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); min-width: 4px; }
+    .bar-row-value { width: 90px; font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
     /* Scent Detail Cards (for scent dialog) */
     .scent-detail-cards { display: flex; flex-direction: column; gap: 12px; }
     .scent-detail-card {
-      padding: 16px 20px; border-radius: 14px;
+      padding: 16px 20px; border-radius: var(--radius-md);
       border: 1px solid var(--border); border-left: 4px solid;
       background: var(--surface); transition: all 0.15s;
     }
     .scent-detail-card:hover { background: var(--surface-hover); box-shadow: var(--shadow-sm); }
     .sdc-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-    .sdc-emoji { font-size: 1.5rem; }
     .sdc-info { display: flex; flex-direction: column; flex: 1; }
-    .sdc-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
-    .sdc-types { font-size: 12px; color: var(--text-secondary); }
+    .sdc-name { font-size: var(--text-md); font-weight: 700; color: var(--text-primary); }
+    .sdc-types { font-size: var(--text-xs); color: var(--text-secondary); }
     .sdc-badge {
-      padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;
+      padding: 4px 12px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700;
     }
     .sdc-bar-wrapper { display: flex; align-items: center; gap: 12px; }
-    .sdc-bar { flex: 1; height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+    .sdc-bar { flex: 1; height: 8px; background: var(--color-surface-2); border-radius: 4px; overflow: hidden; }
     .sdc-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
-    .sdc-units { font-size: 13px; font-weight: 700; color: var(--text-primary); white-space: nowrap; font-family: 'SF Mono', monospace; }
+    .sdc-units { font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
     /* ── Scent Breakdown Pod ── */
     .scent-pod {
       background: var(--surface);
+      border: 1px solid var(--color-line);
       border-radius: var(--radius);
       padding: 20px 24px 24px;
       margin-bottom: 24px;
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--shadow-sm);
     }
 
     .scent-pod-header {
@@ -1353,20 +1216,20 @@ interface DashboardData {
       align-items: center;
       gap: 8px;
       font-weight: 700;
-      font-size: 1rem;
+      font-size: var(--text-lg);
       color: var(--text-primary);
     }
     .scent-pod-title mat-icon {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: var(--purple);
+      color: var(--text-secondary);
     }
 
     .scent-pod-view-toggle {
       display: flex;
-      background: #f1f5f9;
-      border-radius: 10px;
+      background: var(--color-surface-2);
+      border-radius: var(--radius-md);
       padding: 3px;
       gap: 2px;
     }
@@ -1378,20 +1241,20 @@ interface DashboardData {
       width: 34px;
       height: 34px;
       border: none;
-      border-radius: 8px;
+      border-radius: var(--radius-control);
       background: transparent;
       color: var(--text-muted);
       cursor: pointer;
       transition: all 0.2s;
     }
     .view-toggle-btn:hover {
-      color: var(--text-secondary);
-      background: rgba(0,0,0,0.04);
+      color: var(--color-text-2);
+      background: var(--color-surface-3);
     }
     .view-toggle-btn.active {
-      background: white;
-      color: var(--purple);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      background: var(--color-surface);
+      color: var(--color-primary);
+      box-shadow: var(--shadow-sm);
     }
     .view-toggle-btn mat-icon {
       font-size: 20px;
@@ -1411,14 +1274,13 @@ interface DashboardData {
       align-items: center;
       justify-content: space-between;
       padding: 14px 18px;
-      background: #f8fafc;
-      border-radius: var(--radius-sm);
-      border-left: 4px solid #ccc;
-      transition: all 0.2s;
+      background: var(--color-canvas);
+      border-radius: var(--radius-md);
+      border-left: 4px solid var(--color-line-strong);
+      transition: background 0.2s;
     }
     .scent-list-item:hover {
-      background: #f1f5f9;
-      transform: translateX(4px);
+      background: var(--color-surface-2);
     }
 
     .scent-list-left {
@@ -1442,9 +1304,10 @@ interface DashboardData {
 
     .scent-card {
       background: var(--surface);
-      border-radius: var(--radius-sm);
+      border: 1px solid var(--color-line);
+      border-left: 4px solid var(--color-line-strong);
+      border-radius: var(--radius-md);
       padding: 18px 20px;
-      border-left: 4px solid #ccc;
       box-shadow: var(--shadow-sm);
       transition: all 0.2s;
     }
@@ -1460,21 +1323,21 @@ interface DashboardData {
       margin-bottom: 14px;
     }
 
-    .scent-emoji { font-size: 1.5rem; }
-    .scent-name { font-weight: 700; font-size: 1.05rem; color: var(--text-primary); }
+    .scent-name { font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); }
 
     .scent-card-stats { display: flex; gap: 20px; }
     .scs-item { display: flex; flex-direction: column; }
-    .scs-val { font-weight: 800; font-size: 1rem; color: var(--text-primary); }
-    .scs-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
+    .scs-val { font-weight: 800; font-size: var(--text-lg); color: var(--text-primary); }
+    .scs-lbl { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
 
     /* ── Bar Chart ── */
     .chart-section {
       background: var(--surface);
+      border: 1px solid var(--color-line);
       border-radius: var(--radius);
       padding: 24px;
       margin-bottom: 24px;
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--shadow-sm);
     }
 
     .section-header {
@@ -1491,7 +1354,7 @@ interface DashboardData {
       gap: 8px;
       color: var(--text-primary);
       font-weight: 700;
-      font-size: 1rem;
+      font-size: var(--text-lg);
     }
     .section-header h3 mat-icon { color: var(--text-secondary); }
 
@@ -1499,7 +1362,7 @@ interface DashboardData {
       display: flex;
       align-items: center;
       gap: 14px;
-      font-size: 0.75rem;
+      font-size: var(--text-xs);
       color: var(--text-secondary);
       font-weight: 600;
     }
@@ -1510,8 +1373,8 @@ interface DashboardData {
       display: inline-block;
       margin-right: 4px;
     }
-    .legend-dot.female { background: #e91e63; }
-    .legend-dot.male { background: #2196f3; }
+    .legend-dot.female { background: var(--pink); }
+    .legend-dot.male { background: var(--blue); }
 
     .bar-chart {
       display: flex;
@@ -1532,10 +1395,10 @@ interface DashboardData {
     }
 
     .bar-value {
-      font-size: 0.7rem;
+      font-size: var(--text-xs);
       font-weight: 700;
       color: var(--text-secondary);
-      font-family: 'SF Mono', monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     .stacked-bar {
@@ -1556,11 +1419,11 @@ interface DashboardData {
     }
 
     .bar-segment.female {
-      background: linear-gradient(180deg, #ec407a, #c2185b);
+      background: var(--pink);
     }
 
     .bar-segment.male {
-      background: linear-gradient(180deg, #42a5f5, #1565c0);
+      background: var(--blue);
     }
 
     .bar {
@@ -1572,7 +1435,7 @@ interface DashboardData {
     }
 
     .bar-label {
-      font-size: 0.65rem;
+      font-size: var(--text-xs);
       color: var(--text-muted);
       text-align: center;
       line-height: 1.3;
@@ -1583,9 +1446,10 @@ interface DashboardData {
     /* ── Schedule Table ── */
     .schedule-section {
       background: var(--surface);
+      border: 1px solid var(--color-line);
       border-radius: var(--radius);
       padding: 24px;
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--shadow-sm);
     }
 
     .schedule-header {
@@ -1604,7 +1468,7 @@ interface DashboardData {
       gap: 8px;
       color: var(--text-primary);
       font-weight: 700;
-      font-size: 1rem;
+      font-size: var(--text-lg);
     }
     .schedule-header h3 mat-icon { color: var(--text-secondary); }
 
@@ -1623,58 +1487,46 @@ interface DashboardData {
 
     .schedule-table-wrapper {
       overflow-x: auto;
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius-md);
       border: 1px solid var(--border);
     }
 
     .schedule-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.8rem;
       min-width: 900px;
     }
 
     .schedule-table thead th {
-      background: #1e293b;
-      color: white;
-      padding: 10px 6px;
-      text-align: center;
-      font-weight: 700;
-      font-size: 0.72rem;
-      position: sticky;
-      top: 0;
       z-index: 2;
-      white-space: nowrap;
-      letter-spacing: 0.2px;
     }
 
     .schedule-table thead th.weekend {
-      background: #334155;
+      background: var(--color-surface-3);
     }
 
-    .col-scent { min-width: 80px; text-align: left !important; padding-left: 12px !important; }
+    .col-scent { min-width: 80px; }
     .col-type { min-width: 60px; }
-    .col-batch { min-width: 90px; text-align: left !important; }
+    .col-batch { min-width: 90px; }
     .col-uom { min-width: 55px; }
-    .col-day { min-width: 55px; text-align: center; }
-    .col-total { min-width: 65px; text-align: center; background: rgba(0, 0, 0, 0.02); }
+    .col-day { min-width: 55px; }
+    .col-total { min-width: 65px; background: var(--color-canvas); }
 
     .date-header {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-end;
       line-height: 1.2;
+      padding: 4px 0;
     }
 
-    .day-name { font-size: 0.62rem; opacity: 0.7; }
-    .day-num { font-size: 0.9rem; font-weight: 800; }
-    .day-month { font-size: 0.58rem; opacity: 0.6; }
+    .day-name { font-size: var(--text-xs); font-weight: 600; }
+    .day-num { font-size: var(--text-sm); font-weight: 800; color: var(--color-text); }
+    .day-month { font-size: var(--text-xs); font-weight: 500; }
 
     /* Group header */
+    .group-header-row { cursor: pointer; }
+
     .group-header-row td {
-      padding: 8px 12px;
-      font-size: 0.85rem;
-      border-bottom: 1px solid var(--border);
+      font-size: var(--text-sm);
     }
 
     .group-header-cell {
@@ -1683,19 +1535,9 @@ interface DashboardData {
       gap: 8px;
     }
 
-    .group-emoji { font-size: 1.1rem; }
-
-    .group-type-badge {
-      padding: 2px 10px;
-      border-radius: 10px;
-      color: white;
-      font-size: 0.7rem;
-      font-weight: 600;
-    }
-
     .group-count {
       margin-left: auto;
-      font-size: 0.75rem;
+      font-size: var(--text-xs);
       color: var(--text-muted);
       font-weight: 600;
     }
@@ -1713,8 +1555,8 @@ interface DashboardData {
       transform: rotate(-90deg);
     }
 
-    .group-header-row:hover td {
-      filter: brightness(0.96);
+    .app-table tbody tr.group-header-row:hover td {
+      background: transparent;
     }
 
     .collapse-all-btn {
@@ -1723,10 +1565,10 @@ interface DashboardData {
       gap: 6px;
       padding: 8px 16px;
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: var(--radius-control);
       background: var(--surface);
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
       cursor: pointer;
       transition: all 0.15s ease;
@@ -1746,126 +1588,31 @@ interface DashboardData {
       height: 18px;
     }
 
-    /* Batch rows */
-    .batch-row td {
-      padding: 5px 6px;
-      border-bottom: 1px solid #f1f5f9;
-      text-align: center;
-    }
-
-    .batch-row.even-row { background: #fafbfc; }
-    .batch-row:hover { background: #f1f5f9; }
-
-    .batch-row code {
-      background: #f1f5f9;
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--text-primary);
-      font-family: 'SF Mono', 'Cascadia Code', monospace;
-    }
-
     .zero-qty {
-      color: #cbd5e1;
+      color: var(--color-text-3);
     }
 
     .has-note {
-      color: #ea580c;
+      color: var(--color-warn);
       cursor: help;
-      text-decoration: underline dotted #ea580c;
+      text-decoration: underline dotted var(--color-warn);
     }
-
-    .type-badge {
-      padding: 2px 8px;
-      border-radius: 8px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: white;
-    }
-
-    .type-female { background: var(--pink); }
-    .type-male { background: var(--blue); }
 
     /* Subtotal row */
     .subtotal-row td {
-      padding: 6px 6px;
       font-weight: 700;
-      font-size: 0.78rem;
-      border-bottom: 2px solid var(--border);
-      text-align: center;
+      background: var(--color-surface-2);
+      border-bottom: 1px solid var(--color-line-strong);
     }
 
     .subtotal-label {
-      text-align: right !important;
-      padding-right: 12px !important;
+      text-align: right;
       color: var(--text-secondary);
       font-style: italic;
     }
 
-    .subtotal-val {
-      color: var(--text-primary);
-    }
-
-    /* ── Capture Stock Button ── */
-    .capture-btn {
-      background: linear-gradient(135deg, #4caf50, #2e7d32) !important;
-      color: white !important;
-      border: 1px solid rgba(255, 255, 255, 0.2) !important;
-      border-radius: 12px !important;
-      font-weight: 700 !important;
-      padding: 6px 18px !important;
-      transition: all 0.2s !important;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .capture-btn:hover {
-      background: linear-gradient(135deg, #66bb6a, #388e3c) !important;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4) !important;
-    }
-
-    /* ── Request Delivery Button ── */
-    .request-delivery-btn {
-      background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important;
-      color: white !important;
-      border: 1px solid rgba(255, 255, 255, 0.2) !important;
-      border-radius: 12px !important;
-      font-weight: 700 !important;
-      padding: 6px 18px !important;
-      transition: all 0.2s !important;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .request-delivery-btn:hover {
-      background: linear-gradient(135deg, #ff8787, #f0631a) !important;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(238, 90, 36, 0.4) !important;
-    }
-
-    /* ── Capture Dialog Styles ── */
-    .dh-capture {
-      background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
-    }
-    .capture-icon-ring {
-      background: var(--green) !important;
-      color: white !important;
-    }
-
-    /* ── Delivery Dialog Styles ── */
-    .dh-delivery {
-      background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-    }
-    .delivery-icon-ring {
-      background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important;
-      color: white !important;
-    }
-    .delivery-submit {
-      background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important;
-      color: white !important;
-    }
+    .empty-row td { padding: 0; }
+    .app-table tbody tr.empty-row:hover td { background: transparent; }
 
     .capture-form {
       display: flex;
@@ -1891,7 +1638,7 @@ interface DashboardData {
     }
 
     .form-label {
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 700;
       color: var(--text-secondary);
       text-transform: uppercase;
@@ -1899,21 +1646,21 @@ interface DashboardData {
     }
 
     .form-label .required {
-      color: #ef4444;
+      color: var(--color-danger);
     }
 
     .form-label .optional {
       color: var(--text-muted);
       font-weight: 500;
       text-transform: none;
-      font-size: 11px;
+      font-size: var(--text-xs);
     }
 
     .form-input, .form-select {
       padding: 10px 14px;
-      border: 1.5px solid var(--border);
-      border-radius: 10px;
-      font-size: 14px;
+      border: 1px solid var(--color-line-strong);
+      border-radius: var(--radius-control);
+      font-size: var(--text-md);
       color: var(--text-primary);
       background: var(--surface);
       transition: all 0.15s;
@@ -1922,8 +1669,8 @@ interface DashboardData {
     }
 
     .form-input:focus, .form-select:focus {
-      border-color: var(--green);
-      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.12);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
     }
 
     .form-input::placeholder {
@@ -1940,18 +1687,19 @@ interface DashboardData {
       align-items: center;
       gap: 10px;
       padding: 14px 18px;
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
-      border-radius: 12px;
-      font-size: 13px;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
       color: var(--text-primary);
     }
     .form-preview mat-icon {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: var(--green);
+      color: var(--color-primary);
     }
+    .urgent-tag { color: var(--color-danger); }
 
     .form-actions {
       display: flex;
@@ -1961,18 +1709,11 @@ interface DashboardData {
       border-top: 1px solid var(--border);
     }
 
-    .btn-submit {
-      background: linear-gradient(135deg, #4caf50, #2e7d32) !important;
-      color: white !important;
-      border-radius: 10px !important;
-      font-weight: 700 !important;
-      display: flex !important;
-      align-items: center !important;
-      gap: 6px !important;
-      padding: 8px 20px !important;
-    }
-    .btn-submit:disabled {
-      opacity: 0.5 !important;
+    .btn-submit mat-spinner {
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 6px;
+      --mdc-circular-progress-active-indicator-color: currentColor;
     }
 
     .capture-success {
@@ -1984,7 +1725,7 @@ interface DashboardData {
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1994,7 +1735,7 @@ interface DashboardData {
       font-size: 36px;
       width: 36px;
       height: 36px;
-      color: #4caf50;
+      color: var(--color-ok);
     }
 
     .capture-success h3 {
@@ -2006,7 +1747,7 @@ interface DashboardData {
     .capture-success p {
       color: var(--text-secondary);
       margin: 0 0 20px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .success-actions {
@@ -2015,23 +1756,15 @@ interface DashboardData {
       gap: 12px;
     }
 
-    .btn-add-another {
-      background: var(--green) !important;
-      color: white !important;
-      border-radius: 10px !important;
-      font-weight: 700 !important;
-    }
-
     .capture-error {
       display: flex;
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
-      background: #fef2f2;
-      border: 1px solid #fecaca;
-      border-radius: 10px;
-      color: #dc2626;
-      font-size: 13px;
+      background: var(--color-danger-soft);
+      border-radius: var(--radius-control);
+      color: var(--color-danger);
+      font-size: var(--text-sm);
       font-weight: 600;
       margin-bottom: 16px;
     }
@@ -2054,13 +1787,14 @@ interface DashboardData {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #ef5350;
+      color: var(--color-text-3);
       z-index: 1;
       pointer-events: none;
     }
     .address-input {
-      padding-left: 40px !important;
-      padding-right: 40px !important;
+      flex: 1;
+      padding-left: 40px;
+      padding-right: 40px;
     }
     .address-verified {
       position: absolute;
@@ -2068,7 +1802,7 @@ interface DashboardData {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #22c55e;
+      color: var(--color-ok);
       animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     @keyframes popIn {
@@ -2077,8 +1811,8 @@ interface DashboardData {
     }
     .address-confirmed-text {
       display: block;
-      font-size: 11px;
-      color: #22c55e;
+      font-size: var(--text-xs);
+      color: var(--color-ok);
       font-weight: 600;
       margin-top: 4px;
       padding-left: 2px;
@@ -2089,9 +1823,9 @@ interface DashboardData {
       .kpi-grid { grid-template-columns: repeat(3, 1fr); }
     }
     @media (max-width: 768px) {
-      .dashboard-container { padding: 0 12px 24px; }
+      .dashboard-container { padding: 0 0 var(--space-5); }
       .back-row { flex-direction: column; align-items: flex-start; }
-      .dashboard-title { font-size: 1.3rem; }
+      .dashboard-title { font-size: var(--text-2xl); }
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }
       .scent-cards-row { grid-template-columns: 1fr 1fr; }
       .schedule-filters { flex-direction: column; }
@@ -2100,22 +1834,22 @@ interface DashboardData {
     }
     @media (max-width: 600px) {
       .kpi-grid { grid-template-columns: 1fr 1fr; }
-      .dialog-panel { width: 100vw; max-height: 95vh; border-radius: 16px 16px 0 0; }
+      .dialog-panel { width: 100vw; max-height: 95vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
       .dialog-header { padding: 18px 20px 16px; }
     }
 
     /* Delivery Password Dialog */
     .pwd-dialog {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: white; border-radius: 16px; padding: 32px; width: 380px; max-width: 90vw;
-      text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 1200;
+      background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: 32px; width: 380px; max-width: 90vw;
+      text-align: center; box-shadow: var(--shadow-lg); z-index: 1200;
     }
-    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: #f57c00; margin-bottom: 12px; }
-    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: 20px; color: #1a1a2e; }
-    .pwd-dialog p { margin: 0 0 20px 0; color: #666; font-size: 14px; }
+    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: var(--color-primary); margin-bottom: 12px; }
+    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: var(--text-2xl); color: var(--color-text); }
+    .pwd-dialog p { margin: 0 0 20px 0; color: var(--color-text-2); font-size: var(--text-md); }
     .pwd-input { width: 100%; margin-bottom: 16px; }
     .pwd-actions { display: flex; gap: 12px; justify-content: center; }
-    .pwd-error { color: #e53935; font-size: 13px; margin: -8px 0 12px 0; }
+    .pwd-error { color: var(--color-danger); font-size: var(--text-sm); margin: -8px 0 12px 0; }
   `]
 })
 export class CondomsDashboardComponent implements OnInit {
@@ -2495,6 +2229,12 @@ export class CondomsDashboardComponent implements OnInit {
     });
   }
 
+  clearFilters(): void {
+    this.filterScent = 'all';
+    this.filterType = 'all';
+    this.applyFilter();
+  }
+
   toggleGroupCollapse(scentGroup: string): void {
     if (this.collapsedGroups.has(scentGroup)) {
       this.collapsedGroups.delete(scentGroup);
@@ -2515,34 +2255,21 @@ export class CondomsDashboardComponent implements OnInit {
 
   // ── Helpers ──
 
+  private readonly scentCategories: Record<string, string> = {
+    'Vanilla': 'teal',
+    'Strawberry': 'pink',
+    'Banana': 'amber',
+    'Grape': 'purple'
+  };
+
   getScentColor(scent: string): string {
-    const colors: Record<string, string> = {
-      'Vanilla': '#f9a825',
-      'Strawberry': '#e91e63',
-      'Banana': '#ffc107',
-      'Grape': '#7b1fa2'
-    };
-    return colors[scent] || '#607d8b';
+    const cat = this.scentCategories[scent];
+    return cat ? `var(--color-cat-${cat})` : 'var(--color-text-3)';
   }
 
-  getScentColorLight(scent: string): string {
-    const colors: Record<string, string> = {
-      'Vanilla': '#ffee58',
-      'Strawberry': '#f48fb1',
-      'Banana': '#ffe082',
-      'Grape': '#ce93d8'
-    };
-    return colors[scent] || '#90a4ae';
-  }
-
-  getScentEmoji(scent: string): string {
-    const emojis: Record<string, string> = {
-      'Vanilla': '🍦',
-      'Strawberry': '🍓',
-      'Banana': '🍌',
-      'Grape': '🍇'
-    };
-    return emojis[scent] || '📦';
+  getScentSoft(scent: string): string {
+    const cat = this.scentCategories[scent];
+    return cat ? `var(--color-cat-${cat}-soft)` : 'var(--color-surface-2)';
   }
 
   getBarHeight(total: number): number {

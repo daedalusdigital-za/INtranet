@@ -5,6 +5,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 export interface AssetInvoicePreviewData {
   found: boolean;
@@ -23,7 +25,7 @@ export interface AssetInvoicePreviewData {
 @Component({
   selector: 'app-asset-invoice-preview-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, StatusChipComponent, EmptyStateComponent],
   template: `
     <div class="inv-dialog">
       <div class="inv-header">
@@ -36,10 +38,10 @@ export interface AssetInvoicePreviewData {
         </div>
         <div class="inv-header-actions">
           @if (data.found && data.blobUrl) {
-            <button mat-icon-button (click)="download()" matTooltip="Download"><mat-icon>download</mat-icon></button>
-            <button mat-icon-button (click)="openNewTab()" matTooltip="Open in new tab"><mat-icon>open_in_new</mat-icon></button>
+            <button aria-label="Download" mat-icon-button (click)="download()" matTooltip="Download"><mat-icon>download</mat-icon></button>
+            <button aria-label="Open in new tab" mat-icon-button (click)="openNewTab()" matTooltip="Open in new tab"><mat-icon>open_in_new</mat-icon></button>
           }
-          <button mat-icon-button (click)="close()" matTooltip="Close"><mat-icon>close</mat-icon></button>
+          <button aria-label="Close" mat-icon-button (click)="close()" matTooltip="Close"><mat-icon>close</mat-icon></button>
         </div>
       </div>
 
@@ -47,7 +49,7 @@ export interface AssetInvoicePreviewData {
         <div class="inv-meta">
           @if (data.invoiceDate) { <span><mat-icon>event</mat-icon> {{ data.invoiceDate | date:'dd MMM yyyy' }}</span> }
           @if (data.total != null) { <span><mat-icon>payments</mat-icon> {{ data.currency || 'ZAR' }} {{ data.total | number:'1.2-2' }}</span> }
-          @if (data.status) { <span class="inv-status">{{ data.status }}</span> }
+          @if (data.status) { <app-status-chip [status]="data.status"></app-status-chip> }
         </div>
         <div class="inv-body">
           @if (isPdf) {
@@ -64,36 +66,29 @@ export interface AssetInvoicePreviewData {
         </div>
       } @else {
         <div class="inv-notfound">
-          <mat-icon>search_off</mat-icon>
-          <h4>No matching invoice in Books</h4>
-          <p>Invoice <strong>{{ data.invoiceNumber || '—' }}</strong> is not yet uploaded or linked in the Books module.</p>
-          <p class="hint">Upload it under <em>Books › Invoices</em>, then it will preview here automatically.</p>
+          <app-empty-state icon="search_off" title="No matching invoice in Books"
+                           [message]="'Invoice ' + (data.invoiceNumber || '—') + ' is not yet uploaded or linked in the Books module. Upload it under Books › Invoices, then it will preview here automatically.'"></app-empty-state>
         </div>
       }
     </div>
   `,
   styles: [`
-    .inv-dialog { width: 78vw; max-width: 900px; height: 82vh; display: flex; flex-direction: column; background: #fff; }
-    .inv-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #eef2f7; }
+    .inv-dialog { width: 78vw; max-width: 900px; height: 82vh; display: flex; flex-direction: column; background: var(--color-surface); }
+    .inv-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--color-line); }
     .inv-title { display: flex; align-items: center; gap: 12px; }
-    .inv-title > mat-icon { color: #2563eb; font-size: 28px; width: 28px; height: 28px; }
-    .inv-title h3 { margin: 0; font-size: 17px; color: #1f2937; font-weight: 700; }
-    .inv-supplier { font-size: 12px; color: #6b7280; }
+    .inv-title > mat-icon { color: var(--color-primary); font-size: var(--text-3xl); width: 24px; height: 24px; }
+    .inv-title h3 { margin: 0; font-size: var(--text-lg); color: var(--color-text); font-weight: 700; }
+    .inv-supplier { font-size: var(--text-xs); color: var(--color-text-3); }
     .inv-header-actions { display: flex; gap: 2px; }
-    .inv-meta { display: flex; align-items: center; gap: 18px; padding: 10px 18px; background: #f8fafc; border-bottom: 1px solid #eef2f7; font-size: 13px; color: #475569; flex-wrap: wrap; }
+    .inv-meta { display: flex; align-items: center; gap: 18px; padding: 10px 18px; background: var(--color-canvas); border-bottom: 1px solid var(--color-line); font-size: var(--text-sm); color: var(--color-text-2); flex-wrap: wrap; }
     .inv-meta span { display: inline-flex; align-items: center; gap: 5px; }
-    .inv-meta mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; }
-    .inv-status { background: #dbeafe; color: #1d4ed8; border-radius: 10px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
-    .inv-body { flex: 1; min-height: 0; background: #525659; }
+    .inv-meta mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-text-3); }
+    .inv-body { flex: 1; min-height: 0; background: var(--color-surface-3); }
     .inv-body iframe { width: 100%; height: 100%; border: 0; }
     .inv-body img { width: 100%; height: 100%; object-fit: contain; }
-    .inv-fallback { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #e5e7eb; }
-    .inv-fallback mat-icon { font-size: 56px; width: 56px; height: 56px; opacity: .8; }
-    .inv-notfound { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px; }
-    .inv-notfound mat-icon { font-size: 64px; width: 64px; height: 64px; color: #cbd5e1; }
-    .inv-notfound h4 { margin: 16px 0 8px; color: #374151; font-size: 18px; }
-    .inv-notfound p { margin: 4px 0; color: #6b7280; font-size: 14px; }
-    .inv-notfound .hint { font-size: 12px; color: #9ca3af; margin-top: 10px; }
+    .inv-fallback { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--color-text-3); }
+    .inv-fallback mat-icon { font-size: var(--text-4xl); width: 32px; height: 32px; opacity: .8; }
+    .inv-notfound { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; }
   `]
 })
 export class AssetInvoicePreviewDialogComponent {

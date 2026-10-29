@@ -36,7 +36,7 @@ import { environment } from '../../../../environments/environment';
       <div class="dialog-header">
         <mat-icon class="header-icon">event_busy</mat-icon>
         <h2>Leave Request</h2>
-        <button mat-icon-button class="close-btn" (click)="close()">
+        <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -137,7 +137,7 @@ import { environment } from '../../../../environments/environment';
       justify-content: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+      background: linear-gradient(135deg, var(--color-ok) 0%, #45a049 100%);
       color: white;
       margin: -24px -24px 0 -24px;
       position: relative;
@@ -185,10 +185,10 @@ import { environment } from '../../../../environments/environment';
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       border-radius: 8px;
       margin-bottom: 16px;
-      color: #2e7d32;
+      color: var(--color-ok);
     }
 
     .days-info mat-icon {
@@ -202,7 +202,7 @@ import { environment } from '../../../../environments/environment';
       justify-content: flex-end;
       gap: 12px;
       padding-top: 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     .dialog-actions button mat-spinner {
@@ -213,16 +213,16 @@ import { environment } from '../../../../environments/environment';
       margin-right: 8px;
     }
 
-    .past-requests { margin-top: 16px; border-top: 1px solid #eee; padding-top: 12px; }
-    .past-title { display:flex; align-items:center; gap:6px; font-size:13px; color:#555; font-weight:600; margin-bottom:8px; }
+    .past-requests { margin-top: 16px; border-top: 1px solid var(--color-line); padding-top: 12px; }
+    .past-title { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--color-text-2); font-weight:600; margin-bottom:8px; }
     .past-title mat-icon { font-size:16px; width:16px; height:16px; }
-    .past-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; background:#f9fafb; margin-bottom:6px; font-size:13px; }
-    .leave-type-label { font-weight:600; color:#333; flex:1; }
-    .date-range { color:#666; white-space:nowrap; }
+    .past-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; background:var(--color-canvas); margin-bottom:6px; font-size:13px; }
+    .leave-type-label { font-weight:600; color:var(--color-text); flex:1; }
+    .date-range { color:var(--color-text-2); white-space:nowrap; }
     .status-pill { padding:2px 10px; border-radius:10px; font-size:11px; font-weight:700; }
     .status-pending { background:#fff3cd; color:#856404; }
-    .status-approved { background:#d1fae5; color:#065f46; }
-    .status-rejected { background:#fee2e2; color:#991b1b; }
+    .status-approved { background:var(--color-ok-soft); color:#065f46; }
+    .status-rejected { background:var(--color-danger-soft); color:#991b1b; }
   `]
 })
 export class LeaveRequestDialogComponent implements OnInit {

@@ -11,6 +11,8 @@ import {
   StackKind, PaperlessUser, PaperlessCategory, PAPERLESS_CATEGORIES
 } from '../../services/paperless.service';
 import { NotificationService } from '../../services/notification.service';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
 
 // Use the bundled pdf.js worker so we can render PDFs into scrollable canvases
 // (an <iframe> viewer scrolls internally and detaches the annotation overlay).
@@ -47,6 +49,8 @@ export class PaperlessComponent {
   readonly paperless = inject(PaperlessService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly notify = inject(NotificationService);
+  private readonly confirmDialog = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
 
   // Right panel expand/collapse (default compact controller, expands to 92vw)
   readonly rightExpanded = signal(false);
@@ -424,8 +428,13 @@ export class PaperlessComponent {
     this.paperless.openInViewer(d.id);
   }
 
-  remove(d: PaperlessDocument): void {
-    if (confirm(`Remove "${d.name}" from Paperless?`)) {
+  async remove(d: PaperlessDocument): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Remove "${d.name}" from Paperless?`,
+      message: 'Any documents stacked under it are removed too.',
+      confirmText: 'Remove document',
+      danger: true
+    })) {
       this.paperless.removeDocument(d.id);
     }
   }
@@ -577,7 +586,7 @@ export class PaperlessComponent {
     this.paperless.setRouting(d.id, mode);
   }
   send(d: PaperlessDocument): void {
-    if (d.recipients.length === 0) { alert('Add at least one recipient first.'); return; }
+    if (d.recipients.length === 0) { this.toast.warn('Add at least one recipient first.'); return; }
     this.paperless.sendForSignature(d.id);
   }
   markActed(d: PaperlessDocument, r: PaperlessRecipient): void {
@@ -590,8 +599,14 @@ export class PaperlessComponent {
   remind(d: PaperlessDocument, r: PaperlessRecipient): void {
     this.paperless.remind(d.id, r.id);
   }
-  cancel(d: PaperlessDocument): void {
-    if (confirm(`Cancel the workflow for "${d.name}"?`)) this.paperless.cancelWorkflow(d.id);
+  async cancel(d: PaperlessDocument): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Cancel the workflow for "${d.name}"?`,
+      message: 'The document is marked as cancelled.',
+      confirmText: 'Cancel workflow',
+      cancelText: 'Keep workflow',
+      danger: true
+    })) this.paperless.cancelWorkflow(d.id);
   }
 
   isActive(d: PaperlessDocument, r: PaperlessRecipient): boolean {
@@ -805,14 +820,14 @@ export class PaperlessComponent {
     if (mode === 'draw') {
       const canvas = this.sigPad?.nativeElement;
       if (!canvas) return;
-      if (!this.sigDirty) { alert('Please draw your signature first.'); return; }
+      if (!this.sigDirty) { this.toast.warn('Please draw your signature first.'); return; }
       dataUrl = canvas.toDataURL('image/png');
     } else if (mode === 'upload') {
       dataUrl = this.uploadedSig();
-      if (!dataUrl) { alert('Please choose a signature image first.'); return; }
+      if (!dataUrl) { this.toast.warn('Please choose a signature image first.'); return; }
     } else { // saved
       dataUrl = this.savedSig();
-      if (!dataUrl) { alert('No saved signature yet. Draw or upload one first.'); return; }
+      if (!dataUrl) { this.toast.warn('No saved signature yet. Draw or upload one first.'); return; }
     }
 
     // Optionally remember this signature as the user's default.
@@ -848,7 +863,7 @@ export class PaperlessComponent {
       dataUrl = this.uploadedSig();
     }
     if (dataUrl) this.persistSavedSig(dataUrl);
-    else alert('Draw or upload a signature first, then save it as default.');
+    else this.toast.warn('Draw or upload a signature first, then save it as default.');
   }
   clearSavedSig(): void {
     try { localStorage.removeItem(this.SAVED_SIG_KEY); } catch { /* ignore */ }

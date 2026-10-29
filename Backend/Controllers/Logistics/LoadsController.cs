@@ -1076,6 +1076,60 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Counts for the Home page: loads scheduled for delivery today (South African
+        /// date) by status and warehouse, plus loads from earlier days still not delivered.
+        /// </summary>
+        [HttpGet("today-summary")]
+        public async Task<IActionResult> TodaySummary()
+        {
+            // SAST is a fixed UTC+2 offset with no daylight saving.
+            var today = DateTime.UtcNow.AddHours(2).Date;
+            var tomorrow = today.AddDays(1);
+            var closed = new[] { "Delivered", "Completed", "Cancelled" };
+
+            // Most loads are planned by pickup date only (ScheduledDeliveryDate is
+            // left blank), so the "due" date falls back to the pickup date. Loads
+            // actually delivered today are counted as well.
+            var rows = await _context.Loads.AsNoTracking()
+                .Where(l => l.Status != "Cancelled" && (
+                    ((l.ScheduledDeliveryDate ?? l.ScheduledPickupDate) >= today && (l.ScheduledDeliveryDate ?? l.ScheduledPickupDate) < tomorrow) ||
+                    (l.ActualDeliveryDate >= today && l.ActualDeliveryDate < tomorrow)))
+                .Select(l => new { l.Status, Warehouse = l.Warehouse != null ? (l.Warehouse.Code ?? l.Warehouse.Name) : null })
+                .ToListAsync();
+
+            var overdue = await _context.Loads.AsNoTracking()
+                .CountAsync(l => (l.ScheduledDeliveryDate ?? l.ScheduledPickupDate) < today && !closed.Contains(l.Status));
+
+            static string Bucket(string s) => s switch
+            {
+                "Delivered" or "Completed" => "delivered",
+                "InTransit" => "inTransit",
+                _ => "notStarted"
+            };
+
+            return Ok(new
+            {
+                total = rows.Count,
+                delivered = rows.Count(r => Bucket(r.Status) == "delivered"),
+                inTransit = rows.Count(r => Bucket(r.Status) == "inTransit"),
+                notStarted = rows.Count(r => Bucket(r.Status) == "notStarted"),
+                overdue,
+                byWarehouse = rows
+                    .GroupBy(r => r.Warehouse ?? "No warehouse")
+                    .Select(g => new
+                    {
+                        name = g.Key,
+                        total = g.Count(),
+                        delivered = g.Count(r => Bucket(r.Status) == "delivered"),
+                        inTransit = g.Count(r => Bucket(r.Status) == "inTransit"),
+                        notStarted = g.Count(r => Bucket(r.Status) == "notStarted")
+                    })
+                    .OrderByDescending(g => g.total)
+                    .ToList()
+            });
+        }
+
+        /// <summary>
         /// Loads marked Delivered that still have no proof of delivery — the
         /// unbillable backlog. A load is covered when a POD document is attached
         /// to it directly, or every invoice on it has a linked POD.

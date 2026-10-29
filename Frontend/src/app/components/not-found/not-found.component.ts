@@ -57,7 +57,7 @@ import { MatCardModule } from '@angular/material/card';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       position: relative;
       overflow: hidden;
     }
@@ -81,7 +81,7 @@ import { MatCardModule } from '@angular/material/card';
       font-size: 80px;
       width: 80px;
       height: 80px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -91,7 +91,7 @@ import { MatCardModule } from '@angular/material/card';
       font-size: 120px;
       font-weight: 800;
       margin: 0;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -101,13 +101,13 @@ import { MatCardModule } from '@angular/material/card';
     .error-title {
       font-size: 28px;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       margin: 16px 0;
     }
 
     .error-message {
       font-size: 16px;
-      color: #666;
+      color: var(--color-text-2);
       margin-bottom: 32px;
       line-height: 1.6;
     }
@@ -130,13 +130,13 @@ import { MatCardModule } from '@angular/material/card';
     .countdown {
       margin-top: 24px;
       padding: 12px 20px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
     }
 
     .countdown p {
       margin: 0;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 14px;
     }
 

@@ -32,6 +32,7 @@ import {
   UpdateExpenseDto
 } from '../../../models/finance.model';
 import { environment } from '../../../../environments/environment';
+import { ConfirmService } from '../../../ui/confirm.service';
 import { NavbarComponent } from '../../shared/navbar/navbar.component';
 
 const VAT_RATE = 0.15; // South African VAT
@@ -66,7 +67,7 @@ interface Department {
       <!-- Header -->
       <div class="exp-header">
         <div class="exp-header-left">
-          <button mat-icon-button class="back-btn" (click)="goBack()" matTooltip="Back to Finance">
+          <button aria-label="Back to Finance" mat-icon-button class="back-btn" (click)="goBack()" matTooltip="Back to Finance">
             <mat-icon>arrow_back</mat-icon>
           </button>
           <div class="exp-icon-ring"><mat-icon>receipt_long</mat-icon></div>
@@ -164,7 +165,7 @@ interface Department {
                 <span class="status-badge" [ngClass]="e.status.toLowerCase()">{{ e.status }}</span>
               </td>
               <td class="actions-col">
-                <button mat-icon-button [matMenuTriggerFor]="menu"><mat-icon>more_vert</mat-icon></button>
+                <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="menu"><mat-icon>more_vert</mat-icon></button>
                 <mat-menu #menu="matMenu">
                   <button mat-menu-item (click)="openDialog(e)">
                     <mat-icon>edit</mat-icon><span>Edit</span>
@@ -203,53 +204,53 @@ interface Department {
     .exp-container { max-width: 1400px; margin: 0 auto; padding: 24px; }
     .exp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .exp-header-left { display: flex; align-items: center; gap: 16px; }
-    .back-btn { color: #64748b; }
-    .exp-icon-ring { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg,#6366f1,#4f46e5); display:flex; align-items:center; justify-content:center; }
+    .back-btn { color: var(--color-text-3); }
+    .exp-icon-ring { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg,var(--color-primary),var(--color-primary)); display:flex; align-items:center; justify-content:center; }
     .exp-icon-ring mat-icon { color:#fff; font-size:28px; width:28px; height:28px; }
-    .exp-header h1 { margin:0; font-size:26px; font-weight:700; color:#0f172a; }
-    .exp-header p { margin:2px 0 0; color:#64748b; font-size:14px; }
-    .new-btn { background: linear-gradient(135deg,#6366f1,#4f46e5); color:#fff; height:44px; border-radius:12px; padding:0 20px; font-weight:600; }
+    .exp-header h1 { margin:0; font-size:26px; font-weight:700; color:var(--color-text); }
+    .exp-header p { margin:2px 0 0; color:var(--color-text-3); font-size:14px; }
+    .new-btn { background: linear-gradient(135deg,var(--color-primary),var(--color-primary)); color:#fff; height:44px; border-radius:12px; padding:0 20px; font-weight:600; }
 
     .summary-grid { display:grid; grid-template-columns: repeat(4,1fr); gap:16px; margin-bottom:24px; }
-    .sum-card { display:flex; align-items:center; gap:14px; padding:18px; background:#fff; border:1px solid #e2e8f0; border-radius:16px; cursor:pointer; transition:all .18s; }
+    .sum-card { display:flex; align-items:center; gap:14px; padding:18px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:16px; cursor:pointer; transition:all .18s; }
     .sum-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,.06); }
-    .sum-card.active { border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,.15); }
+    .sum-card.active { border-color:var(--color-primary); box-shadow:0 0 0 2px rgba(99,102,241,.15); }
     .sum-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; }
-    .sum-card.pending .sum-icon { background:#fef3c7; color:#d97706; }
-    .sum-card.approved .sum-icon { background:#dbeafe; color:#2563eb; }
-    .sum-card.paid .sum-icon { background:#dcfce7; color:#16a34a; }
-    .sum-card.all .sum-icon { background:#e0e7ff; color:#4f46e5; }
+    .sum-card.pending .sum-icon { background:var(--color-warn-soft); color:var(--color-warn); }
+    .sum-card.approved .sum-icon { background:var(--color-primary-soft); color:var(--color-primary); }
+    .sum-card.paid .sum-icon { background:var(--color-ok-soft); color:var(--color-ok); }
+    .sum-card.all .sum-icon { background:var(--color-primary-soft); color:var(--color-primary); }
     .sum-body { display:flex; flex-direction:column; }
-    .sum-value { font-size:20px; font-weight:700; color:#0f172a; }
-    .sum-label { font-size:13px; color:#64748b; }
+    .sum-value { font-size:20px; font-weight:700; color:var(--color-text); }
+    .sum-label { font-size:13px; color:var(--color-text-3); }
 
     .toolbar { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
-    .search-box { display:flex; align-items:center; gap:8px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:8px 14px; min-width:320px; flex:1; max-width:420px; }
-    .search-box mat-icon { color:#94a3b8; }
+    .search-box { display:flex; align-items:center; gap:8px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:12px; padding:8px 14px; min-width:320px; flex:1; max-width:420px; }
+    .search-box mat-icon { color:var(--color-text-3); }
     .search-box input { border:none; outline:none; flex:1; font-size:14px; background:transparent; }
     .chip-filters { display:flex; gap:8px; flex-wrap:wrap; }
-    .chip { border:1px solid #e2e8f0; background:#fff; border-radius:999px; padding:6px 14px; font-size:13px; cursor:pointer; color:#475569; transition:all .15s; }
-    .chip.on { background:#4f46e5; border-color:#4f46e5; color:#fff; }
+    .chip { border:1px solid var(--color-line); background:var(--color-surface); border-radius:999px; padding:6px 14px; font-size:13px; cursor:pointer; color:var(--color-text-2); transition:all .15s; }
+    .chip.on { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
 
-    .table-wrap { background:#fff; border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; }
+    .table-wrap { background:var(--color-surface); border:1px solid var(--color-line); border-radius:16px; overflow:hidden; }
     .loading { display:flex; justify-content:center; padding:60px; }
     .exp-table { width:100%; border-collapse:collapse; }
-    .exp-table thead th { text-align:left; padding:14px 16px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#64748b; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+    .exp-table thead th { text-align:left; padding:14px 16px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--color-text-3); background:var(--color-canvas); border-bottom:1px solid var(--color-line); }
     .exp-table th.num, .exp-table td.num { text-align:right; }
-    .exp-table tbody td { padding:14px 16px; border-bottom:1px solid #f1f5f9; font-size:14px; color:#334155; vertical-align:top; }
-    .exp-table tbody tr:hover { background:#f8fafc; }
-    .mono { font-family:'SF Mono',Menlo,monospace; font-size:13px; color:#6366f1; font-weight:600; }
-    .vend { font-weight:600; color:#0f172a; }
-    .desc { font-size:12.5px; color:#94a3b8; margin-top:2px; }
-    .num.strong { font-weight:700; color:#0f172a; }
+    .exp-table tbody td { padding:14px 16px; border-bottom:1px solid var(--color-surface-2); font-size:14px; color:var(--color-text-2); vertical-align:top; }
+    .exp-table tbody tr:hover { background:var(--color-canvas); }
+    .mono { font-family:'SF Mono',Menlo,monospace; font-size:13px; color:var(--color-primary); font-weight:600; }
+    .vend { font-weight:600; color:var(--color-text); }
+    .desc { font-size:12.5px; color:var(--color-text-3); margin-top:2px; }
+    .num.strong { font-weight:700; color:var(--color-text); }
     .actions-col { text-align:center; width:60px; }
     .status-badge { padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; text-transform:capitalize; }
-    .status-badge.pending { background:#fef3c7; color:#b45309; }
-    .status-badge.approved { background:#dbeafe; color:#1d4ed8; }
-    .status-badge.paid { background:#dcfce7; color:#15803d; }
-    .status-badge.rejected { background:#fee2e2; color:#b91c1c; }
-    .empty { text-align:center; padding:60px 20px; color:#94a3b8; }
-    .empty mat-icon { font-size:48px; width:48px; height:48px; color:#cbd5e1; }
+    .status-badge.pending { background:var(--color-warn-soft); color:#b45309; }
+    .status-badge.approved { background:var(--color-primary-soft); color:var(--color-primary-hover); }
+    .status-badge.paid { background:var(--color-ok-soft); color:#15803d; }
+    .status-badge.rejected { background:var(--color-danger-soft); color:var(--color-danger); }
+    .empty { text-align:center; padding:60px 20px; color:var(--color-text-3); }
+    .empty mat-icon { font-size:48px; width:48px; height:48px; color:var(--color-line-strong); }
     .empty p { margin:12px 0; }
 
     @media (max-width: 900px) {
@@ -271,7 +272,8 @@ export class ExpensesComponent implements OnInit {
     private financeService: FinanceService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
-    private router: Router
+    private router: Router,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -358,8 +360,12 @@ export class ExpensesComponent implements OnInit {
     window.open(`${environment.apiUrl}/finance/expenses/${e.id}/receipt`, '_blank');
   }
 
-  remove(e: Expense): void {
-    if (!confirm(`Delete expense "${e.expenseNumber}"?`)) return;
+  async remove(e: Expense): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete expense ${e.expenseNumber}?`,
+      confirmText: 'Delete expense',
+      danger: true
+    }))) return;
     this.financeService.deleteExpense(e.id).subscribe({
       next: () => {
         this.snackBar.open('Expense deleted', 'Close', { duration: 2000 });
@@ -481,15 +487,15 @@ export class ExpensesComponent implements OnInit {
     </mat-dialog-actions>
   `,
   styles: [`
-    h2[mat-dialog-title] { display:flex; align-items:center; gap:10px; font-size:20px; font-weight:700; color:#0f172a; }
+    h2[mat-dialog-title] { display:flex; align-items:center; gap:10px; font-size:20px; font-weight:700; color:var(--color-text); }
     .dlg-content { padding-top:8px !important; }
     .row { display:flex; gap:12px; }
     .row > mat-form-field { flex:1; }
     .grow { flex:2 !important; }
     .full { width:100%; }
-    .total-box { flex:1; display:flex; flex-direction:column; justify-content:center; background:#f1f5f9; border-radius:8px; padding:8px 14px; margin-bottom:22px; }
-    .tl { font-size:12px; color:#64748b; }
-    .tv { font-size:18px; font-weight:700; color:#4f46e5; }
+    .total-box { flex:1; display:flex; flex-direction:column; justify-content:center; background:var(--color-surface-2); border-radius:8px; padding:8px 14px; margin-bottom:22px; }
+    .tl { font-size:12px; color:var(--color-text-3); }
+    .tv { font-size:18px; font-weight:700; color:var(--color-primary); }
     .vat-toggle { margin:-6px 0 12px; }
   `]
 })

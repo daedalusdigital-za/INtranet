@@ -1,4 +1,7 @@
-import { Component, OnInit, Inject, inject } from '@angular/core';
+import { Component, OnInit, DoCheck, OnDestroy, Inject, inject, signal, computed } from '@angular/core';
+import { Router, ActivatedRoute, NavigationEnd, Params } from '@angular/router';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, filter } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -20,6 +23,10 @@ import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { WellyActivityService } from '../../services/welly-activity.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { SubNavComponent } from '../../ui/sub-nav/sub-nav.component';
+import { isFilterRecord, queryText, recordFilters, toQuery } from '../../ui/sub-pages';
+import { STOCK_SECTIONS, StockSlug, stockSection } from './stock-sections';
 import { EmptyStateComponent } from '../shared/ui/empty-state.component';
 import { Warehouse3DComponent } from '../warehouse-3d/warehouse-3d.component';
 import { environment } from '../../../environments/environment';
@@ -119,6 +126,8 @@ interface ComprehensiveAnalysisResponse {
     MatTooltipModule,
     MatProgressBarModule,
     NavbarComponent,
+    PageHeaderComponent,
+    SubNavComponent,
     EmptyStateComponent,
     MatListModule,
     FormsModule,
@@ -130,35 +139,28 @@ interface ComprehensiveAnalysisResponse {
     <app-navbar></app-navbar>
 
     <div class="container">
-      <div class="page-header">
-        <div class="header-lead">
-          <mat-icon class="header-icon">inventory_2</mat-icon>
-          <div class="header-text">
-            <h1>Stock Management</h1>
-            <p class="subtitle">{{ selectedWarehouse ? selectedWarehouse.name + ' · ' + selectedWarehouse.location : 'All warehouses — click a warehouse card to focus' }}</p>
-          </div>
-        </div>
-        <div class="header-actions">
-          @if (selectedWarehouse) {
-            <button mat-raised-button class="welly-stock-btn" (click)="wellyAnalyzeStock()" matTooltip="Ask Welly to analyze stock levels">
-              <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
-              Ask Welly to Analyze
-            </button>
-            <button mat-stroked-button (click)="whFilterId = null" matTooltip="Show all warehouses">
-              <mat-icon>filter_alt_off</mat-icon>
-              Clear Filter
-            </button>
-          }
-        </div>
-      </div>
+      <app-page-header [crumbs]="['Operations', 'Stock']" [title]="currentSection()?.label ?? 'Stock'"
+                       [subtitle]="selectedWarehouse ? selectedWarehouse.name + ' · ' + selectedWarehouse.location : 'All warehouses'">
+        @if (selectedWarehouse) {
+          <button mat-stroked-button (click)="whFilterId = null" matTooltip="Show all warehouses">
+            <mat-icon>filter_alt_off</mat-icon>Clear filter
+          </button>
+          <button mat-flat-button color="primary" (click)="wellyAnalyzeStock()" matTooltip="Ask Welly to analyse stock levels">
+            <mat-icon>auto_awesome</mat-icon>Ask Welly to analyse
+          </button>
+        }
+        <app-sub-nav tabs [pages]="sections" base="/stock-management" [active]="section()" [queries]="linkQueries()"
+                     [counts]="sectionCounts()" [panel]="stockPanel" label="Stock sections"></app-sub-nav>
+      </app-page-header>
 
+      <mat-tab-nav-panel #stockPanel>
       @if (loading) {
         <div class="loading-state">
           <div class="loading-card">
             <div class="lc-icon-wrap">
               <mat-icon class="lc-icon pulse-icon">warehouse</mat-icon>
             </div>
-            <h3>Loading Stock Management</h3>
+            <h3>Loading stock</h3>
             <p class="lc-subtitle">Fetching warehouse inventory and stock data</p>
             <div class="lc-progress-wrap">
               <div class="lc-progress-track">
@@ -190,6 +192,7 @@ interface ComprehensiveAnalysisResponse {
           message="No warehouses have been configured yet."></app-empty-state>
       } @else {
 
+        @if (section() === 'on-hand') {
         <!-- ═══ KPI CARDS ═══ -->
         <div class="stk-kpi-grid">
           <div class="stk-kpi k-indigo">
@@ -218,6 +221,7 @@ interface ComprehensiveAnalysisResponse {
             <div class="stk-kpi-lbl">Out of Stock</div>
           </div>
         </div>
+        }
 
         <!-- ═══ WAREHOUSE CARDS (click to filter, Operations to drill in) ═══ -->
         <div class="stk-wh-grid">
@@ -232,7 +236,7 @@ interface ComprehensiveAnalysisResponse {
                   <h3>{{ warehouse.name }}</h3>
                   <span>{{ warehouse.location }}</span>
                 </div>
-                <button mat-icon-button class="stk-wh-ops" matTooltip="View warehouse in 3D with all stock"
+                <button aria-label="View warehouse in 3D with all stock" mat-icon-button class="stk-wh-ops" matTooltip="View warehouse in 3D with all stock"
                         (click)="open3DView(warehouse); $event.stopPropagation()">
                   <mat-icon>visibility</mat-icon>
                 </button>
@@ -281,12 +285,12 @@ interface ComprehensiveAnalysisResponse {
           }
         </div>
 
-        <!-- ═══ TABS ═══ -->
-        <mat-tab-group class="stk-tabs" animationDuration="150ms">
+        <!-- ═══ CURRENT SUB-PAGE ═══ -->
+        <div class="stk-tabs">
+        @switch (section()) {
 
           <!-- STOCK ON HAND -->
-          <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">inventory_2</mat-icon> Stock on Hand</ng-template>
+          @case ('on-hand') {
             <div class="stk-tab-body">
               <div class="stk-toolbar">
                 <mat-form-field appearance="outline" class="stk-search">
@@ -331,11 +335,10 @@ interface ComprehensiveAnalysisResponse {
                 </div>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- STOCK COUNTS -->
-          <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">fact_check</mat-icon> Stock Counts</ng-template>
+          @case ('counts') {
             <div class="stk-tab-body">
               <div class="stk-toolbar">
                 <span class="stk-count">Latest counts per warehouse</span>
@@ -384,11 +387,10 @@ interface ComprehensiveAnalysisResponse {
               </div>
               <p class="stk-note"><mat-icon>info</mat-icon> Click a <b>warehouse name</b> or a <b>company chip</b> to open a datasheet of the stock on hand there. Baseline quantities come from the consolidated stock imports; every count variance you post is written to the Movements ledger as an Adjustment. Click a warehouse card, then <b>New Stock Take</b> to count on screen — or download the <b>Count Template</b> (one sheet per warehouse, all companies, fill in <i>Counted Qty</i> only) and <b>Import Count</b> to load it for review before posting.</p>
             </div>
-          </mat-tab>
+          }
 
           <!-- ISSUES -->
-          <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">assignment_late</mat-icon> Issues ({{ openIssueCount }})</ng-template>
+          @case ('issues') {
             <div class="stk-tab-body">
               <div class="stk-toolbar">
                 <button mat-stroked-button [class.stk-filter-on]="issueStatusFilter === 'Open'" (click)="issueStatusFilter = issueStatusFilter === 'Open' ? '' : 'Open'">
@@ -429,14 +431,14 @@ interface ComprehensiveAnalysisResponse {
                           </td>
                           <td style="text-align:right;white-space:nowrap;">
                             @if (i.status === 'Open') {
-                              <button mat-icon-button matTooltip="Start working on this" (click)="setIssueStatus(i, 'InProgress')"><mat-icon>play_circle</mat-icon></button>
+                              <button aria-label="Start working on this" mat-icon-button matTooltip="Start working on this" (click)="setIssueStatus(i, 'InProgress')"><mat-icon>play_circle</mat-icon></button>
                             }
                             @if (i.status === 'Open' || i.status === 'InProgress') {
-                              <button mat-icon-button matTooltip="Resolve" style="color:#16a34a;" (click)="openResolveIssue(i, 'Resolved')"><mat-icon>task_alt</mat-icon></button>
-                              <button mat-icon-button matTooltip="Dismiss (not an issue)" (click)="openResolveIssue(i, 'Dismissed')"><mat-icon>block</mat-icon></button>
+                              <button aria-label="Resolve" mat-icon-button matTooltip="Resolve" style="color:var(--color-ok);" (click)="openResolveIssue(i, 'Resolved')"><mat-icon>task_alt</mat-icon></button>
+                              <button aria-label="Dismiss (not an issue)" mat-icon-button matTooltip="Dismiss (not an issue)" (click)="openResolveIssue(i, 'Dismissed')"><mat-icon>block</mat-icon></button>
                             }
                             @if (i.status === 'Resolved' || i.status === 'Dismissed') {
-                              <button mat-icon-button matTooltip="Reopen" (click)="setIssueStatus(i, 'Open')"><mat-icon>restart_alt</mat-icon></button>
+                              <button aria-label="Reopen" mat-icon-button matTooltip="Reopen" (click)="setIssueStatus(i, 'Open')"><mat-icon>restart_alt</mat-icon></button>
                             }
                           </td>
                         </tr>
@@ -447,11 +449,10 @@ interface ComprehensiveAnalysisResponse {
                 </div>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- EXCEPTIONS -->
-          <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">report_problem</mat-icon> Exceptions</ng-template>
+          @case ('exceptions') {
             <div class="stk-tab-body">
               <div class="stk-toolbar">
                 <button mat-stroked-button [class.stk-filter-on]="excMode === 'out'" (click)="excMode = 'out'">
@@ -482,13 +483,10 @@ interface ComprehensiveAnalysisResponse {
                 </table>
               </div>
             </div>
-          </mat-tab>
+          }
 
           <!-- MOVEMENTS -->
-          <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">swap_horiz</mat-icon> Movements
-              @if (pendingDispatchCount > 0) { <span class="tab-count">{{ pendingDispatchCount }}</span> }
-            </ng-template>
+          @case ('movements') {
             <div class="stk-tab-body">
 
               <!-- Ledger summary strip -->
@@ -566,7 +564,7 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-stroked-button (click)="openTransferStock()" matTooltip="Move stock between warehouses"><mat-icon>sync_alt</mat-icon> Transfer</button>
                 <button mat-stroked-button (click)="openManualMovement('Adjustment')" matTooltip="Correct a stock count (+/-) with a reason"><mat-icon>tune</mat-icon> Adjust</button>
                 <button mat-stroked-button (click)="openManualMovement('Return')" matTooltip="Customer return back into stock"><mat-icon>undo</mat-icon> Return</button>
-                <button mat-stroked-button (click)="openManualMovement('Scrap')" matTooltip="Write off damaged or expired stock" style="color:#dc2626;"><mat-icon>delete_sweep</mat-icon> Scrap</button>
+                <button mat-stroked-button (click)="openManualMovement('Scrap')" matTooltip="Write off damaged or expired stock" style="color:var(--color-danger);"><mat-icon>delete_sweep</mat-icon> Scrap</button>
                 <button mat-raised-button color="primary" (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon> Receive Stock</button>
               </div>
               @if (ledgerLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading movements...</div> }
@@ -589,10 +587,10 @@ interface ComprehensiveAnalysisResponse {
                           <td>{{ m.createdBy }}</td>
                           <td style="text-align:right;white-space:nowrap;">
                             @if (m.loadId) {
-                              <button mat-icon-button matTooltip="View the linked tripsheet's picking slip" (click)="openLedgerLoadDoc(m)"><mat-icon>checklist</mat-icon></button>
+                              <button aria-label="View the linked tripsheet's picking slip" mat-icon-button matTooltip="View the linked tripsheet's picking slip" (click)="openLedgerLoadDoc(m)"><mat-icon>checklist</mat-icon></button>
                             }
                             @if (canApprove && !m.reversedByMovementId && m.movementType !== 'Reversal') {
-                              <button mat-icon-button matTooltip="Reverse this movement (creates a counter-entry)" (click)="reverseMovement(m)"><mat-icon>undo</mat-icon></button>
+                              <button aria-label="Reverse this movement (creates a counter-entry)" mat-icon-button matTooltip="Reverse this movement (creates a counter-entry)" (click)="reverseMovement(m)"><mat-icon>undo</mat-icon></button>
                             }
                             @if (m.reversedByMovementId) { <span class="stk-chip" matTooltip="Reversed by movement #{{ m.reversedByMovementId }}">Reversed</span> }
                             @if (m.reversesMovementId) { <span class="stk-chip" matTooltip="Reversal of movement #{{ m.reversesMovementId }}">↩ #{{ m.reversesMovementId }}</span> }
@@ -605,11 +603,10 @@ interface ComprehensiveAnalysisResponse {
                 <p class="stk-note"><mat-icon>info</mat-icon> Stock on hand = imported baseline + these approved movements. Rows are never edited — mistakes are fixed with reversals.</p>
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- DISPATCH -->
-          <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">local_shipping</mat-icon> Dispatch</ng-template>
+          @case ('dispatch') {
             <div class="stk-tab-body">
               <div class="stk-toolbar">
                 <button mat-stroked-button [class.stk-filter-on]="dispatchMode === 'tripsheets'" (click)="dispatchMode = 'tripsheets'">
@@ -656,7 +653,7 @@ interface ComprehensiveAnalysisResponse {
                             <td><span class="stk-badge" [class.b-in]="l.status === 'Delivered' || l.status === 'Completed'"
                                   [class.b-warn]="l.status === 'InTransit' || l.status === 'Pending' || l.status === 'Assigned'">{{ l.status }}</span></td>
                             <td>{{ (l.actualDeliveryDate || l.scheduledDeliveryDate) ? ((l.actualDeliveryDate || l.scheduledDeliveryDate) | date:'dd MMM yyyy') : '—' }}</td>
-                            <td>@if (l.hasPOD) { <mat-icon style="color:#16a34a;font-size:18px;width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { — }</td>
+                            <td>@if (l.hasPOD) { <mat-icon style="color:var(--color-ok);font-size:18px;width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { — }</td>
                             <td>
                               @switch (loadStockState(l)) {
                                 @case ('deducted') { <span class="stk-badge b-in">Deducted</span> }
@@ -666,13 +663,13 @@ interface ComprehensiveAnalysisResponse {
                             </td>
                             <td style="text-align:right;white-space:nowrap;">
                               @if (loadStockState(l) === 'awaiting' && canApprove) {
-                                <button mat-icon-button matTooltip="Review picking slip & approve dispatch (deducts stock)" style="color:#d97706;"
+                                <button aria-label="Review picking slip & approve dispatch (deducts stock)" mat-icon-button matTooltip="Review picking slip & approve dispatch (deducts stock)" style="color:var(--color-warn);"
                                         (click)="openApproveDispatch(l)"><mat-icon>fact_check</mat-icon></button>
                               }
                               @if (dispatchMode === 'tripsheets') {
-                                <button mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(l, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
+                                <button aria-label="View trip sheet" mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(l, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
                               }
-                              <button mat-icon-button matTooltip="View picking slip" (click)="openLoadDoc(l, 'picking')"><mat-icon>checklist</mat-icon></button>
+                              <button aria-label="View picking slip" mat-icon-button matTooltip="View picking slip" (click)="openLoadDoc(l, 'picking')"><mat-icon>checklist</mat-icon></button>
                             </td>
                           </tr>
                         } @empty { <tr><td colspan="11" class="stk-empty">No tripsheets found{{ whFilterName }}</td></tr> }
@@ -706,9 +703,9 @@ interface ComprehensiveAnalysisResponse {
                             <td>{{ r.deliveryDate ? (r.deliveryDate | date:'dd MMM yyyy') : '—' }}</td>
                             <td style="text-align:right;white-space:nowrap;">
                               @if (!r.deducted && canApprove) {
-                                <button mat-icon-button matTooltip="Review & approve dispatch" style="color:#d97706;" (click)="openApproveDispatch(r.load)"><mat-icon>fact_check</mat-icon></button>
+                                <button aria-label="Review & approve dispatch" mat-icon-button matTooltip="Review & approve dispatch" style="color:var(--color-warn);" (click)="openApproveDispatch(r.load)"><mat-icon>fact_check</mat-icon></button>
                               }
-                              <button mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(r.load, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
+                              <button aria-label="View trip sheet" mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(r.load, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
                             </td>
                           </tr>
                         } @empty { <tr><td colspan="9" class="stk-empty">No invoices found on tripsheets{{ whFilterName }}</td></tr> }
@@ -719,11 +716,10 @@ interface ComprehensiveAnalysisResponse {
                 }
               }
             </div>
-          </mat-tab>
+          }
 
           <!-- REPORTS -->
-          <mat-tab>
-            <ng-template mat-tab-label><mat-icon class="tab-ico">summarize</mat-icon> Reports</ng-template>
+          @case ('reports') {
             <div class="stk-tab-body">
               <div class="stk-toolbar">
                 <button mat-stroked-button [class.stk-filter-on]="reportMode === 'valuation'" (click)="reportMode = 'valuation'">
@@ -780,8 +776,8 @@ interface ComprehensiveAnalysisResponse {
                           <td><b>{{ r.warehouse }}</b></td>
                           <td>{{ r.type }}</td>
                           <td class="num">{{ r.count | number }}</td>
-                          <td class="num" style="color:#16a34a;">+{{ formatQty(r.unitsIn) }}</td>
-                          <td class="num" style="color:#dc2626;">-{{ formatQty(r.unitsOut) }}</td>
+                          <td class="num" style="color:var(--color-ok);">+{{ formatQty(r.unitsIn) }}</td>
+                          <td class="num" style="color:var(--color-danger);">-{{ formatQty(r.unitsOut) }}</td>
                           <td class="num"><b [style.color]="r.net < 0 ? '#dc2626' : '#16a34a'">{{ r.net > 0 ? '+' : '' }}{{ formatQty(r.net) }}</b></td>
                           <td>{{ r.last ? (r.last | date:'dd MMM HH:mm') : '—' }}</td>
                         </tr>
@@ -801,9 +797,9 @@ interface ComprehensiveAnalysisResponse {
                         <tr [class.stk-row-total]="r.isTotal">
                           <td><b>{{ r.warehouse }}</b></td>
                           <td class="num">{{ r.total | number }}</td>
-                          <td class="num" style="color:#94a3b8;">{{ r.baseline | number }}</td>
+                          <td class="num" style="color:var(--color-text-3);">{{ r.baseline | number }}</td>
                           <td class="num">{{ r.live | number }}</td>
-                          <td class="num" style="color:#16a34a;">{{ r.deducted | number }}</td>
+                          <td class="num" style="color:var(--color-ok);">{{ r.deducted | number }}</td>
                           <td class="num" [style.color]="r.pending > 0 ? '#d97706' : ''">{{ r.pending | number }}</td>
                           <td class="num"><b>{{ r.live ? (r.deducted / r.live * 100 | number:'1.0-0') : 0 }}%</b></td>
                           <td class="num" [style.color]="r.deliveredPending > 0 ? '#dc2626' : ''">{{ r.deliveredPending | number }}</td>
@@ -837,9 +833,11 @@ interface ComprehensiveAnalysisResponse {
                 </div>
               }
             </div>
-          </mat-tab>
-        </mat-tab-group>
+          }
+        }
+        </div>
       }
+      </mat-tab-nav-panel>
 
       <!-- Welly Stock Analysis Panel -->
       @if (showWellyPanel) {
@@ -850,7 +848,7 @@ interface ComprehensiveAnalysisResponse {
                 <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
                 <h3>Welly Stock Analysis</h3>
               </div>
-              <button mat-icon-button (click)="closeWellyPanel()">
+              <button aria-label="Close" mat-icon-button (click)="closeWellyPanel()">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -958,20 +956,14 @@ interface ComprehensiveAnalysisResponse {
       display: block;
       min-height: 100vh;
       position: relative;
-      background:
-        radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.35) 0, transparent 45%),
-        radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.30) 0, transparent 45%),
-        radial-gradient(circle at 0% 100%, rgba(236, 72, 153, 0.24) 0, transparent 45%),
-        radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.26) 0, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
-      --ink: #0f172a;
-      --muted: #64748b;
-      --line: #e2e8f0;
-      --accent: #2563eb;
-      --accent2: #1e40af;
-      --accent-soft: #eff6ff;
+      --ink: var(--color-text);
+      --muted: var(--color-text-3);
+      --line: var(--color-line);
+      --accent: var(--color-primary);
+      --accent2: var(--color-primary-hover);
+      --accent-soft: var(--color-primary-soft);
     }
 
     .spacer {
@@ -985,58 +977,8 @@ interface ComprehensiveAnalysisResponse {
       min-height: calc(100vh - 64px);
     }
 
-    .page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-bottom: 32px;
-    }
-
-    .header-icon {
-      font-size: 36px;
-      width: 36px;
-      height: 36px;
-      color: #1e90ff;
-      background: rgba(255, 255, 255, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      border-radius: 20px;
-      padding: 16px;
-      box-sizing: content-box;
-      flex-shrink: 0;
-      box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
-      backdrop-filter: blur(10px);
-    }
-
-    .header-lead { display: flex; align-items: center; gap: 14px; }
-
-    .header-text {
-      text-align: left;
-    }
-
-    .header-actions {
-      display: flex;
-      gap: 12px;
-    }
-
-    .header-actions button {
-      font-weight: 500;
-    }
-
-    h1 {
-      color: #ffffff;
-      font-size: 32px;
-      font-weight: 700;
-      margin: 0 0 4px;
-      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-      letter-spacing: -0.5px;
-    }
-
-    .subtitle {
-      color: rgba(255, 255, 255, 0.85);
-      font-size: 15px;
-      margin: 0;
+    app-page-header {
+      margin-bottom: var(--space-5);
     }
 
     @media (max-width: 820px) {
@@ -1048,7 +990,7 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .warehouse-progress-bar ::ng-deep .mdc-linear-progress__buffer-bar {
-      background-color: #e5e7eb !important;
+      background-color: var(--color-line) !important;
     }
 
     .warehouse-progress-bar ::ng-deep .mdc-linear-progress__bar {
@@ -1063,8 +1005,8 @@ interface ComprehensiveAnalysisResponse {
       padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
       max-width: 520px; width: 100%;
     }
-    .loading-card h3 { color: #1a1a2e; margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+    .loading-card h3 { color: var(--color-text); margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
+    .loading-card p { color: var(--color-text-3); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
     .lc-icon-wrap {
       width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
       background: linear-gradient(135deg, rgba(14,165,233,0.12), rgba(6,182,212,0.12));
@@ -1074,9 +1016,9 @@ interface ComprehensiveAnalysisResponse {
     .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #0ea5e9; }
     .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
     @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
-    .lc-subtitle { color: #94a3b8 !important; font-size: 13px !important; }
+    .lc-subtitle { color: var(--color-text-3) !important; font-size: 13px !important; }
     .lc-progress-wrap { margin: 8px 0 24px; }
-    .lc-progress-track { height: 8px; border-radius: 4px; background: #f1f5f9; overflow: hidden; position: relative; }
+    .lc-progress-track { height: 8px; border-radius: 4px; background: var(--color-surface-2); overflow: hidden; position: relative; }
     .lc-progress-fill {
       height: 100%; border-radius: 4px;
       background: linear-gradient(90deg, #0ea5e9, #38bdf8, #06b6d4);
@@ -1089,9 +1031,9 @@ interface ComprehensiveAnalysisResponse {
     }
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
-    .lc-progress-message { color: #64748b; font-weight: 500; }
+    .lc-progress-message { color: var(--color-text-3); font-weight: 500; }
     .lc-progress-pct { color: #0ea5e9; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid #e2e8f0; }
+    .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid var(--color-line); }
     .lc-step {
       display: flex; flex-direction: column; align-items: center; gap: 6px;
       flex: 1; padding-top: 16px; opacity: 0.35; transition: opacity 0.4s ease, transform 0.3s ease;
@@ -1099,18 +1041,18 @@ interface ComprehensiveAnalysisResponse {
     .lc-step.active { opacity: 1; transform: translateY(-2px); }
     .lc-step.done { opacity: 0.65; }
     .lc-step-dot {
-      width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9;
+      width: 32px; height: 32px; border-radius: 50%; background: var(--color-surface-2);
       display: flex; align-items: center; justify-content: center;
       transition: background 0.3s ease, box-shadow 0.3s ease;
     }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: #94a3b8; transition: color 0.3s ease; }
+    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--color-text-3); transition: color 0.3s ease; }
     .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #0ea5e9, #06b6d4); box-shadow: 0 2px 10px rgba(14,165,233,0.3); }
     .lc-step.active .lc-step-dot mat-icon { color: #fff; }
-    .lc-step.done .lc-step-dot { background: #dcfce7; }
-    .lc-step.done .lc-step-dot mat-icon { color: #16a34a; }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
+    .lc-step.done .lc-step-dot { background: var(--color-ok-soft); }
+    .lc-step.done .lc-step-dot mat-icon { color: var(--color-ok); }
+    .lc-step-label { font-size: 11px; font-weight: 600; color: var(--color-text-3); white-space: nowrap; }
     .lc-step.active .lc-step-label { color: #0ea5e9; }
-    .lc-step.done .lc-step-label { color: #16a34a; }
+    .lc-step.done .lc-step-label { color: var(--color-ok); }
 
     .empty-state {
       display: flex;
@@ -1118,7 +1060,7 @@ interface ComprehensiveAnalysisResponse {
       align-items: center;
       justify-content: center;
       padding: 72px;
-      background: #ffffff;
+      background: var(--color-surface);
       border: 1px solid var(--line);
       border-radius: 16px;
       color: var(--ink);
@@ -1129,7 +1071,7 @@ interface ComprehensiveAnalysisResponse {
       width: 64px;
       height: 64px;
       margin-bottom: 16px;
-      color: #cbd5e1;
+      color: var(--color-line-strong);
     }
 
     .empty-state h3 {
@@ -1158,23 +1100,6 @@ interface ComprehensiveAnalysisResponse {
     }
 
     /* Welly Stock Analysis Styles */
-    .welly-stock-btn {
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
-      color: white !important;
-      border: none !important;
-      transition: all 0.3s ease;
-    }
-
-    .welly-stock-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-
-    .welly-stock-btn .welly-sparkle {
-      color: #ffd700;
-      margin-right: 4px;
-    }
-
     .welly-panel-overlay {
       position: fixed;
       top: 0;
@@ -1212,7 +1137,7 @@ interface ComprehensiveAnalysisResponse {
       align-items: center;
       justify-content: space-between;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
     }
 
@@ -1251,7 +1176,7 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .welly-loading p {
-      color: #666;
+      color: var(--color-text-2);
       font-size: 14px;
     }
 
@@ -1264,24 +1189,24 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .welly-summary-card {
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       padding: 14px 16px;
       display: flex;
       align-items: center;
       gap: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-      border-left: 4px solid #2563eb;
+      border-left: 4px solid var(--color-primary);
     }
 
-    .welly-summary-card.card-stock { border-left-color: #2563eb; }
-    .welly-summary-card.card-stock .summary-icon { color: #2563eb; }
-    .welly-summary-card.card-value { border-left-color: #43a047; }
-    .welly-summary-card.card-value .summary-icon { color: #43a047; }
+    .welly-summary-card.card-stock { border-left-color: var(--color-primary); }
+    .welly-summary-card.card-stock .summary-icon { color: var(--color-primary); }
+    .welly-summary-card.card-value { border-left-color: var(--color-ok); }
+    .welly-summary-card.card-value .summary-icon { color: var(--color-ok); }
     .welly-summary-card.card-alert { border-left-color: #ef5350; }
     .welly-summary-card.card-alert .summary-icon { color: #ef5350; }
-    .welly-summary-card.card-invoice { border-left-color: #ff9800; }
-    .welly-summary-card.card-invoice .summary-icon { color: #ff9800; }
+    .welly-summary-card.card-invoice { border-left-color: var(--color-warn); }
+    .welly-summary-card.card-invoice .summary-icon { color: var(--color-warn); }
     .welly-summary-card.card-delivery { border-left-color: #26a69a; }
     .welly-summary-card.card-delivery .summary-icon { color: #26a69a; }
     .welly-summary-card.card-rate { border-left-color: #7e57c2; }
@@ -1301,13 +1226,13 @@ interface ComprehensiveAnalysisResponse {
     .summary-value {
       font-size: 18px;
       font-weight: 700;
-      color: #333;
+      color: var(--color-text);
       line-height: 1.2;
     }
 
     .summary-label {
       font-size: 11px;
-      color: #888;
+      color: var(--color-text-3);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       font-weight: 500;
@@ -1322,7 +1247,7 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .welly-chart-card {
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       padding: 16px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
@@ -1332,7 +1257,7 @@ interface ComprehensiveAnalysisResponse {
       margin: 0 0 12px 0;
       font-size: 13px;
       font-weight: 600;
-      color: #555;
+      color: var(--color-text-2);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -1350,19 +1275,19 @@ interface ComprehensiveAnalysisResponse {
       margin: 0 0 12px 0;
       font-size: 14px;
       font-weight: 600;
-      color: #555;
+      color: var(--color-text-2);
     }
 
     .welly-section-title mat-icon {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #2563eb;
+      color: var(--color-primary);
     }
 
     .welly-result-text {
-      background: white;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 12px;
       padding: 18px;
       font-size: 13px;
@@ -1371,7 +1296,7 @@ interface ComprehensiveAnalysisResponse {
       max-height: 40vh;
       overflow-y: auto;
       margin-bottom: 16px;
-      color: #333;
+      color: var(--color-text);
     }
 
     .welly-result-actions {
@@ -1387,12 +1312,12 @@ interface ComprehensiveAnalysisResponse {
     .client-chip {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
-      background: rgba(255,255,255,0.75); color: #334155; border: 1px solid rgba(148,163,184,0.35);
+      background: rgba(255,255,255,0.75); color: var(--color-text-2); border: 1px solid rgba(148,163,184,0.35);
     }
-    .client-chip b { color: #0f172a; }
+    .client-chip b { color: var(--color-text); }
     .stock-asat {
       display: flex; align-items: center; gap: 6px; margin-top: 8px;
-      font-size: 11.5px; color: #64748b; position: relative; z-index: 1;
+      font-size: 11.5px; color: var(--color-text-3); position: relative; z-index: 1;
     }
     .stock-asat mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
@@ -1401,19 +1326,19 @@ interface ComprehensiveAnalysisResponse {
     @media (max-width: 1400px) { .stk-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 760px) { .stk-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
     .stk-kpi {
-      background: #fff; border-radius: 22px; padding: 18px 18px; box-shadow: 0 10px 34px rgba(2,6,23,0.28);
+      background: var(--color-surface); border-radius: 22px; padding: 18px 18px; box-shadow: 0 10px 34px rgba(2,6,23,0.28);
       border-top: 4px solid transparent; transition: transform .25s ease, box-shadow .25s ease;
       position: relative; overflow: hidden;
     }
     .stk-kpi:hover { transform: translateY(-6px); box-shadow: 0 22px 52px rgba(2,6,23,0.38); }
     .stk-kpi mat-icon { font-size: 24px; width: 24px; height: 24px; opacity: 0.9; }
-    .stk-kpi-val { font-size: 26px; font-weight: 700; color: #1a1a2e; margin-top: 6px; line-height: 1.1; }
-    .stk-kpi-lbl { font-size: 12px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-top: 3px; }
-    .k-indigo { border-color: #6366f1; } .k-indigo mat-icon { color: #6366f1; }
-    .k-green { border-color: #16a34a; } .k-green mat-icon { color: #16a34a; }
+    .stk-kpi-val { font-size: 26px; font-weight: 700; color: var(--color-text); margin-top: 6px; line-height: 1.1; }
+    .stk-kpi-lbl { font-size: 12px; color: var(--color-text-2); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-top: 3px; }
+    .k-indigo { border-color: var(--color-primary); } .k-indigo mat-icon { color: var(--color-primary); }
+    .k-green { border-color: var(--color-ok); } .k-green mat-icon { color: var(--color-ok); }
     .k-teal { border-color: #0d9488; } .k-teal mat-icon { color: #0d9488; }
-    .k-emerald { border-color: #10b981; } .k-emerald mat-icon { color: #10b981; }
-    .k-red { border-color: #dc2626; } .k-red mat-icon { color: #dc2626; }
+    .k-emerald { border-color: var(--color-ok); } .k-emerald mat-icon { color: var(--color-ok); }
+    .k-red { border-color: var(--color-danger); } .k-red mat-icon { color: var(--color-danger); }
 
     .stk-wh-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
     @media (max-width: 1200px) { .stk-wh-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -1421,19 +1346,19 @@ interface ComprehensiveAnalysisResponse {
     .stk-link { cursor: pointer; color: #0369a1; text-decoration: none; }
     .stk-link:hover { text-decoration: underline; }
     .stk-chip-btn { cursor: pointer; border: 1px solid transparent; font: inherit; }
-    .stk-chip-btn:hover { border-color: #0369a1; color: #0369a1; background: #e0f2fe; }
+    .stk-chip-btn:hover { border-color: #0369a1; color: #0369a1; background: var(--color-primary-soft); }
     .stk-wh-card {
-      background: #fff; border-radius: 16px; padding: 18px; cursor: pointer;
+      background: var(--color-surface); border-radius: 16px; padding: 18px; cursor: pointer;
       box-shadow: 0 10px 34px rgba(2,6,23,0.28); border: 2px solid transparent; transition: all .25s ease;
     }
     .stk-wh-card:hover { box-shadow: 0 22px 52px rgba(2,6,23,0.38); transform: translateY(-4px); }
     .stk-wh-card.active {
-      border-color: #16a34a; background: #f0fdf4;
+      border-color: var(--color-ok); background: var(--color-ok-soft);
       box-shadow: 0 10px 34px rgba(22,163,74,0.35);
       animation: whPulse 2.6s ease-in-out infinite;
       position: relative;
     }
-    .stk-wh-card.active .stk-wh-ico { color: #16a34a; }
+    .stk-wh-card.active .stk-wh-ico { color: var(--color-ok); }
     @keyframes whPulse {
       0%, 100% { box-shadow: 0 10px 34px rgba(22,163,74,0.30), 0 0 0 0 rgba(22,163,74,0.45); }
       50% { box-shadow: 0 10px 34px rgba(22,163,74,0.40), 0 0 0 7px rgba(22,163,74,0); }
@@ -1444,7 +1369,7 @@ interface ComprehensiveAnalysisResponse {
       position: absolute; inset: -2px;
       border-radius: 16px;
       padding: 2px;
-      background: conic-gradient(from var(--wh-angle, 0deg), transparent 0 78%, #16a34a 88%, #4ade80 93%, transparent 100%);
+      background: conic-gradient(from var(--wh-angle, 0deg), transparent 0 78%, var(--color-ok) 88%, #4ade80 93%, transparent 100%);
       -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
       -webkit-mask-composite: xor;
       mask-composite: exclude;
@@ -1464,42 +1389,33 @@ interface ComprehensiveAnalysisResponse {
       100% { --wh-angle: 360deg; opacity: 0; }
     }
     .stk-wh-head { display: flex; align-items: center; gap: 10px; }
-    .stk-wh-ico { color: #2563eb; }
+    .stk-wh-ico { color: var(--color-primary); }
     .stk-wh-title { flex: 1; min-width: 0; }
-    .stk-wh-title h3 { margin: 0; font-size: 0.95rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .stk-wh-title span { font-size: 11.5px; color: #64748b; }
-    .stk-wh-ops { color: #64748b; }
+    .stk-wh-title h3 { margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stk-wh-title span { font-size: 11.5px; color: var(--color-text-3); }
+    .stk-wh-ops { color: var(--color-text-3); }
     .stk-wh-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
-    .stk-wh-stats > div { text-align: center; background: #f8fafc; border-radius: 8px; padding: 6px 2px; }
+    .stk-wh-stats > div { text-align: center; background: var(--color-canvas); border-radius: 8px; padding: 6px 2px; }
     .stk-wh-card.active .stk-wh-stats > div { background: rgba(255,255,255,0.7); }
-    .stk-wh-stats b { display: block; font-size: 13px; color: #0f172a; }
-    .stk-wh-stats b .out-sub { font-style: normal; font-size: 10px; color: #dc2626; font-weight: 600; }
-    .stk-wh-stats span { font-size: 9.5px; color: #64748b; text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
+    .stk-wh-stats b { display: block; font-size: 13px; color: var(--color-text); }
+    .stk-wh-stats b .out-sub { font-style: normal; font-size: 10px; color: var(--color-danger); font-weight: 600; }
+    .stk-wh-stats span { font-size: 9.5px; color: var(--color-text-3); text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
 
-    .stk-tabs { background: #fff; border-radius: 22px; box-shadow: 0 10px 34px rgba(2,6,23,0.28); overflow: hidden; margin-bottom: 30px; }
-    .stk-tabs ::ng-deep .mat-mdc-tab-header {
-      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    }
-    .stk-tabs ::ng-deep .mat-mdc-tab { min-width: 140px; padding: 0 24px; }
-    .stk-tabs ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
-      display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px;
-    }
-    .stk-tabs ::ng-deep .mat-mdc-tab-body-wrapper { background: #fff; }
+    .stk-tabs { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 30px; }
 
     /* Company filter chips — same design as Sales History */
     .sh-company-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
     .sh-company-chip {
       display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
       border: 1.5px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.92); border-radius: 999px;
-      font-size: 13px; font-weight: 600; color: #475569; cursor: pointer;
+      font-size: 13px; font-weight: 600; color: var(--color-text-2); cursor: pointer;
       transition: all .18s ease; box-shadow: 0 4px 14px rgba(2,6,23,0.25);
     }
     .sh-company-chip mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .sh-company-chip:hover { background: #fff; transform: translateY(-1px); }
+    .sh-company-chip:hover { background: var(--color-surface); transform: translateY(-1px); }
     .sh-company-chip.active {
-      border-color: var(--chip-color, #1a237e); color: var(--chip-color, #1a237e);
-      background: #fff; box-shadow: 0 6px 18px rgba(2,6,23,0.35);
+      border-color: var(--chip-color, #1a237e); color: var(--chip-color, var(--color-brand));
+      background: var(--color-surface); box-shadow: 0 6px 18px rgba(2,6,23,0.35);
     }
     .sh-company-chip--logo { padding: 6px 14px 6px 8px; gap: 8px; }
     .sh-chip-logo {
@@ -1508,69 +1424,67 @@ interface ComprehensiveAnalysisResponse {
     }
     .sh-company-chip--logo:hover .sh-chip-logo { filter: grayscale(0%); opacity: 1; }
     .sh-company-chip--logo.active .sh-chip-logo { filter: none; opacity: 1; }
-    .sh-chip-label { font-size: 12.5px; font-weight: 600; color: #475569; }
-    .sh-company-chip--logo.active .sh-chip-label { color: var(--chip-color, #1a237e); }
-    .tab-ico { margin-right: 6px; font-size: 18px; width: 18px; height: 18px; vertical-align: middle; }
+    .sh-chip-label { font-size: 12.5px; font-weight: 600; color: var(--color-text-2); }
+    .sh-company-chip--logo.active .sh-chip-label { color: var(--chip-color, var(--color-brand)); }
     .stk-tab-body { padding: 16px; }
     .stk-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
     .stk-search { flex: 1; min-width: 240px; max-width: 420px; }
     .stk-search ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
 
     /* Movements tab */
-    .tab-count { background: #d97706; color: #fff; border-radius: 10px; font-size: 11px; font-weight: 800; padding: 1px 7px; margin-left: 6px; }
     .mov-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
     @media (max-width: 1100px) { .mov-stats { grid-template-columns: repeat(2, 1fr); } }
-    .mov-stat { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 16px; }
+    .mov-stat { display: flex; align-items: center; gap: 12px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 14px; padding: 12px 16px; }
     .mov-stat mat-icon { font-size: 26px; width: 26px; height: 26px; }
-    .mov-stat b { display: block; font-size: 20px; line-height: 1.1; color: #0f172a; }
-    .mov-stat span { font-size: 11.5px; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
-    .mov-stat.ms-amber mat-icon { color: #d97706; } .mov-stat.ms-amber { border-color: #fcd34d; background: #fffbeb; }
-    .mov-stat.ms-amber.ms-zero { border-color: #e2e8f0; background: #fff; }
-    .mov-stat.ms-green mat-icon { color: #16a34a; } .mov-stat.ms-green b { color: #16a34a; }
-    .mov-stat.ms-red mat-icon { color: #dc2626; } .mov-stat.ms-red b { color: #dc2626; }
-    .mov-stat.ms-blue mat-icon { color: #2563eb; }
-    .mov-queue { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; }
+    .mov-stat b { display: block; font-size: 20px; line-height: 1.1; color: var(--color-text); }
+    .mov-stat span { font-size: 11.5px; color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.4px; }
+    .mov-stat.ms-amber mat-icon { color: var(--color-warn); } .mov-stat.ms-amber { border-color: #fcd34d; background: var(--color-warn-soft); }
+    .mov-stat.ms-amber.ms-zero { border-color: var(--color-line); background: var(--color-surface); }
+    .mov-stat.ms-green mat-icon { color: var(--color-ok); } .mov-stat.ms-green b { color: var(--color-ok); }
+    .mov-stat.ms-red mat-icon { color: var(--color-danger); } .mov-stat.ms-red b { color: var(--color-danger); }
+    .mov-stat.ms-blue mat-icon { color: var(--color-primary); }
+    .mov-queue { background: var(--color-warn-soft); border: 1px solid #fcd34d; border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; }
     .mov-queue-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: #92400e; }
-    .mov-queue-head mat-icon { color: #d97706; }
+    .mov-queue-head mat-icon { color: var(--color-warn); }
     .mov-queue-sub { font-size: 12px; color: #a16207; font-weight: 400; }
-    .mov-queue-row { display: flex; align-items: center; gap: 14px; padding: 8px 10px; background: #fff; border: 1px solid #fde68a; border-radius: 10px; margin-bottom: 6px; font-size: 13px; }
+    .mov-queue-row { display: flex; align-items: center; gap: 14px; padding: 8px 10px; background: var(--color-surface); border: 1px solid #fde68a; border-radius: 10px; margin-bottom: 6px; font-size: 13px; }
     .mq-load { font-weight: 700; min-width: 110px; }
-    .mq-wh { min-width: 170px; color: #475569; }
-    .mq-cust { flex: 1; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .mq-date { color: #64748b; white-space: nowrap; }
-    .mq-noperm { font-size: 12px; color: #94a3b8; font-style: italic; }
+    .mq-wh { min-width: 170px; color: var(--color-text-2); }
+    .mq-cust { flex: 1; color: var(--color-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mq-date { color: var(--color-text-3); white-space: nowrap; }
+    .mq-noperm { font-size: 12px; color: var(--color-text-3); font-style: italic; }
     .mov-queue-more { font-size: 12px; color: #a16207; text-align: center; padding: 4px 0 0; }
-    .stk-count { font-size: 12.5px; color: #64748b; font-weight: 600; }
+    .stk-count { font-size: 12.5px; color: var(--color-text-3); font-weight: 600; }
     .stk-spacer { flex: 1; }
-    .stk-sep { width: 1px; height: 26px; background: #e2e8f0; margin: 0 4px; }
-    .stk-row-total td { background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1; }
-    .stk-filter-on { background: #eff6ff !important; border-color: #2563eb !important; color: #1d4ed8 !important; }
-    .stk-loading { display: flex; align-items: center; gap: 12px; padding: 30px; color: #64748b; }
-    .stk-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
-    .stk-table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; }
-    .stk-table thead th { text-align: left; padding: 9px 12px; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; position: sticky; top: 0; }
+    .stk-sep { width: 1px; height: 26px; background: var(--color-line); margin: 0 4px; }
+    .stk-row-total td { background: var(--color-canvas); font-weight: 700; border-top: 2px solid var(--color-line-strong); }
+    .stk-filter-on { background: var(--color-primary-soft) !important; border-color: var(--color-primary) !important; color: var(--color-primary-hover) !important; }
+    .stk-loading { display: flex; align-items: center; gap: 12px; padding: 30px; color: var(--color-text-3); }
+    .stk-table-wrap { overflow-x: auto; border: 1px solid var(--color-line); border-radius: 10px; }
+    .stk-table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--color-surface); }
+    .stk-table thead th { text-align: left; padding: 9px 12px; background: var(--color-surface-2); color: var(--color-text-2); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; position: sticky; top: 0; }
     .stk-table th.num, .stk-table td.num { text-align: right; }
-    .stk-table tbody td { padding: 8px 12px; border-top: 1px solid #f1f5f9; color: #334155; }
-    .stk-table tbody tr:hover { background: #f8fafc; }
-    .stk-table td.mono { font-family: monospace; font-weight: 600; color: #0f172a; white-space: nowrap; }
-    .stk-table td.mono.code-inv, .ws-table td.mono.code-inv { color: #16a34a !important; font-weight: 800; }
+    .stk-table tbody td { padding: 8px 12px; border-top: 1px solid var(--color-surface-2); color: var(--color-text-2); }
+    .stk-table tbody tr:hover { background: var(--color-canvas); }
+    .stk-table td.mono { font-family: monospace; font-weight: 600; color: var(--color-text); white-space: nowrap; }
+    .stk-table td.mono.code-inv, .ws-table td.mono.code-inv { color: var(--color-ok) !important; font-weight: 800; }
     .stk-table td.desc { max-width: 340px; }
-    .stk-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #e2e8f0; color: #475569; }
-    .stk-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #e2e8f0; color: #475569; white-space: nowrap; }
-    .stk-badge.b-in { background: #dcfce7; color: #166534; }
-    .stk-badge.b-out { background: #fee2e2; color: #991b1b; }
+    .stk-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--color-line); color: var(--color-text-2); }
+    .stk-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--color-line); color: var(--color-text-2); white-space: nowrap; }
+    .stk-badge.b-in { background: var(--color-ok-soft); color: #166534; }
+    .stk-badge.b-out { background: var(--color-danger-soft); color: #991b1b; }
     .stk-badge.b-neg { background: #7f1d1d; color: #fff; }
-    .stk-badge.b-warn { background: #fef3c7; color: #92400e; }
-    .stk-empty { text-align: center; padding: 28px; color: #94a3b8; }
+    .stk-badge.b-warn { background: var(--color-warn-soft); color: #92400e; }
+    .stk-empty { text-align: center; padding: 28px; color: var(--color-text-3); }
     .stk-row-resolved td { opacity: 0.55; }
-    .stk-resolution { font-size: 11px; color: #16a34a; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-    .stk-more { text-align: center; padding: 10px; font-size: 12px; color: #64748b; background: #f8fafc; }
-    .stk-note { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; color: #64748b; }
-    .stk-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
+    .stk-resolution { font-size: 11px; color: var(--color-ok); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .stk-more { text-align: center; padding: 10px; font-size: 12px; color: var(--color-text-3); background: var(--color-canvas); }
+    .stk-note { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; color: var(--color-text-3); }
+    .stk-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--color-primary); }
     @media (max-width: 1100px) { .stk-reports-grid { grid-template-columns: repeat(2, 1fr); } }
   `]
 })
-export class StockManagementComponent implements OnInit {
+export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   warehouses: WarehouseSummary[] = [];
   loading = true;
 
@@ -2297,7 +2211,153 @@ export class StockManagementComponent implements OnInit {
     private snackBar: MatSnackBar
   ) {}
 
+  // ---------- Sub-pages with their own addresses (design review D-12) ----------
+  // /stock-management/<section>?<filters> picks the sub-page and its filters. The warehouse and
+  // company filters apply to every sub-page, so the sub-page links carry them along. Moving
+  // between sub-pages adds to the browser history; changing a filter replaces the current entry.
+
+  readonly sections = STOCK_SECTIONS;
+  readonly section = signal<StockSlug>('on-hand');
+  readonly currentSection = computed(() => stockSection(this.section()));
+  /** Each sub-page's filters as last used, so its link in the sub-navigation brings them back. */
+  readonly sectionQuery = signal<Partial<Record<StockSlug, Params>>>({});
+
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly subscriptions = new Subscription();
+  private readonly filterWrites = new Subject<void>();
+  private lastFilterKey = '';
+
+  /** Sub-page links: each one's own filters, with the current warehouse and company. */
+  linkQueries(): Partial<Record<StockSlug, Params>> {
+    const shared = this.sharedQuery();
+    const links: Partial<Record<StockSlug, Params>> = {};
+    for (const s of STOCK_SECTIONS) {
+      links[s.slug] = { ...this.sectionQuery()[s.slug], warehouse: shared['warehouse'] ?? null, company: shared['company'] ?? null };
+    }
+    return links;
+  }
+
+  /** Counts after the sub-page links, as the tabs had. */
+  sectionCounts(): Partial<Record<StockSlug, number>> {
+    return { issues: this.openIssueCount, movements: this.pendingDispatchCount };
+  }
+
+  /** Filters change from many fields and buttons, so look for a change once per check and follow it in the address. */
+  ngDoCheck(): void {
+    const key = JSON.stringify(this.currentQuery(this.section()));
+    if (key !== this.lastFilterKey) {
+      this.lastFilterKey = key;
+      this.filterWrites.next();
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+  }
+
+  /** Reads the sub-page and its filters from the address. Runs after every navigation. */
+  private applyUrl(): void {
+    const section = stockSection(this.route.snapshot.firstChild?.paramMap.get('section'));
+    if (!section) {
+      // An old or mistyped address: open Stock where it normally opens rather than an empty page.
+      this.router.navigate(['/stock-management', STOCK_SECTIONS[0].slug], { replaceUrl: true });
+      return;
+    }
+    this.section.set(section.slug);
+    const query = this.route.snapshot.queryParams;
+    if (!isFilterRecord(this.router)) {
+      this.applyFilters(section.slug, query);
+    }
+    this.sectionQuery.update(all => ({ ...all, [section.slug]: query }));
+  }
+
+  /** Sets the filters from the address. Filters missing from it go back to their defaults. */
+  private applyFilters(slug: StockSlug, q: Params): void {
+    const text = (key: string): string => queryText(q, key);
+    const warehouse = Number(text('warehouse'));
+    this.whFilterId = Number.isInteger(warehouse) && warehouse > 0 ? warehouse : null;
+    this.companyFilter = text('company');
+    switch (slug) {
+      case 'on-hand':
+        this.sohSearch = text('q');
+        break;
+      case 'issues': {
+        // Open issues show by default; "all" in the address means no status filter.
+        const status = text('status') || 'Open';
+        this.issueStatusFilter = status === 'all' ? '' : status;
+        this.issueSearch = text('q');
+        break;
+      }
+      case 'exceptions': {
+        const show = text('show');
+        this.excMode = show === 'neg' || show === 'unpriced' ? show : 'out';
+        break;
+      }
+      case 'movements':
+        this.movTypeFilter = text('type');
+        this.movSearch = text('q');
+        break;
+      case 'dispatch': {
+        const deducted = text('deducted');
+        this.dispatchDeductFilter = deducted === 'pending' || deducted === 'done' || deducted === 'baseline' ? deducted : '';
+        this.dispatchSearch = text('q');
+        break;
+      }
+      case 'reports': {
+        const report = text('report');
+        this.reportMode = report === 'activity' || report === 'dispatch' || report === 'exceptions' ? report : 'valuation';
+        const days = Number(text('days') || 30);
+        this.reportDays = [7, 30, 90, 0].includes(days) ? days : 30;
+        break;
+      }
+    }
+  }
+
+  /** The warehouse and company filters, which every sub-page shares. */
+  private sharedQuery(): Params {
+    return toQuery({ warehouse: this.whFilterId ? String(this.whFilterId) : null, company: this.companyFilter });
+  }
+
+  /** A sub-page's filters as address parameters, leaving out the defaults. */
+  private currentQuery(slug: StockSlug): Params {
+    let own: Params = {};
+    switch (slug) {
+      case 'on-hand':
+        own = toQuery({ q: this.sohSearch });
+        break;
+      case 'issues':
+        own = toQuery({ status: this.issueStatusFilter || 'all', q: this.issueSearch }, { status: 'Open' });
+        break;
+      case 'exceptions':
+        own = toQuery({ show: this.excMode }, { show: 'out' });
+        break;
+      case 'movements':
+        own = toQuery({ type: this.movTypeFilter, q: this.movSearch });
+        break;
+      case 'dispatch':
+        own = toQuery({ deducted: this.dispatchDeductFilter, q: this.dispatchSearch });
+        break;
+      case 'reports':
+        own = toQuery({ report: this.reportMode, days: String(this.reportDays) }, { report: 'valuation', days: '30' });
+        break;
+    }
+    return { ...this.sharedQuery(), ...own };
+  }
+
+  private writeFilters(): void {
+    const slug = this.section();
+    const query = this.currentQuery(slug);
+    this.sectionQuery.update(all => ({ ...all, [slug]: query }));
+    recordFilters(this.router, this.route, query);
+  }
+
   ngOnInit(): void {
+    this.applyUrl();
+    this.subscriptions.add(this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => this.applyUrl()));
+    this.subscriptions.add(this.filterWrites.pipe(debounceTime(250)).subscribe(() => this.writeFilters()));
     this.loadWarehouses();
     this.loadDashboardData();
     this.loadInvoiceCodes();
@@ -2669,7 +2729,7 @@ async function parseCountSheet(file: File, inventory: any[]): Promise<CountImpor
           <span>{{ data.warehouse.location || 'Stock on hand datasheet' }}</span>
         </div>
       </div>
-      <button mat-icon-button (click)="dialogRef.close(changed ? 'changed' : undefined)" matTooltip="Close"><mat-icon>close</mat-icon></button>
+      <button aria-label="Close" mat-icon-button (click)="dialogRef.close(changed ? 'changed' : undefined)" matTooltip="Close"><mat-icon>close</mat-icon></button>
     </div>
 
     <div class="ws-companies">
@@ -2771,52 +2831,52 @@ async function parseCountSheet(file: File, inventory: any[]): Promise<CountImpor
   styles: [`
     :host { display: block; }
     .ws-locked, .ws-unlocked { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 4px 12px; }
-    .ws-locked { color: #64748b; background: #f1f5f9; }
-    .ws-unlocked { color: #065f46; background: #d1fae5; }
+    .ws-locked { color: var(--color-text-3); background: var(--color-surface-2); }
+    .ws-unlocked { color: #065f46; background: var(--color-ok-soft); }
     .ws-locked mat-icon, .ws-unlocked mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .ws-table.editable td.edit { cursor: cell; }
-    .ws-table.editable td.edit:hover { outline: 2px solid #0369a1; outline-offset: -2px; background: #eff6ff; }
-    .ws-table td.ro { color: #94a3b8; font-style: italic; }
-    .ws-table td.noprice { color: #d97706; font-weight: 600; font-size: 12px; }
+    .ws-table.editable td.edit:hover { outline: 2px solid #0369a1; outline-offset: -2px; background: var(--color-primary-soft); }
+    .ws-table td.ro { color: var(--color-text-3); font-style: italic; }
+    .ws-table td.noprice { color: var(--color-warn); font-weight: 600; font-size: 12px; }
     .ws-table tr.saving td { opacity: .5; }
-    .ws-input { width: 100%; box-sizing: border-box; border: 2px solid #0369a1; border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; background: #fff; }
+    .ws-input { width: 100%; box-sizing: border-box; border: 2px solid #0369a1; border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; background: var(--color-surface); }
     .ws-input.num { text-align: right; font-weight: 700; }
     .ws-input:focus { outline: none; box-shadow: 0 0 0 3px #bfdbfe; }
     .ws-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px 10px; }
     .ws-title { display: flex; align-items: center; gap: 14px; }
     .ws-title > mat-icon { font-size: 36px; width: 36px; height: 36px; color: #0369a1; }
-    .ws-title h2 { margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; }
-    .ws-title span { font-size: 12.5px; color: #64748b; }
+    .ws-title h2 { margin: 0; font-size: 20px; font-weight: 800; color: var(--color-text); }
+    .ws-title span { font-size: 12.5px; color: var(--color-text-3); }
     .ws-companies { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 24px 12px; }
-    .ws-chip { border: 1.5px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: #334155; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
-    .ws-chip b { background: #e2e8f0; border-radius: 999px; padding: 0 8px; font-size: 12px; }
+    .ws-chip { border: 1.5px solid var(--color-line-strong); background: var(--color-surface); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: var(--color-text-2); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+    .ws-chip b { background: var(--color-line); border-radius: 999px; padding: 0 8px; font-size: 12px; }
     .ws-chip:hover { border-color: #0369a1; color: #0369a1; }
     .ws-chip.active { background: #0369a1; border-color: #0369a1; color: #fff; }
     .ws-chip.active b { background: rgba(255,255,255,0.25); color: #fff; }
     .ws-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 0 24px 12px; }
-    .ws-kpis > div { background: #f1f5f9; border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
-    .ws-kpis b { font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.1; }
-    .ws-kpis span { font-size: 11.5px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
-    .ws-kpis .warn b { color: #dc2626; }
+    .ws-kpis > div { background: var(--color-surface-2); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
+    .ws-kpis b { font-size: 20px; font-weight: 800; color: var(--color-text); line-height: 1.1; }
+    .ws-kpis span { font-size: 11.5px; color: var(--color-text-3); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+    .ws-kpis .warn b { color: var(--color-danger); }
     .ws-toolbar { display: flex; align-items: center; gap: 14px; padding: 0 24px 6px; }
     .ws-search { width: 340px; }
     .ws-search ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
-    .ws-toggle { font-size: 13px; color: #475569; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .ws-toggle { font-size: 13px; color: var(--color-text-2); display: flex; align-items: center; gap: 6px; cursor: pointer; }
     .ws-body { padding: 0 24px 20px !important; max-height: 60vh; }
     .ws-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .ws-table th { position: sticky; top: 0; background: #0f172a; color: #fff; text-align: left; padding: 10px 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; user-select: none; white-space: nowrap; z-index: 1; }
+    .ws-table th { position: sticky; top: 0; background: var(--color-text); color: #fff; text-align: left; padding: 10px 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; user-select: none; white-space: nowrap; z-index: 1; }
     .ws-table th.num, .ws-table td.num { text-align: right; }
-    .ws-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; color: #1e293b; vertical-align: middle; }
-    .ws-table tbody tr:hover td { background: #f8fafc; }
-    .ws-table tr.zero td { color: #94a3b8; }
-    .ws-table tr.zero td.qty { color: #dc2626; font-weight: 700; }
+    .ws-table td { padding: 8px 10px; border-bottom: 1px solid var(--color-line); color: var(--color-text); vertical-align: middle; }
+    .ws-table tbody tr:hover td { background: var(--color-canvas); }
+    .ws-table tr.zero td { color: var(--color-text-3); }
+    .ws-table tr.zero td.qty { color: var(--color-danger); font-weight: 700; }
     .ws-table td.qty { font-weight: 700; font-size: 14px; }
     .ws-table td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
-    .ws-table td.mono.code-inv { color: #16a34a !important; font-weight: 800; }
+    .ws-table td.mono.code-inv { color: var(--color-ok) !important; font-weight: 800; }
     .ws-table td.desc { max-width: 420px; }
-    .ws-tag { background: #e0f2fe; color: #075985; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; font-weight: 600; }
-    .ws-table tfoot td { background: #f1f5f9; border-top: 2px solid #cbd5e1; border-bottom: none; font-size: 13.5px; }
-    .ws-empty { text-align: center; color: #94a3b8; padding: 28px !important; }
+    .ws-tag { background: var(--color-primary-soft); color: #075985; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; font-weight: 600; }
+    .ws-table tfoot td { background: var(--color-surface-2); border-top: 2px solid var(--color-line-strong); border-bottom: none; font-size: 13.5px; }
+    .ws-empty { text-align: center; color: var(--color-text-3); padding: 28px !important; }
   `]
 })
 export class WarehouseStockSheetDialog {
@@ -2963,7 +3023,7 @@ const COUNT_IMPORT_PIN = '2630';
   standalone: true,
   imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule],
   template: `
-    <h2 mat-dialog-title><mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">lock</mat-icon> {{ data.title || 'Unlock Import' }}</h2>
+    <h2 mat-dialog-title><mat-icon style="vertical-align:middle;margin-right:8px;color:var(--color-warn);">lock</mat-icon> {{ data.title || 'Unlock Import' }}</h2>
     <mat-dialog-content class="pin-body">
       @if (data.message) { <p [innerHTML]="data.message"></p> }
       @else { <p>Importing a stock count will <b>override stock on hand</b> at <b>{{ data.warehouse.name }}</b>.<br>Enter the 4-digit PIN to continue.</p> }
@@ -2981,11 +3041,11 @@ const COUNT_IMPORT_PIN = '2630';
     </mat-dialog-actions>
   `,
   styles: [`
-    .pin-body p { font-size: 13.5px; color: #475569; margin: 0 0 16px; line-height: 1.5; }
+    .pin-body p { font-size: 13.5px; color: var(--color-text-2); margin: 0 0 16px; line-height: 1.5; }
     .pin-boxes { display: flex; gap: 12px; justify-content: center; margin-bottom: 8px; }
-    .pin-box { width: 52px; height: 60px; text-align: center; font-size: 28px; font-weight: 700; border: 2px solid #cbd5e1; border-radius: 10px; letter-spacing: 0; }
-    .pin-box:focus { outline: none; border-color: #d97706; box-shadow: 0 0 0 3px #fde68a; }
-    .pin-error { display: flex; align-items: center; justify-content: center; gap: 6px; color: #dc2626; font-size: 13px; font-weight: 600; margin-top: 6px; }
+    .pin-box { width: 52px; height: 60px; text-align: center; font-size: 28px; font-weight: 700; border: 2px solid var(--color-line-strong); border-radius: 10px; letter-spacing: 0; }
+    .pin-box:focus { outline: none; border-color: var(--color-warn); box-shadow: 0 0 0 3px #fde68a; }
+    .pin-error { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--color-danger); font-size: 13px; font-weight: 600; margin-top: 6px; }
     .pin-error mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .shake { animation: shake .35s; }
     @keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
@@ -3041,7 +3101,7 @@ export class CountImportPinDialog {
   ],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">fact_check</mat-icon>
+      <mat-icon style="vertical-align:middle;margin-right:8px;color:var(--color-warn);">fact_check</mat-icon>
       Stock Take — {{ data.warehouse.name }}
     </h2>
     <mat-dialog-content>
@@ -3097,7 +3157,7 @@ export class CountImportPinDialog {
                   @if (r.counted !== null && r.counted !== undefined) {
                     <b [style.color]="varianceOf(r) > 0 ? '#16a34a' : (varianceOf(r) < 0 ? '#dc2626' : '#94a3b8')">
                       {{ varianceOf(r) > 0 ? '+' : '' }}{{ varianceOf(r) | number }}</b>
-                  } @else { <span style="color:#cbd5e1;">—</span> }
+                  } @else { <span style="color:var(--color-line-strong);">—</span> }
                 </td>
               </tr>
             } @empty { <tr><td colspan="7" class="st-empty">No items match</td></tr> }
@@ -3131,30 +3191,30 @@ export class CountImportPinDialog {
     .st-search { flex: 1; min-width: 240px; }
     .st-ref { width: 220px; }
     .st-bar mat-form-field { margin-bottom: -1.25em; }
-    .st-on { background: #fef3c7 !important; border-color: #f59e0b !important; }
-    .st-table-wrap { max-height: 50vh; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .st-on { background: var(--color-warn-soft) !important; border-color: var(--color-warn) !important; }
+    .st-table-wrap { max-height: 50vh; overflow: auto; border: 1px solid var(--color-line); border-radius: 10px; }
     .st-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .st-table th { position: sticky; top: 0; background: #f8fafc; text-align: left; padding: 8px 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-bottom: 1px solid #e2e8f0; }
-    .st-table td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; }
+    .st-table th { position: sticky; top: 0; background: var(--color-canvas); text-align: left; padding: 8px 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); border-bottom: 1px solid var(--color-line); }
+    .st-table td { padding: 6px 10px; border-bottom: 1px solid var(--color-surface-2); }
     .st-table .num { text-align: right; }
     .st-table .mono { font-family: monospace; font-weight: 600; }
     .st-table .desc { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .st-diff { background: #fffbeb; }
-    .st-chip { font-size: 11px; background: #eef2ff; color: #3730a3; padding: 2px 8px; border-radius: 10px; }
-    .st-qty { width: 110px; text-align: right; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600; }
-    .st-qty:focus { outline: 2px solid #f59e0b; border-color: transparent; }
-    .st-empty, .st-more { text-align: center; color: #94a3b8; padding: 16px; font-size: 12.5px; }
+    .st-diff { background: var(--color-warn-soft); }
+    .st-chip { font-size: 11px; background: var(--color-primary-soft); color: #3730a3; padding: 2px 8px; border-radius: 10px; }
+    .st-qty { width: 110px; text-align: right; padding: 5px 8px; border: 1px solid var(--color-line-strong); border-radius: 6px; font-weight: 600; }
+    .st-qty:focus { outline: 2px solid var(--color-warn); border-color: transparent; }
+    .st-empty, .st-more { text-align: center; color: var(--color-text-3); padding: 16px; font-size: 12.5px; }
     .st-summary { display: flex; gap: 14px; margin-top: 12px; }
-    .st-summary > div { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
+    .st-summary > div { flex: 1; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
     .st-summary b { font-size: 20px; }
-    .st-summary span { font-size: 12px; color: #64748b; }
-    .st-summary .pos b { color: #16a34a; } .st-summary .neg b { color: #dc2626; }
-    .st-note { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #64748b; margin-top: 12px; }
-    .st-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
-    .st-import { display: flex; gap: 10px; align-items: flex-start; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #1e3a8a; }
-    .st-import mat-icon { color: #2563eb; flex-shrink: 0; }
+    .st-summary span { font-size: 12px; color: var(--color-text-3); }
+    .st-summary .pos b { color: var(--color-ok); } .st-summary .neg b { color: var(--color-danger); }
+    .st-note { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--color-text-3); margin-top: 12px; }
+    .st-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--color-primary); }
+    .st-import { display: flex; gap: 10px; align-items: flex-start; background: var(--color-primary-soft); border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: var(--color-primary-hover); }
+    .st-import mat-icon { color: var(--color-primary); flex-shrink: 0; }
     .st-warn { color: #b45309; font-weight: 600; }
-    .st-import-detail { margin-top: 4px; font-size: 12px; color: #475569; display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
+    .st-import-detail { margin-top: 4px; font-size: 12px; color: var(--color-text-2); display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
   `]
 })
 export class StockTakeDialog implements OnInit {
@@ -3240,7 +3300,7 @@ export class StockTakeDialog implements OnInit {
         <mat-icon>view_in_ar</mat-icon>
         <h2>{{ data.name }} — 3D Stock View</h2>
       </div>
-      <button mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
+      <button aria-label="Close" mat-icon-button mat-dialog-close><mat-icon>close</mat-icon></button>
     </div>
     <div class="w3d-body">
       <app-warehouse-3d [embeddedWarehouseId]="data.id"></app-warehouse-3d>
@@ -3248,10 +3308,10 @@ export class StockTakeDialog implements OnInit {
   `,
   styles: [`
     :host { display: flex; flex-direction: column; height: 100%; }
-    .w3d-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #e2e8f0; }
+    .w3d-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--color-line); }
     .w3d-title { display: flex; align-items: center; gap: 10px; }
-    .w3d-title mat-icon { color: #16a34a; }
-    .w3d-title h2 { margin: 0; font-size: 18px; font-weight: 700; color: #0f172a; }
+    .w3d-title mat-icon { color: var(--color-ok); }
+    .w3d-title h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--color-text); }
     .w3d-body { flex: 1; min-height: 0; overflow: hidden; }
     .w3d-body app-warehouse-3d { display: block; height: 100%; }
   `]
@@ -3267,7 +3327,7 @@ export class Warehouse3DDialog {
   imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
             MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
-    <h2 mat-dialog-title><mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">assignment_late</mat-icon> New Stock Issue</h2>
+    <h2 mat-dialog-title><mat-icon style="vertical-align:middle;margin-right:8px;color:var(--color-warn);">assignment_late</mat-icon> New Stock Issue</h2>
     <mat-dialog-content class="ci-body">
       <div class="ci-row">
         <mat-form-field appearance="outline">
@@ -3423,9 +3483,9 @@ export class CreateIssueDialog {
     </mat-dialog-actions>
   `,
   styles: [`
-    .ri-summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 14px; }
-    .ri-code { font-family: monospace; background: #e2e8f0; border-radius: 6px; padding: 1px 7px; margin-left: 8px; font-size: 12px; }
-    .ri-detail { font-size: 12.5px; color: #64748b; margin-top: 6px; }
+    .ri-summary { background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+    .ri-code { font-family: monospace; background: var(--color-line); border-radius: 6px; padding: 1px 7px; margin-left: 8px; font-size: 12px; }
+    .ri-detail { font-size: 12.5px; color: var(--color-text-3); margin-top: 6px; }
     .ri-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
     .ri-chip { font-size: 11.5px !important; line-height: 28px !important; padding: 0 10px !important; border-radius: 999px !important; }
   `]
@@ -3524,15 +3584,15 @@ export class ResolveIssueDialog {
     </mat-dialog-actions>
   `,
   styles: [`
-    .mm-list { max-height: 260px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
-    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid #f1f5f9; background: #fff; cursor: pointer; }
-    .mm-item:hover { background: #f0fdf4; }
+    .mm-list { max-height: 260px; overflow: auto; border: 1px solid var(--color-line); border-radius: 10px; }
+    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; }
+    .mm-item:hover { background: var(--color-ok-soft); }
     .mm-code { font-family: monospace; font-weight: 700; min-width: 110px; }
-    .mm-name { flex: 1; font-size: 13px; color: #334155; }
-    .mm-qty { font-size: 12px; color: #64748b; white-space: nowrap; }
-    .mm-empty { padding: 20px; text-align: center; color: #94a3b8; }
-    .mm-selected { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-    .mm-onhand { font-size: 13px; color: #475569; margin: 4px 0; }
+    .mm-name { flex: 1; font-size: 13px; color: var(--color-text-2); }
+    .mm-qty { font-size: 12px; color: var(--color-text-3); white-space: nowrap; }
+    .mm-empty { padding: 20px; text-align: center; color: var(--color-text-3); }
+    .mm-selected { background: var(--color-ok-soft); border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    .mm-onhand { font-size: 13px; color: var(--color-text-2); margin: 4px 0; }
     .mm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     mat-form-field { width: 100%; }
   `]
@@ -3609,7 +3669,7 @@ export class ManualMovementDialog {
             MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon style="vertical-align:middle;margin-right:8px;color:#2563eb;">sync_alt</mat-icon>
+      <mat-icon style="vertical-align:middle;margin-right:8px;color:var(--color-primary);">sync_alt</mat-icon>
       Transfer Stock Between Warehouses
     </h2>
     <mat-dialog-content>
@@ -3656,7 +3716,7 @@ export class ManualMovementDialog {
             <mat-label>Quantity to transfer</mat-label>
             <input matInput type="number" min="1" [(ngModel)]="quantity">
             @if (quantity && selected && quantity > selected.quantityOnHand) {
-              <mat-hint style="color:#dc2626;">Exceeds on hand — a reason will be required</mat-hint>
+              <mat-hint style="color:var(--color-danger);">Exceeds on hand — a reason will be required</mat-hint>
             }
           </mat-form-field>
           <mat-form-field appearance="outline">
@@ -3679,17 +3739,17 @@ export class ManualMovementDialog {
   `,
   styles: [`
     .ts-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
-    .ts-arrow { color: #2563eb; margin-top: -18px; }
+    .ts-arrow { color: var(--color-primary); margin-top: -18px; }
     .ts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .mm-list { max-height: 220px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
-    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid #f1f5f9; background: #fff; cursor: pointer; }
-    .mm-item:hover { background: #eff6ff; }
+    .mm-list { max-height: 220px; overflow: auto; border: 1px solid var(--color-line); border-radius: 10px; }
+    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; }
+    .mm-item:hover { background: var(--color-primary-soft); }
     .mm-code { font-family: monospace; font-weight: 700; min-width: 110px; }
-    .mm-name { flex: 1; font-size: 13px; color: #334155; }
-    .mm-qty { font-size: 12px; color: #64748b; white-space: nowrap; }
-    .mm-empty { padding: 20px; text-align: center; color: #94a3b8; }
-    .mm-selected { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-    .mm-onhand { font-size: 13px; color: #475569; margin: 4px 0; }
+    .mm-name { flex: 1; font-size: 13px; color: var(--color-text-2); }
+    .mm-qty { font-size: 12px; color: var(--color-text-3); white-space: nowrap; }
+    .mm-empty { padding: 20px; text-align: center; color: var(--color-text-3); }
+    .mm-selected { background: var(--color-primary-soft); border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    .mm-onhand { font-size: 13px; color: var(--color-text-2); margin: 4px 0; }
     mat-form-field { width: 100%; }
   `]
 })
@@ -3760,7 +3820,7 @@ export class TransferStockDialog {
             MatFormFieldModule, MatInputModule, MatTooltipModule],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon style="vertical-align:middle;margin-right:8px;color:#d97706;">fact_check</mat-icon>
+      <mat-icon style="vertical-align:middle;margin-right:8px;color:var(--color-warn);">fact_check</mat-icon>
       Approve Dispatch — {{ data.load.loadNumber }}
     </h2>
     <mat-dialog-content>
@@ -3860,51 +3920,51 @@ export class TransferStockDialog {
     </mat-dialog-actions>
   `,
   styles: [`
-    .ad-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+    .ad-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
     .ad-meta > div { display: flex; flex-direction: column; gap: 2px; }
-    .ad-meta-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; font-weight: 600; }
-    .ad-meta-val { font-size: 14.5px; color: #0f172a; font-weight: 600; }
+    .ad-meta-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-3); font-weight: 600; }
+    .ad-meta-val { font-size: 14.5px; color: var(--color-text); font-weight: 600; }
     .ad-meta-val small { color: #b45309; font-weight: 600; font-size: 12px; }
-    .ad-strong { font-size: 20px; color: #1d4ed8; font-weight: 800; }
-    .ad-table-wrap { max-height: 52vh; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .ad-strong { font-size: 20px; color: var(--color-primary-hover); font-weight: 800; }
+    .ad-table-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--color-line); border-radius: 10px; }
     .ad-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
-    .ad-table th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 10px 12px; background: #f1f5f9; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #475569; border-bottom: 2px solid #e2e8f0; }
+    .ad-table th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 10px 12px; background: var(--color-surface-2); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-2); border-bottom: 2px solid var(--color-line); }
     .ad-table th.num, .ad-table td.num { text-align: right; }
-    .ad-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #0f172a; }
-    .ad-table tbody tr:nth-child(even) td { background: #fafbfc; }
-    .ad-table td.mono { font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: 13px; color: #334155; }
+    .ad-table td { padding: 10px 12px; border-bottom: 1px solid var(--color-surface-2); vertical-align: middle; color: var(--color-text); }
+    .ad-table tbody tr:nth-child(even) td { background: var(--color-surface-2); }
+    .ad-table td.mono { font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: 13px; color: var(--color-text-2); }
     .ad-table td.desc { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ad-table tfoot td { background: #f8fafc; font-weight: 800; border-top: 2px solid #e2e8f0; color: #0f172a; }
+    .ad-table tfoot td { background: var(--color-canvas); font-weight: 800; border-top: 2px solid var(--color-line); color: var(--color-text); }
     .ad-big { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .ad-red { color: #dc2626 !important; }
-    .ad-row-neg td { background: #fef2f2 !important; }
-    .ad-row-short td { background: #fffbeb !important; }
-    .ad-qty { width: 120px; padding: 8px 10px; border: 2px solid #94a3b8; border-radius: 8px; text-align: right; font-weight: 800; font-size: 17px; color: #0f172a; background: #fff; font-variant-numeric: tabular-nums; }
-    .ad-qty:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px #bfdbfe; }
+    .ad-red { color: var(--color-danger) !important; }
+    .ad-row-neg td { background: var(--color-danger-soft) !important; }
+    .ad-row-short td { background: var(--color-warn-soft) !important; }
+    .ad-qty { width: 120px; padding: 8px 10px; border: 2px solid var(--color-text-3); border-radius: 8px; text-align: right; font-weight: 800; font-size: 17px; color: var(--color-text); background: var(--color-surface); font-variant-numeric: tabular-nums; }
+    .ad-qty:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px #bfdbfe; }
     .ad-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
     .ad-tag mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .ad-tag-ok { background: #dcfce7; color: #166534; }
-    .ad-tag-short { background: #fef3c7; color: #92400e; }
-    .ad-tag-over { background: #dbeafe; color: #1e40af; }
-    .ad-tag-neg { background: #fee2e2; color: #991b1b; }
-    .ad-unmapped { border: 1px solid #fcd34d; background: #fffbeb; border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+    .ad-tag-ok { background: var(--color-ok-soft); color: #166534; }
+    .ad-tag-short { background: var(--color-warn-soft); color: #92400e; }
+    .ad-tag-over { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .ad-tag-neg { background: var(--color-danger-soft); color: #991b1b; }
+    .ad-unmapped { border: 1px solid #fcd34d; background: var(--color-warn-soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
     .ad-unmapped-head { display: flex; align-items: center; gap: 8px; color: #92400e; font-size: 13.5px; margin-bottom: 8px; }
     .ad-unmapped-head mat-icon { font-size: 20px; width: 20px; height: 20px; }
-    .ad-table-sm { font-size: 13px; background: #fff; border-radius: 8px; overflow: hidden; }
-    .ad-table-sm th { position: static; background: #fef3c7; color: #78350f; padding: 7px 10px; }
+    .ad-table-sm { font-size: 13px; background: var(--color-surface); border-radius: 8px; overflow: hidden; }
+    .ad-table-sm th { position: static; background: var(--color-warn-soft); color: #78350f; padding: 7px 10px; }
     .ad-table-sm td { padding: 7px 10px; }
     .ad-link-cell { position: relative; }
-    .ad-link-search { width: 100%; min-width: 240px; padding: 6px 9px; border: 1.5px solid #cbd5e1; border-radius: 7px; font-size: 13px; }
-    .ad-link-search:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px #bfdbfe; }
-    .ad-link-opts { position: absolute; z-index: 5; left: 10px; right: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 8px 20px rgba(15,23,42,.15); max-height: 180px; overflow: auto; }
-    .ad-link-opt { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid #f1f5f9; padding: 7px 10px; font-size: 12.5px; cursor: pointer; color: #0f172a; }
-    .ad-link-opt:hover { background: #eff6ff; }
+    .ad-link-search { width: 100%; min-width: 240px; padding: 6px 9px; border: 1.5px solid var(--color-line-strong); border-radius: 7px; font-size: 13px; }
+    .ad-link-search:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px #bfdbfe; }
+    .ad-link-opts { position: absolute; z-index: 5; left: 10px; right: 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 8px; box-shadow: 0 8px 20px rgba(15,23,42,.15); max-height: 180px; overflow: auto; }
+    .ad-link-opt { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--color-surface-2); padding: 7px 10px; font-size: 12.5px; cursor: pointer; color: var(--color-text); }
+    .ad-link-opt:hover { background: var(--color-primary-soft); }
     .ad-link-opt .mono { font-family: ui-monospace, Consolas, monospace; font-weight: 700; margin-right: 6px; }
-    .ad-link-opt small { color: #64748b; margin-left: 6px; }
-    .ad-link-none { padding: 8px 10px; font-size: 12.5px; color: #94a3b8; }
-    .ad-empty { padding: 24px; text-align: center; color: #94a3b8; }
-    .ad-note { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #64748b; margin-top: 12px; }
-    .ad-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: #2563eb; }
+    .ad-link-opt small { color: var(--color-text-3); margin-left: 6px; }
+    .ad-link-none { padding: 8px 10px; font-size: 12.5px; color: var(--color-text-3); }
+    .ad-empty { padding: 24px; text-align: center; color: var(--color-text-3); }
+    .ad-note { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-3); margin-top: 12px; }
+    .ad-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--color-primary); }
   `]
 })
 export class ApproveDispatchDialog {

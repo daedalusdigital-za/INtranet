@@ -10,7 +10,7 @@
   <!-- Header Bar -->
   <div class="header-bar">
     <div class="header-left">
-      <button mat-icon-button (click)="goBack()" matTooltip="Back to Stock Management">
+      <button aria-label="Back to Stock Management" mat-icon-button (click)="goBack()" matTooltip="Back to Stock Management">
         <mat-icon>arrow_back</mat-icon>
       </button>
       <h1>{{ warehouseName() }}</h1>
@@ -46,7 +46,7 @@
             placeholder="Search by name, SKU, or ID..."
             autocomplete="off">
           @if (searchQuery()) {
-            <button matSuffix mat-icon-button (click)="searchQuery.set(''); searchResults.set([]); showSearchResults.set(false)">
+            <button aria-label="Close" matSuffix mat-icon-button (click)="searchQuery.set(''); searchResults.set([]); showSearchResults.set(false)">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -88,11 +88,11 @@
         {{ dragModeEnabled() ? 'Lock' : 'Move' }}
       </button>
       
-      <button mat-icon-button (click)="resetCamera()" matTooltip="Reset Camera">
+      <button aria-label="Reset Camera" mat-icon-button (click)="resetCamera()" matTooltip="Reset Camera">
         <mat-icon>center_focus_strong</mat-icon>
       </button>
       
-      <button mat-icon-button (click)="fitToContent()" matTooltip="Fit to Content">
+      <button aria-label="Fit to Content" mat-icon-button (click)="fitToContent()" matTooltip="Fit to Content">
         <mat-icon>fit_screen</mat-icon>
       </button>
     </div>
@@ -109,7 +109,7 @@
           <mat-icon [style.color]="getStatusColor(selectedBox()!.status)">inventory_2</mat-icon>
           {{ selectedBox()!.label }}
         </mat-card-title>
-        <button mat-icon-button (click)="clearSelection()" class="close-btn">
+        <button aria-label="Close" mat-icon-button (click)="clearSelection()" class="close-btn">
           <mat-icon>close</mat-icon>
         </button>
       </mat-card-header>
@@ -171,7 +171,7 @@
   <!-- Legend -->
   <div class="legend">
     <div class="legend-item">
-      <span class="color-box" style="background-color: #4CAF50;"></span>
+      <span class="color-box" style="background-color: var(--color-ok);"></span>
       <span>Active</span>
     </div>
     <div class="legend-item">
@@ -179,7 +179,7 @@
       <span>Low Stock</span>
     </div>
     <div class="legend-item">
-      <span class="color-box" style="background-color: #F44336;"></span>
+      <span class="color-box" style="background-color: var(--color-danger);"></span>
       <span>Empty</span>
     </div>
     <div class="legend-item">
@@ -204,7 +204,7 @@
       <div class="transfer-dialog" (click)="$event.stopPropagation()">
         <div class="transfer-header">
           <h3>Transfer to Building</h3>
-          <button mat-icon-button (click)="closeTransferDialog()">
+          <button aria-label="Close" mat-icon-button (click)="closeTransferDialog()">
             <mat-icon>close</mat-icon>
           </button>
         </div>

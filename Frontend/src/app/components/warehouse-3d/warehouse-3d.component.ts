@@ -30,6 +30,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
 
 import { Warehouse3DService } from './warehouse-3d.service';
+import { ToastService } from '../../ui/toast.service';
 import { 
   WarehouseBox3D, 
   Warehouse3DViewData, 
@@ -132,7 +133,8 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
   constructor(
     private warehouse3DService: Warehouse3DService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private readonly toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -698,7 +700,7 @@ export class Warehouse3DComponent implements OnInit, AfterViewInit, OnDestroy {
       },
       error: (err) => {
         console.error('Transfer failed:', err);
-        alert('Transfer failed. Please try again.');
+        this.toast.error('Transfer failed. Please try again.');
       }
     });
   }

@@ -1,11 +1,11 @@
 :host {
   display: block;
-  --ihp-primary: #6366f1;
-  --ihp-primary-600: #4f46e5;
-  --ihp-ink: #0f172a;
-  --ihp-muted: #64748b;
-  --ihp-line: #e5e7eb;
-  --ihp-red: #ef4444;
+  --ihp-primary: var(--color-primary);
+  --ihp-primary-600: var(--color-primary);
+  --ihp-ink: var(--color-text);
+  --ihp-muted: var(--color-text-3);
+  --ihp-line: var(--color-line);
+  --ihp-red: var(--color-danger);
 }
 
 .ihp {
@@ -13,7 +13,7 @@
   display: flex;
   flex-direction: column;
   max-height: 88vh;
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 16px;
   overflow: hidden;
   font-family: 'Segoe UI', Arial, sans-serif;
@@ -24,7 +24,7 @@
 .ihp__head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #eef2ff, #faf5ff);
+  background: linear-gradient(135deg, var(--color-primary-soft), #faf5ff);
   border-bottom: 1px solid var(--ihp-line);
 }
 .ihp__brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -50,7 +50,7 @@
 
 .ihp__error {
   display: flex; align-items: center; gap: 8px;
-  background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+  background: var(--color-danger-soft); color: var(--color-danger); border: 1px solid #fecaca;
   border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.85rem;
   .material-icons { font-size: 18px; }
 }
@@ -77,7 +77,7 @@
   border: 2px dashed #c7d2fe; border-radius: 16px; background: #f8faff;
   padding: 46px 20px; text-align: center; cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
-  &:hover { background: #eef2ff; border-color: var(--ihp-primary); }
+  &:hover { background: var(--color-primary-soft); border-color: var(--ihp-primary); }
   .material-icons { font-size: 46px; color: var(--ihp-primary-600); }
   &__title { font-weight: 700; margin-top: 8px; }
   &__hint { font-size: 0.8rem; color: var(--ihp-muted); margin-top: 4px; }
@@ -86,7 +86,7 @@
 // ── Loaded file bar ──────────────────────────────────────────
 .ihp-file {
   display: flex; align-items: center; gap: 12px;
-  background: #f8fafc; border: 1px solid var(--ihp-line); border-radius: 12px;
+  background: var(--color-canvas); border: 1px solid var(--ihp-line); border-radius: 12px;
   padding: 12px 14px; margin-bottom: 16px;
   > .material-icons { color: var(--ihp-red); font-size: 26px; }
   &__meta { flex: 1; min-width: 0; }
@@ -110,7 +110,7 @@
 }
 .ihp-thumb {
   position: relative; cursor: pointer; padding: 0; border-radius: 10px; overflow: hidden;
-  border: 2px solid var(--ihp-line); background: #fff; transition: border-color 0.12s, transform 0.1s;
+  border: 2px solid var(--ihp-line); background: var(--color-surface); transition: border-color 0.12s, transform 0.1s;
   aspect-ratio: 3 / 4; display: flex; align-items: center; justify-content: center;
   img { width: 100%; height: 100%; object-fit: contain; opacity: 0.55; transition: opacity 0.12s; }
   &:hover { transform: translateY(-2px); }
@@ -122,7 +122,7 @@
   }
   &__check {
     position: absolute; top: 4px; right: 4px; color: var(--ihp-primary-600);
-    background: #fff; border-radius: 50%; font-size: 20px;
+    background: var(--color-surface); border-radius: 50%; font-size: 20px;
   }
 }
 
@@ -137,7 +137,7 @@
   border: 1.5px solid var(--ihp-line); background: #fbfbff;
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
   &:hover { transform: translateY(-2px); border-color: var(--ihp-primary); }
-  &--on { border-color: var(--ihp-primary); background: #eef2ff; box-shadow: 0 6px 18px rgba(99,102,241,0.2); }
+  &--on { border-color: var(--ihp-primary); background: var(--color-primary-soft); box-shadow: 0 6px 18px rgba(99,102,241,0.2); }
   &__icon { font-size: 26px; color: var(--ihp-primary-600); }
   &__name { font-weight: 800; }
   &__blurb { font-size: 0.73rem; color: var(--ihp-muted); line-height: 1.3; }
@@ -155,11 +155,11 @@
   display: flex; flex-direction: column; align-items: center;
   &__label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ihp-muted); }
   &__val { font-weight: 800; font-size: 1.05rem; }
-  &__val--after { color: #059669; }
+  &__val--after { color: var(--color-ok); }
   &--save .ihp-stat__val { color: var(--ihp-primary-600); }
 }
 .ihp-preview {
-  border: 1px solid var(--ihp-line); border-radius: 12px; overflow: hidden; height: 46vh; background: #f1f5f9;
+  border: 1px solid var(--ihp-line); border-radius: 12px; overflow: hidden; height: 46vh; background: var(--color-surface-2);
   iframe { width: 100%; height: 100%; border: none; }
 }
 
@@ -170,8 +170,8 @@
   transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
   .material-icons { font-size: 18px; }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
-  &--primary { background: var(--ihp-primary-600); color: #fff; &:hover:not(:disabled) { background: #4338ca; } }
-  &--ghost { background: #eef2f6; color: var(--ihp-ink); &:hover:not(:disabled) { background: #e2e8f0; } }
+  &--primary { background: var(--ihp-primary-600); color: #fff; &:hover:not(:disabled) { background: var(--color-primary-hover); } }
+  &--ghost { background: #eef2f6; color: var(--ihp-ink); &:hover:not(:disabled) { background: var(--color-line); } }
 }
 
 // ── Footer ───────────────────────────────────────────────────
@@ -200,7 +200,7 @@
 }
 .ihp-merge-item {
   display: flex; align-items: center; gap: 12px;
-  border: 1px solid var(--ihp-line); border-radius: 12px; padding: 10px 12px; background: #fff;
+  border: 1px solid var(--ihp-line); border-radius: 12px; padding: 10px 12px; background: var(--color-surface);
 }
 .ihp-merge-item__order {
   flex: 0 0 26px; height: 26px; border-radius: 50%;
@@ -209,7 +209,7 @@
 }
 .ihp-merge-item__thumb {
   flex: 0 0 46px; width: 46px; height: 60px; border-radius: 6px; overflow: hidden;
-  background: #f1f5f9; display: flex; align-items: center; justify-content: center;
+  background: var(--color-surface-2); display: flex; align-items: center; justify-content: center;
   transition: transform 0.2s ease;
   img { width: 100%; height: 100%; object-fit: cover; }
   .material-icons { color: var(--ihp-red); font-size: 28px; }
@@ -222,12 +222,12 @@
 .ihp-iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
-  border: 1px solid var(--ihp-line); background: #f8fafc; color: var(--ihp-ink);
+  border: 1px solid var(--ihp-line); background: var(--color-canvas); color: var(--ihp-ink);
   transition: background 0.15s, color 0.15s;
   .material-icons { font-size: 18px; }
-  &:hover:not(:disabled) { background: #eef2ff; }
+  &:hover:not(:disabled) { background: var(--color-primary-soft); }
   &:disabled { opacity: 0.4; cursor: not-allowed; }
-  &--danger:hover:not(:disabled) { background: #fee2e2; color: var(--ihp-red); }
+  &--danger:hover:not(:disabled) { background: var(--color-danger-soft); color: var(--ihp-red); }
 }
 
 .ihp-email {
@@ -239,7 +239,7 @@
 
 .ihp-sent {
   display: flex; align-items: center; gap: 8px;
-  background: #dcfce7; color: #166534; font-weight: 700; font-size: 0.85rem;
+  background: var(--color-ok-soft); color: #166534; font-weight: 700; font-size: 0.85rem;
   padding: 10px 14px; border-radius: 10px; margin-bottom: 12px;
   .material-icons { font-size: 20px; }
 }
@@ -252,20 +252,20 @@
 .ihp-card--stamp .ihp-card__icon { color: #db2777; }
 
 // ── New tool cards ───────────────────────────────────────────
-.ihp-card--delete .ihp-card__icon { color: #ef4444; }
-.ihp-card--number .ihp-card__icon { color: #f59e0b; }
-.ihp-card--extract .ihp-card__icon { color: #10b981; }
+.ihp-card--delete .ihp-card__icon { color: var(--color-danger); }
+.ihp-card--number .ihp-card__icon { color: var(--color-warn); }
+.ihp-card--extract .ihp-card__icon { color: var(--color-ok); }
 .ihp-card--rotate .ihp-card__icon { color: #8b5cf6; }
 
 // Delete-pages thumbs: marked pages glow red instead of indigo
-.ihp-thumb--del.ihp-thumb--on { border-color: #ef4444; }
-.ihp-thumb__check--del { color: #ef4444 !important; }
+.ihp-thumb--del.ihp-thumb--on { border-color: var(--color-danger); }
+.ihp-thumb__check--del { color: var(--color-danger) !important; }
 
 // Text extractor output
 .ihp-extract-area {
   width: 100%; min-height: 42vh; resize: vertical;
   font-family: 'Consolas', 'Courier New', monospace; font-size: 0.8rem; line-height: 1.5;
-  background: #f8fafc;
+  background: var(--color-canvas);
 }
 
 .ihp-stamp-palette {
@@ -276,19 +276,19 @@
 .ihp-stamp-chip {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 8px 10px; border-radius: 12px; cursor: pointer;
-  border: 1.5px solid var(--ihp-line); background: #fff;
+  border: 1.5px solid var(--ihp-line); background: var(--color-surface);
   transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s;
   width: 108px;
   &:hover { transform: translateY(-2px); border-color: #db2777; }
   &--on { border-color: #db2777; box-shadow: 0 0 0 3px rgba(219,39,119,0.16); }
   img { max-width: 88px; max-height: 46px; object-fit: contain; }
-  &__name { font-size: 0.72rem; font-weight: 700; color: #334155; text-align: center; line-height: 1.1; }
+  &__name { font-size: 0.72rem; font-weight: 700; color: var(--color-text-2); text-align: center; line-height: 1.1; }
 }
 
 /* Step 1 — 6-card company stamp chooser */
 .ihp-stamp-chooser {
   margin: 8px 0 4px;
-  &__title { font-size: 1.05rem; font-weight: 800; color: #0f172a; text-align: center; }
+  &__title { font-size: 1.05rem; font-weight: 800; color: var(--color-text); text-align: center; }
   &__sub { font-size: 0.82rem; color: var(--ihp-muted); text-align: center; margin: 4px 0 16px; }
   &__grid {
     display: grid; gap: 14px;
@@ -299,7 +299,7 @@
 .ihp-stamp-card {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 16px 14px; border-radius: 16px; cursor: pointer;
-  border: 1.5px solid var(--ihp-line); background: #fff;
+  border: 1.5px solid var(--ihp-line); background: var(--color-surface);
   transition: border-color 0.14s, box-shadow 0.14s, transform 0.14s;
   &:hover {
     transform: translateY(-3px); border-color: #db2777;
@@ -307,10 +307,10 @@
   }
   &__thumb {
     width: 100%; height: 96px; display: flex; align-items: center; justify-content: center;
-    background: #f8fafc; border-radius: 12px; padding: 10px;
+    background: var(--color-canvas); border-radius: 12px; padding: 10px;
     img { max-width: 100%; max-height: 100%; object-fit: contain; }
   }
-  &__name { font-size: 0.9rem; font-weight: 800; color: #1e293b; text-align: center; }
+  &__name { font-size: 0.9rem; font-weight: 800; color: var(--color-text); text-align: center; }
 }
 
 /* Step 2 — selected stamp summary bar */
@@ -322,7 +322,7 @@
   &__preview {
     flex: 0 0 auto; width: 92px; height: 54px;
     display: flex; align-items: center; justify-content: center;
-    background: #fff; border-radius: 10px; padding: 6px;
+    background: var(--color-surface); border-radius: 10px; padding: 6px;
     border: 1px solid var(--ihp-line);
     img { max-width: 100%; max-height: 100%; object-fit: contain; }
   }
@@ -334,7 +334,7 @@
 .ihp-stamp-pages {
   display: flex; flex-direction: column; align-items: center; gap: 18px;
   margin-top: 8px; max-height: 52vh; overflow: auto; padding: 6px;
-  background: #f1f5f9; border-radius: 12px;
+  background: var(--color-surface-2); border-radius: 12px;
 }
 .ihp-stamp-page {
   position: relative; line-height: 0; box-shadow: 0 6px 18px rgba(15,23,42,0.14);
@@ -355,15 +355,15 @@
   &__del {
     position: absolute; top: -10px; right: -10px; z-index: 3;
     width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
-    background: #ef4444; color: #fff; display: flex; align-items: center; justify-content: center;
+    background: var(--color-danger); color: #fff; display: flex; align-items: center; justify-content: center;
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     .material-icons { font-size: 15px; }
-    &:hover { background: #dc2626; }
+    &:hover { background: var(--color-danger); }
   }
   &__resize {
     position: absolute; right: -7px; bottom: -7px; z-index: 3;
     width: 16px; height: 16px; border-radius: 50%; cursor: nwse-resize;
-    background: #db2777; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    background: #db2777; border: 2px solid var(--color-surface); box-shadow: 0 1px 4px rgba(0,0,0,0.3);
   }
 }
 

@@ -9,12 +9,15 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatAutocompleteModule, MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { Subject, debounceTime, distinctUntilChanged, switchMap, of, catchError } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { ConfirmService } from '../../../ui/confirm.service';
+import { ToastService } from '../../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
 
 export interface ClientLocation {
   id: number;
@@ -55,7 +58,7 @@ interface PageResult {
   selector: 'app-client-locations',
   standalone: true,
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatTooltipModule, MatProgressSpinnerModule, MatSnackBarModule, MatDialogModule, MatPaginatorModule],
+    MatTooltipModule, MatDialogModule, MatPaginatorModule, SkeletonRowsComponent, EmptyStateComponent],
   template: `
     <div class="cl-wrap">
 
@@ -80,7 +83,7 @@ interface PageResult {
           <mat-form-field appearance="outline" class="cl-key-input">
             <mat-label>New API key</mat-label>
             <input matInput [(ngModel)]="newKey" placeholder="Paste Google API key" autocomplete="off" [type]="showKey ? 'text' : 'password'">
-            <button mat-icon-button matSuffix (click)="showKey = !showKey" type="button"><mat-icon>{{ showKey ? 'visibility_off' : 'visibility' }}</mat-icon></button>
+            <button [attr.aria-label]="showKey ? 'Hide key' : 'Show key'" mat-icon-button matSuffix (click)="showKey = !showKey" type="button"><mat-icon>{{ showKey ? 'visibility_off' : 'visibility' }}</mat-icon></button>
           </mat-form-field>
           <button mat-raised-button color="primary" [disabled]="!newKey.trim() || keySaving" (click)="saveKey()"><mat-icon>save</mat-icon> Save key</button>
           <button mat-stroked-button [disabled]="keyTesting" (click)="testKey()" matTooltip="Geocode a known address with the active key"><mat-icon>network_check</mat-icon> Test</button>
@@ -133,8 +136,8 @@ interface PageResult {
 
       <!-- ═══ Table ═══ -->
       <div class="cl-table-wrap">
-        @if (loading) { <div class="cl-loading"><mat-spinner diameter="32"></mat-spinner> Loading client locations…</div> }
-        <table class="cl-table">
+        @if (loading) { <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows> } @else {
+        <table class="app-table cl-table">
           <thead><tr>
             <th style="width:36px;"></th>
             <th>Customer</th>
@@ -156,7 +159,7 @@ interface PageResult {
                 </td>
                 <td class="cl-addr">{{ r.address || '—' }}</td>
                 <td>{{ r.city || '—' }}<div class="cl-sub">{{ r.province || '' }}{{ r.postalCode ? ' · ' + r.postalCode : '' }}</div></td>
-                <td class="num mono">
+                <td class="num ref">
                   @if (r.latitude && r.longitude) { {{ r.latitude | number:'1.5-5' }}, {{ r.longitude | number:'1.5-5' }} }
                   @else { <span class="cl-missing">missing</span> }
                 </td>
@@ -169,69 +172,76 @@ interface PageResult {
                 <td class="cl-actions">
                   <button mat-stroked-button color="primary" (click)="edit(r)"><mat-icon>{{ r.addressVerified ? 'edit_location_alt' : 'fact_check' }}</mat-icon> {{ r.addressVerified ? 'Edit' : 'Verify' }}</button>
                   @if (r.addressVerified) {
-                    <button mat-icon-button matTooltip="Remove verification" (click)="unverify(r)"><mat-icon>remove_done</mat-icon></button>
+                    <button aria-label="Remove verification" mat-icon-button matTooltip="Remove verification" (click)="unverify(r)"><mat-icon>remove_done</mat-icon></button>
                   }
                 </td>
               </tr>
-            } @empty { @if (!loading) { <tr><td colspan="7" class="cl-empty">No customers match</td></tr> } }
+            } @empty {
+              <tr><td colspan="7">
+                @if (hasFilters) {
+                  <app-empty-state icon="filter_alt_off" title="No customers match these filters" message="Try another search, province or filter.">
+                    <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
+                  </app-empty-state>
+                } @else {
+                  <app-empty-state icon="store" title="No customers yet" message="Customers imported into the database show up here with their delivery address."></app-empty-state>
+                }
+              </td></tr>
+            }
           </tbody>
         </table>
+        }
       </div>
       <mat-paginator [length]="total" [pageIndex]="page - 1" [pageSize]="pageSize" [pageSizeOptions]="[25, 50, 100, 200]" (page)="onPage($event)" showFirstLastButtons></mat-paginator>
     </div>
   `,
   styles: [`
     .cl-wrap { display: flex; flex-direction: column; gap: 16px; }
-    .cl-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; }
+    .cl-card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 12px; padding: 16px 18px; }
     .cl-key-head { display: flex; gap: 12px; align-items: flex-start; }
-    .cl-key-head > mat-icon { color: #7c3aed; font-size: 28px; width: 28px; height: 28px; }
-    .cl-key-head h3 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
-    .cl-key-head p { margin: 2px 0 0; font-size: 12.5px; color: #64748b; }
-    .cl-key-src { margin-left: auto; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: 999px; background: #f1f5f9; color: #475569; white-space: nowrap; }
-    .cl-key-src.admin { background: #ede9fe; color: #5b21b6; }
+    .cl-key-head > mat-icon { color: var(--color-primary); font-size: 28px; width: 28px; height: 28px; }
+    .cl-key-head h3 { margin: 0; font-size: var(--text-lg); font-weight: 700; color: var(--color-text); }
+    .cl-key-head p { margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-text-3); }
+    .cl-key-src { margin-left: auto; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: 999px; background: var(--color-surface-2); color: var(--color-text-2); white-space: nowrap; }
+    .cl-key-src.admin { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
     .cl-key-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
     .cl-key-row mat-form-field { margin-bottom: -1.25em; }
     .cl-key-current { display: flex; flex-direction: column; min-width: 240px; }
-    .cl-key-current .lbl { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; }
-    .cl-key-current code { font-size: 14px; font-weight: 700; color: #0f172a; }
-    .cl-key-current small { font-size: 11px; color: #94a3b8; }
+    .cl-key-current .lbl { font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); font-weight: 600; }
+    .cl-key-current code { font-size: var(--text-md); font-weight: 700; color: var(--color-text); }
+    .cl-key-current small { font-size: var(--text-xs); color: var(--color-text-3); }
     .cl-key-input { flex: 1; min-width: 320px; }
-    .cl-key-test { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; padding: 8px 12px; border-radius: 8px; }
-    .cl-key-test.ok { background: #dcfce7; color: #166534; } .cl-key-test.bad { background: #fee2e2; color: #991b1b; }
+    .cl-key-test { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: var(--text-sm); padding: 8px 12px; border-radius: 8px; }
+    .cl-key-test.ok { background: var(--color-ok-soft); color: var(--color-ok); } .cl-key-test.bad { background: var(--color-danger-soft); color: var(--color-danger); }
     .cl-kpis { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
-    .cl-kpi { background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 10px 18px; display: flex; flex-direction: column; min-width: 130px; cursor: pointer; text-align: left; font-family: inherit; }
-    .cl-kpi b { font-size: 22px; color: #0f172a; } .cl-kpi span { font-size: 12px; color: #64748b; font-weight: 600; }
-    .cl-kpi.on { border-color: #2563eb; background: #eff6ff; }
-    .cl-kpi.k-purple b { color: #7c3aed; } .cl-kpi.k-purple.on { border-color: #7c3aed; background: #f5f3ff; }
-    .cl-kpi.k-amber b { color: #d97706; } .cl-kpi.k-amber.on { border-color: #d97706; background: #fffbeb; }
-    .cl-kpi.k-red b { color: #dc2626; } .cl-kpi.k-red.on { border-color: #dc2626; background: #fef2f2; }
-    .cl-legend { margin-left: auto; display: flex; flex-direction: column; justify-content: center; gap: 4px; font-size: 12px; color: #475569; }
+    .cl-kpi { background: var(--color-surface); border: 2px solid var(--color-line); border-radius: 12px; padding: 10px 18px; display: flex; flex-direction: column; min-width: 130px; cursor: pointer; text-align: left; font-family: inherit; }
+    .cl-kpi b { font-size: var(--text-2xl); color: var(--color-text); } .cl-kpi span { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 600; }
+    .cl-kpi.on { border-color: var(--color-primary); background: var(--color-primary-soft); }
+    .cl-kpi.k-purple b { color: var(--color-cat-purple); } .cl-kpi.k-purple.on { border-color: var(--color-cat-purple); background: var(--color-cat-purple-soft); }
+    .cl-kpi.k-amber b { color: var(--color-warn); } .cl-kpi.k-amber.on { border-color: var(--color-warn); background: var(--color-warn-soft); }
+    .cl-kpi.k-red b { color: var(--color-danger); } .cl-kpi.k-red.on { border-color: var(--color-danger); background: var(--color-danger-soft); }
+    .cl-legend { margin-left: auto; display: flex; flex-direction: column; justify-content: center; gap: 4px; font-size: var(--text-xs); color: var(--color-text-2); }
     .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-    .dot.green { background: #4caf50; } .dot.purple { background: #7c3aed; }
+    .dot.green { background: var(--color-ok); } .dot.purple { background: var(--color-cat-purple); }
     .cl-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
     .cl-toolbar mat-form-field { margin-bottom: -1.25em; }
     .cl-search { flex: 1; min-width: 300px; } .cl-prov { width: 200px; } .cl-spacer { flex: 1; }
-    .cl-table-wrap { position: relative; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: auto; max-height: 62vh; }
-    .cl-loading { position: absolute; inset: 0; background: rgba(255,255,255,.75); display: flex; align-items: center; justify-content: center; gap: 12px; z-index: 2; color: #475569; font-weight: 600; }
-    .cl-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
-    .cl-table th { position: sticky; top: 0; z-index: 1; background: #f8fafc; text-align: left; padding: 10px 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-bottom: 2px solid #e2e8f0; }
-    .cl-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; color: #0f172a; }
-    .cl-table tr.v td { background: #faf5ff; }
-    .cl-table .num { text-align: right; } .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: nowrap; }
-    .cl-name { font-weight: 700; } .cl-sub { font-size: 11.5px; color: #64748b; margin-top: 2px; }
+    .cl-table-wrap { position: relative; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 12px; overflow: auto; max-height: 62vh; }
+    .cl-table td { vertical-align: top; }
+    .cl-table tr.v td { background: var(--color-cat-purple-soft); }
+    .cl-name { font-weight: 700; } .cl-sub { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 2px; }
     .cl-addr { max-width: 420px; }
-    .cl-pin.purple { color: #7c3aed; } .cl-pin.green { color: #4caf50; } .cl-pin.grey { color: #cbd5e1; }
-    .cl-missing { color: #dc2626; font-weight: 700; font-size: 12px; }
-    .cl-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
-    .cl-badge.purple { background: #ede9fe; color: #5b21b6; } .cl-badge.amber { background: #fef3c7; color: #92400e; }
+    .cl-pin.purple { color: var(--color-cat-purple); } .cl-pin.green { color: var(--color-ok); } .cl-pin.grey { color: var(--color-line-strong); }
+    .cl-missing { color: var(--color-danger); font-weight: 700; font-size: var(--text-xs); }
+    .cl-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700; }
+    .cl-badge.purple { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); } .cl-badge.amber { background: var(--color-warn-soft); color: var(--color-warn); }
     .cl-actions { white-space: nowrap; text-align: right; }
-    .cl-empty { text-align: center; color: #94a3b8; padding: 30px; }
   `]
 })
 export class ClientLocationsComponent implements OnInit {
   private http = inject(HttpClient);
-  private snack = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private dialog = inject(MatDialog);
+  private readonly confirmDialog = inject(ConfirmService);
   private api = `${environment.apiUrl}/admin/client-locations`;
 
   rows: ClientLocation[] = [];
@@ -252,6 +262,11 @@ export class ClientLocationsComponent implements OnInit {
   }
 
   setFilter(f: typeof this.filter): void { this.filter = f; this.page = 1; this.reload(); }
+  get hasFilters(): boolean { return this.filter !== 'all' || !!this.search.trim() || !!this.province; }
+  clearFilters(): void {
+    this.filter = 'all'; this.province = ''; this.page = 1;
+    if (this.search) this.search$.next(''); else this.reload();
+  }
   onPage(e: PageEvent): void { this.page = e.pageIndex + 1; this.pageSize = e.pageSize; this.reload(); }
 
   reload(): void {
@@ -261,7 +276,7 @@ export class ClientLocationsComponent implements OnInit {
     if (this.province) params.province = this.province;
     this.http.get<PageResult>(this.api, { params }).subscribe({
       next: r => { this.rows = r.items; this.total = r.total; this.summary = r.summary; this.loading = false; },
-      error: e => { this.loading = false; this.snack.open(e?.error?.message || 'Failed to load client locations', 'Close', { duration: 5000 }); }
+      error: e => { this.loading = false; this.toast.error(e?.error?.message || 'Failed to load client locations'); }
     });
   }
 
@@ -275,11 +290,16 @@ export class ClientLocationsComponent implements OnInit {
     });
   }
 
-  unverify(r: ClientLocation): void {
-    if (!confirm(`Remove verification from ${r.name}? The address stays, but tripsheets will show it green instead of purple.`)) return;
+  async unverify(r: ClientLocation): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Remove verification from ${r.name}?`,
+      message: 'The address stays, but tripsheets will show it green instead of purple.',
+      confirmText: 'Remove verification',
+      danger: true
+    }))) return;
     this.http.post<ClientLocation>(`${this.api}/${r.id}/unverify`, {}).subscribe({
-      next: () => { this.snack.open(`Verification removed for ${r.name}`, 'Close', { duration: 3000 }); this.reload(); },
-      error: e => this.snack.open(e?.error?.message || 'Failed', 'Close', { duration: 4000 })
+      next: () => { this.toast.done(`Verification removed for ${r.name}`); this.reload(); },
+      error: e => this.toast.error(e?.error?.message || `Couldn't remove verification for ${r.name}`)
     });
   }
 
@@ -288,13 +308,18 @@ export class ClientLocationsComponent implements OnInit {
   saveKey(): void {
     this.keySaving = true; this.keyTestResult = null;
     this.http.put<any>(`${this.api}/google-api-key`, { apiKey: this.newKey.trim() }).subscribe({
-      next: k => { this.keyInfo = k; this.newKey = ''; this.keySaving = false; this.snack.open('Google API key saved — active immediately', 'Close', { duration: 4000 }); },
-      error: e => { this.keySaving = false; this.snack.open(e?.error?.message || 'Failed to save key', 'Close', { duration: 5000 }); }
+      next: k => { this.keyInfo = k; this.newKey = ''; this.keySaving = false; this.toast.done('Google API key saved — active immediately'); },
+      error: e => { this.keySaving = false; this.toast.error(e?.error?.message || 'Failed to save key'); }
     });
   }
-  resetKey(): void {
-    if (!confirm('Remove the admin-configured key and fall back to the built-in default?')) return;
-    this.http.put<any>(`${this.api}/google-api-key`, { apiKey: '' }).subscribe({ next: k => { this.keyInfo = k; this.snack.open('Reverted to built-in key', 'Close', { duration: 3000 }); } });
+  async resetKey(): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: 'Reset the Google API key?',
+      message: 'The admin-configured key is removed and the app falls back to the built-in default key.',
+      confirmText: 'Reset key',
+      danger: true
+    }))) return;
+    this.http.put<any>(`${this.api}/google-api-key`, { apiKey: '' }).subscribe({ next: k => { this.keyInfo = k; this.toast.done('Reverted to built-in key'); } });
   }
   testKey(): void {
     this.keyTesting = true; this.keyTestResult = null;
@@ -311,7 +336,7 @@ export class ClientLocationsComponent implements OnInit {
   standalone: true,
   imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTooltipModule, MatProgressSpinnerModule, MatAutocompleteModule],
   template: `
-    <h2 mat-dialog-title><mat-icon style="vertical-align:middle;margin-right:8px;color:#7c3aed;">verified</mat-icon> Verify delivery address</h2>
+    <h2 mat-dialog-title><mat-icon style="vertical-align:middle;margin-right:8px;color:var(--color-cat-purple);">verified</mat-icon> Verify delivery address</h2>
     <mat-dialog-content class="vd">
       <div class="vd-cust">
         <b>{{ data.row.name }}</b>
@@ -335,7 +360,7 @@ export class ClientLocationsComponent implements OnInit {
       <mat-form-field appearance="outline" class="full">
         <mat-label>Delivery address</mat-label>
         <input matInput [(ngModel)]="address" (ngModelChange)="onAddressTyped($event)" [matAutocomplete]="auto" placeholder="Start typing — Google suggestions appear below" autocomplete="off">
-        @if (suggesting) { <mat-spinner matSuffix diameter="18" style="margin-right:8px;"></mat-spinner> } @else { <mat-icon matSuffix style="color:#94a3b8;">travel_explore</mat-icon> }
+        @if (suggesting) { <mat-spinner matSuffix diameter="18" style="margin-right:8px;"></mat-spinner> } @else { <mat-icon matSuffix style="color:var(--color-text-3);">travel_explore</mat-icon> }
         <mat-autocomplete #auto="matAutocomplete" (optionSelected)="onSuggestionPicked($event)" class="vd-auto">
           @for (s of suggestions; track s.placeId) {
             <mat-option [value]="s.description">
@@ -343,7 +368,7 @@ export class ClientLocationsComponent implements OnInit {
             </mat-option>
           }
         </mat-autocomplete>
-        <mat-hint>@if (suggestError) { <span style="color:#dc2626;">{{ suggestError }}</span> } @else { Pick a Google suggestion to auto-fill coordinates, or type freely and click Geocode. }</mat-hint>
+        <mat-hint>@if (suggestError) { <span style="color:var(--color-danger);">{{ suggestError }}</span> } @else { Pick a Google suggestion to auto-fill coordinates, or type freely and click Geocode. }</mat-hint>
       </mat-form-field>
 
       <div class="vd-row">
@@ -358,7 +383,7 @@ export class ClientLocationsComponent implements OnInit {
           @if (geocoding) { <mat-spinner diameter="18"></mat-spinner> } @else { <mat-icon>my_location</mat-icon> } Geocode with Google
         </button>
         @if (latitude && longitude) {
-          <a mat-icon-button [href]="'https://www.google.com/maps?q=' + latitude + ',' + longitude" target="_blank" matTooltip="Open in Google Maps"><mat-icon>map</mat-icon></a>
+          <a aria-label="Open in Google Maps" mat-icon-button [href]="'https://www.google.com/maps?q=' + latitude + ',' + longitude" target="_blank" matTooltip="Open in Google Maps"><mat-icon>map</mat-icon></a>
         }
       </div>
       @if (geoResult) {
@@ -379,11 +404,11 @@ export class ClientLocationsComponent implements OnInit {
         <mat-label>Delivery instructions (optional)</mat-label>
         <input matInput [(ngModel)]="instructions" placeholder="e.g. Deliver to pharmacy stores, gate 3, ask for Sr Dlamini">
       </mat-form-field>
-      <p class="vd-note"><mat-icon>info</mat-icon> Verifying saves this as the customer's default delivery address, records your name and the date, and shows the stop in <b style="color:#7c3aed;">purple</b> on tripsheets so planners know it has been checked.</p>
+      <p class="vd-note"><mat-icon>info</mat-icon> Verifying saves this as the customer's default delivery address, records your name and the date, and shows the stop in <b style="color:var(--color-cat-purple);">purple</b> on tripsheets so planners know it has been checked.</p>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" [disabled]="!canSave() || saving" (click)="save()" style="background:#7c3aed;">
+      <button mat-flat-button color="primary" [disabled]="!canSave() || saving" (click)="save()">
         <mat-icon>verified</mat-icon> {{ data.row.addressVerified ? 'Save & keep verified' : 'Verify address' }}
       </button>
     </mat-dialog-actions>
@@ -391,31 +416,31 @@ export class ClientLocationsComponent implements OnInit {
   styles: [`
     .vd { display: flex; flex-direction: column; gap: 4px; padding-top: 6px !important; }
     .vd-cust { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
-    .vd-cust b { font-size: 16px; } .vd-cust span { font-size: 12.5px; color: #64748b; }
-    .vd-badge { display: inline-block; margin-top: 4px; background: #ede9fe; color: #5b21b6 !important; font-weight: 600; padding: 2px 10px; border-radius: 999px; width: fit-content; }
-    .vd-saved { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow: auto; }
-    .vd-lbl { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; margin-bottom: 4px; }
-    .vd-saved-item { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 10px; cursor: pointer; text-align: left; font-family: inherit; font-size: 13px; }
-    .vd-saved-item:hover { background: #eff6ff; } .vd-saved-item.cur { border-color: #7c3aed; background: #f5f3ff; }
-    .vd-saved-item mat-icon { font-size: 18px; width: 18px; height: 18px; color: #64748b; } .vd-saved-item.cur mat-icon { color: #7c3aed; }
-    .vd-saved-item .m { font-size: 11px; color: #94a3b8; white-space: nowrap; }
+    .vd-cust b { font-size: var(--text-lg); } .vd-cust span { font-size: var(--text-sm); color: var(--color-text-3); }
+    .vd-cust .vd-badge { display: inline-block; margin-top: 4px; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); font-weight: 600; padding: 2px 10px; border-radius: 999px; width: fit-content; }
+    .vd-saved { border: 1px solid var(--color-line); border-radius: 10px; padding: 8px 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow: auto; }
+    .vd-lbl { font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); font-weight: 600; margin-bottom: 4px; }
+    .vd-saved-item { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 8px; padding: 6px 10px; cursor: pointer; text-align: left; font-family: inherit; font-size: var(--text-sm); color: var(--color-text); }
+    .vd-saved-item:hover { background: var(--color-primary-soft); } .vd-saved-item.cur { border-color: var(--color-cat-purple); background: var(--color-cat-purple-soft); }
+    .vd-saved-item mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-text-3); } .vd-saved-item.cur mat-icon { color: var(--color-cat-purple); }
+    .vd-saved-item .m { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; }
     .full { width: 100%; }
     .vd-sug { display: flex; gap: 8px; align-items: center; line-height: 1.2; padding: 2px 0; }
-    .vd-sug mat-icon { color: #7c3aed; font-size: 18px; width: 18px; height: 18px; }
-    .vd-sug b { display: block; font-size: 13px; } .vd-sug small { font-size: 11.5px; color: #64748b; }
+    .vd-sug mat-icon { color: var(--color-cat-purple); font-size: 18px; width: 18px; height: 18px; }
+    .vd-sug b { display: block; font-size: var(--text-sm); } .vd-sug small { font-size: var(--text-xs); color: var(--color-text-3); }
     .vd-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .vd-row mat-form-field { flex: 1; min-width: 150px; } .vd-row .short { flex: 0 0 130px; min-width: 130px; }
     .vd-geo { height: 48px; margin-bottom: 1.25em; white-space: nowrap; }
-    .vd-geo-res { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 12px; }
-    .vd-geo-res.ok { background: #dcfce7; color: #166534; } .vd-geo-res.warn { background: #fef3c7; color: #92400e; } .vd-geo-res.bad { background: #fee2e2; color: #991b1b; }
-    .vd-geo-res .s { font-size: 12px; opacity: .85; margin-top: 2px; }
-    .vd-note { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: #64748b; margin: 0; }
-    .vd-note mat-icon { color: #2563eb; font-size: 18px; width: 18px; height: 18px; }
+    .vd-geo-res { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; font-size: var(--text-sm); margin-bottom: 12px; }
+    .vd-geo-res.ok { background: var(--color-ok-soft); color: var(--color-ok); } .vd-geo-res.warn { background: var(--color-warn-soft); color: var(--color-warn); } .vd-geo-res.bad { background: var(--color-danger-soft); color: var(--color-danger); }
+    .vd-geo-res .s { font-size: var(--text-xs); opacity: .85; margin-top: 2px; }
+    .vd-note { display: flex; gap: 8px; align-items: center; font-size: var(--text-sm); color: var(--color-text-3); margin: 0; }
+    .vd-note mat-icon { color: var(--color-primary); font-size: 18px; width: 18px; height: 18px; }
   `]
 })
 export class VerifyClientLocationDialog implements OnInit {
   private http = inject(HttpClient);
-  private snack = inject(MatSnackBar);
+  private toast = inject(ToastService);
   address = ''; city = ''; province = ''; postalCode = '';
   latitude: number | null = null; longitude: number | null = null; placeId: string | null = null;
   instructions = '';
@@ -501,8 +526,8 @@ export class VerifyClientLocationDialog implements OnInit {
       deliveryInstructions: this.instructions || null, requireCoordinates: true
     };
     this.http.put<ClientLocation>(`${this.data.api}/${this.data.row.id}/verify`, body).subscribe({
-      next: r => { this.snack.open(`✓ ${r.name} verified — will show purple on tripsheets`, 'Close', { duration: 4000 }); this.ref.close(r); },
-      error: e => { this.saving = false; this.snack.open(e?.error?.message || 'Failed to verify address', 'Close', { duration: 5000 }); }
+      next: r => { this.toast.done(`${r.name} verified — will show purple on tripsheets`); this.ref.close(r); },
+      error: e => { this.saving = false; this.toast.error(e?.error?.message || 'Failed to verify address'); }
     });
   }
 }

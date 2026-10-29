@@ -19,6 +19,11 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Subject, takeUntil } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { ConfirmService } from '../../../ui/confirm.service';
+import { ToastService } from '../../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
+import { StatusChipComponent } from '../../../ui/status-chip/status-chip.component';
 import {
   HBA1CService,
   HBA1CProjectDashboard,
@@ -54,14 +59,16 @@ import {
     MatDividerModule,
     MatFormFieldModule,
     MatInputModule,
-    FormsModule
+    FormsModule,
+    SkeletonRowsComponent,
+    EmptyStateComponent,
+    StatusChipComponent
   ],
   template: `
     <!-- Hero Header -->
     <div class="hero-header">
-      <div class="hero-bg"></div>
       <div class="hero-content">
-        <button mat-button (click)="goBack.emit()" class="back-btn">
+        <button mat-stroked-button (click)="goBack.emit()" class="back-btn">
           <mat-icon>arrow_back</mat-icon> Back to Projects
         </button>
         <div class="hero-title-block">
@@ -69,7 +76,7 @@ import {
             <mat-icon>biotech</mat-icon>
           </div>
           <div class="hero-text">
-            <h1>HBA1C Medical Management</h1>
+            <h2>HBA1C Medical Management</h2>
             <p>National training, inventory & sales dashboard</p>
           </div>
         </div>
@@ -79,10 +86,10 @@ import {
             <span>{{ loading ? 'Connecting...' : isConnected ? 'Live' : 'Offline' }}</span>
           </div>
           @if (!loading && isConnected) {
-            <button mat-flat-button class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
+            <button mat-flat-button color="primary" class="request-delivery-btn" (click)="showDeliveryPasswordPrompt()">
               <mat-icon>local_shipping</mat-icon> Request Delivery
             </button>
-            <button mat-flat-button class="refresh-btn" (click)="loadDashboard()" matTooltip="Refresh all data">
+            <button mat-stroked-button class="refresh-btn" (click)="loadDashboard()" matTooltip="Refresh all data">
               <mat-icon>refresh</mat-icon> Refresh
             </button>
           }
@@ -144,7 +151,6 @@ import {
       <!-- KPI Cards -->
       <div class="kpi-grid">
         <div class="kpi-card kpi-blue clickable" (click)="openKpiDialog('training')">
-          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>school</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.trainingStats?.totalSessions || 0 | number }}</span>
@@ -153,7 +159,6 @@ import {
           <span class="kpi-sub">{{ dashboard?.trainingStats?.completedSessions || 0 }} completed</span>
         </div>
         <div class="kpi-card kpi-green clickable" (click)="openKpiDialog('participants')">
-          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>groups</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.trainingStats?.totalParticipants || 0 | number }}</span>
@@ -162,7 +167,6 @@ import {
           <span class="kpi-sub">Across all provinces</span>
         </div>
         <div class="kpi-card kpi-orange clickable" (click)="openKpiDialog('trainers')">
-          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>person</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.nationalTotals?.totalTrainers || 0 | number }}</span>
@@ -171,7 +175,6 @@ import {
           <span class="kpi-sub">Active trainers</span>
         </div>
         <div class="kpi-card kpi-purple clickable" (click)="openKpiDialog('deliveries')">
-          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>local_shipping</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.nationalTotals?.totalDeliveries || 0 | number }}</span>
@@ -180,7 +183,6 @@ import {
           <span class="kpi-sub">Equipment deliveries</span>
         </div>
         <div class="kpi-card kpi-teal clickable" (click)="openKpiDialog('revenue')">
-          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>point_of_sale</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">R{{ dashboard?.salesStats?.totalRevenue || 0 | number:'1.0-0' }}</span>
@@ -189,7 +191,6 @@ import {
           <span class="kpi-sub">{{ dashboard?.salesStats?.totalSales || 0 }} sales</span>
         </div>
         <div class="kpi-card kpi-red clickable" (click)="openKpiDialog('inventory')">
-          <div class="kpi-glow"></div>
           <div class="kpi-icon-wrap"><mat-icon>inventory_2</mat-icon></div>
           <div class="kpi-body">
             <span class="kpi-number">{{ dashboard?.inventoryStats?.totalItems || 0 | number }}</span>
@@ -203,7 +204,7 @@ import {
       @if (activeDialog) {
         <div class="dialog-backdrop" (click)="closeDialog()"></div>
         <div class="dialog-panel" [class]="'dialog-' + activeDialog">
-          <div class="dialog-header" [class]="'dh-' + activeDialog">
+          <div class="dialog-header">
             <div class="dialog-title-group">
               <div class="dialog-icon-ring">
                 @switch (activeDialog) {
@@ -238,17 +239,14 @@ import {
                 </p>
               </div>
             </div>
-            <button class="dialog-close" (click)="closeDialog()">
+            <button mat-icon-button aria-label="Close" class="dialog-close" (click)="closeDialog()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
 
           <div class="dialog-body">
             @if (dialogLoading) {
-              <div class="dialog-loading">
-                <mat-spinner diameter="36" strokeWidth="3"></mat-spinner>
-                <p>Loading data...</p>
-              </div>
+              <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
             } @else {
 
               <!-- ── Training Sessions Dialog ── -->
@@ -273,24 +271,24 @@ import {
                 </div>
                 <h4 class="dialog-section-title"><mat-icon>map</mat-icon> By Province</h4>
                 <div class="dialog-table-wrap">
-                  <table class="dialog-table">
-                    <thead><tr><th>Province</th><th class="right">Sessions</th><th class="right">Participants</th><th class="right">Trainers</th></tr></thead>
+                  <table class="app-table">
+                    <thead><tr><th>Province</th><th class="num">Sessions</th><th class="num">Participants</th><th class="num">Trainers</th></tr></thead>
                     <tbody>
                       @for (p of dashboard?.provinceStats || []; track p.province) {
                         <tr>
                           <td class="primary-cell">{{ p.province }}</td>
-                          <td class="right mono-text">{{ p.sessions }}</td>
-                          <td class="right mono-text">{{ p.participants | number }}</td>
-                          <td class="right mono-text">{{ p.trainers }}</td>
+                          <td class="num">{{ p.sessions }}</td>
+                          <td class="num">{{ p.participants | number }}</td>
+                          <td class="num">{{ p.trainers }}</td>
                         </tr>
                       }
                     </tbody>
                     <tfoot>
-                      <tr class="total-row">
-                        <td><strong>Total</strong></td>
-                        <td class="right mono-text"><strong>{{ getTotalSessions() }}</strong></td>
-                        <td class="right mono-text"><strong>{{ getTotalParticipants() | number }}</strong></td>
-                        <td class="right mono-text"><strong>{{ dashboard?.nationalTotals?.totalTrainers || 0 }}</strong></td>
+                      <tr>
+                        <td>Total</td>
+                        <td class="num">{{ getTotalSessions() }}</td>
+                        <td class="num">{{ getTotalParticipants() | number }}</td>
+                        <td class="num">{{ dashboard?.nationalTotals?.totalTrainers || 0 }}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -357,9 +355,7 @@ import {
                           @if (t.email) { <span class="trainer-detail">{{ t.email }}</span> }
                           @if (t.phone) { <span class="trainer-detail">{{ t.phone }}</span> }
                         </div>
-                        <div class="trainer-badge" [class.active]="t.isActive" [class.inactive]="!t.isActive">
-                          {{ t.isActive ? 'Active' : 'Inactive' }}
-                        </div>
+                        <app-status-chip [status]="t.isActive ? 'Active' : 'Inactive'" [tone]="t.isActive ? 'ok' : 'danger'"></app-status-chip>
                       </div>
                     }
                   </div>
@@ -381,22 +377,23 @@ import {
                 @if (dashboard?.equipmentStats?.length) {
                   <h4 class="dialog-section-title"><mat-icon>precision_manufacturing</mat-icon> Equipment Order Summary</h4>
                   <div class="dialog-table-wrap">
-                    <table class="dialog-table">
-                      <thead><tr><th>Equipment</th><th class="right">Orders</th><th class="right">Qty</th><th class="right">Value</th></tr></thead>
+                    <table class="app-table">
+                      <thead><tr><th>Equipment</th><th class="num">Orders</th><th class="num">Qty</th><th class="num">Value</th></tr></thead>
                       <tbody>
                         @for (e of dashboard?.equipmentStats || []; track e.equipmentType) {
                           <tr>
                             <td class="primary-cell">{{ e.equipmentType }}</td>
-                            <td class="right mono-text">{{ e.totalOrdered | number }}</td>
-                            <td class="right mono-text">{{ getItemBreakdownTotal(e, 'qty') | number }}</td>
-                            <td class="right mono-text">R{{ e.totalOrderValue | number:'1.0-0' }}</td>
+                            <td class="num">{{ e.totalOrdered | number }}</td>
+                            <td class="num">{{ getItemBreakdownTotal(e, 'qty') | number }}</td>
+                            <td class="num">R{{ e.totalOrderValue | number:'1.0-0' }}</td>
                           </tr>
                         }
                       </tbody>
                     </table>
                   </div>
                 } @else {
-                  <div class="dialog-empty"><mat-icon>local_shipping</mat-icon><p>No delivery data available</p></div>
+                  <app-empty-state icon="local_shipping" title="No equipment deliveries yet"
+                                   message="Equipment orders show here once the HBA1C system records a delivery."></app-empty-state>
                 }
               }
 
@@ -473,14 +470,14 @@ import {
                 @if (dashboard?.inventoryStats?.categoryStats?.length) {
                   <h4 class="dialog-section-title"><mat-icon>category</mat-icon> By Category</h4>
                   <div class="dialog-table-wrap">
-                    <table class="dialog-table">
-                      <thead><tr><th>Category</th><th class="right">Items</th><th class="right">Value</th></tr></thead>
+                    <table class="app-table">
+                      <thead><tr><th>Category</th><th class="num">Items</th><th class="num">Value</th></tr></thead>
                       <tbody>
                         @for (c of dashboard?.inventoryStats?.categoryStats || []; track c.category) {
                           <tr>
                             <td class="primary-cell">{{ c.categoryName || 'Category ' + c.category }}</td>
-                            <td class="right mono-text">{{ c.itemCount }}</td>
-                            <td class="right mono-text">R{{ c.totalValue | number:'1.0-0' }}</td>
+                            <td class="num">{{ c.itemCount }}</td>
+                            <td class="num">R{{ c.totalValue | number:'1.0-0' }}</td>
                           </tr>
                         }
                       </tbody>
@@ -490,15 +487,15 @@ import {
                 @if (dashboard?.lowStockItems?.length) {
                   <h4 class="dialog-section-title warn-title"><mat-icon>warning</mat-icon> Low Stock Alerts</h4>
                   <div class="dialog-table-wrap">
-                    <table class="dialog-table">
-                      <thead><tr><th>Item</th><th>SKU</th><th class="right">Available</th><th class="right">Reorder Level</th></tr></thead>
+                    <table class="app-table">
+                      <thead><tr><th>Item</th><th>SKU</th><th class="num">Available</th><th class="num">Reorder Level</th></tr></thead>
                       <tbody>
                         @for (item of dashboard?.lowStockItems || []; track item.id) {
-                          <tr class="low-stock-row">
+                          <tr>
                             <td class="primary-cell">{{ item.name }}</td>
-                            <td class="mono-text">{{ item.sku }}</td>
-                            <td class="right mono-text danger-val">{{ item.stockAvailable }}</td>
-                            <td class="right mono-text">{{ item.reorderLevel }}</td>
+                            <td class="ref">{{ item.sku }}</td>
+                            <td class="num danger-val">{{ item.stockAvailable }}</td>
+                            <td class="num">{{ item.reorderLevel }}</td>
                           </tr>
                         }
                       </tbody>
@@ -529,7 +526,7 @@ import {
           </mat-form-field>
           <div class="pwd-actions">
             <button mat-stroked-button (click)="cancelDeliveryPassword()">Cancel</button>
-            <button mat-raised-button color="primary" (click)="verifyDeliveryPassword()">
+            <button mat-flat-button color="primary" (click)="verifyDeliveryPassword()">
               <mat-icon>lock_open</mat-icon> Verify
             </button>
           </div>
@@ -550,7 +547,7 @@ import {
                 <p class="dlg-subtitle">Submit a delivery request to logistics</p>
               </div>
             </div>
-            <button class="dlg-close" (click)="closeDeliveryDialog()">
+            <button mat-icon-button aria-label="Close" class="dlg-close" (click)="closeDeliveryDialog()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -562,7 +559,7 @@ import {
                 <h3>Delivery Request Submitted!</h3>
                 <p>{{ deliverySuccessMsg }}</p>
                 <div class="dlg-success-actions">
-                  <button mat-flat-button class="btn-another" (click)="resetDeliveryForm()">
+                  <button mat-flat-button color="primary" (click)="resetDeliveryForm()">
                     <mat-icon>add</mat-icon> Request Another
                   </button>
                   <button mat-stroked-button (click)="closeDeliveryDialog()">
@@ -588,7 +585,7 @@ import {
                     <label class="dlg-label">Priority</label>
                     <select class="dlg-select" [(ngModel)]="deliveryForm.priority">
                       <option value="Normal">Normal</option>
-                      <option value="Urgent">🔴 Urgent</option>
+                      <option value="Urgent">Urgent</option>
                     </select>
                   </div>
                 </div>
@@ -633,7 +630,7 @@ import {
                       }
                     </div>
                     @if (addressVerified) {
-                      <span class="address-confirmed-text">✓ Address verified via Google</span>
+                      <span class="address-confirmed-text">Address verified via Google</span>
                     }
                   </div>
                 </div>
@@ -649,7 +646,7 @@ import {
                   <div class="dlg-preview">
                     <mat-icon>local_shipping</mat-icon>
                     <span>
-                      @if (deliveryForm.priority === 'Urgent') { 🔴 }
+                      @if (deliveryForm.priority === 'Urgent') { <span class="urgent-tag">Urgent</span> }
                       <strong>{{ deliveryForm.quantity }} {{ deliveryForm.unitOfMeasure }}</strong> &mdash;
                       {{ deliveryForm.description }}
                       @if (deliveryForm.invoiceNumber) { ({{ deliveryForm.invoiceNumber }}) }
@@ -659,7 +656,7 @@ import {
 
                 <div class="dlg-actions">
                   <button mat-stroked-button (click)="closeDeliveryDialog()" [disabled]="deliverySaving">Cancel</button>
-                  <button mat-flat-button class="btn-submit-delivery" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || !isDeliveryFormValid()">
+                  <button mat-flat-button color="primary" (click)="submitDeliveryRequest()" [disabled]="deliverySaving || !isDeliveryFormValid()">
                     @if (deliverySaving) {
                       <mat-spinner diameter="18" strokeWidth="2"></mat-spinner>
                       Submitting...
@@ -706,7 +703,7 @@ import {
                 <p class="dlg-subtitle">{{ editMode === 'create' ? 'Create a new record' : 'Update existing record' }}</p>
               </div>
             </div>
-            <button class="dlg-close" (click)="closeEditDialog()"><mat-icon>close</mat-icon></button>
+            <button mat-icon-button aria-label="Close" class="dlg-close" (click)="closeEditDialog()"><mat-icon>close</mat-icon></button>
           </div>
 
           <div class="dlg-body">
@@ -720,7 +717,7 @@ import {
                 <h3>{{ editMode === 'create' ? 'Created' : 'Updated' }} Successfully!</h3>
                 <p>The record has been saved.</p>
                 <div class="dlg-success-actions">
-                  <button mat-flat-button class="btn-another" (click)="closeEditDialog()"><mat-icon>close</mat-icon> Close</button>
+                  <button mat-flat-button color="primary" (click)="closeEditDialog()"><mat-icon>close</mat-icon> Close</button>
                 </div>
               </div>
             } @else {
@@ -1071,7 +1068,7 @@ import {
 
                 <div class="dlg-actions">
                   <button mat-stroked-button (click)="closeEditDialog()" [disabled]="editSaving">Cancel</button>
-                  <button mat-flat-button class="btn-submit-delivery" (click)="saveEditForm()" [disabled]="editSaving">
+                  <button mat-flat-button color="primary" (click)="saveEditForm()" [disabled]="editSaving">
                     @if (editSaving) {
                       <mat-spinner diameter="18" strokeWidth="2"></mat-spinner> Saving...
                     } @else {
@@ -1089,15 +1086,15 @@ import {
       @if (showStockDialog) {
         <div class="dlg-backdrop" (click)="closeStockDialog()"></div>
         <div class="dlg-panel stock-panel">
-          <div class="dlg-header stock-header">
+          <div class="dlg-header">
             <div class="dlg-title-group">
-              <div class="dlg-icon-ring stock-icon-ring"><mat-icon>sync</mat-icon></div>
+              <div class="dlg-icon-ring"><mat-icon>sync</mat-icon></div>
               <div>
                 <h2 class="dlg-title">Update Stock Levels</h2>
                 <p class="dlg-subtitle">Adjust inventory quantities</p>
               </div>
             </div>
-            <button class="dlg-close" (click)="closeStockDialog()"><mat-icon>close</mat-icon></button>
+            <button mat-icon-button aria-label="Close" class="dlg-close" (click)="closeStockDialog()"><mat-icon>close</mat-icon></button>
           </div>
           <div class="dlg-body">
             @if (stockSuccess) {
@@ -1106,7 +1103,7 @@ import {
                 <h3>Stock Updated!</h3>
                 <p>{{ stockSuccessMsg }}</p>
                 <div class="dlg-success-actions">
-                  <button mat-flat-button class="btn-another" (click)="resetStockForm()"><mat-icon>sync</mat-icon> Update Another</button>
+                  <button mat-flat-button color="primary" (click)="resetStockForm()"><mat-icon>sync</mat-icon> Update Another</button>
                   <button mat-stroked-button (click)="closeStockDialog()"><mat-icon>close</mat-icon> Close</button>
                 </div>
               </div>
@@ -1127,7 +1124,7 @@ import {
                 @if (stockForm.itemId > 0) {
                   <div class="stock-current-info">
                     <div class="sci-item"><span class="sci-label">Item</span><span class="sci-value">{{ stockForm.itemName }}</span></div>
-                    <div class="sci-item"><span class="sci-label">SKU</span><span class="sci-value mono-text">{{ stockForm.itemSku }}</span></div>
+                    <div class="sci-item"><span class="sci-label">SKU</span><span class="sci-value sci-ref">{{ stockForm.itemSku }}</span></div>
                     <div class="sci-item"><span class="sci-label">Current Stock</span><span class="sci-value" [class.danger-val]="stockForm.currentStock <= stockForm.reorderLevel">{{ stockForm.currentStock }}</span></div>
                     <div class="sci-item"><span class="sci-label">Reorder Level</span><span class="sci-value">{{ stockForm.reorderLevel }}</span></div>
                   </div>
@@ -1161,7 +1158,7 @@ import {
                 }
                 <div class="dlg-actions">
                   <button mat-stroked-button (click)="closeStockDialog()" [disabled]="stockSaving">Cancel</button>
-                  <button mat-flat-button class="btn-stock-save" (click)="saveStockUpdate()" [disabled]="stockSaving || stockForm.itemId === 0">
+                  <button mat-flat-button color="primary" (click)="saveStockUpdate()" [disabled]="stockSaving || stockForm.itemId === 0">
                     @if (stockSaving) {
                       <mat-spinner diameter="18" strokeWidth="2"></mat-spinner> Saving...
                     } @else {
@@ -1179,7 +1176,7 @@ import {
       @if (showDeleteDialog) {
         <div class="dlg-backdrop" (click)="closeDeleteDialog()"></div>
         <div class="dlg-panel delete-panel">
-          <div class="dlg-header delete-header">
+          <div class="dlg-header">
             <div class="dlg-title-group">
               <div class="dlg-icon-ring delete-icon-ring"><mat-icon>warning</mat-icon></div>
               <div>
@@ -1187,7 +1184,7 @@ import {
                 <p class="dlg-subtitle">This action cannot be undone</p>
               </div>
             </div>
-            <button class="dlg-close" (click)="closeDeleteDialog()"><mat-icon>close</mat-icon></button>
+            <button mat-icon-button aria-label="Close" class="dlg-close" (click)="closeDeleteDialog()"><mat-icon>close</mat-icon></button>
           </div>
           <div class="dlg-body">
             <p class="delete-message">Are you sure you want to delete <strong>{{ deleteItemName }}</strong>?</p>
@@ -1196,7 +1193,7 @@ import {
             }
             <div class="dlg-actions">
               <button mat-stroked-button (click)="closeDeleteDialog()" [disabled]="editSaving">Cancel</button>
-              <button mat-flat-button class="btn-delete-confirm" (click)="confirmDelete()" [disabled]="editSaving">
+              <button mat-flat-button color="warn" (click)="confirmDelete()" [disabled]="editSaving">
                 @if (editSaving) {
                   <mat-spinner diameter="18" strokeWidth="2"></mat-spinner> Deleting...
                 } @else {
@@ -1256,10 +1253,8 @@ import {
                     </div>
                   }
                   @if (!dashboard?.provinceStats?.length) {
-                    <div class="empty-placeholder">
-                      <mat-icon>map</mat-icon>
-                      <p>No provincial data available</p>
-                    </div>
+                    <app-empty-state class="empty-placeholder" icon="map" title="No provincial figures yet"
+                                     message="Province totals appear once training sessions are recorded."></app-empty-state>
                   }
                 </div>
               </section>
@@ -1324,7 +1319,7 @@ import {
                           @if (eq.category) {
                             <span class="equip-category-tag">{{ eq.category }}</span>
                           }
-                          <button class="edp-close" (click)="expandedEquipment = null; $event.stopPropagation()"><mat-icon>close</mat-icon></button>
+                          <button mat-icon-button aria-label="Close" class="edp-close" (click)="expandedEquipment = null; $event.stopPropagation()"><mat-icon>close</mat-icon></button>
                         </div>
                         <div class="edp-stats">
                           <div class="edp-stat">
@@ -1365,24 +1360,24 @@ import {
                           <div class="equip-detail-section">
                             <h5 class="eds-title"><mat-icon>map</mat-icon> Province Distribution</h5>
                             <div class="prov-dist-table-wrap">
-                              <table class="dialog-table">
+                              <table class="app-table">
                                 <thead>
                                   <tr>
                                     <th>Province</th>
-                                    <th class="right">Ordered</th>
-                                    <th class="right">Delivered</th>
-                                    <th class="right">Value</th>
-                                    <th class="right">Rate</th>
+                                    <th class="num">Ordered</th>
+                                    <th class="num">Delivered</th>
+                                    <th class="num">Value</th>
+                                    <th class="num">Rate</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   @for (pd of eq.provinceDistribution; track pd.province) {
                                     <tr>
                                       <td class="primary-cell">{{ pd.province }}</td>
-                                      <td class="right mono-text">{{ pd.ordered | number }}</td>
-                                      <td class="right mono-text">{{ pd.delivered | number }}</td>
-                                      <td class="right mono-text">{{ pd.orderValue > 0 ? 'R' + (pd.orderValue | number:'1.0-0') : '—' }}</td>
-                                      <td class="right">
+                                      <td class="num">{{ pd.ordered | number }}</td>
+                                      <td class="num">{{ pd.delivered | number }}</td>
+                                      <td class="num">{{ pd.orderValue > 0 ? 'R' + (pd.orderValue | number:'1.0-0') : '—' }}</td>
+                                      <td class="num">
                                         <span class="rate-pill" [class.good]="pd.percentage >= 80" [class.mid]="pd.percentage >= 50 && pd.percentage < 80" [class.low]="pd.percentage < 50">
                                           {{ pd.percentage | number:'1.1-1' }}%
                                         </span>
@@ -1399,10 +1394,8 @@ import {
                   }
                 }
                   @if (!dashboard?.equipmentStats?.length) {
-                    <div class="empty-placeholder">
-                      <mat-icon>precision_manufacturing</mat-icon>
-                      <p>No equipment data available</p>
-                    </div>
+                    <app-empty-state icon="precision_manufacturing" title="No equipment orders yet"
+                                     message="Equipment ordered through the HBA1C system shows here with its delivery status."></app-empty-state>
                   }
               </section>
 
@@ -1506,19 +1499,19 @@ import {
                       <p>{{ trainingSessions.length }} sessions loaded</p>
                     </div>
                   </div>
-                  <button mat-stroked-button class="panel-action" (click)="loadTraining()">
+                  <button mat-stroked-button (click)="loadTraining()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
-                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('training')">
+                  <button mat-flat-button color="primary" (click)="openCreateDialog('training')">
                     <mat-icon>add</mat-icon> Add Training
                   </button>
                 </div>
 
                 @if (trainingLoading) {
-                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                  <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
                 } @else {
                   <div class="table-wrap">
-                    <table class="modern-table">
+                    <table class="app-table">
                       <thead>
                         <tr>
                           <th>Training Name</th>
@@ -1546,12 +1539,10 @@ import {
                               <span class="num-badge blue">{{ session.numberOfParticipants }}</span>
                             </td>
                             <td class="center">
-                              <span class="status-tag" [class]="'st-' + ('' + (session.statusText || 'unknown')).toLowerCase()">
-                                {{ session.statusText || 'Unknown' }}
-                              </span>
+                              <app-status-chip [status]="session.statusText || 'Unknown'"></app-status-chip>
                             </td>
                             <td class="center">
-                              <button mat-icon-button class="action-attach" matTooltip="View / Upload Attachments" (click)="openTrainingAttachmentsPanel(session)">
+                              <button aria-label="View / Upload Attachments" mat-icon-button class="action-attach" matTooltip="View / Upload Attachments" (click)="openTrainingAttachmentsPanel(session)">
                                 <mat-icon>attach_file</mat-icon>
                               </button>
                               @if (trainingAttachmentCounts[session.id!]) {
@@ -1559,17 +1550,22 @@ import {
                               }
                             </td>
                             <td class="center actions-cell">
-                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('training', session)">
+                              <button aria-label="Edit" mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('training', session)">
                                 <mat-icon>edit</mat-icon>
                               </button>
-                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('training', session.id!, session.trainingName)">
+                              <button aria-label="Delete" mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('training', session.id!, session.trainingName)">
                                 <mat-icon>delete</mat-icon>
                               </button>
                             </td>
                           </tr>
                         }
                         @if (!trainingSessions.length) {
-                          <tr><td colspan="9" class="empty-row">No training sessions found</td></tr>
+                          <tr class="empty-row"><td colspan="9">
+                            <app-empty-state icon="school" title="No training sessions yet"
+                                             message="Sessions recorded in the HBA1C system show here.">
+                              <button mat-stroked-button (click)="openCreateDialog('training')"><mat-icon>add</mat-icon> Add training</button>
+                            </app-empty-state>
+                          </td></tr>
                         }
                       </tbody>
                     </table>
@@ -1588,7 +1584,7 @@ import {
                           <span class="attachments-panel-sub">{{ trainingAttachmentsPanelSession.trainingName }} — {{ trainingAttachmentsPanelSession.venue }}</span>
                         </div>
                       </div>
-                      <button mat-icon-button (click)="closeTrainingAttachmentsPanel()" matTooltip="Close"><mat-icon>close</mat-icon></button>
+                      <button aria-label="Close" mat-icon-button (click)="closeTrainingAttachmentsPanel()" matTooltip="Close"><mat-icon>close</mat-icon></button>
                     </div>
 
                     <div class="attachments-panel-upload">
@@ -1600,18 +1596,16 @@ import {
                                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.csv,.txt">
                       </label>
                       @if (trainingAttachmentUploading) {
-                        <div class="upload-progress"><mat-spinner diameter="20" strokeWidth="2"></mat-spinner> Uploading...</div>
+                        <div class="upload-progress"><span>Uploading...</span><mat-progress-bar mode="indeterminate"></mat-progress-bar></div>
                       }
                     </div>
 
                     <div class="attachments-panel-list">
                       @if (trainingAttachmentsLoading) {
-                        <div class="panel-loading"><mat-spinner diameter="24" strokeWidth="2"></mat-spinner></div>
+                        <app-skeleton-rows [rows]="3" [avatar]="true"></app-skeleton-rows>
                       } @else if (!trainingAttachments.length) {
-                        <div class="attachments-empty">
-                          <mat-icon>folder_open</mat-icon>
-                          <p>No files attached yet</p>
-                        </div>
+                        <app-empty-state icon="folder_open" title="No files attached yet"
+                                         message="Upload attendance registers, photos or reports for this session above."></app-empty-state>
                       } @else {
                         @for (att of trainingAttachments; track att.id) {
                           <div class="attachment-item">
@@ -1623,10 +1617,10 @@ import {
                               <span class="attachment-meta">{{ formatFileSize(att.fileSize) }} · {{ att.uploadedAt | date:'dd MMM yyyy HH:mm' }}</span>
                             </div>
                             <div class="attachment-actions">
-                              <button mat-icon-button matTooltip="Download" (click)="downloadTrainingAttachment(att)">
+                              <button aria-label="Download" mat-icon-button matTooltip="Download" (click)="downloadTrainingAttachment(att)">
                                 <mat-icon>download</mat-icon>
                               </button>
-                              <button mat-icon-button matTooltip="Delete" class="action-delete" (click)="deleteTrainingAttachment(att)">
+                              <button aria-label="Delete" mat-icon-button matTooltip="Delete" class="action-delete" (click)="deleteTrainingAttachment(att)">
                                 <mat-icon>delete</mat-icon>
                               </button>
                             </div>
@@ -1700,7 +1694,7 @@ import {
                       <div class="alert-card">
                         <div class="alert-top">
                           <span class="alert-name">{{ item.name }}</span>
-                          <span class="status-tag st-warning">Low Stock</span>
+                          <app-status-chip status="Low Stock" tone="warn"></app-status-chip>
                         </div>
                         <div class="alert-meta">
                           <span>SKU: <strong>{{ item.sku }}</strong></span>
@@ -1727,30 +1721,30 @@ import {
                       <p>{{ inventoryItems.length }} items loaded</p>
                     </div>
                   </div>
-                  <button mat-stroked-button class="panel-action" (click)="loadInventory()">
+                  <button mat-stroked-button (click)="loadInventory()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
-                  <button mat-flat-button class="panel-action update-stock-btn" (click)="openStockUpdateDialog()">
+                  <button mat-stroked-button (click)="openStockUpdateDialog()">
                     <mat-icon>sync</mat-icon> Update Stock
                   </button>
-                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('inventory')">
+                  <button mat-flat-button color="primary" (click)="openCreateDialog('inventory')">
                     <mat-icon>add</mat-icon> Add Item
                   </button>
                 </div>
 
                 @if (inventoryLoading) {
-                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                  <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
                 } @else {
                   <div class="table-wrap">
-                    <table class="modern-table">
+                    <table class="app-table">
                       <thead>
                         <tr>
                           <th>Name</th>
                           <th>SKU</th>
                           <th>Category</th>
-                          <th class="right">Stock</th>
-                          <th class="right">Reorder</th>
-                          <th class="right">Unit Price</th>
+                          <th class="num">Stock</th>
+                          <th class="num">Reorder</th>
+                          <th class="num">Unit Price</th>
                           <th>Supplier</th>
                           <th class="center">Status</th>
                           <th class="center">Actions</th>
@@ -1760,31 +1754,35 @@ import {
                         @for (item of inventoryItems; track item.id) {
                           <tr [class.alert-row]="item.stockAvailable <= item.reorderLevel">
                             <td class="primary-cell">{{ item.name }}</td>
-                            <td class="mono-text">{{ item.sku }}</td>
+                            <td class="ref">{{ item.sku }}</td>
                             <td><span class="category-tag">{{ item.categoryText }}</span></td>
-                            <td class="right" [class.danger-val]="item.stockAvailable <= item.reorderLevel">
+                            <td class="num" [class.danger-val]="item.stockAvailable <= item.reorderLevel">
                               {{ item.stockAvailable | number }}
                             </td>
-                            <td class="right secondary-text">{{ item.reorderLevel | number }}</td>
-                            <td class="right money-val">R{{ item.unitPrice | number:'1.2-2' }}</td>
+                            <td class="num secondary-text">{{ item.reorderLevel | number }}</td>
+                            <td class="num money-val">R{{ item.unitPrice | number:'1.2-2' }}</td>
                             <td class="secondary-text">{{ item.supplier }}</td>
                             <td class="center">
-                              <span class="status-tag" [class]="item.stockAvailable <= item.reorderLevel ? 'st-warning' : 'st-ok'">
-                                {{ item.statusText || (item.stockAvailable <= item.reorderLevel ? 'Low Stock' : 'In Stock') }}
-                              </span>
+                              <app-status-chip [status]="item.statusText || (item.stockAvailable <= item.reorderLevel ? 'Low Stock' : 'In Stock')"
+                                               [tone]="item.stockAvailable <= item.reorderLevel ? 'warn' : 'ok'"></app-status-chip>
                             </td>
                             <td class="center actions-cell">
-                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('inventory', item)">
+                              <button aria-label="Edit" mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('inventory', item)">
                                 <mat-icon>edit</mat-icon>
                               </button>
-                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('inventory', item.id!, item.name)">
+                              <button aria-label="Delete" mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('inventory', item.id!, item.name)">
                                 <mat-icon>delete</mat-icon>
                               </button>
                             </td>
                           </tr>
                         }
                         @if (!inventoryItems.length) {
-                          <tr><td colspan="9" class="empty-row">No inventory items found</td></tr>
+                          <tr class="empty-row"><td colspan="9">
+                            <app-empty-state icon="inventory_2" title="No inventory items yet"
+                                             message="Items stocked for the HBA1C programme show here.">
+                              <button mat-stroked-button (click)="openCreateDialog('inventory')"><mat-icon>add</mat-icon> Add item</button>
+                            </app-empty-state>
+                          </td></tr>
                         }
                       </tbody>
                     </table>
@@ -1863,10 +1861,8 @@ import {
                     </div>
                   }
                   @if (!dashboard?.provincialData?.length) {
-                    <div class="empty-placeholder">
-                      <mat-icon>point_of_sale</mat-icon>
-                      <p>No provincial sales data</p>
-                    </div>
+                    <app-empty-state class="empty-placeholder" icon="point_of_sale" title="No provincial sales yet"
+                                     message="Revenue and delivery rates per province appear once sales are recorded."></app-empty-state>
                   }
                 </div>
               </section>
@@ -1894,10 +1890,8 @@ import {
                     </div>
                   }
                   @if (!dashboard?.topProducts?.length) {
-                    <div class="empty-placeholder compact">
-                      <mat-icon>star</mat-icon>
-                      <p>No product data</p>
-                    </div>
+                    <app-empty-state icon="star" title="No product sales yet" [compact]="true"
+                                     message="Best sellers are ranked here once sales are recorded."></app-empty-state>
                   }
                 </div>
               </section>
@@ -1912,26 +1906,26 @@ import {
                       <p>{{ salesList.length }} sales loaded</p>
                     </div>
                   </div>
-                  <button mat-stroked-button class="panel-action" (click)="loadSales()">
+                  <button mat-stroked-button (click)="loadSales()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
-                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('sale')">
+                  <button mat-flat-button color="primary" (click)="openCreateDialog('sale')">
                     <mat-icon>add</mat-icon> Add Sale
                   </button>
                 </div>
 
                 @if (salesLoading) {
-                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                  <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
                 } @else {
                   <div class="table-wrap">
-                    <table class="modern-table">
+                    <table class="app-table">
                       <thead>
                         <tr>
                           <th>Sale #</th>
                           <th>Customer</th>
                           <th>Date</th>
                           <th class="center">Items</th>
-                          <th class="right">Total</th>
+                          <th class="num">Total</th>
                           <th class="center">Credit</th>
                           <th class="center">Actions</th>
                         </tr>
@@ -1939,32 +1933,37 @@ import {
                       <tbody>
                         @for (sale of salesList; track sale.id) {
                           <tr>
-                            <td class="mono-text">{{ sale.saleNumber }}</td>
+                            <td class="ref">{{ sale.saleNumber }}</td>
                             <td class="primary-cell">{{ sale.customerName }}</td>
                             <td class="mono-text">{{ sale.saleDate | date:'dd MMM yyyy' }}</td>
                             <td class="center">
                               <span class="num-badge subtle">{{ sale.saleItems?.length || 0 }}</span>
                             </td>
-                            <td class="right money-val">R{{ sale.total | number:'1.2-2' }}</td>
+                            <td class="num money-val">R{{ sale.total | number:'1.2-2' }}</td>
                             <td class="center">
                               @if (sale.hasCreditNote) {
-                                <span class="status-tag st-warning">R{{ sale.creditedAmount || 0 | number:'1.2-2' }}</span>
+                                <app-status-chip [status]="'R' + (sale.creditedAmount || 0 | number:'1.2-2')" tone="warn"></app-status-chip>
                               } @else {
-                                <span class="status-tag st-ok">OK</span>
+                                <app-status-chip status="OK" tone="ok"></app-status-chip>
                               }
                             </td>
                             <td class="center actions-cell">
-                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('sale', sale)">
+                              <button aria-label="Edit" mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('sale', sale)">
                                 <mat-icon>edit</mat-icon>
                               </button>
-                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('sale', sale.id!, sale.saleNumber)">
+                              <button aria-label="Delete" mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('sale', sale.id!, sale.saleNumber)">
                                 <mat-icon>delete</mat-icon>
                               </button>
                             </td>
                           </tr>
                         }
                         @if (!salesList.length) {
-                          <tr><td colspan="7" class="empty-row">No sales found</td></tr>
+                          <tr class="empty-row"><td colspan="7">
+                            <app-empty-state icon="receipt_long" title="No sales yet"
+                                             message="Sales recorded in the HBA1C system show here.">
+                              <button mat-stroked-button (click)="openCreateDialog('sale')"><mat-icon>add</mat-icon> Add sale</button>
+                            </app-empty-state>
+                          </td></tr>
                         }
                       </tbody>
                     </table>
@@ -1991,26 +1990,26 @@ import {
                       <p>{{ creditNotes.length }} notes loaded</p>
                     </div>
                   </div>
-                  <button mat-stroked-button class="panel-action" (click)="loadCreditNotes()">
+                  <button mat-stroked-button (click)="loadCreditNotes()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
-                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('creditNote')">
+                  <button mat-flat-button color="primary" (click)="openCreateDialog('creditNote')">
                     <mat-icon>add</mat-icon> Add Credit Note
                   </button>
                 </div>
 
                 @if (creditNotesLoading) {
-                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                  <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
                 } @else {
                   <div class="table-wrap">
-                    <table class="modern-table">
+                    <table class="app-table">
                       <thead>
                         <tr>
                           <th>Credit Note #</th>
                           <th>Invoice #</th>
                           <th>Customer</th>
-                          <th class="right">Original</th>
-                          <th class="right">Credit</th>
+                          <th class="num">Original</th>
+                          <th class="num">Credit</th>
                           <th>Reason</th>
                           <th>Created</th>
                           <th class="center">Status</th>
@@ -2021,20 +2020,18 @@ import {
                       <tbody>
                         @for (cn of creditNotes; track cn.id) {
                           <tr>
-                            <td class="mono-text">{{ cn.creditNoteNumber }}</td>
-                            <td class="mono-text">{{ cn.invoiceNumber }}</td>
+                            <td class="ref">{{ cn.creditNoteNumber }}</td>
+                            <td class="ref">{{ cn.invoiceNumber }}</td>
                             <td class="primary-cell">{{ cn.customerName }}</td>
-                            <td class="right money-val">R{{ cn.originalAmount | number:'1.2-2' }}</td>
-                            <td class="right danger-val">-R{{ cn.creditAmount | number:'1.2-2' }}</td>
+                            <td class="num money-val">R{{ cn.originalAmount | number:'1.2-2' }}</td>
+                            <td class="num danger-val">-R{{ cn.creditAmount | number:'1.2-2' }}</td>
                             <td class="secondary-text reason-cell">{{ cn.reason }}</td>
                             <td class="mono-text">{{ cn.createdDate | date:'dd MMM yyyy' }}</td>
                             <td class="center">
-                              <span class="status-tag" [class]="'st-' + ('' + (cn.status || 'unknown')).toLowerCase()">
-                                {{ cn.status }}
-                              </span>
+                              <app-status-chip [status]="cn.status"></app-status-chip>
                             </td>
                             <td class="center">
-                              <button mat-icon-button class="action-attach" matTooltip="View / Upload Attachments" (click)="openAttachmentsPanel(cn)">
+                              <button aria-label="View / Upload Attachments" mat-icon-button class="action-attach" matTooltip="View / Upload Attachments" (click)="openAttachmentsPanel(cn)">
                                 <mat-icon>attach_file</mat-icon>
                               </button>
                               @if (creditNoteAttachmentCounts[cn.id]) {
@@ -2042,17 +2039,22 @@ import {
                               }
                             </td>
                             <td class="center actions-cell">
-                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('creditNote', cn)">
+                              <button aria-label="Edit" mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('creditNote', cn)">
                                 <mat-icon>edit</mat-icon>
                               </button>
-                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('creditNote', cn.id, cn.creditNoteNumber)">
+                              <button aria-label="Delete" mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('creditNote', cn.id, cn.creditNoteNumber)">
                                 <mat-icon>delete</mat-icon>
                               </button>
                             </td>
                           </tr>
                         }
                         @if (!creditNotes.length) {
-                          <tr><td colspan="10" class="empty-row">No credit notes found</td></tr>
+                          <tr class="empty-row"><td colspan="10">
+                            <app-empty-state icon="receipt" title="No credit notes yet"
+                                             message="Credit notes raised against HBA1C invoices show here.">
+                              <button mat-stroked-button (click)="openCreateDialog('creditNote')"><mat-icon>add</mat-icon> Add credit note</button>
+                            </app-empty-state>
+                          </td></tr>
                         }
                       </tbody>
                     </table>
@@ -2071,7 +2073,7 @@ import {
                           <span class="attachments-panel-sub">{{ attachmentsPanelCreditNote.creditNoteNumber }} — {{ attachmentsPanelCreditNote.customerName }}</span>
                         </div>
                       </div>
-                      <button mat-icon-button (click)="closeAttachmentsPanel()" matTooltip="Close"><mat-icon>close</mat-icon></button>
+                      <button aria-label="Close" mat-icon-button (click)="closeAttachmentsPanel()" matTooltip="Close"><mat-icon>close</mat-icon></button>
                     </div>
 
                     <div class="attachments-panel-upload">
@@ -2083,18 +2085,16 @@ import {
                                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.csv,.txt">
                       </label>
                       @if (attachmentUploading) {
-                        <div class="upload-progress"><mat-spinner diameter="20" strokeWidth="2"></mat-spinner> Uploading...</div>
+                        <div class="upload-progress"><span>Uploading...</span><mat-progress-bar mode="indeterminate"></mat-progress-bar></div>
                       }
                     </div>
 
                     <div class="attachments-panel-list">
                       @if (attachmentsLoading) {
-                        <div class="panel-loading"><mat-spinner diameter="24" strokeWidth="2"></mat-spinner></div>
+                        <app-skeleton-rows [rows]="3" [avatar]="true"></app-skeleton-rows>
                       } @else if (!creditNoteAttachments.length) {
-                        <div class="attachments-empty">
-                          <mat-icon>folder_open</mat-icon>
-                          <p>No files attached yet</p>
-                        </div>
+                        <app-empty-state icon="folder_open" title="No files attached yet"
+                                         message="Upload the signed credit note or supporting documents above."></app-empty-state>
                       } @else {
                         @for (att of creditNoteAttachments; track att.id) {
                           <div class="attachment-item">
@@ -2106,10 +2106,10 @@ import {
                               <span class="attachment-meta">{{ formatFileSize(att.fileSize) }} · {{ att.uploadedAt | date:'dd MMM yyyy HH:mm' }}</span>
                             </div>
                             <div class="attachment-actions">
-                              <button mat-icon-button matTooltip="Download" (click)="downloadAttachment(att)">
+                              <button aria-label="Download" mat-icon-button matTooltip="Download" (click)="downloadAttachment(att)">
                                 <mat-icon>download</mat-icon>
                               </button>
-                              <button mat-icon-button matTooltip="Delete" class="action-delete" (click)="deleteAttachment(att)">
+                              <button aria-label="Delete" mat-icon-button matTooltip="Delete" class="action-delete" (click)="deleteAttachment(att)">
                                 <mat-icon>delete</mat-icon>
                               </button>
                             </div>
@@ -2184,7 +2184,7 @@ import {
                       <span class="live-label">LIVE</span>
                     }
                   </div>
-                  <button mat-stroked-button class="panel-action" (click)="loadLiveLocations()" [disabled]="liveTrackingLoading">
+                  <button mat-stroked-button (click)="loadLiveLocations()" [disabled]="liveTrackingLoading">
                     @if (liveTrackingLoading) {
                       <mat-spinner diameter="16" strokeWidth="2"></mat-spinner>
                     } @else {
@@ -2195,7 +2195,7 @@ import {
                 </div>
 
                 @if (liveTrackingLoading && !liveVehicles.length) {
-                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                  <app-skeleton-rows [rows]="4" [avatar]="true"></app-skeleton-rows>
                 } @else {
                   <div class="live-vehicles-grid">
                     @for (v of liveVehicles; track v.registration) {
@@ -2209,9 +2209,8 @@ import {
                             <span class="lv-driver">{{ v.driverName }}</span>
                             <span class="lv-reg">{{ v.registration }}</span>
                           </div>
-                          <span class="lv-status-badge" [class]="'badge-' + v.status">
-                            {{ v.status === 'moving' ? 'Moving' : v.status === 'idling' ? 'Idling' : v.status === 'stopped' ? 'Stopped' : 'Offline' }}
-                          </span>
+                          <app-status-chip [status]="v.status === 'moving' ? 'Moving' : v.status === 'idling' ? 'Idling' : v.status === 'stopped' ? 'Stopped' : 'Offline'"
+                                           [tone]="v.status === 'moving' ? 'ok' : v.status === 'idling' ? 'warn' : v.status === 'stopped' ? 'info' : 'neutral'"></app-status-chip>
                         </div>
                         <div class="lv-body">
                           @if (v.location) {
@@ -2246,7 +2245,7 @@ import {
                             </div>
                           }
                           <div class="lv-actions">
-                            <button class="lv-history-btn" (click)="loadTripHistory(v)" [disabled]="tripHistoryLoading">
+                            <button mat-stroked-button class="lv-history-btn" (click)="loadTripHistory(v)" [disabled]="tripHistoryLoading">
                               <mat-icon>history</mat-icon>
                               @if (tripHistoryLoading && tripHistoryReg === v.registration && !historicalDatePickerReg) {
                                 <mat-spinner diameter="14" strokeWidth="2"></mat-spinner>
@@ -2254,7 +2253,7 @@ import {
                                 Today's Trips
                               }
                             </button>
-                            <button class="lv-history-btn lv-historical-btn" (click)="toggleHistoricalDatePicker(v.registration)" [disabled]="tripHistoryLoading && tripHistoryReg !== v.registration">
+                            <button mat-stroked-button class="lv-history-btn" (click)="toggleHistoricalDatePicker(v.registration)" [disabled]="tripHistoryLoading && tripHistoryReg !== v.registration">
                               <mat-icon>calendar_month</mat-icon>
                               @if (tripHistoryLoading && historicalDatePickerReg === v.registration) {
                                 <mat-spinner diameter="14" strokeWidth="2"></mat-spinner>
@@ -2265,10 +2264,10 @@ import {
                             @if (historicalDatePickerReg === v.registration) {
                               <div class="historical-date-picker">
                                 <input type="date" class="historical-date-input" [(ngModel)]="historicalDateValue" [max]="getTodayDate()" />
-                                <button class="historical-go-btn" (click)="loadHistoricalTrips(v)" [disabled]="!historicalDateValue || tripHistoryLoading">
+                                <button mat-flat-button color="primary" (click)="loadHistoricalTrips(v)" [disabled]="!historicalDateValue || tripHistoryLoading">
                                   <mat-icon>search</mat-icon> View Trips
                                 </button>
-                                <button class="historical-cancel-btn" (click)="historicalDatePickerReg = ''">
+                                <button mat-icon-button aria-label="Close" (click)="historicalDatePickerReg = ''">
                                   <mat-icon>close</mat-icon>
                                 </button>
                               </div>
@@ -2278,10 +2277,10 @@ import {
                       </div>
                     }
                     @if (!liveVehicles.length && !liveTrackingLoading) {
-                      <div class="lv-empty">
-                        <mat-icon>directions_car</mat-icon>
-                        <p>Click Refresh to fetch live vehicle locations</p>
-                      </div>
+                      <app-empty-state class="lv-empty" icon="directions_car" title="No vehicle locations loaded"
+                                       message="Live positions come from CarTrack when you refresh.">
+                        <button mat-stroked-button (click)="loadLiveLocations()"><mat-icon>refresh</mat-icon> Fetch locations</button>
+                      </app-empty-state>
                     }
                   </div>
 
@@ -2296,10 +2295,10 @@ import {
                           </div>
                         </div>
                         <div class="trip-header-actions">
-                          <button class="trip-export-btn" (click)="exportTripHistoryToExcel()" title="Export to Excel">
+                          <button mat-stroked-button (click)="exportTripHistoryToExcel()" matTooltip="Export to Excel">
                             <mat-icon>download</mat-icon> Export
                           </button>
-                          <button mat-icon-button (click)="closeTripHistory()" class="trip-close-btn">
+                          <button aria-label="Close" mat-icon-button (click)="closeTripHistory()">
                             <mat-icon>close</mat-icon>
                           </button>
                         </div>
@@ -2420,22 +2419,22 @@ import {
                       <option value="Western Cape">Western Cape</option>
                     </select>
                   </div>
-                  <button mat-stroked-button class="panel-action" (click)="loadCarTrack()">
+                  <button mat-stroked-button (click)="loadCarTrack()">
                     <mat-icon>refresh</mat-icon> Refresh
                   </button>
-                  <button mat-stroked-button class="panel-action export-btn" (click)="openExportDialog()">
+                  <button mat-stroked-button (click)="openExportDialog()">
                     <mat-icon>file_download</mat-icon> Export Report
                   </button>
-                  <button mat-flat-button class="panel-action add-btn" (click)="openCreateDialog('carTrack')">
+                  <button mat-flat-button color="primary" (click)="openCreateDialog('carTrack')">
                     <mat-icon>add</mat-icon> Log Visit
                   </button>
                 </div>
 
                 @if (carTrackLoading) {
-                  <div class="panel-loading"><mat-spinner diameter="32" strokeWidth="3"></mat-spinner></div>
+                  <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
                 } @else {
                   <div class="table-wrap">
-                    <table class="modern-table">
+                    <table class="app-table">
                       <thead>
                         <tr>
                           <th>Date</th>
@@ -2445,7 +2444,7 @@ import {
                           <th>Client</th>
                           <th>Province</th>
                           <th>Time</th>
-                          <th class="right">Distance</th>
+                          <th class="num">Distance</th>
                           <th class="center">Status</th>
                           <th class="center">Actions</th>
                         </tr>
@@ -2460,7 +2459,7 @@ import {
                                 <span>{{ entry.salesRepName }}</span>
                               </div>
                             </td>
-                            <td class="mono-text">{{ entry.registrationNumber || '—' }}</td>
+                            <td class="ref">{{ entry.registrationNumber || '—' }}</td>
                             <td>
                               <div class="location-cell">
                                 <mat-icon class="loc-pin">place</mat-icon>
@@ -2485,7 +2484,7 @@ import {
                                 —
                               }
                             </td>
-                            <td class="right mono-text">
+                            <td class="num">
                               @if (entry.kilometerStart != null && entry.kilometerEnd != null) {
                                 {{ (entry.kilometerEnd - entry.kilometerStart) | number:'1.1-1' }} km
                               } @else {
@@ -2493,26 +2492,30 @@ import {
                               }
                             </td>
                             <td class="center">
-                              <span class="status-tag" [class]="'st-' + (entry.status || 'completed').toLowerCase().replace(' ', '-')">
-                                {{ entry.status }}
-                              </span>
+                              <app-status-chip [status]="entry.status"></app-status-chip>
                             </td>
                             <td class="center actions-cell">
-                              <button mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('carTrack', entry)">
+                              <button aria-label="Edit" mat-icon-button class="action-edit" matTooltip="Edit" (click)="openEditDialog('carTrack', entry)">
                                 <mat-icon>edit</mat-icon>
                               </button>
-                              <button mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('carTrack', entry.id, entry.salesRepName + ' - ' + entry.location)">
+                              <button aria-label="Delete" mat-icon-button class="action-delete" matTooltip="Delete" (click)="openDeleteDialog('carTrack', entry.id, entry.salesRepName + ' - ' + entry.location)">
                                 <mat-icon>delete</mat-icon>
                               </button>
                             </td>
                           </tr>
                         }
                         @if (!filteredCarTrackEntries.length) {
-                          <tr><td colspan="10" class="empty-row">
+                          <tr class="empty-row"><td colspan="10">
                             @if (carTrackFilterRep || carTrackFilterProvince) {
-                              No visits match the current filters
+                              <app-empty-state icon="filter_alt_off" title="No visits match these filters"
+                                               message="No visit is logged for the chosen rep and province.">
+                                <button mat-stroked-button (click)="carTrackFilterRep = ''; carTrackFilterProvince = ''; filterCarTrackEntries()">Clear the filters</button>
+                              </app-empty-state>
                             } @else {
-                              No car track entries yet — click "Log Visit" to add one
+                              <app-empty-state icon="directions_car" title="No visits logged yet"
+                                               message="Log each rep's visits to build the Car Track report.">
+                                <button mat-stroked-button (click)="openCreateDialog('carTrack')"><mat-icon>add</mat-icon> Log visit</button>
+                              </app-empty-state>
                             }
                           </td></tr>
                         }
@@ -2534,7 +2537,7 @@ import {
                         <p>Select a date range to export visit log and trip history</p>
                       </div>
                     </div>
-                    <button class="export-close-btn" (click)="closeExportDialog()">
+                    <button mat-icon-button aria-label="Close" (click)="closeExportDialog()">
                       <mat-icon>close</mat-icon>
                     </button>
                   </div>
@@ -2580,7 +2583,7 @@ import {
                   </div>
                   <div class="export-dialog-footer">
                     <button mat-stroked-button (click)="closeExportDialog()">Cancel</button>
-                    <button mat-flat-button color="primary" class="export-download-btn"
+                    <button mat-flat-button color="primary"
                             (click)="downloadExportReport()"
                             [disabled]="!exportFromDate || !exportToDate || exportLoading">
                       @if (exportLoading) {
@@ -2606,127 +2609,87 @@ import {
     /* ============================== */
     :host {
       display: block;
-      --blue: #3b82f6; --blue-soft: #eff6ff; --blue-mid: #dbeafe;
-      --green: #22c55e; --green-soft: #f0fdf4; --green-mid: #dcfce7;
-      --orange: #f59e0b; --orange-soft: #fffbeb; --orange-mid: #fef3c7;
-      --purple: #8b5cf6; --purple-soft: #f5f3ff; --purple-mid: #ede9fe;
-      --teal: #14b8a6; --teal-soft: #f0fdfa; --teal-mid: #ccfbf1;
-      --red: #ef4444; --red-soft: #fef2f2; --red-mid: #fee2e2;
-      --text-primary: #0f172a;
-      --text-secondary: #64748b;
-      --text-muted: #94a3b8;
-      --surface: #ffffff;
-      --surface-hover: #f8fafc;
-      --border: #e2e8f0;
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --radius-lg: 16px;
-      --radius-xl: 20px;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-      --shadow-md: 0 4px 12px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
-      --shadow-lg: 0 10px 30px rgba(0,0,0,0.08), 0 4px 8px rgba(0,0,0,0.04);
+      --blue: var(--color-primary); --blue-soft: var(--color-primary-soft); --blue-mid: var(--color-primary-soft);
+      --green: var(--color-ok); --green-soft: var(--color-ok-soft); --green-mid: var(--color-ok-soft);
+      --orange: var(--color-warn); --orange-soft: var(--color-warn-soft); --orange-mid: var(--color-warn-soft);
+      --purple: var(--color-cat-purple); --purple-soft: var(--color-cat-purple-soft); --purple-mid: var(--color-cat-purple-soft);
+      --teal: var(--color-cat-teal); --teal-soft: var(--color-cat-teal-soft); --teal-mid: var(--color-cat-teal-soft);
+      --red: var(--color-danger); --red-soft: var(--color-danger-soft); --red-mid: var(--color-danger-soft);
+      --text-primary: var(--color-text);
+      --text-secondary: var(--color-text-2);
+      --text-muted: var(--color-text-3);
+      --surface: var(--color-surface);
+      --surface-hover: var(--color-canvas);
+      --border: var(--color-line);
     }
 
     /* ============================== */
-    /*  HERO HEADER                   */
+    /*  HEADER ROW                    */
     /* ============================== */
     .hero-header {
-      position: relative;
-      margin: -24px -24px 32px;
-      padding: 32px 40px 36px;
-      overflow: hidden;
-    }
-    .hero-bg {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, #0d9488 0%, #0891b2 40%, #3b82f6 100%);
-      z-index: 0;
-    }
-    .hero-bg::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      margin: 0 0 var(--space-5);
     }
     .hero-content {
-      position: relative;
-      z-index: 1;
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: var(--space-4);
       flex-wrap: wrap;
     }
-    .back-btn {
-      color: rgba(255,255,255,0.9) !important;
-      border-radius: 12px !important;
-      font-weight: 500 !important;
-    }
-    .back-btn:hover { background: rgba(255,255,255,0.15) !important; }
     .hero-title-block {
       flex: 1;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: var(--space-3);
     }
     .hero-icon-ring {
-      width: 56px;
-      height: 56px;
-      border-radius: 18px;
-      background: rgba(255,255,255,0.2);
-      backdrop-filter: blur(12px);
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 1px solid rgba(255,255,255,0.25);
       flex-shrink: 0;
     }
     .hero-icon-ring mat-icon {
-      font-size: 30px;
-      width: 30px;
-      height: 30px;
-      color: white;
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
-    .hero-text h1 {
+    .hero-text h2 {
       margin: 0;
-      font-size: 26px;
-      font-weight: 800;
-      color: white;
-      letter-spacing: -0.3px;
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-text);
+      letter-spacing: -0.01em;
     }
     .hero-text p {
       margin: 4px 0 0;
-      font-size: 14px;
-      color: rgba(255,255,255,0.75);
+      font-size: var(--text-md);
+      color: var(--color-text-3);
     }
     .hero-actions {
       display: flex;
       align-items: center;
-      gap: 10px;
+      flex-wrap: wrap;
+      gap: var(--space-2);
     }
-    .refresh-btn {
-      background: rgba(255,255,255,0.2) !important;
-      color: white !important;
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.2) !important;
-      border-radius: 12px !important;
-      font-weight: 600 !important;
-    }
-    .refresh-btn:hover { background: rgba(255,255,255,0.3) !important; }
 
     .connection-pill {
       display: flex; align-items: center; gap: 7px;
-      padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
-      background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.8);
-      backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);
+      padding: 4px 12px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600;
+      background: var(--color-surface-2); color: var(--color-text-2);
+      border: 1px solid var(--color-line);
     }
     .conn-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: rgba(255,255,255,0.5); animation: pulse 2s infinite;
+      background: var(--color-text-3); animation: pulse 2s infinite;
     }
-    .connection-pill.connected { background: rgba(34,197,94,0.25); border-color: rgba(34,197,94,0.5); color: #bbf7d0; }
-    .connection-pill.connected .conn-dot { background: #4ade80; }
-    .connection-pill.error { background: rgba(239,68,68,0.25); border-color: rgba(239,68,68,0.5); color: #fca5a5; }
-    .connection-pill.error .conn-dot { background: #f87171; animation: none; }
+    .connection-pill.connected { background: var(--color-ok-soft); border-color: var(--color-ok-soft); color: var(--color-ok); }
+    .connection-pill.connected .conn-dot { background: var(--color-ok); }
+    .connection-pill.error { background: var(--color-danger-soft); border-color: var(--color-danger-soft); color: var(--color-danger); }
+    .connection-pill.error .conn-dot { background: var(--color-danger); animation: none; }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -2740,53 +2703,41 @@ import {
       display: flex; justify-content: center; padding: 80px 20px;
     }
     .loading-card, .error-card {
-      background: var(--surface); border-radius: 24px;
-      padding: 48px 56px; text-align: center;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-      border: 1px solid #f0f0f0;
-      max-width: 520px; width: 100%;
+      background: var(--color-surface); border-radius: var(--radius-lg);
+      padding: var(--space-6) var(--space-5); text-align: center;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--color-line);
+      max-width: 520px; width: 100%; box-sizing: border-box;
     }
     .loading-card h3, .error-card h3 { color: var(--text-primary); margin: 16px 0 6px; font-size: 20px; font-weight: 800; }
     .loading-card p, .error-card p { color: var(--text-secondary); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
 
     /* Loading icon */
     .lc-icon-wrap {
-      width: 72px; height: 72px; border-radius: 22px; margin: 0 auto;
-      background: linear-gradient(135deg, #0d9488, #3b82f6);
+      width: 72px; height: 72px; border-radius: var(--radius-lg); margin: 0 auto;
+      background: var(--color-primary-soft);
       display: flex; align-items: center; justify-content: center;
     }
     .lc-icon-wrap.pulse-ring {
       animation: pulseRing 1.8s ease-in-out infinite;
     }
     @keyframes pulseRing {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(13,148,136,0.4); }
-      50% { transform: scale(1.08); box-shadow: 0 0 0 16px rgba(13,148,136,0); }
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
     }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: white; }
-    .lc-subtitle { color: var(--text-muted) !important; font-size: 13px !important; }
+    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-primary); }
+    .loading-card .lc-subtitle { color: var(--text-muted); font-size: var(--text-sm); }
 
     /* Progress bar */
     .lc-progress-wrap { margin: 8px 0 24px; }
     .lc-progress-track {
-      height: 8px; border-radius: 4px; background: var(--bg-secondary);
+      height: 8px; border-radius: 4px; background: var(--color-surface-2);
       overflow: hidden; position: relative;
     }
     .lc-progress-fill {
       height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #0d9488, #0891b2, #3b82f6);
-      background-size: 200% 100%;
-      animation: shimmer 2s ease-in-out infinite;
+      background: var(--color-primary);
       transition: width 0.15s ease-out;
-      position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
-      border-radius: 0 4px 4px 0;
-    }
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
     }
     .lc-progress-info {
       display: flex; justify-content: space-between; align-items: center;
@@ -2797,37 +2748,34 @@ import {
       transition: opacity 0.3s ease;
     }
     .lc-progress-pct {
-      color: var(--teal); font-weight: 700; font-size: 13px;
+      color: var(--color-primary); font-weight: 700; font-size: var(--text-sm);
       font-variant-numeric: tabular-nums;
     }
 
     /* Step indicators */
     .lc-steps {
       display: flex; justify-content: space-between; gap: 4px;
-      padding-top: 4px; border-top: 1px solid var(--border-light);
+      padding-top: 4px; border-top: 1px solid var(--color-line);
     }
     .lc-step {
       display: flex; flex-direction: column; align-items: center; gap: 6px;
-      flex: 1; padding-top: 16px; opacity: 0.35;
+      flex: 1; min-width: 0; padding-top: 16px; opacity: 0.35;
       transition: opacity 0.4s ease, transform 0.3s ease;
     }
     .lc-step.active { opacity: 1; transform: translateY(-2px); }
     .lc-step.done { opacity: 0.65; }
     .lc-step-dot {
       width: 32px; height: 32px; border-radius: 50%;
-      background: var(--bg-secondary); display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
+      background: var(--color-surface-2); display: flex; align-items: center; justify-content: center;
+      transition: background 0.3s ease;
     }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--text-tertiary); transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot {
-      background: linear-gradient(135deg, #0d9488, #3b82f6);
-      box-shadow: 0 2px 10px rgba(13, 148, 136, 0.3);
-    }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
+    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--color-text-3); transition: color 0.3s ease; }
+    .lc-step.active .lc-step-dot { background: var(--color-primary); }
+    .lc-step.active .lc-step-dot mat-icon { color: var(--color-on-primary); }
     .lc-step.done .lc-step-dot { background: var(--green-soft); }
     .lc-step.done .lc-step-dot mat-icon { color: var(--green); }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: var(--teal); }
+    .lc-step-label { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-align: center; }
+    .lc-step.active .lc-step-label { color: var(--color-primary); }
     .lc-step.done .lc-step-label { color: var(--green); }
     .error-icon-wrap {
       width: 64px; height: 64px; border-radius: 50%; margin: 0 auto;
@@ -2840,67 +2788,50 @@ import {
     /* ============================== */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 18px; margin-bottom: 28px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-4); margin-bottom: var(--space-5);
     }
     .kpi-card {
-      background: var(--surface); border-radius: 20px;
+      background: var(--color-surface); border-radius: var(--radius-lg);
       padding: 24px; display: flex; flex-direction: column; gap: 14px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: all 0.25s cubic-bezier(.4,0,.2,1);
-      position: relative; overflow: hidden; border: 1px solid #f0f0f0;
+      box-shadow: var(--shadow-sm); transition: box-shadow 0.2s ease, border-color 0.2s ease;
+      border: 1px solid var(--color-line);
     }
-    .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.08); }
-    .kpi-glow {
-      position: absolute; top: -40px; right: -40px;
-      width: 100px; height: 100px; border-radius: 50%;
-      opacity: 0.12; transition: opacity 0.3s;
-    }
-    .kpi-card:hover .kpi-glow { opacity: 0.2; }
-    .kpi-blue .kpi-glow { background: var(--blue); }
-    .kpi-green .kpi-glow { background: var(--green); }
-    .kpi-orange .kpi-glow { background: var(--orange); }
-    .kpi-purple .kpi-glow { background: var(--purple); }
-    .kpi-teal .kpi-glow { background: var(--teal); }
-    .kpi-red .kpi-glow { background: var(--red); }
+    .kpi-card:hover { border-color: var(--color-line-strong); box-shadow: var(--shadow-md); }
 
     .kpi-icon-wrap {
-      width: 48px; height: 48px; border-radius: 16px;
+      width: 48px; height: 48px; border-radius: var(--radius-md);
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      background: var(--color-primary-soft); color: var(--color-primary);
     }
-    .kpi-blue .kpi-icon-wrap { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
-    .kpi-green .kpi-icon-wrap { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
-    .kpi-orange .kpi-icon-wrap { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
-    .kpi-purple .kpi-icon-wrap { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
-    .kpi-teal .kpi-icon-wrap { background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; }
-    .kpi-red .kpi-icon-wrap { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
     .kpi-icon-wrap mat-icon { font-size: 24px; width: 24px; height: 24px; }
 
     .kpi-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .kpi-number { font-size: 26px; font-weight: 800; color: var(--text-primary); line-height: 1.1; white-space: nowrap; letter-spacing: -0.5px; }
+    .kpi-number { font-size: var(--text-3xl); font-weight: 800; color: var(--text-primary); line-height: 1.1; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
     .kpi-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
     .kpi-sub {
-      font-size: 12px; color: #b0b8c4; padding-top: 4px;
-      border-top: 1px dashed #f0f0f0;
+      font-size: 12px; color: var(--color-text-3); padding-top: 4px;
+      border-top: 1px dashed var(--color-line);
     }
 
     /* ============================== */
     /*  TABS                          */
     /* ============================== */
     .tabs-wrapper {
-      background: var(--surface); border-radius: 20px;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.05); overflow: hidden;
-      border: 1px solid #f0f0f0;
+      background: var(--color-surface); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm); overflow: hidden;
+      border: 1px solid var(--color-line);
     }
-    .dashboard-tabs ::ng-deep .mat-mdc-tab-header { background: linear-gradient(135deg, #f0fdfa 0%, #f8fafc 100%); border-bottom: 1px solid #e2e8f0; }
+    .dashboard-tabs ::ng-deep .mat-mdc-tab-header { background: var(--color-surface); border-bottom: 1px solid var(--color-line); }
     .dashboard-tabs ::ng-deep .mat-mdc-tab { min-width: 140px; }
     .dashboard-tabs ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
       display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;
     }
     .tab-count {
-      background: var(--blue); color: white; font-size: 10px; font-weight: 700;
+      background: var(--color-surface-2); color: var(--color-text-2); font-size: 10px; font-weight: 700;
       padding: 2px 8px; border-radius: 10px; margin-left: 2px; line-height: 16px;
     }
-    .tab-count.warn { background: var(--orange); }
+    .tab-count.warn { background: var(--color-warn-soft); color: var(--color-warn); }
     .tab-body { padding: 28px; }
 
     /* ============================== */
@@ -2911,17 +2842,16 @@ import {
     }
     .stat-chip {
       flex: 1; min-width: 160px; display: flex; align-items: center; gap: 12px;
-      padding: 16px 18px; border-radius: var(--radius-md); border: 1px solid;
-      transition: transform 0.2s;
+      padding: 16px 18px; border-radius: var(--radius-md);
+      background: var(--color-surface); border: 1px solid var(--color-line);
     }
-    .stat-chip:hover { transform: translateY(-2px); }
     .stat-chip mat-icon { font-size: 22px; width: 22px; height: 22px; }
-    .stat-chip.blue { background: var(--blue-soft); border-color: var(--blue-mid); color: var(--blue); }
-    .stat-chip.green { background: var(--green-soft); border-color: var(--green-mid); color: var(--green); }
-    .stat-chip.orange { background: var(--orange-soft); border-color: var(--orange-mid); color: var(--orange); }
-    .stat-chip.purple { background: var(--purple-soft); border-color: var(--purple-mid); color: var(--purple); }
-    .stat-chip.teal { background: var(--teal-soft); border-color: var(--teal-mid); color: var(--teal); }
-    .stat-chip.red { background: var(--red-soft); border-color: var(--red-mid); color: var(--red); }
+    .stat-chip.blue mat-icon { color: var(--blue); }
+    .stat-chip.green mat-icon { color: var(--green); }
+    .stat-chip.orange mat-icon { color: var(--orange); }
+    .stat-chip.purple mat-icon { color: var(--purple); }
+    .stat-chip.teal mat-icon { color: var(--teal); }
+    .stat-chip.red mat-icon { color: var(--red); }
     .sc-text { display: flex; flex-direction: column; }
     .sc-val { font-size: 20px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
     .sc-lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 500; }
@@ -2930,19 +2860,19 @@ import {
     /*  PANEL (section wrapper)       */
     /* ============================== */
     .panel {
-      background: var(--surface); border: 1px solid #f0f0f0;
-      border-radius: 20px; margin-bottom: 24px;
-      overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+      background: var(--color-surface); border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg); margin-bottom: 24px;
+      overflow: hidden; box-shadow: var(--shadow-sm);
     }
     .alert-panel { border-color: var(--orange-mid); background: var(--orange-soft); }
 
     .panel-header {
-      display: flex; justify-content: space-between; align-items: center;
+      display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
       padding: 20px 24px; border-bottom: 1px solid var(--border);
     }
     .alert-panel .panel-header { border-bottom-color: var(--orange-mid); }
 
-    .panel-title-group { display: flex; align-items: center; gap: 14px; }
+    .panel-title-group { display: flex; align-items: center; gap: 14px; margin-right: auto; }
     .panel-icon {
       width: 40px; height: 40px; border-radius: var(--radius-sm);
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -2954,16 +2884,10 @@ import {
     .panel-icon.purple { background: var(--purple-soft); color: var(--purple); }
     .panel-icon.teal { background: var(--teal-soft); color: var(--teal); }
     .panel-icon.red { background: var(--red-soft); color: var(--red); }
-    .alert-panel .panel-icon.orange { background: rgba(245,158,11,0.2); }
+    .alert-panel .panel-icon.orange { background: var(--color-surface); }
 
-    .panel-title-group h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
-    .panel-title-group p { font-size: 12px; color: var(--text-muted); margin: 3px 0 0; }
-    .panel-action {
-      font-size: 12px !important; border-color: var(--border) !important;
-      color: var(--text-secondary) !important; border-radius: var(--radius-sm) !important;
-    }
-    .panel-action mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; }
-    .panel-loading { display: flex; justify-content: center; padding: 48px; }
+    .panel-title-group h3 { font-size: var(--text-md); font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
+    .panel-title-group p { font-size: var(--text-xs); color: var(--text-muted); margin: 3px 0 0; }
 
     /* ============================== */
     /*  PROVINCE GRID (Overview)      */
@@ -2976,7 +2900,7 @@ import {
       background: var(--surface); padding: 20px 24px;
       transition: background 0.2s, transform 0.2s;
     }
-    .province-card:hover { background: #f0fdfa; transform: translateY(-1px); }
+    .province-card:hover { background: var(--color-canvas); transform: translateY(-1px); }
     .prov-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
     .prov-map-icon { font-size: 18px; width: 18px; height: 18px; color: var(--blue); }
     .province-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
@@ -2996,11 +2920,11 @@ import {
     .equip-card {
       display: flex; align-items: stretch; gap: 0;
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; cursor: pointer; overflow: hidden;
-      transition: all 0.15s ease; position: relative;
+      border-radius: var(--radius-md); cursor: pointer; overflow: hidden;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease; position: relative;
     }
-    .equip-card:hover { border-color: var(--teal-mid); box-shadow: 0 4px 16px rgba(0,0,0,0.06); transform: translateY(-2px); }
-    .equip-card.active { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-soft); }
+    .equip-card:hover { border-color: var(--color-line-strong); box-shadow: var(--shadow-md); }
+    .equip-card.active { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-soft); }
 
     .ec-rank {
       display: flex; align-items: center; justify-content: center;
@@ -3039,7 +2963,7 @@ import {
     /* Equipment Summary Strip */
     .equip-summary-strip {
       display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--border);
-      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      background: var(--color-surface-2);
     }
     .ess-item {
       flex: 1; min-width: 120px; padding: 16px 20px;
@@ -3059,24 +2983,14 @@ import {
     /* Expanded Detail Panel (below grid) */
     .equip-detail-panel {
       margin: 0 20px 20px; padding: 20px;
-      background: #f8fafc; border-radius: 14px; border: 1px solid var(--border);
+      background: var(--color-canvas); border-radius: var(--radius-lg); border: 1px solid var(--border);
       animation: slideDown 0.25s ease;
-    }
-    @keyframes slideDown {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
     }
     .edp-header {
       display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
     }
-    .edp-header mat-icon { font-size: 22px; width: 22px; height: 22px; color: var(--purple); }
+    .edp-header > mat-icon { font-size: 22px; width: 22px; height: 22px; color: var(--purple); }
     .edp-header h4 { font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0; flex: 1; }
-    .edp-close {
-      background: none; border: none; cursor: pointer; padding: 4px;
-      border-radius: 8px; color: var(--text-muted); display: flex;
-      transition: all 0.15s;
-    }
-    .edp-close:hover { background: var(--border); color: var(--text-primary); }
     .edp-stats {
       display: flex; gap: 0; border-radius: 10px; overflow: hidden;
       border: 1px solid var(--border); margin-bottom: 16px;
@@ -3212,13 +3126,6 @@ import {
     }
     .tp-row:last-child { border-bottom: none; }
     .tp-row:hover { background: var(--surface-hover); }
-    .tp-rank {
-      font-size: 14px; font-weight: 800; min-width: 32px; text-align: center;
-      padding: 4px 0; border-radius: var(--radius-sm); color: var(--text-muted);
-    }
-    .rank-1 { color: #d97706; background: #fef3c7; }
-    .rank-2 { color: #6b7280; background: #f3f4f6; }
-    .rank-3 { color: #92400e; background: #fde68a33; }
     .tp-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
     .tp-name { font-weight: 600; color: var(--text-primary); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tp-meta { font-size: 12px; color: var(--text-muted); }
@@ -3232,7 +3139,7 @@ import {
       gap: 12px; padding: 20px 24px;
     }
     .alert-card {
-      background: white; border-radius: var(--radius-md); padding: 16px;
+      background: var(--color-surface); border-radius: var(--radius-md); padding: 16px;
       border: 1px solid var(--orange-mid); box-shadow: var(--shadow-sm);
     }
     .alert-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -3240,99 +3147,44 @@ import {
     .alert-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
 
     /* ============================== */
-    /*  MODERN TABLE                  */
+    /*  TABLES                        */
     /* ============================== */
     .table-wrap { overflow-x: auto; }
-    .modern-table {
-      width: 100%; border-collapse: collapse; font-size: 13px;
-      min-width: 700px;
-    }
-    .modern-table thead { background: linear-gradient(135deg, #f0fdfa 0%, #f0f9ff 100%); }
-    .modern-table th {
-      padding: 12px 18px; text-align: left; font-weight: 700;
-      color: #0d9488; text-transform: uppercase; font-size: 11px;
-      letter-spacing: 0.5px; border-bottom: 2px solid #ccfbf1;
-      white-space: nowrap; position: sticky; top: 0; background: linear-gradient(135deg, #f0fdfa 0%, #f0f9ff 100%);
-    }
-    .modern-table th.center { text-align: center; }
-    .modern-table th.right { text-align: right; }
-    .modern-table td {
-      padding: 13px 18px; border-bottom: 1px solid #f1f5f9;
-      color: var(--text-secondary); vertical-align: middle;
-    }
-    .modern-table tbody tr { transition: background 0.15s; }
-    .modern-table tbody tr:hover { background: #f0fdfa; }
-    .modern-table tbody tr:last-child td { border-bottom: none; }
+    .table-wrap .app-table { min-width: 700px; }
 
-    .primary-cell { font-weight: 600; color: var(--text-primary) !important; }
+    .primary-cell { font-weight: 600; color: var(--text-primary); }
     .secondary-text { color: var(--text-secondary); }
-    .mono-text { font-family: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', monospace; font-size: 12px; color: var(--text-secondary); }
-    .money-val { font-weight: 700; color: var(--green) !important; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
-    .danger-val { color: var(--red) !important; font-weight: 700; }
-    .center { text-align: center !important; }
-    .right { text-align: right !important; }
+    .mono-text { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-secondary); }
+    .money-val { font-weight: 700; }
+    .danger-val { color: var(--red); font-weight: 700; }
+    .center { text-align: center; }
     .reason-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .num-badge {
       display: inline-flex; align-items: center; justify-content: center;
       min-width: 28px; height: 24px; padding: 0 8px;
-      border-radius: 12px; font-weight: 700; font-size: 12px;
+      border-radius: 999px; font-weight: 700; font-size: var(--text-xs);
     }
     .num-badge.blue { background: var(--blue-soft); color: var(--blue); }
-    .num-badge.subtle { background: #f1f5f9; color: var(--text-secondary); }
+    .num-badge.subtle { background: var(--color-surface-2); color: var(--text-secondary); }
 
     .province-tag {
-      display: inline-block; padding: 3px 10px; border-radius: 6px;
-      background: var(--blue-soft); color: var(--blue); font-size: 12px; font-weight: 600;
+      display: inline-block; padding: 3px 10px; border-radius: var(--radius-sm);
+      background: var(--blue-soft); color: var(--blue); font-size: var(--text-xs); font-weight: 600;
     }
     .category-tag {
-      display: inline-block; padding: 3px 10px; border-radius: 6px;
-      background: var(--purple-soft); color: var(--purple); font-size: 12px; font-weight: 600;
+      display: inline-block; padding: 3px 10px; border-radius: var(--radius-sm);
+      background: var(--purple-soft); color: var(--purple); font-size: var(--text-xs); font-weight: 600;
     }
 
-    .alert-row { background: var(--orange-soft) !important; }
-    .alert-row:hover { background: #fef3c7 !important; }
-
-    .empty-row {
-      text-align: center !important; color: var(--text-muted) !important;
-      padding: 40px 18px !important; font-style: italic;
-    }
-
-    /* ============================== */
-    /*  STATUS TAGS                   */
-    /* ============================== */
-    .status-tag {
-      display: inline-block; padding: 4px 12px; border-radius: 20px;
-      font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
-      text-transform: capitalize; white-space: nowrap;
-    }
-    .st-completed, .st-paid, .st-approved, .st-ok, .st-active {
-      background: var(--green-soft); color: #16a34a; border: 1px solid var(--green-mid);
-    }
-    .st-pending, .st-scheduled, .st-processing, .st-in.progress, .st-inprogress {
-      background: var(--blue-soft); color: #2563eb; border: 1px solid var(--blue-mid);
-    }
-    .st-warning, .st-cancelled, .st-overdue, .st-low.stock {
-      background: var(--orange-soft); color: #d97706; border: 1px solid var(--orange-mid);
-    }
-    .st-rejected, .st-failed {
-      background: var(--red-soft); color: #dc2626; border: 1px solid var(--red-mid);
-    }
-    .st-draft, .st-unknown, .st-0, .st-1, .st-2, .st-3 {
-      background: #f1f5f9; color: var(--text-secondary); border: 1px solid var(--border);
-    }
+    .alert-row td { background: var(--orange-soft); }
+    .empty-row td { padding: 0; }
+    .empty-row:hover td { background: transparent; }
 
     /* ============================== */
     /*  EMPTY STATES                  */
     /* ============================== */
-    .empty-placeholder {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 48px 20px; color: var(--text-muted); grid-column: 1 / -1;
-      background: var(--surface);
-    }
-    .empty-placeholder.compact { padding: 32px 20px; }
-    .empty-placeholder mat-icon { font-size: 40px; width: 40px; height: 40px; margin-bottom: 8px; opacity: 0.5; }
-    .empty-placeholder p { margin: 0; font-size: 14px; }
+    .empty-placeholder { grid-column: 1 / -1; background: var(--surface); }
 
     /* ============================== */
     /*  KPI DIALOG OVERLAY            */
@@ -3340,15 +3192,15 @@ import {
     .kpi-card.clickable { cursor: pointer; }
 
     .dialog-backdrop {
-      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
-      backdrop-filter: blur(4px); z-index: 1000;
+      position: fixed; inset: 0; background: var(--color-scrim);
+      z-index: 1000;
       animation: fadeIn 0.2s ease;
     }
     .dialog-panel {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 94vw; max-width: 720px; max-height: 85vh;
-      background: var(--surface); border-radius: 20px;
-      box-shadow: 0 25px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1);
+      background: var(--color-surface); border-radius: var(--radius-lg);
+      border: 1px solid var(--color-line); box-shadow: var(--shadow-lg);
       z-index: 1001; display: flex; flex-direction: column;
       animation: dialogSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       overflow: hidden;
@@ -3360,57 +3212,27 @@ import {
     }
 
     .dialog-header {
-      padding: 24px 28px 20px; display: flex; align-items: center;
+      padding: 20px 24px 16px; display: flex; align-items: center; gap: var(--space-3);
       justify-content: space-between; border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .dh-training { background: linear-gradient(135deg, var(--blue-soft), var(--blue-mid)); }
-    .dh-participants { background: linear-gradient(135deg, var(--green-soft), var(--green-mid)); }
-    .dh-trainers { background: linear-gradient(135deg, var(--orange-soft), var(--orange-mid)); }
-    .dh-deliveries { background: linear-gradient(135deg, var(--purple-soft), var(--purple-mid)); }
-    .dh-revenue { background: linear-gradient(135deg, var(--teal-soft), var(--teal-mid)); }
-    .dh-inventory { background: linear-gradient(135deg, var(--red-soft), var(--red-mid)); }
 
-    .dialog-title-group { display: flex; align-items: center; gap: 14px; }
+    .dialog-title-group { display: flex; align-items: center; gap: 14px; min-width: 0; }
     .dialog-icon-ring {
-      width: 46px; height: 46px; border-radius: 14px;
+      width: 44px; height: 44px; border-radius: var(--radius-md);
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      background: var(--color-primary-soft); color: var(--color-primary);
     }
-    .dialog-training .dialog-icon-ring { background: var(--blue); color: white; }
-    .dialog-participants .dialog-icon-ring { background: var(--green); color: white; }
-    .dialog-trainers .dialog-icon-ring { background: var(--orange); color: white; }
-    .dialog-deliveries .dialog-icon-ring { background: var(--purple); color: white; }
-    .dialog-revenue .dialog-icon-ring { background: var(--teal); color: white; }
-    .dialog-inventory .dialog-icon-ring { background: var(--red); color: white; }
     .dialog-icon-ring mat-icon { font-size: 24px; width: 24px; height: 24px; }
 
-    .dialog-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
-    .dialog-subtitle { font-size: 12px; color: var(--text-secondary); margin: 3px 0 0; }
+    .dialog-title { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin: 0; line-height: 1.2; }
+    .dialog-subtitle { font-size: var(--text-xs); color: var(--text-secondary); margin: 3px 0 0; }
 
-    .dialog-close {
-      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
-      background: var(--surface); display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: all 0.15s; color: var(--text-secondary); flex-shrink: 0;
-    }
-    .dialog-close:hover { background: var(--red-soft); color: var(--red); border-color: var(--red-mid); }
-    .dialog-close mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .dialog-close { flex-shrink: 0; color: var(--text-secondary); }
 
     .dialog-body {
-      padding: 24px 28px 28px; overflow-y: auto; flex: 1;
+      padding: 24px; overflow-y: auto; flex: 1;
     }
-
-    .dialog-loading {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 48px 20px; gap: 12px; color: var(--text-muted);
-    }
-    .dialog-loading p { margin: 0; font-size: 13px; }
-
-    .dialog-empty {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 40px 20px; color: var(--text-muted);
-    }
-    .dialog-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.4; margin-bottom: 8px; }
-    .dialog-empty p { margin: 0; font-size: 14px; }
 
     /* Dialog Stats Row */
     .dialog-stats-row {
@@ -3418,21 +3240,16 @@ import {
       gap: 12px; margin-bottom: 24px;
     }
     .dialog-stat {
-      padding: 16px 18px; border-radius: 14px; text-align: center;
+      padding: 16px 18px; border-radius: var(--radius-md); text-align: center;
       display: flex; flex-direction: column; gap: 4px;
+      background: var(--color-surface-2);
     }
-    .dialog-stat.blue { background: var(--blue-soft); }
-    .dialog-stat.green { background: var(--green-soft); }
-    .dialog-stat.orange { background: var(--orange-soft); }
-    .dialog-stat.purple { background: var(--purple-soft); }
-    .dialog-stat.teal { background: var(--teal-soft); }
-    .dialog-stat.red { background: var(--red-soft); }
-    .ds-val { font-size: 22px; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
-    .ds-lbl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
+    .ds-val { font-size: var(--text-2xl); font-weight: 800; color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .ds-lbl { font-size: var(--text-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; }
 
     .dialog-section-title {
       display: flex; align-items: center; gap: 8px;
-      font-size: 14px; font-weight: 700; color: var(--text-primary);
+      font-size: var(--text-md); font-weight: 700; color: var(--text-primary);
       margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
     }
     .dialog-section-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--text-secondary); }
@@ -3440,32 +3257,11 @@ import {
     .dialog-section-title.warn-title mat-icon { color: var(--orange); }
 
     /* Dialog Table */
-    .dialog-table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
-    .dialog-table {
-      width: 100%; border-collapse: collapse; font-size: 13px;
-    }
-    .dialog-table thead { background: #f8fafc; }
-    .dialog-table th {
-      padding: 10px 16px; font-size: 11px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);
-      border-bottom: 1px solid var(--border); white-space: nowrap;
-    }
-    .dialog-table td {
-      padding: 10px 16px; border-bottom: 1px solid #f1f5f9; color: var(--text-primary);
-    }
-    .dialog-table tbody tr:last-child td { border-bottom: none; }
-    .dialog-table tbody tr:hover { background: #f0fdfa; }
-    .dialog-table .right { text-align: right; }
-    .dialog-table .mono-text { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
-    .dialog-table .primary-cell { font-weight: 600; }
-    .dialog-table .danger-val { color: var(--red); font-weight: 600; }
-    .dialog-table tfoot td { border-top: 2px solid var(--border); background: #f8fafc; }
-    .total-row td { font-size: 13px; }
-    .low-stock-row { background: var(--red-soft) !important; }
+    .dialog-table-wrap { overflow-x: auto; border-radius: var(--radius-md); border: 1px solid var(--border); }
 
     .rate-pill {
-      display: inline-block; padding: 3px 10px; border-radius: 20px;
-      font-size: 12px; font-weight: 700;
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      font-size: var(--text-xs); font-weight: 700;
     }
     .rate-pill.good { background: var(--green-soft); color: var(--green); }
     .rate-pill.mid { background: var(--orange-soft); color: var(--orange); }
@@ -3474,70 +3270,63 @@ import {
     /* Participant Bars */
     .dialog-province-bars { display: flex; flex-direction: column; gap: 10px; }
     .bar-row { display: flex; align-items: center; gap: 12px; }
-    .bar-label { width: 120px; font-size: 13px; font-weight: 600; color: var(--text-primary); text-align: right; flex-shrink: 0; }
-    .bar-track { flex: 1; height: 26px; background: #f1f5f9; border-radius: 8px; overflow: hidden; }
-    .bar-fill { height: 100%; border-radius: 8px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); min-width: 4px; }
-    .bar-fill.green-fill { background: linear-gradient(90deg, var(--green), #4ade80); }
-    .bar-value { width: 60px; font-size: 13px; font-weight: 700; color: var(--text-primary); font-family: 'SF Mono', monospace; }
+    .bar-label { width: 120px; font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); text-align: right; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 26px; background: var(--color-surface-2); border-radius: var(--radius-control); overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: var(--radius-control); transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); min-width: 4px; }
+    .bar-fill.green-fill { background: var(--color-primary); }
+    .bar-value { width: 60px; font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
     /* Trainer Cards */
     .trainer-cards-grid { display: flex; flex-direction: column; gap: 10px; }
     .trainer-card {
       display: flex; align-items: center; gap: 14px;
-      padding: 14px 18px; border-radius: 14px;
+      padding: 14px 18px; border-radius: var(--radius-md);
       border: 1px solid var(--border); background: var(--surface);
-      transition: all 0.15s;
+      transition: background 0.15s;
     }
-    .trainer-card:hover { background: var(--surface-hover); box-shadow: var(--shadow-sm); }
+    .trainer-card:hover { background: var(--surface-hover); }
     .trainer-avatar {
-      width: 44px; height: 44px; border-radius: 12px;
+      width: 44px; height: 44px; border-radius: var(--radius-md);
       display: flex; align-items: center; justify-content: center;
-      font-size: 15px; font-weight: 800; color: white; flex-shrink: 0;
+      font-size: var(--text-md); font-weight: 800; flex-shrink: 0;
       letter-spacing: 0.5px;
     }
-    .ta-0 { background: linear-gradient(135deg, var(--blue), #60a5fa); }
-    .ta-1 { background: linear-gradient(135deg, var(--green), #4ade80); }
-    .ta-2 { background: linear-gradient(135deg, var(--orange), #fbbf24); }
-    .ta-3 { background: linear-gradient(135deg, var(--purple), #a78bfa); }
-    .ta-4 { background: linear-gradient(135deg, var(--teal), #2dd4bf); }
+    .ta-0 { background: var(--color-primary-soft); color: var(--color-primary); }
+    .ta-1 { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); }
+    .ta-2 { background: var(--color-cat-amber-soft); color: var(--color-cat-amber); }
+    .ta-3 { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .ta-4 { background: var(--color-cat-pink-soft); color: var(--color-cat-pink); }
     .trainer-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-    .trainer-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
-    .trainer-detail { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .trainer-badge {
-      padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; flex-shrink: 0;
-    }
-    .trainer-badge.active { background: var(--green-soft); color: var(--green); }
-    .trainer-badge.inactive { background: var(--red-soft); color: var(--red); }
+    .trainer-name { font-size: var(--text-md); font-weight: 700; color: var(--text-primary); }
+    .trainer-detail { font-size: var(--text-xs); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Revenue Split Layout */
     .dialog-split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
     .top-product-row {
       display: flex; align-items: center; gap: 12px;
-      padding: 10px 0; border-bottom: 1px solid #f1f5f9;
+      padding: 10px 0; border-bottom: 1px solid var(--color-line);
     }
     .top-product-row:last-child { border-bottom: none; }
     .tp-rank {
-      width: 28px; height: 28px; border-radius: 8px;
+      min-width: 28px; height: 28px; padding: 0 6px; box-sizing: border-box; border-radius: var(--radius-sm);
       display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 800; flex-shrink: 0;
+      font-size: var(--text-xs); font-weight: 800; flex-shrink: 0;
+      background: var(--color-surface-2); color: var(--text-secondary);
     }
-    .tp-rank.rank-0 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: white; }
-    .tp-rank.rank-1 { background: linear-gradient(135deg, #cbd5e1, #94a3b8); color: white; }
-    .tp-rank.rank-2 { background: linear-gradient(135deg, #d97706, #b45309); color: white; }
-    .tp-rank.rank-rest { background: #f1f5f9; color: var(--text-secondary); }
+    .tp-rank.rank-0, .tp-rank.rank-1, .tp-rank.rank-2, .tp-rank.rank-3 { background: var(--color-primary-soft); color: var(--color-primary); }
     .tp-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .tp-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .tp-sub { font-size: 11px; color: var(--text-muted); }
-    .tp-rev { font-size: 13px; font-weight: 700; color: var(--teal); font-family: 'SF Mono', monospace; white-space: nowrap; }
+    .tp-name { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tp-sub { font-size: var(--text-xs); color: var(--text-muted); }
+    .tp-rev { font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
     /* Order Status Donuts */
     .status-donut-row { display: flex; gap: 24px; justify-content: center; padding: 16px 0; }
     .donut-stat { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .donut-stat span { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+    .donut-stat span { font-size: var(--text-xs); color: var(--text-secondary); font-weight: 600; }
     .donut-circle {
-      width: 64px; height: 64px; border-radius: 50%;
+      width: 64px; height: 64px; border-radius: 50%; box-sizing: border-box;
       display: flex; align-items: center; justify-content: center;
-      font-size: 18px; font-weight: 800; color: var(--text-primary);
+      font-size: var(--text-xl); font-weight: 800; color: var(--text-primary);
       border: 4px solid var(--border);
     }
     .donut-circle.green-ring { border-color: var(--green); background: var(--green-soft); }
@@ -3547,29 +3336,11 @@ import {
     /*  RESPONSIVE                    */
     /* ============================== */
     /* ============================== */
-    /*  REQUEST DELIVERY BUTTON        */
-    /* ============================== */
-    .request-delivery-btn {
-      background: linear-gradient(135deg, #f59e0b, #ef4444) !important;
-      color: white !important;
-      border: 1px solid rgba(255,255,255,0.2) !important;
-      border-radius: 12px !important;
-      font-weight: 700 !important;
-      backdrop-filter: blur(8px);
-      display: flex; align-items: center; gap: 6px;
-    }
-    .request-delivery-btn:hover {
-      background: linear-gradient(135deg, #fbbf24, #f87171) !important;
-      box-shadow: 0 4px 16px rgba(245,158,11,0.35) !important;
-    }
-
-    /* ============================== */
     /*  DELIVERY DIALOG                */
     /* ============================== */
     .dlg-backdrop {
       position: fixed; inset: 0;
-      background: rgba(15, 23, 42, 0.5);
-      backdrop-filter: blur(4px);
+      background: var(--color-scrim);
       z-index: 1000;
       animation: fadeIn 0.2s ease;
     }
@@ -3577,61 +3348,50 @@ import {
       position: fixed; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       width: 94vw; max-width: 580px; max-height: 85vh;
-      background: var(--surface); border-radius: 24px;
-      box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+      background: var(--color-surface); border-radius: var(--radius-lg);
+      border: 1px solid var(--color-line); box-shadow: var(--shadow-lg);
       z-index: 1001;
       display: flex; flex-direction: column;
       animation: dialogSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
       overflow: hidden;
     }
     .dlg-header {
-      padding: 24px 28px 20px;
-      background: linear-gradient(135deg, #0d9488, #0891b2, #3b82f6);
+      padding: 20px 24px 16px; gap: var(--space-3);
+      border-bottom: 1px solid var(--color-line);
       display: flex; align-items: center; justify-content: space-between;
     }
-    .dlg-title-group { display: flex; align-items: center; gap: 14px; }
+    .dlg-title-group { display: flex; align-items: center; gap: 14px; min-width: 0; }
     .dlg-icon-ring {
-      width: 46px; height: 46px; border-radius: 14px;
-      background: rgba(255,255,255,0.2);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,0.25);
+      width: 44px; height: 44px; border-radius: var(--radius-md); flex-shrink: 0;
+      background: var(--color-primary-soft); color: var(--color-primary);
       display: flex; align-items: center; justify-content: center;
     }
-    .dlg-icon-ring mat-icon { color: white; font-size: 24px; width: 24px; height: 24px; }
-    .dlg-title { font-size: 18px; font-weight: 700; color: white; margin: 0; }
-    .dlg-subtitle { font-size: 12px; color: rgba(255,255,255,0.75); margin: 3px 0 0; }
-    .dlg-close {
-      width: 36px; height: 36px; border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.1);
-      color: rgba(255,255,255,0.8);
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: all 0.15s;
-    }
-    .dlg-close:hover { background: rgba(255,255,255,0.2); color: white; }
-    .dlg-close mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .dlg-icon-ring mat-icon { font-size: 24px; width: 24px; height: 24px; }
+    .delete-panel .dlg-icon-ring { background: var(--color-danger-soft); color: var(--color-danger); }
+    .dlg-title { font-size: var(--text-xl); font-weight: 700; color: var(--color-text); margin: 0; }
+    .dlg-subtitle { font-size: var(--text-xs); color: var(--color-text-2); margin: 3px 0 0; }
+    .dlg-close { flex-shrink: 0; color: var(--color-text-2); }
 
-    .dlg-body { padding: 28px; overflow-y: auto; flex: 1; }
+    .dlg-body { padding: 24px; overflow-y: auto; flex: 1; }
 
     .dlg-form { display: flex; flex-direction: column; gap: 18px; }
     .dlg-row { display: flex; gap: 16px; }
     .dlg-row.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .dlg-field { display: flex; flex-direction: column; gap: 6px; }
+    .dlg-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
     .dlg-label {
-      font-size: 12px; font-weight: 700; color: var(--text-secondary);
-      text-transform: uppercase; letter-spacing: 0.4px;
+      font-size: var(--text-xs); font-weight: 700; color: var(--text-secondary);
     }
     .dlg-label .req { color: var(--red); }
-    .dlg-label .opt { color: var(--text-muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+    .dlg-label .opt { color: var(--text-muted); font-weight: 500; }
     .dlg-input, .dlg-select {
-      padding: 10px 14px; border: 1.5px solid var(--border);
-      border-radius: 12px; font-size: 14px; color: var(--text-primary);
-      background: var(--surface); outline: none;
+      padding: 10px 14px; border: 1px solid var(--color-line-strong);
+      border-radius: var(--radius-control); font-size: var(--text-md); color: var(--text-primary);
+      background: var(--color-surface); outline: none; font-family: inherit;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
     .dlg-input:focus, .dlg-select:focus {
-      border-color: #0d9488;
-      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
     }
     .dlg-input::placeholder { color: var(--text-muted); }
 
@@ -3639,19 +3399,20 @@ import {
     .address-input-wrap {
       position: relative; display: flex; align-items: center;
     }
+    .address-input-wrap .dlg-input { flex: 1; min-width: 0; }
     .address-loc-icon {
       position: absolute; left: 12px;
       font-size: 20px; width: 20px; height: 20px;
-      color: #ef5350; z-index: 1; pointer-events: none;
+      color: var(--color-text-3); z-index: 1; pointer-events: none;
     }
-    .address-input {
-      padding-left: 40px !important;
-      padding-right: 40px !important;
+    .dlg-input.address-input {
+      padding-left: 40px;
+      padding-right: 40px;
     }
     .address-verified {
       position: absolute; right: 12px;
       font-size: 20px; width: 20px; height: 20px;
-      color: #22c55e;
+      color: var(--color-ok);
       animation: addrPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     @keyframes addrPopIn {
@@ -3659,29 +3420,28 @@ import {
       100% { transform: scale(1); opacity: 1; }
     }
     .address-confirmed-text {
-      display: block; font-size: 11px; color: #22c55e;
+      display: block; font-size: var(--text-xs); color: var(--color-ok);
       font-weight: 600; margin-top: 4px; padding-left: 2px;
     }
 
     /* Preview */
     .dlg-preview {
       display: flex; align-items: center; gap: 10px;
-      padding: 12px 16px; border-radius: 12px;
-      background: #f0fdfa; border: 1px solid #ccfbf1;
-      color: var(--text-secondary); font-size: 13px;
+      padding: 12px 16px; border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--text-primary); font-size: var(--text-sm);
     }
-    .dlg-preview mat-icon { color: var(--teal); font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+    .dlg-preview mat-icon { color: var(--color-primary); font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+    .urgent-tag {
+      display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px;
+      background: var(--color-danger-soft); color: var(--color-danger);
+      font-size: var(--text-xs); font-weight: 700;
+    }
 
     /* Actions */
     .dlg-actions {
       display: flex; justify-content: flex-end; gap: 12px; padding-top: 8px;
     }
-    .btn-submit-delivery {
-      background: linear-gradient(135deg, #0d9488, #3b82f6) !important;
-      color: white !important; border-radius: 12px !important;
-      font-weight: 700 !important; display: flex; align-items: center; gap: 6px;
-    }
-    .btn-submit-delivery:disabled { opacity: 0.5; }
 
     /* Success */
     .dlg-success {
@@ -3690,24 +3450,20 @@ import {
     }
     .dlg-success-icon {
       width: 64px; height: 64px; border-radius: 50%;
-      background: #f0fdf4; display: flex; align-items: center; justify-content: center;
+      background: var(--color-ok-soft); display: flex; align-items: center; justify-content: center;
       margin-bottom: 16px;
     }
-    .dlg-success-icon mat-icon { font-size: 36px; width: 36px; height: 36px; color: #22c55e; }
-    .dlg-success h3 { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
-    .dlg-success p { font-size: 14px; color: var(--text-secondary); margin: 0 0 20px; }
+    .dlg-success-icon mat-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-ok); }
+    .dlg-success h3 { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
+    .dlg-success p { font-size: var(--text-md); color: var(--text-secondary); margin: 0 0 20px; }
     .dlg-success-actions { display: flex; gap: 12px; }
-    .btn-another {
-      background: linear-gradient(135deg, #0d9488, #3b82f6) !important;
-      color: white !important; border-radius: 12px !important; font-weight: 600 !important;
-    }
 
     /* Error */
     .dlg-error {
       display: flex; align-items: center; gap: 10px;
-      padding: 12px 16px; border-radius: 10px;
-      background: #fef2f2; border: 1px solid #fecaca;
-      color: #dc2626; font-size: 13px; font-weight: 600;
+      padding: 12px 16px; border-radius: var(--radius-md);
+      background: var(--color-danger-soft);
+      color: var(--color-danger); font-size: var(--text-sm); font-weight: 600;
       margin-bottom: 16px;
     }
     .dlg-error mat-icon { font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
@@ -3715,48 +3471,44 @@ import {
     /* ============================== */
     /*  CRUD EDIT DIALOG & ACTIONS    */
     /* ============================== */
-    .add-btn {
-      background: linear-gradient(135deg, #0d9488, #3b82f6) !important;
-      color: white !important; border-radius: 12px !important;
-      font-weight: 600 !important; margin-left: 8px;
-    }
     .actions-cell {
       white-space: nowrap;
     }
     .action-edit {
-      color: var(--blue) !important;
+      color: var(--color-primary);
       width: 32px !important; height: 32px !important;
     }
     .action-edit mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .action-delete {
-      color: var(--red) !important;
+      color: var(--color-danger);
       width: 32px !important; height: 32px !important;
     }
     .action-delete mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
     /* ── Attachment badge & button ── */
     .action-attach {
-      color: var(--purple, #7c3aed) !important;
+      color: var(--color-text-2);
       width: 32px !important; height: 32px !important;
     }
     .action-attach mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .attach-count-badge {
       display: inline-flex; align-items: center; justify-content: center;
-      background: var(--purple, #7c3aed); color: #fff;
-      font-size: 11px; font-weight: 600;
+      background: var(--color-primary-soft); color: var(--color-primary);
+      font-size: var(--text-xs); font-weight: 700;
       min-width: 18px; height: 18px; border-radius: 9px;
       padding: 0 5px; margin-left: -4px; vertical-align: middle;
     }
 
     /* ── Attachments slide-out panel ── */
     .attachments-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+      position: fixed; inset: 0; background: var(--color-scrim);
       z-index: 1000; animation: fadeIn 0.2s ease;
     }
     .attachments-panel {
       position: fixed; top: 0; right: 0; bottom: 0;
       width: 420px; max-width: 92vw;
-      background: var(--surface, #fff); box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+      background: var(--color-surface); box-shadow: var(--shadow-lg);
+      border-left: 1px solid var(--color-line);
       z-index: 1001; display: flex; flex-direction: column;
       animation: slideInRight 0.25s ease;
     }
@@ -3766,72 +3518,66 @@ import {
     }
     .attachments-panel-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0);
-      background: var(--surface-2, #f8fafc);
+      padding: 16px 20px; border-bottom: 1px solid var(--color-line);
+      background: var(--color-surface-2);
     }
     .attachments-panel-title {
       display: flex; align-items: center; gap: 12px;
     }
     .attachments-panel-title mat-icon {
-      color: var(--purple, #7c3aed); font-size: 28px; width: 28px; height: 28px;
+      color: var(--color-primary); font-size: 28px; width: 28px; height: 28px;
     }
     .attachments-panel-title h4 {
-      margin: 0; font-size: 16px; font-weight: 600; color: var(--text, #1e293b);
+      margin: 0; font-size: var(--text-lg); font-weight: 600; color: var(--color-text);
     }
     .attachments-panel-sub {
-      font-size: 12px; color: var(--text-secondary, #64748b);
+      font-size: var(--text-xs); color: var(--color-text-2);
     }
 
     /* Upload drop zone */
     .attachments-panel-upload {
-      padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0);
+      padding: 16px 20px; border-bottom: 1px solid var(--color-line);
     }
     .upload-drop-zone {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 4px; padding: 20px; border: 2px dashed var(--border, #cbd5e1);
-      border-radius: 12px; cursor: pointer; transition: all 0.2s;
-      color: var(--text-secondary, #64748b); text-align: center;
+      gap: 4px; padding: 20px; border: 2px dashed var(--color-line-strong);
+      border-radius: var(--radius-md); cursor: pointer; transition: border-color 0.2s, background 0.2s, color 0.2s;
+      color: var(--color-text-2); text-align: center;
     }
     .upload-drop-zone:hover {
-      border-color: var(--purple, #7c3aed); background: rgba(124, 58, 237, 0.04);
-      color: var(--purple, #7c3aed);
+      border-color: var(--color-primary); background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
     .upload-icon { font-size: 32px; width: 32px; height: 32px; opacity: 0.6; }
-    .upload-drop-zone span { font-size: 13px; font-weight: 500; }
-    .upload-hint { font-size: 11px !important; font-weight: 400 !important; opacity: 0.7; }
+    .upload-drop-zone span { font-size: var(--text-sm); font-weight: 500; }
+    .upload-drop-zone .upload-hint { font-size: var(--text-xs); font-weight: 400; opacity: 0.8; }
     .upload-progress {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 0; font-size: 13px; color: var(--purple, #7c3aed);
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 10px 0 0; font-size: var(--text-sm); color: var(--color-text-2);
     }
 
     /* Attachment list */
     .attachments-panel-list {
       flex: 1; overflow-y: auto; padding: 8px 0;
     }
-    .attachments-empty {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 40px 20px; color: var(--text-secondary, #94a3b8);
-    }
-    .attachments-empty mat-icon { font-size: 48px; width: 48px; height: 48px; opacity: 0.4; margin-bottom: 8px; }
-    .attachments-empty p { margin: 0; font-size: 14px; }
 
     .attachment-item {
       display: flex; align-items: center; gap: 12px;
       padding: 10px 20px; transition: background 0.15s;
     }
-    .attachment-item:hover { background: var(--surface-2, #f1f5f9); }
+    .attachment-item:hover { background: var(--color-surface-2); }
     .attachment-icon {
-      width: 36px; height: 36px; border-radius: 8px;
+      width: 36px; height: 36px; border-radius: var(--radius-control);
       display: flex; align-items: center; justify-content: center;
-      background: rgba(124, 58, 237, 0.08); color: var(--purple, #7c3aed);
+      background: var(--color-primary-soft); color: var(--color-primary);
     }
     .attachment-icon mat-icon { font-size: 20px; width: 20px; height: 20px; }
     .attachment-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .attachment-name {
-      font-size: 13px; font-weight: 500; color: var(--text, #1e293b);
+      font-size: var(--text-sm); font-weight: 500; color: var(--color-text);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .attachment-meta { font-size: 11px; color: var(--text-secondary, #94a3b8); }
+    .attachment-meta { font-size: var(--text-xs); color: var(--color-text-3); }
     .attachment-actions { display: flex; gap: 2px; }
     .attachment-actions button { width: 30px !important; height: 30px !important; }
     .attachment-actions mat-icon { font-size: 16px; width: 16px; height: 16px; }
@@ -3842,75 +3588,39 @@ import {
     .delete-panel {
       max-width: 480px;
     }
-    .delete-header {
-      background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-    }
-    .delete-icon-ring {
-      background: rgba(255,255,255,0.2) !important;
-    }
-    .delete-icon-ring mat-icon {
-      color: white !important;
-    }
     .delete-message {
-      font-size: 15px; color: var(--text-secondary);
+      font-size: var(--text-md); color: var(--text-secondary);
       margin: 0 0 20px; line-height: 1.6;
     }
-    .btn-delete-confirm {
-      background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-      color: white !important; border-radius: 12px !important;
-      font-weight: 700 !important; display: flex; align-items: center; gap: 6px;
-    }
-    .btn-delete-confirm:disabled { opacity: 0.5; }
-    .checkbox-label {
-      display: flex !important; align-items: center; gap: 8px;
-      cursor: pointer; font-weight: 500 !important;
+    .dlg-label.checkbox-label {
+      display: flex; align-items: center; gap: 8px;
+      cursor: pointer; font-weight: 500;
     }
     .checkbox-label input[type="checkbox"] {
-      width: 18px; height: 18px; accent-color: #0d9488;
-    }
-    .panel-header {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; flex-wrap: wrap;
+      width: 18px; height: 18px; accent-color: var(--color-primary);
     }
 
-    /* Update Stock button & dialog */
-    .update-stock-btn {
-      background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-      color: white !important; border-radius: 12px !important;
-      font-weight: 600 !important; margin-left: 8px;
-    }
+    /* Update Stock dialog */
     .stock-panel { max-width: 600px; }
-    .stock-header {
-      background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-    }
-    .stock-icon-ring {
-      background: rgba(255,255,255,0.2) !important;
-    }
-    .stock-icon-ring mat-icon { color: white !important; }
     .stock-current-info {
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-      padding: 14px 16px; border-radius: 12px;
-      background: #fffbeb; border: 1px solid #fef3c7; margin-bottom: 16px;
+      padding: 14px 16px; border-radius: var(--radius-md);
+      background: var(--color-surface-2); border: 1px solid var(--color-line); margin-bottom: 16px;
     }
     .sci-item { display: flex; flex-direction: column; gap: 2px; }
-    .sci-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.3px; }
-    .sci-value { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+    .sci-label { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.3px; }
+    .sci-value { font-size: var(--text-md); font-weight: 700; color: var(--text-primary); }
+    .sci-ref { font-family: var(--font-mono); }
     .stock-preview {
       display: flex; align-items: center; gap: 10px;
-      padding: 12px 16px; border-radius: 12px;
-      background: #f0fdfa; border: 1px solid #ccfbf1;
-      color: var(--text-secondary); font-size: 13px;
+      padding: 12px 16px; border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--text-primary); font-size: var(--text-sm);
       margin-bottom: 8px;
     }
-    .stock-preview mat-icon { color: var(--orange); font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
-    .stock-arrow { font-size: 16px !important; width: 16px !important; height: 16px !important; vertical-align: middle; color: var(--text-muted); margin: 0 4px; }
-    .good-val { color: var(--green) !important; }
-    .btn-stock-save {
-      background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-      color: white !important; border-radius: 12px !important;
-      font-weight: 700 !important; display: flex; align-items: center; gap: 6px;
-    }
-    .btn-stock-save:disabled { opacity: 0.5; }
+    .stock-preview > mat-icon { color: var(--color-primary); font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+    .stock-preview .stock-arrow { font-size: 16px; width: 16px; height: 16px; vertical-align: middle; color: var(--text-muted); margin: 0 4px; }
+    .good-val { color: var(--green); }
 
     @media (max-width: 1100px) {
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -3933,8 +3643,7 @@ import {
     }
     @media (max-width: 600px) {
       .kpi-grid { grid-template-columns: 1fr 1fr; }
-      .hero-header { padding: 20px 24px; margin: -24px -24px 24px; }
-      .hero-text h1 { font-size: 20px; }
+      .hero-text h2 { font-size: var(--text-2xl); }
       .dlg-panel { width: 100vw; max-height: 95vh; border-radius: 16px 16px 0 0;
         top: auto; bottom: 0; left: 0; transform: none; }
       .dlg-body { padding: 20px; }
@@ -3954,15 +3663,15 @@ import {
     /* Delivery Password Dialog */
     .pwd-dialog {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: white; border-radius: 16px; padding: 32px; width: 380px; max-width: 90vw;
+      background: var(--color-surface); border-radius: 16px; padding: 32px; width: 380px; max-width: 90vw;
       text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 1200;
     }
-    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: #f57c00; margin-bottom: 12px; }
-    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: 20px; color: #1a1a2e; }
-    .pwd-dialog p { margin: 0 0 20px 0; color: #666; font-size: 14px; }
+    .pwd-lock-icon { font-size: 48px; width: 48px; height: 48px; color: var(--color-warn); margin-bottom: 12px; }
+    .pwd-dialog h3 { margin: 0 0 8px 0; font-size: 20px; color: var(--color-text); }
+    .pwd-dialog p { margin: 0 0 20px 0; color: var(--color-text-2); font-size: 14px; }
     .pwd-input { width: 100%; margin-bottom: 16px; }
     .pwd-actions { display: flex; gap: 12px; justify-content: center; }
-    .pwd-error { color: #e53935; font-size: 13px; margin: -8px 0 12px 0; }
+    .pwd-error { color: var(--color-danger); font-size: 13px; margin: -8px 0 12px 0; }
 
     /* ============================== */
     /*  CAR TRACK TAB STYLES          */
@@ -4103,7 +3812,7 @@ import {
     .badge-moving { background: var(--green-soft); color: var(--green); }
     .badge-idling { background: var(--orange-soft); color: var(--orange); }
     .badge-stopped { background: var(--blue-soft); color: var(--blue); }
-    .badge-offline, .badge-not-found { background: #f1f5f9; color: var(--text-muted); }
+    .badge-offline, .badge-not-found { background: var(--color-surface-2); color: var(--text-muted); }
 
     .lv-body { padding: 0 16px 14px; }
     .lv-location {
@@ -4125,17 +3834,17 @@ import {
       color: var(--text-muted); font-family: 'Courier New', monospace;
     }
     .lv-map-link {
-      color: var(--primary, #1976d2); text-decoration: none;
+      color: var(--primary, var(--color-primary)); text-decoration: none;
       display: inline-flex; align-items: center; gap: 4px;
       transition: color 0.2s;
     }
-    .lv-map-link:hover { color: #1565c0; text-decoration: underline; }
+    .lv-map-link:hover { color: var(--color-primary-hover); text-decoration: underline; }
     .lv-map-icon { font-size: 13px; width: 13px; height: 13px; }
     .field-hint {
       display: flex; align-items: center; gap: 4px;
       font-size: 11px; margin-top: 4px;
     }
-    .field-hint.green { color: #4caf50; }
+    .field-hint.green { color: var(--color-ok); }
     .hint-icon { font-size: 14px; width: 14px; height: 14px; }
     .venue-input-wrap { position: relative; }
     .dlg-textarea {
@@ -4170,7 +3879,7 @@ import {
     .lv-history-btn {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 5px 14px; border-radius: 6px;
-      border: 1px solid var(--primary, #1976d2); color: var(--primary, #1976d2);
+      border: 1px solid var(--primary, var(--color-primary)); color: var(--primary, var(--color-primary));
       background: transparent; font-size: 12px; font-weight: 600;
       cursor: pointer; transition: all 0.2s;
     }
@@ -4187,8 +3896,8 @@ import {
     }
     .historical-date-input {
       flex: 1; padding: 6px 10px; border-radius: 6px;
-      border: 1px solid var(--border, #ccc); font-size: 13px;
-      background: var(--background, #f8f9fa); color: var(--text-primary, #333);
+      border: 1px solid var(--border, var(--color-line-strong)); font-size: 13px;
+      background: var(--background, var(--color-canvas)); color: var(--text-primary, var(--color-text));
       outline: none; transition: border-color 0.2s;
     }
     .historical-date-input:focus { border-color: #7b1fa2; box-shadow: 0 0 0 2px rgba(123,31,162,0.12); }
@@ -4204,10 +3913,10 @@ import {
     .historical-cancel-btn {
       display: inline-flex; align-items: center; justify-content: center;
       width: 30px; height: 30px; border-radius: 50%; border: none;
-      background: var(--background, #eee); color: var(--text-secondary, #888);
+      background: var(--background, var(--color-surface-2)); color: var(--text-secondary, var(--color-text-3));
       cursor: pointer; transition: all 0.2s; flex-shrink: 0;
     }
-    .historical-cancel-btn:hover { background: #ffcdd2; color: #c62828; }
+    .historical-cancel-btn:hover { background: var(--color-danger-soft); color: var(--color-danger); }
     .historical-cancel-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
 
     /* Trip History Panel */
@@ -4223,7 +3932,7 @@ import {
     }
     .trip-history-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 16px; background: linear-gradient(135deg, #1976d2, #1565c0);
+      padding: 14px 16px; background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
       color: #fff;
     }
     .trip-history-title {
@@ -4242,7 +3951,7 @@ import {
       background: rgba(255,255,255,0.12); font-size: 12px; font-weight: 600;
       cursor: pointer; transition: all 0.2s; white-space: nowrap;
     }
-    .trip-export-btn:hover { background: rgba(255,255,255,0.25); border-color: #fff; }
+    .trip-export-btn:hover { background: rgba(255,255,255,0.25); border-color: var(--color-surface); }
     .trip-export-btn mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
     .trip-summary-row {
@@ -4255,8 +3964,8 @@ import {
       background: var(--surface); border: 1px solid var(--border);
       min-width: 100px;
     }
-    .trip-stat mat-icon { font-size: 20px; width: 20px; height: 20px; color: var(--primary, #1976d2); }
-    .trip-stat.harsh mat-icon { color: var(--red, #f44336); }
+    .trip-stat mat-icon { font-size: 20px; width: 20px; height: 20px; color: var(--primary, var(--color-primary)); }
+    .trip-stat.harsh mat-icon { color: var(--red, var(--color-danger)); }
     .trip-stat-val { font-size: 15px; font-weight: 700; color: var(--text-primary); display: block; }
     .trip-stat-lbl { font-size: 11px; color: var(--text-secondary); }
 
@@ -4276,7 +3985,7 @@ import {
     .trip-item.trip-zero { opacity: 0.55; }
     .trip-num {
       width: 28px; height: 28px; border-radius: 50%;
-      background: var(--primary, #1976d2); color: #fff;
+      background: var(--primary, var(--color-primary)); color: #fff;
       display: flex; align-items: center; justify-content: center;
       font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
     }
@@ -4318,7 +4027,7 @@ import {
       position: fixed; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       z-index: 1001; width: 520px; max-width: 95vw;
-      background: var(--surface, #fff);
+      background: var(--surface, var(--color-surface));
       border-radius: 16px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
       animation: slideUp 0.25s ease;
@@ -4331,7 +4040,7 @@ import {
     .export-dialog-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 20px 24px; gap: 16px;
-      background: linear-gradient(135deg, #1565c0, #0d47a1);
+      background: linear-gradient(135deg, var(--color-primary-hover), var(--color-primary-hover));
       color: #fff;
     }
     .export-title-group {
@@ -4364,47 +4073,47 @@ import {
     .export-field.full { flex: 1 1 100%; }
     .export-field label {
       font-size: 13px; font-weight: 600;
-      color: var(--text-secondary, #666);
+      color: var(--text-secondary, var(--color-text-2));
     }
     .export-date-input, .export-select {
       padding: 10px 14px; border-radius: 10px;
-      border: 1px solid var(--border, #ddd);
-      background: var(--background, #f8f9fa);
-      font-size: 14px; color: var(--text-primary, #333);
+      border: 1px solid var(--border, var(--color-line));
+      background: var(--background, var(--color-canvas));
+      font-size: 14px; color: var(--text-primary, var(--color-text));
       transition: border-color 0.2s, box-shadow 0.2s;
       outline: none;
     }
     .export-date-input:focus, .export-select:focus {
-      border-color: #1565c0;
+      border-color: var(--color-primary-hover);
       box-shadow: 0 0 0 3px rgba(21,101,192,0.12);
     }
     .export-checkbox-label {
       display: flex; align-items: center; gap: 10px;
-      font-size: 14px; color: var(--text-primary, #333);
+      font-size: 14px; color: var(--text-primary, var(--color-text));
       cursor: pointer;
     }
     .export-checkbox-label input[type="checkbox"] {
-      width: 18px; height: 18px; accent-color: #1565c0;
+      width: 18px; height: 18px; accent-color: var(--color-primary-hover);
     }
     .export-info-note {
       display: flex; align-items: flex-start; gap: 10px;
       padding: 12px 14px; border-radius: 10px;
-      background: #fff3e0; border: 1px solid #ffe0b2;
-      font-size: 13px; color: #e65100;
+      background: var(--color-warn-soft); border: 1px solid #ffe0b2;
+      font-size: 13px; color: var(--color-warn);
       margin-bottom: 8px;
     }
     .export-info-note mat-icon {
       font-size: 18px; width: 18px; height: 18px;
-      color: #f57c00; flex-shrink: 0; margin-top: 1px;
+      color: var(--color-warn); flex-shrink: 0; margin-top: 1px;
     }
     .export-dialog-footer {
       display: flex; justify-content: flex-end; gap: 12px;
-      padding: 16px 24px; border-top: 1px solid var(--border, #eee);
-      background: var(--background, #f8f9fa);
+      padding: 16px 24px; border-top: 1px solid var(--border, var(--color-line));
+      background: var(--background, var(--color-canvas));
     }
     .export-download-btn {
       display: inline-flex !important; align-items: center; gap: 8px;
-      background: #1565c0 !important; color: #fff !important;
+      background: var(--color-primary-hover) !important; color: #fff !important;
       border-radius: 10px !important; padding: 8px 20px !important;
       font-weight: 600 !important;
     }
@@ -4413,9 +4122,9 @@ import {
     }
     .export-download-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .export-btn {
-      color: #1565c0 !important; border-color: #1565c0 !important;
+      color: var(--color-primary-hover) !important; border-color: var(--color-primary-hover) !important;
     }
-    .export-btn mat-icon { color: #1565c0; }
+    .export-btn mat-icon { color: var(--color-primary-hover); }
   `]
 })
 export class HBA1CDashboardComponent implements OnInit, OnDestroy {
@@ -4444,6 +4153,8 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
   addressVerified = false;
   private autocomplete: google.maps.places.Autocomplete | null = null;
   private readonly mapsLoader = inject(GoogleMapsLoaderService);
+  private readonly confirmDialog = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
   deliveryForm = {
     description: '',
     priority: 'Normal',
@@ -4820,8 +4531,13 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     window.open(url, '_blank');
   }
 
-  deleteAttachment(att: CreditNoteAttachment): void {
-    if (!confirm(`Delete "${att.fileName}"?`)) return;
+  async deleteAttachment(att: CreditNoteAttachment): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete "${att.fileName}"?`,
+      message: 'The file is removed from this credit note.',
+      confirmText: 'Delete file',
+      danger: true
+    }))) return;
     this.hba1cService.deleteCreditNoteAttachment(att.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -4900,8 +4616,13 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
     window.open(url, '_blank');
   }
 
-  deleteTrainingAttachment(att: TrainingAttachment): void {
-    if (!confirm(`Delete "${att.fileName}"?`)) return;
+  async deleteTrainingAttachment(att: TrainingAttachment): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete "${att.fileName}"?`,
+      message: 'The file is removed from this training session.',
+      confirmText: 'Delete file',
+      danger: true
+    }))) return;
     this.hba1cService.deleteTrainingAttachment(att.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -5147,7 +4868,7 @@ export class HBA1CDashboardComponent implements OnInit, OnDestroy {
       error: (err) => {
         console.error('Export failed', err);
         this.exportLoading = false;
-        alert('Failed to export report. Please try again.');
+        this.toast.error('The Car Track report could not be exported. Please try again.');
       }
     });
   }

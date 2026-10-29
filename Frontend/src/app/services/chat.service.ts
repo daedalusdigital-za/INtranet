@@ -15,6 +15,13 @@ export interface ActionResult {
   success: boolean;
   message: string;
   entityId?: number;
+  /** True when Welly will summarise this result himself (tool loop) — UI should not dump raw data. */
+  summarized?: boolean;
+}
+
+export interface ChatStreamEvent {
+  type: 'thinking' | 'status';
+  text: string;
 }
 
 @Injectable({
@@ -31,6 +38,10 @@ export class ChatService {
   // Subject for action results from AI
   private actionSubject = new Subject<ActionResult>();
   public actionResults$ = this.actionSubject.asObservable();
+
+  // Reasoning tokens + progress status while Welly works
+  private streamEventSubject = new Subject<ChatStreamEvent>();
+  public streamEvents$ = this.streamEventSubject.asObservable();
 
   constructor(private router: Router, private wellyActivity: WellyActivityService) {
     // Try to restore session from storage
@@ -221,6 +232,12 @@ export class ChatService {
                 fullResponse += json.message;
                 subject.next(json.message);
               }
+              if (typeof json.thinking === 'string') {
+                this.streamEventSubject.next({ type: 'thinking', text: json.thinking });
+              }
+              if (typeof json.status === 'string') {
+                this.streamEventSubject.next({ type: 'status', text: json.status });
+              }
               // Update session ID if server provides one
               if (json.sessionId) {
                 this.sessionId = json.sessionId;
@@ -232,7 +249,8 @@ export class ChatService {
                   type: json.action.type,
                   success: json.action.success,
                   message: json.action.message,
-                  entityId: json.action.entityId
+                  entityId: json.action.entityId,
+                  summarized: !!json.action.summarized
                 });
               }
             } catch (e) {

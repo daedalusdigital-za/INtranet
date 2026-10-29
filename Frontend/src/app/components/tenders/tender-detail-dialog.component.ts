@@ -16,13 +16,16 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatCardModule } from '@angular/material/card';
 import { TenderService, Tender, TenderDocument, TenderTeamMember, TenderBOQItem, TenderActivity } from '../../services/tender.service';
 import { AuthService } from '../../services/auth.service';
 import { WellyActivityService } from '../../services/welly-activity.service';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { ChipTone, StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 import { environment } from '../../../environments/environment';
 
 interface DialogData {
@@ -54,13 +57,14 @@ interface DialogData {
     MatTooltipModule,
     MatProgressSpinnerModule,
     MatDividerModule,
-    MatSnackBarModule,
     MatMenuModule,
     MatExpansionModule,
     MatCardModule,
     CurrencyPipe,
     DatePipe,
-    DecimalPipe
+    DecimalPipe,
+    EmptyStateComponent,
+    StatusChipComponent
   ],
   template: `
     <div class="dialog-container">
@@ -74,13 +78,11 @@ interface DialogData {
                 {{ data.tender?.companyCode }}
               </span>
               <h2>{{ data.tender?.tenderNumber }}</h2>
-              <span class="status-badge" [style.background-color]="getStatusColor(data.tender?.status || 'Draft')">
-                {{ data.tender?.status }}
-              </span>
+              <app-status-chip [status]="data.tender?.status || ''" [tone]="statusTone(data.tender?.status)"></app-status-chip>
             </div>
           }
         </div>
-        <button mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
+        <button aria-label="Close" mat-icon-button (click)="dialogRef.close()"><mat-icon>close</mat-icon></button>
       </div>
 
       <mat-dialog-content>
@@ -259,10 +261,10 @@ interface DialogData {
                     <ng-container matColumnDef="actions">
                       <th mat-header-cell *matHeaderCellDef>Actions</th>
                       <td mat-cell *matCellDef="let doc">
-                        <button mat-icon-button (click)="downloadDocument(doc)" matTooltip="Download">
+                        <button aria-label="Download" mat-icon-button (click)="downloadDocument(doc)" matTooltip="Download">
                           <mat-icon>download</mat-icon>
                         </button>
-                        <button mat-icon-button (click)="deleteDocument(doc)" matTooltip="Delete" color="warn">
+                        <button aria-label="Delete" mat-icon-button (click)="deleteDocument(doc)" matTooltip="Delete" color="warn">
                           <mat-icon>delete</mat-icon>
                         </button>
                       </td>
@@ -271,10 +273,10 @@ interface DialogData {
                     <tr mat-row *matRowDef="let row; columns: ['type', 'name', 'version', 'uploaded', 'actions'];"></tr>
                   </table>
                 } @else {
-                  <div class="empty-state">
-                    <mat-icon>folder_open</mat-icon>
-                    <p>No documents uploaded yet</p>
-                  </div>
+                  <app-empty-state icon="folder_open" title="No documents uploaded yet"
+                                   message="Upload the RFQ, BOQ, addenda and submission files for this tender.">
+                    <button mat-stroked-button (click)="fileInput.click()"><mat-icon>upload</mat-icon> Upload Document</button>
+                  </app-empty-state>
                 }
               </div>
             </mat-tab>
@@ -289,7 +291,7 @@ interface DialogData {
                   <button mat-raised-button color="primary" (click)="addBOQItem()">
                     <mat-icon>add</mat-icon> Add Line Item
                   </button>
-                  <button mat-raised-button class="welly-boq-btn" [matMenuTriggerFor]="wellyMenu" matTooltip="Welly AI Pricing Assistant">
+                  <button mat-stroked-button class="welly-boq-btn" [matMenuTriggerFor]="wellyMenu" matTooltip="Welly AI Pricing Assistant">
                     <mat-icon class="welly-sparkle">auto_awesome</mat-icon> Ask Welly
                   </button>
                   <mat-menu #wellyMenu="matMenu">
@@ -363,7 +365,7 @@ interface DialogData {
                     <ng-container matColumnDef="actions">
                       <th mat-header-cell *matHeaderCellDef></th>
                       <td mat-cell *matCellDef="let item">
-                        <button mat-icon-button [matMenuTriggerFor]="boqMenu">
+                        <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="boqMenu">
                           <mat-icon>more_vert</mat-icon>
                         </button>
                         <mat-menu #boqMenu="matMenu">
@@ -376,10 +378,10 @@ interface DialogData {
                     <tr mat-row *matRowDef="let row; columns: boqColumns;"></tr>
                   </table>
                 } @else {
-                  <div class="empty-state">
-                    <mat-icon>list_alt</mat-icon>
-                    <p>No BOQ items added yet</p>
-                  </div>
+                  <app-empty-state icon="list_alt" title="No BOQ items added yet"
+                                   message="Add line items by hand, or ask Welly to extract them from the tender documents.">
+                    <button mat-stroked-button (click)="addBOQItem()"><mat-icon>add</mat-icon> Add Line Item</button>
+                  </app-empty-state>
                 }
               </div>
             </mat-tab>
@@ -570,7 +572,7 @@ interface DialogData {
                 <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
                 <h3>Welly Tender Analysis</h3>
               </div>
-              <button mat-icon-button (click)="showWellyPanel = false">
+              <button aria-label="Close" mat-icon-button (click)="showWellyPanel = false">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -579,7 +581,7 @@ interface DialogData {
                 <mat-icon>{{ wellyAnalysisInfo.icon }}</mat-icon>
                 <span>{{ wellyAnalysisInfo.label }}</span>
                 @if (wellyDocsAnalyzed > 0) {
-                  <span class="doc-count">📄 {{ wellyDocsAnalyzed }} doc(s) read</span>
+                  <span class="doc-count">{{ wellyDocsAnalyzed }} doc(s) read</span>
                 }
               </div>
             }
@@ -686,18 +688,19 @@ interface DialogData {
       justify-content: space-between;
       align-items: center;
       padding: 20px 32px;
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 24px;
+      font-size: var(--text-3xl);
       font-weight: 500;
     }
 
     .dialog-header button {
-      color: white;
+      color: var(--color-text-2);
     }
 
     .tender-header {
@@ -708,18 +711,10 @@ interface DialogData {
 
     .company-badge {
       padding: 6px 16px;
-      border-radius: 6px;
-      color: white;
+      border-radius: var(--radius-sm);
+      color: var(--color-on-dark);
       font-weight: 600;
-      font-size: 14px;
-    }
-
-    .status-badge {
-      padding: 6px 16px;
-      border-radius: 20px;
-      color: white;
-      font-size: 13px;
-      font-weight: 500;
+      font-size: var(--text-md);
     }
 
     mat-dialog-content {
@@ -742,12 +737,12 @@ interface DialogData {
 
     .info-section h3 {
       margin: 0 0 12px 0;
-      font-size: 20px;
-      color: #1a5fb4;
+      font-size: var(--text-2xl);
+      color: var(--color-text);
     }
 
     .description {
-      color: #666;
+      color: var(--color-text-2);
       margin-bottom: 24px;
       line-height: 1.6;
     }
@@ -757,39 +752,39 @@ interface DialogData {
       align-items: flex-start;
       margin-bottom: 20px;
       padding: 12px;
-      background: #f8f9fa;
+      background: var(--color-canvas);
       border-radius: 8px;
     }
     .info-row mat-icon {
       margin-right: 16px;
-      color: #1e90ff;
+      color: var(--color-primary);
       font-size: 24px;
       width: 24px;
       height: 24px;
     }
     .info-row .label {
       display: block;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 4px;
     }
     .info-row .value {
       font-weight: 600;
-      font-size: 15px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
     }
 
     /* Dates Section */
     .dates-section h4, .workflow-section h4 {
       margin: 0 0 20px 0;
-      color: #1a5fb4;
-      font-size: 18px;
+      color: var(--color-text);
+      font-size: var(--text-xl);
     }
 
     .date-timeline {
-      border-left: 3px solid #1e90ff;
+      border-left: 3px solid var(--color-primary);
       padding-left: 24px;
       margin-left: 8px;
     }
@@ -800,7 +795,7 @@ interface DialogData {
       margin-bottom: 20px;
       position: relative;
       padding: 12px;
-      background: #f8f9fa;
+      background: var(--color-canvas);
       border-radius: 8px;
     }
     .timeline-item::before {
@@ -811,44 +806,44 @@ interface DialogData {
       width: 14px;
       height: 14px;
       border-radius: 50%;
-      background: #E0E0E0;
-      border: 3px solid white;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      background: var(--color-line);
+      border: 3px solid var(--color-surface);
+      box-shadow: var(--shadow-sm);
     }
-    .timeline-item.past::before { background: #4CAF50; }
-    .timeline-item.closing::before { background: #F44336; }
+    .timeline-item.past::before { background: var(--color-ok); }
+    .timeline-item.closing::before { background: var(--color-danger); }
 
     .timeline-item mat-icon {
       margin-right: 16px;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
     .timeline-item .label {
       display: block;
-      font-size: 12px;
-      color: #666;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
     .timeline-item .date {
       font-weight: 600;
-      font-size: 15px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
     }
     .timeline-item .venue {
       display: block;
-      font-size: 13px;
-      color: #1976D2;
+      font-size: var(--text-sm);
+      color: var(--color-primary);
       margin-top: 4px;
     }
-    .timeline-item.urgent .date { color: #F44336; font-weight: 700; }
+    .timeline-item.urgent .date { color: var(--color-danger); font-weight: 700; }
 
     .days-badge {
       display: inline-block;
       padding: 4px 12px;
-      background: #FFEBEE;
-      color: #C62828;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
       border-radius: 12px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
       margin-left: 12px;
     }
@@ -858,7 +853,7 @@ interface DialogData {
       grid-column: 1 / -1;
       margin-top: 16px;
       padding-top: 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
 
     .workflow-steps {
@@ -871,31 +866,31 @@ interface DialogData {
       display: flex;
       align-items: center;
       padding: 12px 20px;
-      background: #F5F5F5;
+      background: var(--color-surface-2);
       border-radius: 24px;
-      font-size: 14px;
+      font-size: var(--text-md);
       transition: all 0.2s;
     }
     .step.active {
-      background: linear-gradient(135deg, #1e90ff 0%, #4169e1 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       font-weight: 600;
-      box-shadow: 0 4px 12px rgba(30, 144, 255, 0.3);
+      box-shadow: var(--shadow-sm);
     }
     .step.completed {
-      background: #E8F5E9;
-      color: #2E7D32;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
     }
 
     .step-indicator {
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: #CCC;
+      background: var(--color-line-strong);
       margin-right: 10px;
     }
-    .step.active .step-indicator { background: white; }
-    .step.completed .step-indicator { background: #4CAF50; }
+    .step.active .step-indicator { background: var(--color-on-primary); }
+    .step.completed .step-indicator { background: var(--color-ok); }
 
     /* Activity */
     .activity-list {
@@ -906,20 +901,20 @@ interface DialogData {
     .activity-item {
       display: flex;
       padding: 16px;
-      border-bottom: 1px solid #EEE;
+      border-bottom: 1px solid var(--color-line);
     }
     .activity-item mat-icon {
       margin-right: 16px;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
     .activity-desc {
       display: block;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .activity-meta {
       display: block;
-      font-size: 12px;
-      color: #999;
+      font-size: var(--text-xs);
+      color: var(--color-text-3);
       margin-top: 6px;
     }
 
@@ -937,33 +932,17 @@ interface DialogData {
       border-spacing: 0;
     }
 
-    .empty-state {
-      text-align: center;
-      padding: 64px;
-      color: #999;
-    }
-    .empty-state mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      color: #ccc;
-    }
-    .empty-state p {
-      font-size: 16px;
-      margin-top: 16px;
-    }
-
     /* BOQ */
     .boq-summary {
       display: flex;
       gap: 32px;
-      font-size: 15px;
+      font-size: var(--text-md);
     }
     .boq-summary strong {
-      color: #1a5fb4;
+      color: var(--color-text);
     }
 
-    .below-cost { color: #F44336 !important; }
+    .below-cost { color: var(--color-danger); }
 
     /* Team */
     .team-grid {
@@ -981,25 +960,25 @@ interface DialogData {
       font-size: 36px;
       width: 36px;
       height: 36px;
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     .member-info { text-align: center; padding: 16px 0; }
-    .member-name { display: block; font-weight: 600; font-size: 15px; margin-bottom: 12px; }
+    .member-name { display: block; font-weight: 600; font-size: var(--text-md); margin-bottom: 12px; }
     .member-status {
       display: inline-block;
       padding: 6px 16px;
       border-radius: 16px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 500;
     }
-    .member-status.status-pending { background: #FFF3E0; color: #E65100; }
-    .member-status.status-inprogress { background: #E3F2FD; color: #1565C0; }
-    .member-status.status-completed { background: #E8F5E9; color: #2E7D32; }
+    .member-status.status-pending { background: var(--color-warn-soft); color: var(--color-warn); }
+    .member-status.status-inprogress { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .member-status.status-completed { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .no-member {
       text-align: center;
-      color: #999;
+      color: var(--color-text-3);
       padding: 16px 0;
     }
 
@@ -1021,8 +1000,8 @@ interface DialogData {
 
     .form-grid h4 {
       margin: 16px 0 8px 0;
-      color: #1a5fb4;
-      font-size: 16px;
+      color: var(--color-text);
+      font-size: var(--text-lg);
       font-weight: 600;
     }
 
@@ -1040,8 +1019,8 @@ interface DialogData {
 
     mat-dialog-actions {
       padding: 20px 32px;
-      border-top: 1px solid #E0E0E0;
-      background: #fafafa;
+      border-top: 1px solid var(--color-line);
+      background: var(--color-canvas);
     }
 
     mat-dialog-actions button {
@@ -1051,11 +1030,11 @@ interface DialogData {
 
     /* Material overrides */
     ::ng-deep .mat-mdc-tab-labels {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
     }
 
     ::ng-deep .mat-mdc-tab.mdc-tab--active .mdc-tab__text-label {
-      color: #1e90ff;
+      color: var(--color-primary);
     }
 
     ::ng-deep .mat-mdc-tab-body-wrapper {
@@ -1063,32 +1042,18 @@ interface DialogData {
     }
 
     ::ng-deep .mdc-text-field--outlined {
-      --mdc-outlined-text-field-outline-color: #ccc;
-      --mdc-outlined-text-field-focus-outline-color: #1e90ff;
+      --mdc-outlined-text-field-outline-color: var(--color-line-strong);
+      --mdc-outlined-text-field-focus-outline-color: var(--color-primary);
     }
 
     /* Welly BOQ Analysis Styles */
-    .welly-boq-btn {
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
-      color: white !important;
-      border: none !important;
-    }
-
-    .welly-boq-btn:hover {
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-
-    .welly-boq-btn .welly-sparkle {
-      color: #ffd700;
-    }
-
     .welly-panel-overlay {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--color-scrim);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1096,14 +1061,14 @@ interface DialogData {
     }
 
     .welly-panel {
-      background: white;
-      border-radius: 16px;
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
       width: 600px;
       max-width: 90vw;
       max-height: 80vh;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--shadow-lg);
       overflow: hidden;
     }
 
@@ -1112,8 +1077,9 @@ interface DialogData {
       align-items: center;
       justify-content: space-between;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
     }
 
     .welly-panel-title {
@@ -1124,16 +1090,16 @@ interface DialogData {
 
     .welly-panel-title h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 600;
     }
 
     .welly-sparkle {
-      color: #ffd700;
+      color: var(--color-cat-amber);
     }
 
     .welly-panel-header button {
-      color: white;
+      color: var(--color-text-2);
     }
 
     .welly-panel-body {
@@ -1151,8 +1117,8 @@ interface DialogData {
     }
 
     .welly-loading p {
-      color: #666;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
 
     .progress-container {
@@ -1170,7 +1136,7 @@ interface DialogData {
     }
 
     .progress-icon {
-      color: #ffd700;
+      color: var(--color-cat-amber);
       font-size: 22px;
       width: 22px;
       height: 22px;
@@ -1186,18 +1152,18 @@ interface DialogData {
     }
 
     .progress-title {
-      font-size: 15px;
+      font-size: var(--text-md);
       font-weight: 700;
-      color: #1e293b;
+      color: var(--color-text);
       flex: 1;
     }
 
     .progress-timer {
-      font-family: 'SF Mono', 'Cascadia Code', monospace;
-      font-size: 13px;
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
       font-weight: 700;
-      color: #64748b;
-      background: #f1f5f9;
+      color: var(--color-text-3);
+      background: var(--color-surface-2);
       padding: 3px 10px;
       border-radius: 8px;
     }
@@ -1205,30 +1171,17 @@ interface DialogData {
     .progress-bar-track {
       width: 100%;
       height: 8px;
-      background: #e2e8f0;
+      background: var(--color-line);
       border-radius: 4px;
       overflow: hidden;
     }
 
     .progress-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7);
+      background: var(--color-primary);
       border-radius: 4px;
       transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
-    }
-
-    .progress-bar-fill::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-      animation: shimmer 1.5s infinite;
-    }
-
-    @keyframes shimmer {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
     }
 
     .progress-steps {
@@ -1242,18 +1195,18 @@ interface DialogData {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 13px;
-      color: #94a3b8;
+      font-size: var(--text-sm);
+      color: var(--color-text-3);
       transition: all 0.3s;
     }
 
     .progress-step.active {
-      color: #6366f1;
+      color: var(--color-primary);
       font-weight: 600;
     }
 
     .progress-step.done {
-      color: #22c55e;
+      color: var(--color-ok);
     }
 
     .step-icon {
@@ -1271,27 +1224,27 @@ interface DialogData {
     }
 
     .progress-step.done .step-icon mat-icon {
-      color: #22c55e;
+      color: var(--color-ok);
     }
 
     .progress-step:not(.done):not(.active) .step-icon mat-icon {
-      color: #cbd5e1;
+      color: var(--color-line-strong);
     }
 
     .progress-message {
       text-align: center;
-      color: #64748b;
-      font-size: 13px;
+      color: var(--color-text-3);
+      font-size: var(--text-sm);
       margin: 4px 0 0;
       font-style: italic;
     }
 
     .welly-result-text {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
       border-radius: 10px;
       padding: 16px;
-      font-size: 14px;
+      font-size: var(--text-md);
       line-height: 1.6;
       white-space: pre-wrap;
       max-height: 50vh;
@@ -1310,41 +1263,41 @@ interface DialogData {
       align-items: center;
       gap: 8px;
       padding: 8px 20px;
-      background: rgba(37, 99, 235, 0.08);
-      border-bottom: 1px solid rgba(37, 99, 235, 0.15);
-      font-size: 13px;
-      color: #555;
+      background: var(--color-primary-soft);
+      border-bottom: 1px solid var(--color-line);
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
 
     .welly-analysis-info mat-icon {
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #2563eb;
+      color: var(--color-primary);
     }
 
     .welly-analysis-info .doc-count {
       margin-left: auto;
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
       padding: 2px 10px;
       border-radius: 12px;
       font-weight: 500;
-      font-size: 12px;
+      font-size: var(--text-xs);
     }
 
     .welly-extracted-boq {
       margin: 16px 0;
-      border: 2px solid #2563eb;
+      border: 2px solid var(--color-primary);
       border-radius: 12px;
       padding: 16px;
-      background: #f5f3ff;
+      background: var(--color-primary-soft);
     }
 
     .welly-extracted-boq h4 {
       margin: 0 0 12px 0;
-      color: #4527a0;
-      font-size: 14px;
+      color: var(--color-primary);
+      font-size: var(--text-md);
     }
 
     .extracted-items-list {
@@ -1358,14 +1311,14 @@ interface DialogData {
       align-items: center;
       gap: 8px;
       padding: 6px 10px;
-      background: white;
+      background: var(--color-surface);
       border-radius: 6px;
       margin-bottom: 4px;
-      font-size: 13px;
+      font-size: var(--text-sm);
     }
 
     .extracted-item .item-num {
-      color: #2563eb;
+      color: var(--color-primary);
       font-weight: 600;
       min-width: 30px;
     }
@@ -1379,7 +1332,7 @@ interface DialogData {
 
     .extracted-item .item-price {
       font-weight: 600;
-      color: #2e7d32;
+      color: var(--color-ok);
       white-space: nowrap;
     }
 
@@ -1391,13 +1344,13 @@ interface DialogData {
     .welly-result-text ::ng-deep h2,
     .welly-result-text ::ng-deep h3 {
       margin: 12px 0 6px 0;
-      font-size: 15px;
-      color: #333;
+      font-size: var(--text-md);
+      color: var(--color-text);
       font-weight: 600;
     }
 
     .welly-result-text ::ng-deep strong {
-      color: #4527a0;
+      color: var(--color-text);
     }
 
     .welly-result-text ::ng-deep ul,
@@ -1433,9 +1386,10 @@ export class TenderDetailDialogComponent {
     private fb: FormBuilder,
     private tenderService: TenderService,
     private authService: AuthService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private http: HttpClient,
-    private wellyActivity: WellyActivityService
+    private wellyActivity: WellyActivityService,
+    private readonly confirmDialog: ConfirmService
   ) {
     this.tenderForm = this.fb.group({
       tenderNumber: [data.tender?.tenderNumber || '', Validators.required],
@@ -1463,17 +1417,13 @@ export class TenderDetailDialogComponent {
     return this.data.companies.find(c => c.code === code)?.color || '#666';
   }
 
-  getStatusColor(status: string): string {
-    const colors: { [key: string]: string } = {
-      'Draft': '#4CAF50',
-      'Submitted': '#2196F3',
-      'Clarification': '#FF9800',
-      'Evaluation': '#9C27B0',
-      'Awarded': '#FFC107',
-      'Lost': '#F44336',
-      'Cancelled': '#212121'
+  statusTone(status: string | undefined): ChipTone | undefined {
+    const tones: { [key: string]: ChipTone } = {
+      'Submitted': 'info',
+      'Clarification': 'warn',
+      'Evaluation': 'info'
     };
-    return colors[status] || '#666';
+    return tones[status || ''];
   }
 
   getDaysLeft(date: Date): number {
@@ -1549,12 +1499,12 @@ export class TenderDetailDialogComponent {
         createdByUserName: currentUser ? `${currentUser.name} ${currentUser.surname}` : undefined
       }).subscribe({
         next: () => {
-          this.snackBar.open('Tender created successfully', 'Close', { duration: 2000 });
+          this.toast.done('Tender created successfully');
           this.dialogRef.close(true);
         },
         error: () => {
           this.saving = false;
-          this.snackBar.open('Error creating tender', 'Close', { duration: 3000 });
+          this.toast.error('Error creating tender');
         }
       });
     } else {
@@ -1564,24 +1514,30 @@ export class TenderDetailDialogComponent {
         updatedByUserName: currentUser ? `${currentUser.name} ${currentUser.surname}` : undefined
       }).subscribe({
         next: () => {
-          this.snackBar.open('Tender updated successfully', 'Close', { duration: 2000 });
+          this.toast.done('Tender updated successfully');
           this.dialogRef.close(true);
         },
         error: () => {
           this.saving = false;
-          this.snackBar.open('Error updating tender', 'Close', { duration: 3000 });
+          this.toast.error('Error updating tender');
         }
       });
     }
   }
 
   // Document methods
-  uploadDocument(event: Event): void {
+  async uploadDocument(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     if (!input.files?.length || !this.data.tender) return;
 
     const file = input.files[0];
-    const type = prompt('Document type:', 'Submission') || 'Other';
+    const type = (await this.confirmDialog.askText({
+      title: `Upload ${file.name}`,
+      label: 'Document type',
+      value: 'Submission',
+      hint: 'For example RFQ, BOQ, Addendum, Submission. Left empty, it is saved as Other.',
+      confirmText: 'Upload document'
+    })) || 'Other';
     const currentUser = this.authService.currentUserValue;
 
     this.tenderService.uploadDocument(
@@ -1593,9 +1549,9 @@ export class TenderDetailDialogComponent {
     ).subscribe({
       next: (doc) => {
         this.data.tender!.documents = [...(this.data.tender!.documents || []), doc];
-        this.snackBar.open('Document uploaded', 'Close', { duration: 2000 });
+        this.toast.done('Document uploaded');
       },
-      error: () => this.snackBar.open('Error uploading document', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error uploading document')
     });
   }
 
@@ -1609,30 +1565,45 @@ export class TenderDetailDialogComponent {
         a.click();
         window.URL.revokeObjectURL(url);
       },
-      error: () => this.snackBar.open('Error downloading document', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error downloading document')
     });
   }
 
-  deleteDocument(doc: TenderDocument): void {
-    if (!confirm('Delete this document?')) return;
+  async deleteDocument(doc: TenderDocument): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete document ${doc.fileName}?`,
+      message: 'The document is deleted from this tender.',
+      confirmText: 'Delete document',
+      danger: true
+    }))) return;
     this.tenderService.deleteDocument(doc.id).subscribe({
       next: () => {
         this.data.tender!.documents = this.data.tender!.documents?.filter(d => d.id !== doc.id);
-        this.snackBar.open('Document deleted', 'Close', { duration: 2000 });
+        this.toast.done('Document deleted');
       },
-      error: () => this.snackBar.open('Error deleting document', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error deleting document')
     });
   }
 
   // BOQ methods
-  addBOQItem(): void {
+  async addBOQItem(): Promise<void> {
     if (!this.data.tender) return;
-    const desc = prompt('Item description:');
-    if (!desc) return;
-    
-    const qty = parseFloat(prompt('Quantity:', '1') || '1');
-    const cost = parseFloat(prompt('Unit cost (optional):', '') || '0') || undefined;
-    const price = parseFloat(prompt('Unit price:', '0') || '0');
+    const form = await this.confirmDialog.askForm({
+      title: 'Add a BOQ line item',
+      fields: [
+        { key: 'description', label: 'Item description', required: true },
+        { key: 'quantity', label: 'Quantity', type: 'number', value: 1 },
+        { key: 'unitCost', label: 'Unit cost (optional)', type: 'number' },
+        { key: 'unitPrice', label: 'Unit price', type: 'number', value: 0 }
+      ],
+      confirmText: 'Add item'
+    });
+    const desc = form ? String(form['description'] ?? '') : '';
+    if (!form || !desc) return;
+
+    const qty = parseFloat(String(form['quantity'] ?? '') || '1');
+    const cost = parseFloat(String(form['unitCost'] ?? '') || '0') || undefined;
+    const price = parseFloat(String(form['unitPrice'] ?? '') || '0');
 
     this.tenderService.addBOQItem(this.data.tender.id, {
       description: desc,
@@ -1642,41 +1613,59 @@ export class TenderDetailDialogComponent {
     }).subscribe({
       next: (item) => {
         this.data.tender!.boqItems = [...(this.data.tender!.boqItems || []), item];
-        this.snackBar.open('Item added', 'Close', { duration: 2000 });
+        this.toast.done('Item added');
       },
-      error: () => this.snackBar.open('Error adding item', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error adding item')
     });
   }
 
-  editBOQItem(item: TenderBOQItem): void {
-    const price = parseFloat(prompt('New unit price:', item.unitPrice.toString()) || item.unitPrice.toString());
+  async editBOQItem(item: TenderBOQItem): Promise<void> {
+    const form = await this.confirmDialog.askForm({
+      title: `New unit price for "${item.description}"`,
+      fields: [{ key: 'unitPrice', label: 'New unit price', type: 'number', value: item.unitPrice }],
+      confirmText: 'Save price'
+    });
+    const price = parseFloat(String(form?.['unitPrice'] ?? '') || item.unitPrice.toString());
     this.tenderService.updateBOQItem(item.id, { unitPrice: price }).subscribe({
       next: () => {
         item.unitPrice = price;
-        this.snackBar.open('Item updated', 'Close', { duration: 2000 });
+        this.toast.done('Item updated');
       },
-      error: () => this.snackBar.open('Error updating item', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error updating item')
     });
   }
 
-  deleteBOQItem(item: TenderBOQItem): void {
-    if (!confirm('Delete this item?')) return;
+  async deleteBOQItem(item: TenderBOQItem): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete BOQ item "${item.description}"?`,
+      message: 'The item is removed from this tender\'s bill of quantities.',
+      confirmText: 'Delete item',
+      danger: true
+    }))) return;
     this.tenderService.deleteBOQItem(item.id).subscribe({
       next: () => {
         this.data.tender!.boqItems = this.data.tender!.boqItems?.filter(i => i.id !== item.id);
-        this.snackBar.open('Item deleted', 'Close', { duration: 2000 });
+        this.toast.done('Item deleted');
       },
-      error: () => this.snackBar.open('Error deleting item', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error deleting item')
     });
   }
 
   // Team methods
-  addTeamMember(role?: string): void {
+  async addTeamMember(role?: string): Promise<void> {
     if (!this.data.tender) return;
-    const memberName = prompt('Team member name:');
-    if (!memberName) return;
+    const form = await this.confirmDialog.askForm({
+      title: role ? `Assign a ${role} team member` : 'Assign a team member',
+      fields: [
+        { key: 'name', label: 'Team member name', required: true },
+        ...(role ? [] : [{ key: 'role', label: 'Role', value: 'Technical', hint: this.teamRoles.join(', ') }])
+      ],
+      confirmText: 'Assign'
+    });
+    const memberName = form ? String(form['name'] ?? '') : '';
+    if (!form || !memberName) return;
 
-    const memberRole = role || prompt('Role:', 'Technical') || 'Technical';
+    const memberRole = role || String(form['role'] ?? '') || 'Technical';
     const currentUser = this.authService.currentUserValue;
 
     this.tenderService.addTeamMember(this.data.tender.id, {
@@ -1687,9 +1676,9 @@ export class TenderDetailDialogComponent {
     }).subscribe({
       next: (member) => {
         this.data.tender!.teamMembers = [...(this.data.tender!.teamMembers || []), member];
-        this.snackBar.open('Team member added', 'Close', { duration: 2000 });
+        this.toast.done('Team member added');
       },
-      error: () => this.snackBar.open('Error adding team member', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error adding team member')
     });
   }
 
@@ -1702,9 +1691,9 @@ export class TenderDetailDialogComponent {
     }).subscribe({
       next: () => {
         member.status = status;
-        this.snackBar.open('Status updated', 'Close', { duration: 2000 });
+        this.toast.done('Status updated');
       },
-      error: () => this.snackBar.open('Error updating status', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Error updating status')
     });
   }
 
@@ -1780,7 +1769,7 @@ export class TenderDetailDialogComponent {
       },
       error: () => {
         this.stopWellyProgress();
-        this.snackBar.open('Welly could not analyze tender documents. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not analyze tender documents. Please try again.');
         this.wellyLoading = false;
         this.showWellyPanel = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
@@ -1896,14 +1885,14 @@ export class TenderDetailDialogComponent {
           this.data.tender!.boqItems = [...(this.data.tender!.boqItems || []), newItem];
           imported++;
           if (imported === total) {
-            this.snackBar.open(`✅ ${imported} BOQ items imported from documents!`, 'Close', { duration: 4000 });
+            this.toast.done(`${imported} BOQ items imported from documents.`);
             this.wellyExtractedItems = [];
           }
         },
         error: () => {
           imported++;
           if (imported === total) {
-            this.snackBar.open(`Imported some items. Check for errors.`, 'Close', { duration: 3000 });
+            this.toast.warn(`Imported some items. Check for errors.`);
           }
         }
       });
@@ -1938,7 +1927,7 @@ export class TenderDetailDialogComponent {
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
-        this.snackBar.open('Welly could not analyze BOQ. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not analyze BOQ. Please try again.');
         this.wellyLoading = false;
         this.showWellyPanel = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
@@ -1973,7 +1962,7 @@ export class TenderDetailDialogComponent {
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
-        this.snackBar.open('Welly could not check compliance. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not check compliance. Please try again.');
         this.wellyLoading = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
@@ -1994,7 +1983,7 @@ export class TenderDetailDialogComponent {
 
   copyWellyResult(): void {
     navigator.clipboard.writeText(this.wellyResult).then(() => {
-      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
+      this.toast.done('Copied to clipboard');
     });
   }
 }

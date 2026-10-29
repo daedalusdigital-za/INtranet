@@ -5,11 +5,14 @@ import { Subscription } from 'rxjs';
 import { MessageService, Conversation, Message, Participant, MessageAttachment } from '../../services/message.service';
 import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 import { SecureSrcDirective } from '../../directives/secure-src.directive';
+import { MatIconModule } from '@angular/material/icon';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-chat-bubble',
   standalone: true,
-  imports: [CommonModule, FormsModule, PickerComponent, SecureSrcDirective],
+  imports: [CommonModule, FormsModule, PickerComponent, SecureSrcDirective, MatIconModule, SkeletonRowsComponent, EmptyStateComponent],
   templateUrl: './chat-bubble.component.html',
   styleUrls: ['./chat-bubble.component.scss']
 })
@@ -384,13 +387,13 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   }
 
   getFileIcon(mimeType: string): string {
-    if (mimeType?.includes('pdf')) return 'bi-file-earmark-pdf';
-    if (mimeType?.includes('word') || mimeType?.includes('document')) return 'bi-file-earmark-word';
-    if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet')) return 'bi-file-earmark-excel';
-    if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation')) return 'bi-file-earmark-ppt';
-    if (mimeType?.includes('zip') || mimeType?.includes('rar') || mimeType?.includes('archive')) return 'bi-file-earmark-zip';
-    if (mimeType?.includes('text')) return 'bi-file-earmark-text';
-    return 'bi-file-earmark';
+    if (mimeType?.includes('pdf')) return 'picture_as_pdf';
+    if (mimeType?.includes('word') || mimeType?.includes('document')) return 'description';
+    if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet')) return 'table_chart';
+    if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation')) return 'slideshow';
+    if (mimeType?.includes('zip') || mimeType?.includes('rar') || mimeType?.includes('archive')) return 'folder_zip';
+    if (mimeType?.includes('text')) return 'article';
+    return 'insert_drive_file';
   }
 
   downloadAttachment(attachment: MessageAttachment): void {

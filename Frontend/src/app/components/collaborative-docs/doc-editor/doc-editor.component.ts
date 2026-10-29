@@ -9,7 +9,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -21,6 +20,10 @@ import { AuthService } from '../../../services/auth.service';
 import { WellyActivityService } from '../../../services/welly-activity.service';
 import { DocumentDetail, UserPresence } from '../../../models/collaborative-doc.model';
 import { environment } from '../../../../environments/environment';
+import { ConfirmService } from '../../../ui/confirm.service';
+import { ToastService } from '../../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
 
 // Mammoth for Word document import
 import * as mammoth from 'mammoth';
@@ -84,19 +87,20 @@ import { Awareness } from 'y-protocols/awareness';
     MatTooltipModule,
     MatMenuModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
     MatChipsModule,
     MatDividerModule,
     MatTabsModule,
     MatSelectModule,
-    MatFormFieldModule
+    MatFormFieldModule,
+    SkeletonRowsComponent,
+    EmptyStateComponent
   ],
   template: `
     <div class="editor-container" [class.loading]="loading">
       <!-- Title Bar -->
       <div class="title-bar">
         <div class="title-bar-left">
-          <button mat-icon-button routerLink="/docs" matTooltip="Back to Documents">
+          <button aria-label="Back to Documents" mat-icon-button routerLink="/docs" matTooltip="Back to Documents">
             <mat-icon>arrow_back</mat-icon>
           </button>
           <div class="document-icon">
@@ -188,7 +192,7 @@ import { Awareness } from 'y-protocols/awareness';
               </div>
             }
           </div>
-          <button mat-icon-button (click)="darkMode = !darkMode" [matTooltip]="darkMode ? 'Light mode' : 'Dark mode'">
+          <button [attr.aria-label]="darkMode ? 'Light mode' : 'Dark mode'" mat-icon-button (click)="darkMode = !darkMode" [matTooltip]="darkMode ? 'Light mode' : 'Dark mode'">
             <mat-icon>{{ darkMode ? 'light_mode' : 'dark_mode' }}</mat-icon>
           </button>
           <button mat-button class="topbar-btn" [class.active]="showComments" (click)="toggleComments()" matTooltip="Show comments">
@@ -286,22 +290,22 @@ import { Awareness } from 'y-protocols/awareness';
                   </select>
                 </div>
                 <div class="font-row">
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('bold')" (click)="toggleBold()" matTooltip="Bold (Ctrl+B)">
+                  <button aria-label="Bold (Ctrl+B)" class="ribbon-icon-btn" [class.active]="editor?.isActive('bold')" (click)="toggleBold()" matTooltip="Bold (Ctrl+B)">
                     <mat-icon>format_bold</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('italic')" (click)="toggleItalic()" matTooltip="Italic (Ctrl+I)">
+                  <button aria-label="Italic (Ctrl+I)" class="ribbon-icon-btn" [class.active]="editor?.isActive('italic')" (click)="toggleItalic()" matTooltip="Italic (Ctrl+I)">
                     <mat-icon>format_italic</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('underline')" (click)="toggleUnderline()" matTooltip="Underline (Ctrl+U)">
+                  <button aria-label="Underline (Ctrl+U)" class="ribbon-icon-btn" [class.active]="editor?.isActive('underline')" (click)="toggleUnderline()" matTooltip="Underline (Ctrl+U)">
                     <mat-icon>format_underlined</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('strike')" (click)="toggleStrike()" matTooltip="Strikethrough">
+                  <button aria-label="Strikethrough" class="ribbon-icon-btn" [class.active]="editor?.isActive('strike')" (click)="toggleStrike()" matTooltip="Strikethrough">
                     <mat-icon>strikethrough_s</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('subscript')" (click)="toggleSubscript()" matTooltip="Subscript">
+                  <button aria-label="Subscript" class="ribbon-icon-btn" [class.active]="editor?.isActive('subscript')" (click)="toggleSubscript()" matTooltip="Subscript">
                     <mat-icon>subscript</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('superscript')" (click)="toggleSuperscript()" matTooltip="Superscript">
+                  <button aria-label="Superscript" class="ribbon-icon-btn" [class.active]="editor?.isActive('superscript')" (click)="toggleSuperscript()" matTooltip="Superscript">
                     <mat-icon>superscript</mat-icon>
                   </button>
                   <div class="color-btn-wrapper">
@@ -320,10 +324,10 @@ import { Awareness } from 'y-protocols/awareness';
                       </button>
                     </mat-menu>
                   </div>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('highlight')" (click)="toggleHighlight()" matTooltip="Highlight">
+                  <button aria-label="Highlight" class="ribbon-icon-btn" [class.active]="editor?.isActive('highlight')" (click)="toggleHighlight()" matTooltip="Highlight">
                     <mat-icon>highlight</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('link')" (click)="insertLink()" matTooltip="Insert link (Ctrl+K)">
+                  <button aria-label="Insert link (Ctrl+K)" class="ribbon-icon-btn" [class.active]="editor?.isActive('link')" (click)="insertLink()" matTooltip="Insert link (Ctrl+K)">
                     <mat-icon>link</mat-icon>
                   </button>
                 </div>
@@ -337,33 +341,33 @@ import { Awareness } from 'y-protocols/awareness';
             <div class="ribbon-group">
               <div class="ribbon-group-content paragraph-group">
                 <div class="paragraph-row">
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('bulletList')" (click)="toggleBulletList()" matTooltip="Bullets">
+                  <button aria-label="Bullets" class="ribbon-icon-btn" [class.active]="editor?.isActive('bulletList')" (click)="toggleBulletList()" matTooltip="Bullets">
                     <mat-icon>format_list_bulleted</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('orderedList')" (click)="toggleOrderedList()" matTooltip="Numbering">
+                  <button aria-label="Numbering" class="ribbon-icon-btn" [class.active]="editor?.isActive('orderedList')" (click)="toggleOrderedList()" matTooltip="Numbering">
                     <mat-icon>format_list_numbered</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive('taskList')" (click)="toggleTaskList()" matTooltip="Checklist">
+                  <button aria-label="Checklist" class="ribbon-icon-btn" [class.active]="editor?.isActive('taskList')" (click)="toggleTaskList()" matTooltip="Checklist">
                     <mat-icon>checklist</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" (click)="decreaseIndent()" matTooltip="Decrease Indent">
+                  <button aria-label="Decrease Indent" class="ribbon-icon-btn" (click)="decreaseIndent()" matTooltip="Decrease Indent">
                     <mat-icon>format_indent_decrease</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" (click)="increaseIndent()" matTooltip="Increase Indent">
+                  <button aria-label="Increase Indent" class="ribbon-icon-btn" (click)="increaseIndent()" matTooltip="Increase Indent">
                     <mat-icon>format_indent_increase</mat-icon>
                   </button>
                 </div>
                 <div class="paragraph-row">
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive({ textAlign: 'left' })" (click)="setTextAlign('left')" matTooltip="Align Left">
+                  <button aria-label="Align Left" class="ribbon-icon-btn" [class.active]="editor?.isActive({ textAlign: 'left' })" (click)="setTextAlign('left')" matTooltip="Align Left">
                     <mat-icon>format_align_left</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive({ textAlign: 'center' })" (click)="setTextAlign('center')" matTooltip="Center">
+                  <button aria-label="Center" class="ribbon-icon-btn" [class.active]="editor?.isActive({ textAlign: 'center' })" (click)="setTextAlign('center')" matTooltip="Center">
                     <mat-icon>format_align_center</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive({ textAlign: 'right' })" (click)="setTextAlign('right')" matTooltip="Align Right">
+                  <button aria-label="Align Right" class="ribbon-icon-btn" [class.active]="editor?.isActive({ textAlign: 'right' })" (click)="setTextAlign('right')" matTooltip="Align Right">
                     <mat-icon>format_align_right</mat-icon>
                   </button>
-                  <button class="ribbon-icon-btn" [class.active]="editor?.isActive({ textAlign: 'justify' })" (click)="setTextAlign('justify')" matTooltip="Justify">
+                  <button aria-label="Justify" class="ribbon-icon-btn" [class.active]="editor?.isActive({ textAlign: 'justify' })" (click)="setTextAlign('justify')" matTooltip="Justify">
                     <mat-icon>format_align_justify</mat-icon>
                   </button>
                 </div>
@@ -405,7 +409,7 @@ import { Awareness } from 'y-protocols/awareness';
               <div class="ribbon-group-content editing-group">
                 <button class="ribbon-btn vertical" [matMenuTriggerFor]="findMenu" matTooltip="Find, Replace, Select">
                   <mat-icon>search</mat-icon>
-                  <span>Find ▾</span>
+                  <span>Find</span>
                 </button>
                 <mat-menu #findMenu="matMenu">
                   <button mat-menu-item (click)="openFind(false)"><mat-icon>search</mat-icon><span>Find (Ctrl+F)</span></button>
@@ -891,8 +895,9 @@ import { Awareness } from 'y-protocols/awareness';
       <!-- Loading overlay -->
       @if (loading) {
         <div class="loading-overlay">
-          <mat-spinner diameter="48"></mat-spinner>
-          <p>Loading document...</p>
+          <div class="loading-page">
+            <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows>
+          </div>
         </div>
       }
 
@@ -937,11 +942,11 @@ import { Awareness } from 'y-protocols/awareness';
             <input type="checkbox" [(ngModel)]="findMatchCase" (ngModelChange)="runFind()"> Aa
           </label>
           <span class="find-count">{{ findMatches.length ? (currentMatchIndex + 1) + ' of ' + findMatches.length : (findText ? 'No matches' : '') }}</span>
-          <button mat-icon-button (click)="findPrev()" [disabled]="!findMatches.length" matTooltip="Previous"><mat-icon>keyboard_arrow_up</mat-icon></button>
-          <button mat-icon-button (click)="findNext()" [disabled]="!findMatches.length" matTooltip="Next"><mat-icon>keyboard_arrow_down</mat-icon></button>
+          <button aria-label="Previous" mat-icon-button (click)="findPrev()" [disabled]="!findMatches.length" matTooltip="Previous"><mat-icon>keyboard_arrow_up</mat-icon></button>
+          <button aria-label="Next" mat-icon-button (click)="findNext()" [disabled]="!findMatches.length" matTooltip="Next"><mat-icon>keyboard_arrow_down</mat-icon></button>
           <button mat-stroked-button (click)="replaceCurrent()" [disabled]="!findMatches.length">Replace</button>
           <button mat-stroked-button (click)="replaceAll()" [disabled]="!findMatches.length">Replace All</button>
-          <button mat-icon-button (click)="toggleFindReplace()" matTooltip="Close"><mat-icon>close</mat-icon></button>
+          <button aria-label="Close" mat-icon-button (click)="toggleFindReplace()" matTooltip="Close"><mat-icon>close</mat-icon></button>
         </div>
       }
 
@@ -953,7 +958,8 @@ import { Awareness } from 'y-protocols/awareness';
               <mat-icon>toc</mat-icon> Navigation
             </div>
             @if (docHeadings.length === 0) {
-              <p class="nav-empty">No headings yet. Use Heading styles to build the outline.</p>
+              <app-empty-state icon="toc" title="No headings yet" [compact]="true"
+                               message="Use Heading styles to build the outline."></app-empty-state>
             } @else {
               @for (h of docHeadings; track h.pos) {
                 <button class="nav-heading level-{{ h.level }}" (click)="goToHeading(h)">{{ h.text || '(empty heading)' }}</button>
@@ -971,7 +977,7 @@ import { Awareness } from 'y-protocols/awareness';
             <div class="comments-pane-header">
               <mat-icon>comment</mat-icon> Comments
               <span class="spacer"></span>
-              <button mat-icon-button (click)="showComments = false" matTooltip="Close"><mat-icon>close</mat-icon></button>
+              <button aria-label="Close" mat-icon-button (click)="showComments = false" matTooltip="Close"><mat-icon>close</mat-icon></button>
             </div>
             <div class="new-comment">
               <textarea [(ngModel)]="newCommentText" placeholder="Add a comment about the selected text..." rows="2"></textarea>
@@ -980,7 +986,8 @@ import { Awareness } from 'y-protocols/awareness';
               </button>
             </div>
             @if (comments.length === 0) {
-              <p class="comments-empty">No comments yet. Select text and click Comment, or type above.</p>
+              <app-empty-state icon="comment" title="No comments yet" [compact]="true"
+                               message="Select text and click Comment, or type above."></app-empty-state>
             }
             @for (c of comments; track c.id) {
               <div class="comment-card" (click)="goToComment(c)">
@@ -990,7 +997,7 @@ import { Awareness } from 'y-protocols/awareness';
                     <div class="comment-author">{{ c.author }}</div>
                     <div class="comment-date">{{ c.createdAt | date:'MMM d, h:mm a' }}</div>
                   </div>
-                  <button mat-icon-button class="comment-delete" (click)="deleteComment(c, $event)" matTooltip="Delete comment"><mat-icon>delete_outline</mat-icon></button>
+                  <button aria-label="Delete comment" mat-icon-button class="comment-delete" (click)="deleteComment(c, $event)" matTooltip="Delete comment"><mat-icon>delete_outline</mat-icon></button>
                 </div>
                 @if (c.quote) {
                   <div class="comment-quote">“{{ c.quote }}”</div>
@@ -1011,15 +1018,15 @@ import { Awareness } from 'y-protocols/awareness';
                 <mat-icon class="welly-sparkle">auto_awesome</mat-icon>
                 <h3>Welly AI Assistant</h3>
               </div>
-              <button mat-icon-button (click)="showWellyPanel = false">
+              <button aria-label="Close" mat-icon-button (click)="showWellyPanel = false">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
             <div class="welly-panel-body">
               @if (wellyLoading) {
                 <div class="welly-loading">
-                  <mat-spinner diameter="36"></mat-spinner>
                   <p>Welly is {{ wellyActionLabel }}...</p>
+                  <app-skeleton-rows [rows]="4" [avatar]="false"></app-skeleton-rows>
                 </div>
               } @else if (wellyResult) {
                 <div class="welly-result">
@@ -1063,7 +1070,7 @@ import { Awareness } from 'y-protocols/awareness';
                 <mat-icon>email</mat-icon>
                 <h3>Email Document</h3>
               </div>
-              <button mat-icon-button (click)="showEmailDialog = false">
+              <button aria-label="Close" mat-icon-button (click)="showEmailDialog = false">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -1133,11 +1140,11 @@ import { Awareness } from 'y-protocols/awareness';
         </div>
         <div class="status-right">
           <span class="zoom-control">
-            <button mat-icon-button (click)="zoomOut()" [disabled]="zoomLevel <= 50">
+            <button aria-label="Zoom out" mat-icon-button (click)="zoomOut()" [disabled]="zoomLevel <= 50">
               <mat-icon>remove</mat-icon>
             </button>
             <span>{{ zoomLevel }}%</span>
-            <button mat-icon-button (click)="zoomIn()" [disabled]="zoomLevel >= 200">
+            <button aria-label="Zoom in" mat-icon-button (click)="zoomIn()" [disabled]="zoomLevel >= 200">
               <mat-icon>add</mat-icon>
             </button>
           </span>
@@ -1150,7 +1157,7 @@ import { Awareness } from 'y-protocols/awareness';
       display: flex;
       flex-direction: column;
       height: 100vh;
-      background: #f1f3f4;
+      background: var(--color-surface-2);
     }
 
     .editor-container.loading {
@@ -1163,8 +1170,8 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       justify-content: space-between;
       padding: 8px 16px;
-      background: #f9fbfd;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
     }
 
     .title-bar-left {
@@ -1185,7 +1192,7 @@ import { Awareness } from 'y-protocols/awareness';
       font-size: 40px;
       width: 40px;
       height: 40px;
-      color: #4285f4;
+      color: var(--color-primary);
     }
 
     .document-info {
@@ -1196,17 +1203,18 @@ import { Awareness } from 'y-protocols/awareness';
 
     .title-input {
       border: none;
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 500;
       padding: 4px 8px;
       border-radius: 4px;
       background: transparent;
+      color: var(--color-text);
       min-width: 200px;
     }
 
     .title-input:hover,
     .title-input:focus {
-      background: #e8f0fe;
+      background: var(--color-primary-soft);
       outline: none;
     }
 
@@ -1216,7 +1224,7 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .menu-bar button {
-      font-size: 13px;
+      font-size: var(--text-sm);
       min-width: auto;
       padding: 2px 8px;
       height: auto;
@@ -1233,8 +1241,8 @@ import { Awareness } from 'y-protocols/awareness';
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
-      color: #5f6368;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .save-status mat-icon {
@@ -1264,10 +1272,10 @@ import { Awareness } from 'y-protocols/awareness';
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-on-dark);
       font-weight: 600;
-      font-size: 14px;
-      border: 2px solid white;
+      font-size: var(--text-md);
+      border: 2px solid var(--color-surface);
       margin-left: -8px;
     }
 
@@ -1289,29 +1297,29 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .connection-status.Connected {
-      color: #34a853;
+      color: var(--color-ok);
     }
 
     .connection-status.Reconnecting {
-      color: #fbbc04;
+      color: var(--color-warn);
     }
 
     .connection-status.Disconnected,
     .connection-status.Error {
-      color: #ea4335;
+      color: var(--color-danger);
     }
 
     /* Ribbon */
     .ribbon {
-      background: #f9fbfd;
-      border-bottom: 1px solid #dadce0;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
     }
 
     .ribbon-tabs {
       display: flex;
       padding: 0 16px;
-      border-bottom: 1px solid #e0e0e0;
-      background: white;
+      border-bottom: 1px solid var(--color-line);
+      background: var(--color-surface);
     }
 
     .ribbon-tab {
@@ -1319,42 +1327,42 @@ import { Awareness } from 'y-protocols/awareness';
       border: none;
       background: none;
       cursor: pointer;
-      font-size: 13px;
-      color: #5f6368;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
       border-bottom: 3px solid transparent;
       transition: all 0.2s;
     }
 
     .ribbon-tab:hover {
-      background: #f1f3f4;
+      background: var(--color-surface-2);
     }
 
     .ribbon-tab.active {
-      color: #1a73e8;
-      border-bottom-color: #1a73e8;
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
     }
 
     .ribbon-tab.file-tab {
-      background: #2b579a;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       border-radius: 4px 4px 0 0;
       margin-right: 4px;
       font-weight: 600;
     }
 
-    .ribbon-tab.file-tab:hover { background: #1e3f73; }
+    .ribbon-tab.file-tab:hover { background: var(--color-primary-hover); }
 
     .draw-pen {
       width: 28px;
       height: 36px;
-      border: 2px solid #dadce0;
+      border: 2px solid var(--color-line);
       border-radius: 4px 4px 12px 12px;
       cursor: pointer;
       margin: 0 2px;
       transition: transform 0.15s, border-color 0.15s;
     }
     .draw-pen:hover { transform: translateY(-3px); }
-    .draw-pen.active { border-color: #1a73e8; transform: translateY(-3px); box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+    .draw-pen.active { border-color: var(--color-primary); transform: translateY(-3px); box-shadow: var(--shadow-md); }
 
     .theme-btn {
       display: flex;
@@ -1363,18 +1371,19 @@ import { Awareness } from 'y-protocols/awareness';
       gap: 2px;
       padding: 6px 12px;
       border: 1px solid transparent;
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       background: none;
+      color: var(--color-text);
       cursor: pointer;
     }
-    .theme-btn:hover { background: #f1f3f4; }
-    .theme-btn.active { border-color: #1a73e8; background: #e8f0fe; }
-    .theme-preview { font-size: 22px; font-weight: 700; line-height: 1; }
-    .theme-name { font-size: 11px; color: #5f6368; }
+    .theme-btn:hover { background: var(--color-surface-2); }
+    .theme-btn.active { border-color: var(--color-primary); background: var(--color-primary-soft); }
+    .theme-preview { font-size: var(--text-2xl); font-weight: 700; line-height: 1; }
+    .theme-name { font-size: var(--text-xs); color: var(--color-text-2); }
 
     .word-count-panel {
-      font-size: 12px;
-      color: #3c4043;
+      font-size: var(--text-xs);
+      color: var(--color-text);
       padding: 4px 10px;
       line-height: 1.6;
     }
@@ -1383,58 +1392,61 @@ import { Awareness } from 'y-protocols/awareness';
       display: flex;
       flex-wrap: wrap;
       gap: 6px 16px;
-      font-size: 12px;
-      color: #3c4043;
+      font-size: var(--text-xs);
+      color: var(--color-text);
       align-items: center;
     }
     .shortcuts-list kbd {
-      background: #f1f3f4;
-      border: 1px solid #dadce0;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-line);
       border-radius: 4px;
       padding: 1px 6px;
       font-family: inherit;
-      font-size: 11px;
+      font-size: var(--text-xs);
     }
 
-    .menu-active { font-weight: 700; color: #1a73e8; }
+    .menu-active { font-weight: 700; color: var(--color-primary); }
 
     /* Word-web top bar */
     .topbar-btn {
-      font-size: 13px;
-      color: #3c4043;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
       display: inline-flex;
       align-items: center;
       gap: 4px;
     }
-    .topbar-btn.active { color: #1a73e8; background: #e8f0fe; }
+    .topbar-btn.active { color: var(--color-primary); background: var(--color-primary-soft); }
     .topbar-btn .dropdown-caret { margin: 0 -6px 0 -2px; }
     .comment-count {
-      background: #1a73e8;
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       border-radius: 10px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 0 6px;
       margin-left: 2px;
     }
-    .share-btn {
-      background: #2b579a;
-      color: white;
-      border-radius: 6px;
-    }
-    .dictating-mic { color: #d93025; animation: livePulseMic 1.2s infinite; }
+    .dictating-mic { color: var(--color-danger); animation: livePulseMic 1.2s infinite; }
     @keyframes livePulseMic { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
     /* Comments pane */
     .comments-pane {
       width: 300px;
       flex-shrink: 0;
-      background: #faf9f8;
-      border-left: 1px solid #e0e0e0;
+      background: var(--color-surface-2);
+      border-left: 1px solid var(--color-line);
+      color: var(--color-text);
       overflow-y: auto;
       padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 10px;
+    }
+    .comments-pane.dark-mode, .nav-pane.dark-mode {
+      --color-surface: #2d2f34;
+      --color-text: #e8eaed;
+      --color-text-2: #9aa0a6;
+      --color-text-3: #9aa0a6;
+      --color-line: #3c3f45;
     }
     .comments-pane.dark-mode { background: #26282c; border-left-color: #3c3f45; color: #e8eaed; }
     .comments-pane-header {
@@ -1442,59 +1454,60 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       gap: 8px;
       font-weight: 600;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
     .comments-pane-header .spacer { flex: 1; }
     .new-comment { display: flex; flex-direction: column; gap: 6px; }
     .new-comment textarea {
       width: 100%;
-      border: 1px solid #dadce0;
+      border: 1px solid var(--color-line);
       border-radius: 6px;
       padding: 8px;
       font-family: inherit;
-      font-size: 13px;
+      font-size: var(--text-sm);
+      background: var(--color-surface);
+      color: var(--color-text);
       resize: vertical;
       box-sizing: border-box;
     }
-    .comments-empty { font-size: 12px; color: #80868b; }
     .comment-card {
-      background: white;
-      border: 1px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       border-radius: 8px;
       padding: 10px;
       cursor: pointer;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+      box-shadow: var(--shadow-sm);
     }
     .comments-pane.dark-mode .comment-card { background: #2d2f34; border-color: #3c3f45; }
-    .comment-card:hover { border-color: #1a73e8; }
+    .comment-card:hover { border-color: var(--color-primary); }
     .comment-head { display: flex; align-items: center; gap: 8px; }
     .comment-avatar {
       width: 28px; height: 28px; border-radius: 50%;
-      color: white; display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 600; flex-shrink: 0;
+      color: var(--color-on-dark); display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-sm); font-weight: 600; flex-shrink: 0;
     }
     .comment-meta { flex: 1; min-width: 0; }
-    .comment-author { font-size: 13px; font-weight: 600; }
-    .comment-date { font-size: 11px; color: #80868b; }
+    .comment-author { font-size: var(--text-sm); font-weight: 600; }
+    .comment-date { font-size: var(--text-xs); color: var(--color-text-3); }
     .comment-delete { opacity: 0.4; }
     .comment-card:hover .comment-delete { opacity: 1; }
     .comment-quote {
-      font-size: 12px;
-      color: #5f6368;
-      border-left: 3px solid #fbbc04;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
+      border-left: 3px solid var(--color-cat-amber);
       padding-left: 8px;
       margin: 6px 0;
       font-style: italic;
     }
     .comments-pane.dark-mode .comment-quote { color: #9aa0a6; }
-    .comment-text { font-size: 13px; margin-top: 4px; white-space: pre-wrap; }
+    .comment-text { font-size: var(--text-sm); margin-top: 4px; white-space: pre-wrap; }
 
     .ribbon-content {
       display: flex;
       align-items: flex-start;
       padding: 8px 16px;
       gap: 4px;
-      background: white;
+      background: var(--color-surface);
       min-height: 80px;
     }
 
@@ -1512,17 +1525,17 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .ribbon-group-label {
-      font-size: 10px;
-      color: #5f6368;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       text-align: center;
       padding-top: 4px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
       margin-top: 4px;
     }
 
     .ribbon-separator {
       width: 1px;
-      background: #dadce0;
+      background: var(--color-line);
       align-self: stretch;
       margin: 0 4px;
     }
@@ -1537,19 +1550,19 @@ import { Awareness } from 'y-protocols/awareness';
       background: none;
       cursor: pointer;
       border-radius: 4px;
-      color: #5f6368;
+      color: var(--color-text-2);
       transition: all 0.15s;
       gap: 2px;
     }
 
     .ribbon-btn:hover {
-      background: #e8f0fe;
-      color: #1a73e8;
+      background: var(--color-surface-2);
+      color: var(--color-primary);
     }
 
     .ribbon-btn.active {
-      background: #d2e3fc;
-      color: #1a73e8;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
 
     .ribbon-btn mat-icon {
@@ -1559,7 +1572,7 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .ribbon-btn span {
-      font-size: 11px;
+      font-size: var(--text-xs);
       white-space: nowrap;
     }
 
@@ -1610,28 +1623,31 @@ import { Awareness } from 'y-protocols/awareness';
     .font-select {
       width: 120px;
       padding: 4px 8px;
-      border: 1px solid #dadce0;
+      border: 1px solid var(--color-line);
       border-radius: 4px;
-      font-size: 12px;
-      background: white;
+      font-size: var(--text-xs);
+      background: var(--color-surface);
+      color: var(--color-text);
     }
 
     .font-size-select {
       width: 50px;
       padding: 4px;
-      border: 1px solid #dadce0;
+      border: 1px solid var(--color-line);
       border-radius: 4px;
-      font-size: 12px;
-      background: white;
+      font-size: var(--text-xs);
+      background: var(--color-surface);
+      color: var(--color-text);
     }
 
     .size-select {
       width: 56px;
       padding: 4px 6px;
-      border: 1px solid #dadce0;
+      border: 1px solid var(--color-line);
       border-radius: 4px;
-      font-size: 12px;
-      background: white;
+      font-size: var(--text-xs);
+      background: var(--color-surface);
+      color: var(--color-text);
     }
 
     .color-palette {
@@ -1644,7 +1660,7 @@ import { Awareness } from 'y-protocols/awareness';
     .color-swatch {
       width: 22px;
       height: 22px;
-      border: 1px solid rgba(0,0,0,0.15);
+      border: 1px solid var(--color-line-strong);
       border-radius: 3px;
       cursor: pointer;
       padding: 0;
@@ -1652,7 +1668,7 @@ import { Awareness } from 'y-protocols/awareness';
 
     .color-swatch:hover {
       transform: scale(1.15);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      box-shadow: var(--shadow-sm);
     }
 
     .ribbon-icon-btn {
@@ -1666,18 +1682,18 @@ import { Awareness } from 'y-protocols/awareness';
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #5f6368;
+      color: var(--color-text-2);
       position: relative;
     }
 
     .ribbon-icon-btn:hover {
-      background: #e8f0fe;
-      color: #1a73e8;
+      background: var(--color-surface-2);
+      color: var(--color-primary);
     }
 
     .ribbon-icon-btn.active {
-      background: #d2e3fc;
-      color: #1a73e8;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
 
     .ribbon-icon-btn mat-icon {
@@ -1717,8 +1733,9 @@ import { Awareness } from 'y-protocols/awareness';
 
     .style-btn {
       padding: 4px 8px;
-      border: 1px solid #dadce0;
-      background: white;
+      border: 1px solid var(--color-line);
+      background: var(--color-surface);
+      color: var(--color-text);
       cursor: pointer;
       border-radius: 4px;
       min-width: 70px;
@@ -1726,12 +1743,12 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .style-btn:hover {
-      border-color: #1a73e8;
+      border-color: var(--color-primary);
     }
 
     .style-btn.active {
-      border-color: #1a73e8;
-      background: #e8f0fe;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
     }
 
     .style-preview {
@@ -1740,38 +1757,38 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .style-preview.normal {
-      font-size: 11px;
+      font-size: var(--text-xs);
     }
 
     .style-preview.h1 {
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 700;
-      color: #202124;
+      color: var(--color-text);
     }
 
     .style-preview.h2 {
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
-      color: #202124;
+      color: var(--color-text);
     }
 
     .style-preview.h3 {
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 600;
-      color: #5f6368;
+      color: var(--color-text-2);
     }
 
     .style-preview.title-style {
-      font-size: 15px;
+      font-size: var(--text-md);
       font-weight: 700;
       font-family: Georgia, 'Times New Roman', serif;
-      color: #0f3b82;
+      color: var(--color-brand);
     }
 
     .style-preview.quote-style {
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-style: italic;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     /* Editing Group */
@@ -1786,8 +1803,8 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .zoom-level {
-      font-size: 12px;
-      color: #5f6368;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       min-width: 40px;
       text-align: center;
     }
@@ -1798,8 +1815,8 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .table-size-label {
-      font-size: 12px;
-      color: #5f6368;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       margin-bottom: 8px;
       text-align: center;
     }
@@ -1818,14 +1835,14 @@ import { Awareness } from 'y-protocols/awareness';
     .table-grid-cell {
       width: 20px;
       height: 20px;
-      border: 1px solid #dadce0;
-      background: white;
+      border: 1px solid var(--color-line);
+      background: var(--color-surface);
       cursor: pointer;
     }
 
     .table-grid-cell.selected {
-      background: #d2e3fc;
-      border-color: #1a73e8;
+      background: var(--color-primary-soft);
+      border-color: var(--color-primary);
     }
 
     /* Color Grid */
@@ -1839,21 +1856,21 @@ import { Awareness } from 'y-protocols/awareness';
     .color-swatch {
       width: 24px;
       height: 24px;
-      border: 1px solid #dadce0;
+      border: 1px solid var(--color-line);
       border-radius: 4px;
       cursor: pointer;
     }
 
     .color-swatch:hover {
       transform: scale(1.1);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-sm);
     }
 
     /* Ruler */
     .ruler {
       display: flex;
-      background: white;
-      border-bottom: 1px solid #dadce0;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
       padding: 4px 0;
       justify-content: center;
     }
@@ -1861,14 +1878,14 @@ import { Awareness } from 'y-protocols/awareness';
     .ruler-mark {
       width: 8px;
       height: 8px;
-      border-left: 1px solid #dadce0;
+      border-left: 1px solid var(--color-line);
       font-size: 8px;
-      color: #5f6368;
+      color: var(--color-text-2);
     }
 
     .ruler-mark.major {
       height: 16px;
-      border-left-color: #5f6368;
+      border-left-color: var(--color-text-3);
     }
 
     .ruler-mark span {
@@ -1884,7 +1901,7 @@ import { Awareness } from 'y-protocols/awareness';
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(255, 255, 255, 0.9);
+      background: color-mix(in srgb, var(--color-surface-2) 92%, transparent);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1892,13 +1909,22 @@ import { Awareness } from 'y-protocols/awareness';
       z-index: 100;
     }
 
+    .loading-page {
+      width: min(816px, 90%);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: var(--space-5) var(--space-4);
+    }
+
     .loading-overlay p {
       margin-top: 16px;
-      color: #5f6368;
+      color: var(--color-text-2);
     }
 
     .ocr-overlay {
-      background: rgba(255, 255, 255, 0.95) !important;
+      background: color-mix(in srgb, var(--color-surface) 95%, transparent);
       gap: 8px;
     }
 
@@ -1906,7 +1932,7 @@ import { Awareness } from 'y-protocols/awareness';
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #2563eb;
+      color: var(--color-primary);
       animation: pulse 2s ease-in-out infinite;
     }
 
@@ -1915,31 +1941,31 @@ import { Awareness } from 'y-protocols/awareness';
       50% { opacity: 0.7; transform: scale(1.05); }
     }
 
-    .ocr-status {
-      font-size: 14px;
-      color: #333;
+    .ocr-overlay .ocr-status {
+      font-size: var(--text-md);
+      color: var(--color-text);
       font-weight: 500;
-      margin: 4px 0 !important;
+      margin: 4px 0;
     }
 
     .ocr-progress-bar {
       width: 250px;
       height: 6px;
-      background: #e0e0e0;
+      background: var(--color-line);
       border-radius: 3px;
       overflow: hidden;
     }
 
     .ocr-progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #2563eb, #1e40af);
+      background: var(--color-primary);
       border-radius: 3px;
       transition: width 0.3s ease;
     }
 
     .ocr-progress-text {
-      font-size: 12px;
-      color: #5f6368;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     /* Editor main: nav pane + page */
@@ -1954,8 +1980,8 @@ import { Awareness } from 'y-protocols/awareness';
       width: 240px;
       flex-shrink: 0;
       overflow-y: auto;
-      background: #fff;
-      border-right: 1px solid #dadce0;
+      background: var(--color-surface);
+      border-right: 1px solid var(--color-line);
       padding: 8px;
       display: flex;
       flex-direction: column;
@@ -1971,23 +1997,17 @@ import { Awareness } from 'y-protocols/awareness';
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
-      color: #5f6368;
+      color: var(--color-text-2);
       padding: 6px 8px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
       margin-bottom: 4px;
     }
 
     .nav-pane.dark-mode .nav-pane-header { color: #9aa0a6; border-bottom-color: #3c3f45; }
 
     .nav-pane-header mat-icon { font-size: 18px; width: 18px; height: 18px; }
-
-    .nav-empty {
-      font-size: 12px;
-      color: #9aa0a6;
-      padding: 8px;
-    }
 
     .nav-heading {
       display: block;
@@ -1998,8 +2018,8 @@ import { Awareness } from 'y-protocols/awareness';
       cursor: pointer;
       padding: 5px 8px;
       border-radius: 4px;
-      font-size: 13px;
-      color: #202124;
+      font-size: var(--text-sm);
+      color: var(--color-text);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2007,10 +2027,10 @@ import { Awareness } from 'y-protocols/awareness';
 
     .nav-pane.dark-mode .nav-heading { color: #e8eaed; }
 
-    .nav-heading:hover { background: #e8f0fe; color: #1a73e8; }
+    .nav-heading:hover { background: var(--color-primary-soft); color: var(--color-primary); }
     .nav-heading.level-1 { font-weight: 700; }
     .nav-heading.level-2 { padding-left: 20px; font-weight: 500; }
-    .nav-heading.level-3 { padding-left: 34px; color: #5f6368; }
+    .nav-heading.level-3 { padding-left: 34px; color: var(--color-text-2); }
 
     /* Find & Replace bar */
     .find-bar {
@@ -2018,35 +2038,37 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       gap: 8px;
       padding: 6px 16px;
-      background: #fffbe6;
-      border-bottom: 1px solid #e6dba6;
+      background: var(--color-surface-2);
+      border-bottom: 1px solid var(--color-line);
       flex-wrap: wrap;
     }
 
-    .find-icon { color: #8a6d00; }
+    .find-icon { color: var(--color-text-2); }
 
     .find-input {
       padding: 5px 10px;
-      border: 1px solid #dadce0;
+      border: 1px solid var(--color-line);
       border-radius: 4px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       width: 180px;
+      background: var(--color-surface);
+      color: var(--color-text);
     }
 
     .find-opt {
       display: flex;
       align-items: center;
       gap: 3px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
-      color: #5f6368;
+      color: var(--color-text-2);
       cursor: pointer;
       user-select: none;
     }
 
     .find-count {
-      font-size: 12px;
-      color: #5f6368;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
       min-width: 70px;
     }
 
@@ -2057,7 +2079,7 @@ import { Awareness } from 'y-protocols/awareness';
       padding: 24px;
       display: flex;
       justify-content: center;
-      background: #f1f3f4;
+      background: var(--color-surface-2);
       transition: background 0.25s ease;
     }
 
@@ -2104,8 +2126,8 @@ import { Awareness } from 'y-protocols/awareness';
       width: 100%;
       max-width: 816px;
       min-height: calc(100vh - 280px);
-      background: white;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-md);
       border-radius: 0;
       padding: 96px 96px 96px 96px;
       overflow-wrap: break-word;
@@ -2128,10 +2150,10 @@ import { Awareness } from 'y-protocols/awareness';
       justify-content: space-between;
       align-items: center;
       padding: 4px 16px;
-      background: #f9fbfd;
-      border-top: 1px solid #dadce0;
-      font-size: 12px;
-      color: #5f6368;
+      background: var(--color-surface);
+      border-top: 1px solid var(--color-line);
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
     }
 
     .status-left {
@@ -2168,7 +2190,7 @@ import { Awareness } from 'y-protocols/awareness';
       font-family: 'Arial', sans-serif;
       font-size: 11pt;
       line-height: 1.5;
-      color: #000;
+      color: var(--color-text);
       overflow-wrap: break-word;
       word-break: break-word;
     }
@@ -2209,13 +2231,13 @@ import { Awareness } from 'y-protocols/awareness';
       border-left: 4px solid #1a73e8;
       margin: 16px 0;
       padding: 8px 16px;
-      background: #f8f9fa;
+      background: var(--color-surface-2);
       font-style: italic;
     }
 
     :host ::ng-deep .tiptap-editor pre {
-      background: #f5f5f5;
-      color: #333;
+      background: var(--color-surface-2);
+      color: var(--color-text);
       padding: 16px;
       border-radius: 4px;
       overflow-x: auto;
@@ -2227,7 +2249,7 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     :host ::ng-deep .tiptap-editor code {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       padding: 2px 6px;
       border-radius: 4px;
       font-family: 'Courier New', monospace;
@@ -2240,7 +2262,7 @@ import { Awareness } from 'y-protocols/awareness';
 
     :host ::ng-deep .tiptap-editor hr {
       border: none;
-      border-top: 1px solid #dadce0;
+      border-top: 1px solid var(--color-line);
       margin: 24px 0;
     }
 
@@ -2259,13 +2281,13 @@ import { Awareness } from 'y-protocols/awareness';
 
     :host ::ng-deep .tiptap-editor th,
     :host ::ng-deep .tiptap-editor td {
-      border: 1px solid #dadce0;
+      border: 1px solid var(--color-line);
       padding: 8px 12px;
       text-align: left;
     }
 
     :host ::ng-deep .tiptap-editor th {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       font-weight: 600;
     }
 
@@ -2315,8 +2337,8 @@ import { Awareness } from 'y-protocols/awareness';
 
     :host ::ng-deep .collaboration-cursor__label {
       border-radius: 4px;
-      color: white;
-      font-size: 12px;
+      color: var(--color-on-dark);
+      font-size: var(--text-xs);
       font-weight: 600;
       left: -1px;
       line-height: 1;
@@ -2354,19 +2376,16 @@ import { Awareness } from 'y-protocols/awareness';
 
     /* Welly AI Assist Styles */
     .welly-group .welly-btn {
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-      color: white;
-      border-radius: 8px;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      border-radius: var(--radius-control);
       transition: all 0.3s ease;
     }
 
     .welly-group .welly-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-    }
-
-    .welly-group .welly-icon {
-      color: #ffd700;
+      background: var(--color-primary-hover);
+      color: var(--color-on-primary);
+      box-shadow: var(--shadow-md);
     }
 
     .welly-panel-overlay {
@@ -2375,7 +2394,7 @@ import { Awareness } from 'y-protocols/awareness';
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.4);
+      background: var(--color-scrim);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2383,14 +2402,15 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .welly-panel {
-      background: white;
-      border-radius: 16px;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-radius: var(--radius-lg);
       width: 560px;
       max-width: 90vw;
       max-height: 80vh;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--shadow-lg);
       overflow: hidden;
     }
 
@@ -2399,8 +2419,9 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       justify-content: space-between;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
     }
 
     .welly-panel-title {
@@ -2411,16 +2432,12 @@ import { Awareness } from 'y-protocols/awareness';
 
     .welly-panel-title h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 600;
     }
 
     .welly-sparkle {
-      color: #ffd700;
-    }
-
-    .welly-panel-header button {
-      color: white;
+      color: var(--color-primary);
     }
 
     .welly-panel-body {
@@ -2432,22 +2449,21 @@ import { Awareness } from 'y-protocols/awareness';
     .welly-loading {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 16px;
-      padding: 32px;
+      gap: 8px;
     }
 
     .welly-loading p {
-      color: #666;
-      font-size: 14px;
+      margin: 0;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
 
     .welly-result-text {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 10px;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 16px;
-      font-size: 14px;
+      font-size: var(--text-md);
       line-height: 1.6;
       white-space: pre-wrap;
       max-height: 40vh;
@@ -2469,16 +2485,18 @@ import { Awareness } from 'y-protocols/awareness';
 
     .welly-generate-form p {
       margin: 0;
-      color: #555;
-      font-size: 14px;
+      color: var(--color-text-2);
+      font-size: var(--text-md);
     }
 
     .welly-generate-form textarea {
       width: 100%;
-      border: 1px solid #ddd;
-      border-radius: 8px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
       padding: 12px;
-      font-size: 14px;
+      font-size: var(--text-md);
+      background: var(--color-surface);
+      color: var(--color-text);
       font-family: inherit;
       resize: vertical;
       outline: none;
@@ -2486,19 +2504,20 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .welly-generate-form textarea:focus {
-      border-color: #2563eb;
+      border-color: var(--color-primary);
     }
 
     /* Email Dialog */
     .email-dialog {
-      background: white;
-      border-radius: 16px;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-radius: var(--radius-lg);
       width: 620px;
       max-width: 92vw;
       max-height: 88vh;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--shadow-lg);
       overflow: hidden;
     }
 
@@ -2507,8 +2526,13 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       justify-content: space-between;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #2196F3 0%, #1565C0 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
+    }
+
+    .email-dialog-title mat-icon {
+      color: var(--color-primary);
     }
 
     .email-dialog-title {
@@ -2519,12 +2543,8 @@ import { Awareness } from 'y-protocols/awareness';
 
     .email-dialog-title h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 600;
-    }
-
-    .email-dialog-header button {
-      color: white;
     }
 
     .email-dialog-body {
@@ -2539,22 +2559,24 @@ import { Awareness } from 'y-protocols/awareness';
 
     .email-field label {
       display: block;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
-      color: #444;
+      color: var(--color-text-2);
       margin-bottom: 6px;
     }
 
     .email-field .required {
-      color: #f44336;
+      color: var(--color-danger);
     }
 
     .email-input {
       width: 100%;
       padding: 10px 12px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 14px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      font-size: var(--text-md);
+      background: var(--color-surface);
+      color: var(--color-text);
       font-family: inherit;
       outline: none;
       transition: border-color 0.2s;
@@ -2562,8 +2584,8 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .email-input:focus {
-      border-color: #2196F3;
-      box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px var(--color-primary-soft);
     }
 
     .email-textarea-wrapper {
@@ -2574,9 +2596,11 @@ import { Awareness } from 'y-protocols/awareness';
       width: 100%;
       padding: 10px 12px;
       padding-bottom: 44px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 14px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      font-size: var(--text-md);
+      background: var(--color-surface);
+      color: var(--color-text);
       font-family: inherit;
       resize: vertical;
       outline: none;
@@ -2586,8 +2610,8 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .email-textarea:focus {
-      border-color: #2196F3;
-      box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px var(--color-primary-soft);
     }
 
     .welly-compose-btn {
@@ -2598,19 +2622,19 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       gap: 6px;
       padding: 5px 12px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid transparent;
       border-radius: 20px;
-      background: linear-gradient(135deg, #2563eb, #1e40af);
-      color: white;
-      font-size: 12px;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      font-size: var(--text-xs);
       font-weight: 500;
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .welly-compose-btn:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+      background: var(--color-primary-hover);
+      box-shadow: var(--shadow-md);
     }
 
     .welly-compose-btn:disabled {
@@ -2625,7 +2649,7 @@ import { Awareness } from 'y-protocols/awareness';
     }
 
     .welly-compose-btn .welly-sparkle {
-      color: #ffd700;
+      color: inherit;
     }
 
     .email-options {
@@ -2633,8 +2657,8 @@ import { Awareness } from 'y-protocols/awareness';
       flex-direction: column;
       gap: 10px;
       padding: 12px 16px;
-      background: #f8f9fa;
-      border-radius: 8px;
+      background: var(--color-canvas);
+      border-radius: var(--radius-control);
       margin-top: 4px;
     }
 
@@ -2643,14 +2667,14 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       gap: 8px;
       cursor: pointer;
-      font-size: 13px;
-      color: #555;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
 
     .email-checkbox input[type="checkbox"] {
       width: 16px;
       height: 16px;
-      accent-color: #2196F3;
+      accent-color: var(--color-primary);
       cursor: pointer;
     }
 
@@ -2658,7 +2682,7 @@ import { Awareness } from 'y-protocols/awareness';
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #888;
+      color: var(--color-text-3);
     }
 
     .email-dialog-footer {
@@ -2667,8 +2691,8 @@ import { Awareness } from 'y-protocols/awareness';
       align-items: center;
       gap: 8px;
       padding: 12px 20px;
-      border-top: 1px solid #e0e0e0;
-      background: #fafafa;
+      border-top: 1px solid var(--color-line);
+      background: var(--color-canvas);
     }
 
     .email-dialog-footer button[mat-raised-button] {
@@ -2681,14 +2705,16 @@ import { Awareness } from 'y-protocols/awareness';
       display: inline-block;
     }
 
-    .email-btn {
-      background: linear-gradient(135deg, #2196F3, #1565C0) !important;
-      color: white !important;
-      border-radius: 6px !important;
+    .ribbon-btn.email-btn {
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      border-radius: var(--radius-sm);
     }
 
-    .email-btn:hover {
-      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+    .ribbon-btn.email-btn:hover {
+      background: var(--color-primary-hover);
+      color: var(--color-on-primary);
+      box-shadow: var(--shadow-md);
     }
   `]
 })
@@ -2840,7 +2866,8 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     private router: Router,
     private docsService: CollaborativeDocsService,
     private authService: AuthService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
+    private confirmDialog: ConfirmService,
     private http: HttpClient,
     private wellyActivity: WellyActivityService
   ) {}
@@ -2924,7 +2951,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       error: (err) => {
         console.error('Error loading document:', err);
-        this.snackBar.open('Failed to load document', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load document');
         this.router.navigate(['/docs']);
       }
     });
@@ -3046,7 +3073,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         try {
           this.editor?.chain().focus().setContent(html).run();
           this.autosaveSubject.next();
-          this.snackBar.open('Imported file content', 'Close', { duration: 3000 });
+          this.toast.done('Imported file content');
         } catch { /* ignore */ }
       }, 200);
     } catch { /* ignore malformed seed */ }
@@ -3323,7 +3350,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     this.selectedFont = t.font;
     this.editor?.chain().focus().selectAll().setFontFamily(t.font).run();
     this.editor?.commands.setTextSelection(this.editor.state.selection.to);
-    this.snackBar.open(`Theme "${t.name}" applied`, 'Close', { duration: 2000 });
+    this.toast.done(`Theme "${t.name}" applied`);
   }
 
   // ---- Layout tab ----
@@ -3384,12 +3411,12 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   setEditingMode(mode: 'editing' | 'viewing'): void {
     this.editingMode = mode;
     this.editor?.setEditable(mode === 'editing');
-    this.snackBar.open(mode === 'editing' ? 'Editing mode — you can make changes' : 'Viewing mode — read only', 'Close', { duration: 2000 });
+    this.toast.info(mode === 'editing' ? 'Editing mode — you can make changes' : 'Viewing mode — read only');
   }
 
   shareDocument(): void {
     navigator.clipboard.writeText(window.location.href).then(() => {
-      this.snackBar.open('Link copied to clipboard — share it with your team', 'Close', { duration: 3000 });
+      this.toast.done('Link copied to clipboard — share it with your team');
     });
   }
 
@@ -3409,7 +3436,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      this.snackBar.open('Dictation is not supported in this browser. Try Chrome or Edge.', 'Close', { duration: 4000 });
+      this.toast.warn('Dictation is not supported in this browser. Try Chrome or Edge.');
       return;
     }
     this.speechRecognition = new SR();
@@ -3430,14 +3457,14 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     };
     this.speechRecognition.start();
     this.dictating = true;
-    this.snackBar.open('Dictation started — speak now. Click Stop when done.', 'Close', { duration: 3000 });
+    this.toast.info('Dictation started — speak now. Click Stop when done.');
   }
 
   // ---- References tab ----
   insertTableOfContents(): void {
     this.refreshHeadings();
     if (!this.docHeadings.length) {
-      this.snackBar.open('No headings found. Apply Heading styles first.', 'Close', { duration: 3000 });
+      this.toast.warn('No headings found. Apply Heading styles first.');
       return;
     }
     const items = this.docHeadings
@@ -3447,10 +3474,14 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     this.editor?.chain().focus().setTextSelection(0).insertContent(toc).run();
   }
 
-  insertFootnote(): void {
+  async insertFootnote(): Promise<void> {
     this.footnoteCounter++;
     const n = this.footnoteCounter;
-    const note = window.prompt('Footnote text:');
+    const note = await this.confirmDialog.askText({
+      title: `Add footnote ${n}`,
+      label: 'Footnote text',
+      confirmText: 'Insert footnote'
+    });
     if (note === null) { this.footnoteCounter--; return; }
     this.editor?.chain().focus().insertContent(`<sup>[${n}]</sup>`).run();
     const endPos = this.editor?.state.doc.content.size ?? 0;
@@ -3482,7 +3513,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     navigator.clipboard.readText().then(text => {
       this.editor?.chain().focus().insertContent(text).run();
     }).catch(() => {
-      this.snackBar.open('Unable to paste. Please use Ctrl+V', 'Close', { duration: 2000 });
+      this.toast.warn('Unable to paste. Please use Ctrl+V');
     });
   }
 
@@ -3492,26 +3523,33 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Table operations (not available without Table extension)
   insertTable(): void {
-    this.snackBar.open('Tables not available', 'Close', { duration: 2000 });
+    this.toast.info('Tables not available');
   }
 
   // Image operations (not available without Image extension)
   triggerImageUpload(): void {
-    this.snackBar.open('Image upload not available', 'Close', { duration: 2000 });
+    this.toast.info('Image upload not available');
   }
 
   insertImage(event: Event): void {
-    this.snackBar.open('Image insert not available', 'Close', { duration: 2000 });
+    this.toast.info('Image insert not available');
   }
 
   // Link operations
-  insertLink(): void {
+  async insertLink(): Promise<void> {
     if (this.editor?.isActive('link')) {
       this.editor.chain().focus().unsetLink().run();
       return;
     }
     const previous = this.editor?.getAttributes('link')?.['href'] || '';
-    const url = window.prompt('Link URL:', previous);
+    const url = await this.confirmDialog.askText({
+      title: 'Insert link',
+      label: 'Link URL',
+      value: previous,
+      placeholder: 'https://',
+      hint: 'Leave empty to remove the link',
+      confirmText: 'Insert link'
+    });
     if (url === null) return;
     if (url === '') {
       this.editor?.chain().focus().unsetLink().run();
@@ -3616,7 +3654,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     a.download = (this.documentTitle || 'document') + '.doc';
     a.click();
     URL.revokeObjectURL(url);
-    this.snackBar.open('Exported as Word document', 'Close', { duration: 2500 });
+    this.toast.done('Exported as Word document');
   }
 
   /** Word-style Title: an H1 with larger size via textStyle. */
@@ -3696,7 +3734,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     });
     chain.run();
     this.runFind();
-    this.snackBar.open(`Replaced ${count} occurrence${count === 1 ? '' : 's'}`, 'Close', { duration: 2500 });
+    this.toast.done(`Replaced ${count} occurrence${count === 1 ? '' : 's'}`);
   }
 
   // —— Navigation pane ——
@@ -3739,12 +3777,12 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Check file type
     if (!file.name.toLowerCase().endsWith('.docx')) {
-      this.snackBar.open('Please select a valid Word document (.docx)', 'Close', { duration: 3000 });
+      this.toast.warn('Please select a valid Word document (.docx)');
       return;
     }
 
     this.saving = true;
-    this.snackBar.open('Importing Word document...', undefined, { duration: 2000 });
+    this.toast.info('Importing Word document...');
 
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -3760,14 +3798,14 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         // Option 1: Replace all content
         this.editor.chain().focus().setContent(result.value).run();
         
-        this.snackBar.open('Word document imported successfully!', 'Close', { duration: 3000 });
+        this.toast.done('Word document imported successfully');
         
         // Trigger autosave
         this.autosaveSubject.next();
       }
     } catch (error) {
       console.error('Error importing Word document:', error);
-      this.snackBar.open('Failed to import Word document', 'Close', { duration: 3000 });
+      this.toast.error('Failed to import Word document');
     } finally {
       this.saving = false;
       // Reset file input so the same file can be selected again
@@ -3789,12 +3827,12 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      this.snackBar.open('Please select a valid PDF file (.pdf)', 'Close', { duration: 3000 });
+      this.toast.warn('Please select a valid PDF file (.pdf)');
       return;
     }
 
     this.saving = true;
-    this.snackBar.open('Importing PDF document...', undefined, { duration: 2000 });
+    this.toast.info('Importing PDF document...');
 
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -3867,14 +3905,14 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (this.editor && htmlContent) {
         this.editor.chain().focus().setContent(htmlContent).run();
-        this.snackBar.open(`PDF imported successfully! (${totalPages} page${totalPages > 1 ? 's' : ''})`, 'Close', { duration: 3000 });
+        this.toast.done(`PDF imported successfully (${totalPages} page${totalPages > 1 ? 's' : ''})`);
         this.autosaveSubject.next();
       } else if (!htmlContent) {
-        this.snackBar.open('PDF appears to contain no extractable text (may be scanned/image-based)', 'Close', { duration: 5000 });
+        this.toast.warn('PDF appears to contain no extractable text (may be scanned/image-based)');
       }
     } catch (error) {
       console.error('Error importing PDF:', error);
-      this.snackBar.open('Failed to import PDF document', 'Close', { duration: 3000 });
+      this.toast.error('Failed to import PDF document');
     } finally {
       this.saving = false;
       input.value = '';
@@ -3905,7 +3943,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     const validExts = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.webp', '.pdf'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!validExts.includes(ext)) {
-      this.snackBar.open('Please select an image or PDF file', 'Close', { duration: 3000 });
+      this.toast.warn('Please select an image or PDF file');
       return;
     }
 
@@ -3925,7 +3963,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       if (imageSources.length === 0) {
-        this.snackBar.open('Could not process the document', 'Close', { duration: 3000 });
+        this.toast.error('Could not process the document');
         return;
       }
 
@@ -3965,7 +4003,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       await worker.terminate();
 
       if (!fullText.trim()) {
-        this.snackBar.open('No text could be extracted from the scanned document', 'Close', { duration: 4000 });
+        this.toast.warn('No text could be extracted from the scanned document');
         return;
       }
 
@@ -3977,16 +4015,12 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (this.editor && cleanedHtml) {
         this.editor.chain().focus().setContent(cleanedHtml).run();
-        this.snackBar.open(
-          `Scanned document imported! (${totalPages} page${totalPages > 1 ? 's' : ''})`,
-          'Close',
-          { duration: 4000 }
-        );
+        this.toast.done(`Scanned document imported (${totalPages} page${totalPages > 1 ? 's' : ''})`);
         this.autosaveSubject.next();
       }
     } catch (error) {
       console.error('Error scanning document:', error);
-      this.snackBar.open('Failed to scan document. Please try again.', 'Close', { duration: 3000 });
+      this.toast.error('Failed to scan document. Please try again.');
     } finally {
       this.ocrScanning = false;
       this.ocrProgress = 0;
@@ -4101,7 +4135,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         this.wellyActivity.stop(composeActivityId);
       },
       error: () => {
-        this.snackBar.open('Welly could not compose the email. Please write it manually.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not compose the email. Please write it manually.');
         this.emailComposing = false;
         this.wellyActivity.stop(composeActivityId);
       }
@@ -4110,7 +4144,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   sendEmail(): void {
     if (!this.emailTo.trim()) {
-      this.snackBar.open('Please enter at least one recipient email address', 'Close', { duration: 3000 });
+      this.toast.warn('Please enter at least one recipient email address');
       return;
     }
 
@@ -4124,7 +4158,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const invalidEmails = toList.filter(e => !emailRegex.test(e));
     if (invalidEmails.length > 0) {
-      this.snackBar.open(`Invalid email address: ${invalidEmails[0]}`, 'Close', { duration: 3000 });
+      this.toast.warn(`Invalid email address: ${invalidEmails[0]}`);
       return;
     }
 
@@ -4140,14 +4174,14 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       includeInBody: this.emailIncludeInBody
     }).subscribe({
       next: () => {
-        this.snackBar.open('📧 Email sent successfully!', 'Close', { duration: 4000 });
+        this.toast.done('Email sent successfully');
         this.showEmailDialog = false;
         this.emailSending = false;
       },
       error: (err) => {
         console.error('Email send error:', err);
         const msg = err.error?.message || 'Failed to send email. Please try again.';
-        this.snackBar.open(msg, 'Close', { duration: 5000 });
+        this.toast.error(msg);
         this.emailSending = false;
       }
     });
@@ -4175,7 +4209,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     const content = selectedText || this.editor.getText();
 
     if (!content.trim()) {
-      this.snackBar.open('Please write some text first, or select text to process', 'Close', { duration: 3000 });
+      this.toast.warn('Please write some text first, or select text to process');
       this.showWellyPanel = false;
       return;
     }
@@ -4201,7 +4235,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       error: (err) => {
         console.error('Welly assist error:', err);
-        this.snackBar.open('Welly could not process your request. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not process your request. Please try again.');
         this.wellyLoading = false;
         this.showWellyPanel = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
@@ -4226,7 +4260,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       error: (err) => {
         console.error('Welly generate error:', err);
-        this.snackBar.open('Welly could not generate content. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not generate content. Please try again.');
         this.wellyLoading = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
@@ -4243,7 +4277,7 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       // Replace full document
       this.editor.chain().focus().setContent(this.wellyResult).run();
     }
-    this.snackBar.open('Applied to document ✓', 'Close', { duration: 2000 });
+    this.toast.done('Applied to document');
     this.showWellyPanel = false;
     this.autosaveSubject.next();
   }
@@ -4251,14 +4285,14 @@ export class DocEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   insertWellyResult(): void {
     if (!this.editor || !this.wellyResult) return;
     this.editor.chain().focus().insertContent(this.wellyResult).run();
-    this.snackBar.open('Inserted into document ✓', 'Close', { duration: 2000 });
+    this.toast.done('Inserted into document');
     this.showWellyPanel = false;
     this.autosaveSubject.next();
   }
 
   copyWellyResult(): void {
     navigator.clipboard.writeText(this.wellyResult).then(() => {
-      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
+      this.toast.done('Copied to clipboard');
     });
   }
 }

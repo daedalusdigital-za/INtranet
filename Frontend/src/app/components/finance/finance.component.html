@@ -1,41 +1,7 @@
 <app-navbar></app-navbar>
 <div class="finance-container">
-  <!-- Hero Header -->
-  <div class="hero-header animate-in">
-    <div class="hero-content">
-      <div class="hero-left">
-        <div class="hero-icon-ring">
-          <div class="hero-icon-inner">
-            <mat-icon>account_balance</mat-icon>
-          </div>
-        </div>
-        <div class="hero-text">
-          <h1>Finance</h1>
-          <p class="hero-subtitle">Invoices · Expenses · Payments</p>
-        </div>
-      </div>
-      <div class="hero-kpis">
-        <div class="kpi-pill">
-          <div class="kpi-icon-wrap invoices-kpi">
-            <mat-icon>receipt_long</mat-icon>
-          </div>
-          <div class="kpi-data">
-            <span class="kpi-number">{{ stats.totalInvoices }}</span>
-            <span class="kpi-label">Invoices</span>
-          </div>
-        </div>
-        <div class="kpi-pill">
-          <div class="kpi-icon-wrap amount-kpi">
-            <mat-icon>payments</mat-icon>
-          </div>
-          <div class="kpi-data">
-            <span class="kpi-number">{{ stats.totalAmount | currency:'ZAR':'symbol':'1.0-0' }}</span>
-            <span class="kpi-label">Total Value</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <app-page-header class="finance-header" [crumbs]="['People and money', 'Finance']" title="Finance"
+                   [subtitle]="(stats.totalAmount | currency:'ZAR':'symbol':'1.0-0') + ' across all invoices'"></app-page-header>
 
   <!-- Creditors / Debtors split entry -->
   <div class="split-grid animate-in delay-1">
@@ -100,7 +66,7 @@
       </div>
     </div>
 
-    <div class="stat-card-modern expenses-card-stat" (click)="openRequestedPayments()" style="cursor: pointer;">
+    <div class="stat-card-modern expenses-card-stat is-link" (click)="openRequestedPayments()">
       <div class="stat-card-accent"></div>
       <div class="stat-card-body">
         <div class="stat-icon-modern">
@@ -140,10 +106,10 @@
       </div>
     </div>
 
-    <div class="stat-card-modern" style="cursor:pointer" (click)="toggleStationeryPanel()">
-      <div class="stat-card-accent" style="background:linear-gradient(135deg,#ff9800,#f57c00)"></div>
+    <div class="stat-card-modern stationery-card-stat is-link" (click)="toggleStationeryPanel()">
+      <div class="stat-card-accent"></div>
       <div class="stat-card-body">
-        <div class="stat-icon-modern" style="background:rgba(255,152,0,0.12);color:#f57c00">
+        <div class="stat-icon-modern">
           <mat-icon>edit_note</mat-icon>
         </div>
         <div class="stat-detail">
@@ -154,10 +120,10 @@
       </div>
     </div>
 
-    <div class="stat-card-modern" style="cursor:pointer" (click)="toggleRequisitionsPanel()">
-      <div class="stat-card-accent" style="background:linear-gradient(135deg,#7c3aed,#6d28d9)"></div>
+    <div class="stat-card-modern is-link" (click)="toggleRequisitionsPanel()">
+      <div class="stat-card-accent"></div>
       <div class="stat-card-body">
-        <div class="stat-icon-modern" style="background:rgba(124,58,237,0.12);color:#7c3aed">
+        <div class="stat-icon-modern">
           <mat-icon>request_quote</mat-icon>
         </div>
         <div class="stat-detail">
@@ -168,10 +134,10 @@
       </div>
     </div>
 
-    <div class="stat-card-modern" style="cursor:pointer" (click)="goToCommitments()">
-      <div class="stat-card-accent" style="background:linear-gradient(135deg,#059669,#0d9488)"></div>
+    <div class="stat-card-modern is-link" (click)="goToCommitments()">
+      <div class="stat-card-accent"></div>
       <div class="stat-card-body">
-        <div class="stat-icon-modern" style="background:rgba(5,150,105,0.12);color:#059669">
+        <div class="stat-icon-modern">
           <mat-icon>event_repeat</mat-icon>
         </div>
         <div class="stat-detail">
@@ -193,7 +159,7 @@
         <button class="sp-filter sp-approved" [class.active]="stationeryFilter==='Approved'" (click)="setStationeryFilter('Approved')">Approved ({{stationeryCounts.approved}})</button>
         <button class="sp-filter sp-declined" [class.active]="stationeryFilter==='Declined'" (click)="setStationeryFilter('Declined')">Declined ({{stationeryCounts.declined}})</button>
       </div>
-      <button mat-icon-button (click)="showStationeryPanel=false"><mat-icon>close</mat-icon></button>
+      <button aria-label="Close" mat-icon-button (click)="showStationeryPanel=false"><mat-icon>close</mat-icon></button>
     </div>
     @if (stationeryLoading) {
       <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
@@ -219,7 +185,7 @@
               @if (req.hasQuotes) {
                 <div class="sp-quote-links">
                   @for (n of [1,2,3]; track n) {
-                    <a [href]="getQuoteUrl(req.stationeryRequestId, n)" target="_blank" mat-icon-button [matTooltip]="'View Quote ' + n" class="sp-quote-btn">
+                    <a [attr.aria-label]="'View Quote ' + n" [href]="getQuoteUrl(req.stationeryRequestId, n)" target="_blank" mat-icon-button [matTooltip]="'View Quote ' + n" class="sp-quote-btn">
                       <mat-icon>attach_file</mat-icon>
                     </a>
                   }
@@ -227,8 +193,8 @@
               }
               @if (req.status === 'Pending') {
                 <div class="sp-actions">
-                  <button mat-icon-button class="sp-approve" matTooltip="Approve" (click)="reviewStationery(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
-                  <button mat-icon-button class="sp-decline" matTooltip="Decline" (click)="reviewStationery(req, 'Declined')"><mat-icon>cancel</mat-icon></button>
+                  <button aria-label="Approve" mat-icon-button class="sp-approve" matTooltip="Approve" (click)="reviewStationery(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
+                  <button aria-label="Decline" mat-icon-button class="sp-decline" matTooltip="Decline" (click)="reviewStationery(req, 'Declined')"><mat-icon>cancel</mat-icon></button>
                 </div>
               }
             </div>
@@ -249,7 +215,7 @@
         <button class="sp-filter sp-declined" [class.active]="requisitionFilter==='Rejected'" (click)="setRequisitionFilter('Rejected')">Rejected ({{requisitionCounts.rejected}})</button>
         <button class="sp-filter" [class.active]="requisitionFilter==='all'" (click)="setRequisitionFilter('all')">All ({{requisitionCounts.total}})</button>
       </div>
-      <button mat-icon-button (click)="showRequisitionsPanel=false"><mat-icon>close</mat-icon></button>
+      <button aria-label="Close" mat-icon-button (click)="showRequisitionsPanel=false"><mat-icon>close</mat-icon></button>
     </div>
     @if (requisitionsLoading) {
       <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
@@ -274,14 +240,14 @@
               <span class="sp-status" [class]="'spill-' + r.financeStatus.toLowerCase()">{{r.financeStatus}}</span>
               @if (r.financeStatus !== 'Paid') {
                 <div class="sp-actions">
-                  <button mat-icon-button class="sp-approve" matTooltip="Mark Paid" (click)="setRequisitionStatus(r, 'Paid')"><mat-icon>check_circle</mat-icon></button>
+                  <button aria-label="Mark Paid" mat-icon-button class="sp-approve" matTooltip="Mark Paid" (click)="setRequisitionStatus(r, 'Paid')"><mat-icon>check_circle</mat-icon></button>
                   @if (r.financeStatus !== 'Rejected') {
-                    <button mat-icon-button class="sp-decline" matTooltip="Reject" (click)="setRequisitionStatus(r, 'Rejected')"><mat-icon>cancel</mat-icon></button>
+                    <button aria-label="Reject" mat-icon-button class="sp-decline" matTooltip="Reject" (click)="setRequisitionStatus(r, 'Rejected')"><mat-icon>cancel</mat-icon></button>
                   }
                 </div>
               }
               @if (r.financeStatus !== 'Requested') {
-                <button mat-icon-button matTooltip="Move back to Requested" (click)="setRequisitionStatus(r, 'Requested')"><mat-icon>undo</mat-icon></button>
+                <button aria-label="Move back to Requested" mat-icon-button matTooltip="Move back to Requested" (click)="setRequisitionStatus(r, 'Requested')"><mat-icon>undo</mat-icon></button>
               }
             </div>
           </div>
@@ -434,18 +400,18 @@
               <th mat-header-cell *matHeaderCellDef>Actions</th>
               <td mat-cell *matCellDef="let invoice">
                 <div class="action-btns">
-                  <button class="action-btn view" (click)="viewInvoice(invoice)" matTooltip="View Details">
+                  <button aria-label="View Details" class="action-btn view" (click)="viewInvoice(invoice)" matTooltip="View Details">
                     <mat-icon>visibility</mat-icon>
                   </button>
-                  <button class="action-btn download" (click)="downloadInvoice(invoice)" matTooltip="Download">
+                  <button aria-label="Download" class="action-btn download" (click)="downloadInvoice(invoice)" matTooltip="Download">
                     <mat-icon>download</mat-icon>
                   </button>
                   @if (invoice.status === 'Paid') {
-                    <button class="action-btn unpaid" (click)="markUnpaid(invoice)" matTooltip="Mark as Unpaid">
+                    <button aria-label="Mark as Unpaid" class="action-btn unpaid" (click)="markUnpaid(invoice)" matTooltip="Mark as Unpaid">
                       <mat-icon>undo</mat-icon>
                     </button>
                   } @else if (invoice.status !== 'Draft' && invoice.status !== 'Archived') {
-                    <button class="action-btn paid" (click)="markPaid(invoice)" matTooltip="Mark as Paid">
+                    <button aria-label="Mark as Paid" class="action-btn paid" (click)="markPaid(invoice)" matTooltip="Mark as Paid">
                       <mat-icon>paid</mat-icon>
                     </button>
                   }
@@ -548,7 +514,7 @@
             <p>Choose a company to view requested payments</p>
           </div>
         </div>
-        <button class="dialog-close" (click)="closeCompanyDialog()">
+        <button aria-label="Close" class="dialog-close" (click)="closeCompanyDialog()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -587,7 +553,7 @@
             <p>{{ selectedCompany }} — {{ requestedPayments.length }} pending requests</p>
           </div>
         </div>
-        <button class="dialog-close" (click)="closeRequestedPayments()">
+        <button aria-label="Close" class="dialog-close" (click)="closeRequestedPayments()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -628,16 +594,16 @@
                   <span class="rp-date">{{ payment.invoiceDate | date:'dd MMM yyyy' }}</span>
                 </div>
                 <div class="rp-card-actions">
-                  <button class="rp-btn preview" (click)="previewRequestedPayment(payment)" matTooltip="Preview">
+                  <button aria-label="Preview" class="rp-btn preview" (click)="previewRequestedPayment(payment)" matTooltip="Preview">
                     <mat-icon>visibility</mat-icon>
                   </button>
-                  <button class="rp-btn download" (click)="downloadRequestedPayment(payment)" matTooltip="Download">
+                  <button aria-label="Download" class="rp-btn download" (click)="downloadRequestedPayment(payment)" matTooltip="Download">
                     <mat-icon>download</mat-icon>
                   </button>
-                  <button class="rp-btn approve" (click)="approvePayment(payment)" matTooltip="Submit / Approve">
+                  <button aria-label="Submit / Approve" class="rp-btn approve" (click)="approvePayment(payment)" matTooltip="Submit / Approve">
                     <mat-icon>check_circle</mat-icon>
                   </button>
-                  <button class="rp-btn reject" (click)="rejectPayment(payment)" matTooltip="Reject">
+                  <button aria-label="Reject" class="rp-btn reject" (click)="rejectPayment(payment)" matTooltip="Reject">
                     <mat-icon>cancel</mat-icon>
                   </button>
                 </div>
@@ -666,7 +632,7 @@
             <p>{{ previewPayment.invoiceNumber }}</p>
           </div>
         </div>
-        <button class="dialog-close" (click)="closePreviewDialog()">
+        <button aria-label="Close" class="dialog-close" (click)="closePreviewDialog()">
           <mat-icon>close</mat-icon>
         </button>
       </div>

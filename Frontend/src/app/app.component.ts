@@ -1,24 +1,25 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ChatbotComponent } from './components/chatbot/chatbot.component';
 import { PaperlessComponent } from './components/paperless/paperless.component';
-import { AnimatedIconBackgroundComponent } from './components/shared/animated-icon-background/animated-icon-background.component';
 import { Subscription, filter } from 'rxjs';
+import { AppearanceService } from './ui/appearance.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, ChatbotComponent, PaperlessComponent, CommonModule, AnimatedIconBackgroundComponent],
+  imports: [RouterOutlet, ChatbotComponent, PaperlessComponent, CommonModule],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
 export class AppComponent implements OnInit, OnDestroy {
   title = 'Frontend';
   showChatbot = false;
-  showAnimatedBackground = true;
-  backgroundTheme: 'light' | 'dark' = 'light';
   private routerSubscription?: Subscription;
+  // Created here so the saved light/dark choice and "same as this computer" also apply to
+  // pages without the navbar, such as sign-in.
+  private readonly appearance = inject(AppearanceService);
 
   constructor(private router: Router) {}
 

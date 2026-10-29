@@ -65,19 +65,19 @@ import { Invoice, IncomingOrderEmail } from './sales.models';
     </h2>
     <mat-dialog-content style="min-width: 380px;">
       @if (invoices.length > 0) {
-        <div style="color:#666; font-size:13px; margin-bottom:8px;">
+        <div style="color:var(--color-text-2); font-size:13px; margin-bottom:8px;">
           {{ invoices.length }} invoice{{ invoices.length === 1 ? '' : 's' }} linked to this POD
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           @for (inv of invoices; track inv) {
-            <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:#f5f6fa; border-radius:8px;">
+            <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--color-surface-2); border-radius:8px;">
               <mat-icon style="color:#3f51b5; font-size:20px; width:20px; height:20px;">receipt</mat-icon>
               <span style="font-family:monospace; font-weight:600;">{{ inv }}</span>
             </div>
           }
         </div>
       } @else {
-        <div style="color:#888; padding:16px 0; text-align:center;">
+        <div style="color:var(--color-text-3); padding:16px 0; text-align:center;">
           <mat-icon style="font-size:32px; width:32px; height:32px; opacity:.4;">receipt</mat-icon>
           <div>No invoice numbers recorded on this POD.</div>
         </div>
@@ -85,10 +85,10 @@ import { Invoice, IncomingOrderEmail } from './sales.models';
 
       @if (data.pod.loadId) {
         <mat-divider style="margin:16px 0;"></mat-divider>
-        <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:#e8f5e9; border-radius:8px;">
-          <mat-icon style="color:#2e7d32;">local_shipping</mat-icon>
+        <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--color-ok-soft); border-radius:8px;">
+          <mat-icon style="color:var(--color-ok);">local_shipping</mat-icon>
           <div>
-            <div style="font-size:12px; color:#666;">Linked Tripsheet</div>
+            <div style="font-size:12px; color:var(--color-text-2);">Linked Tripsheet</div>
             <div style="font-weight:600; color:#1b5e20;">{{ data.pod.loadNumber || ('Load #' + data.pod.loadId) }}</div>
           </div>
         </div>
@@ -146,15 +146,15 @@ export class PodInvoicesDialog {
           </div>
           <div style="flex: 1;">
             <div style="font-weight: 600; font-size: 16px;">{{ data.from }}</div>
-            <div style="color: #666; font-size: 13px;">{{ data.fromEmail }}</div>
+            <div style="color: var(--color-text-2); font-size: 13px;">{{ data.fromEmail }}</div>
           </div>
-          <div style="text-align: right; color: #888; font-size: 13px;">
+          <div style="text-align: right; color: var(--color-text-3); font-size: 13px;">
             <div>{{ data.date | date:'dd MMM yyyy' }}</div>
             <div>{{ data.date | date:'HH:mm:ss' }}</div>
           </div>
         </div>
 
-        <div style="background: #f5f5f5; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px;">
+        <div style="background: var(--color-surface-2); padding: 12px 16px; border-radius: 8px; margin-bottom: 12px;">
           <div style="font-weight: 600; font-size: 18px; margin-bottom: 4px;">{{ data.subject }}</div>
           @if (data.hasAttachments) {
             <mat-chip style="margin-top: 4px;">
@@ -167,17 +167,17 @@ export class PodInvoicesDialog {
         <mat-divider></mat-divider>
 
         <div style="margin-top: 12px;">
-          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: #666; font-size: 13px;">
+          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: 13px;">
             <strong style="min-width: 60px;">To:</strong>
             <span>{{ data.to.join(', ') || 'N/A' }}</span>
           </div>
           @if (data.cc.length > 0) {
-            <div style="display: flex; gap: 8px; margin-bottom: 6px; color: #666; font-size: 13px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: 13px;">
               <strong style="min-width: 60px;">Cc:</strong>
               <span>{{ data.cc.join(', ') }}</span>
             </div>
           }
-          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: #666; font-size: 13px;">
+          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: 13px;">
             <strong style="min-width: 60px;">Mailbox:</strong>
             <span>{{ data.foundInAccounts?.join(', ') || data.accountEmail }}</span>
           </div>
@@ -185,7 +185,7 @@ export class PodInvoicesDialog {
 
         @if (data.preview) {
           <mat-divider style="margin: 12px 0;"></mat-divider>
-          <div style="padding: 12px; background: #fafafa; border-radius: 8px; border-left: 3px solid #1a237e; font-size: 14px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">
+          <div style="padding: 12px; background: var(--color-canvas); border-radius: 8px; border-left: 3px solid #1a237e; font-size: 14px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">
             {{ data.preview }}
           </div>
         }

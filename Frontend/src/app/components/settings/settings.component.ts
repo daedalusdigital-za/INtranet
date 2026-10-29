@@ -26,13 +26,14 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatMenuModule } from '@angular/material/menu';
 import { RouterModule } from '@angular/router';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { SystemLogsService, SystemLog } from '../../services/system-logs.service';
 import { AnnouncementHistoryService, Announcement } from '../../services/announcement-history.service';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
 import { UserManagementService, User, Department, CreateUserDto, Permission, ModulePermission, OperatingCompany, ClockInEmployee, ClockInEmployeeRequest } from '../../services/user-management.service';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
-import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
+import { ConfirmService } from '../../ui/confirm.service';
 import { environment } from '../../../environments/environment';
 import { PodUploaderComponent } from './pod-uploader.component';
 import { DocumentTemplatesComponent } from '../admin/document-templates/document-templates.component';
@@ -70,6 +71,7 @@ import * as XLSX from 'xlsx';
     MatNativeDateModule,
     MatMenuModule,
     NavbarComponent,
+    PageHeaderComponent,
     PodUploaderComponent,
     DocumentTemplatesComponent,
     ClientLocationsComponent
@@ -77,15 +79,8 @@ import * as XLSX from 'xlsx';
   template: `
     <app-navbar></app-navbar>
     <div class="settings-container">
-      <div class="settings-header">
-        <div class="header-content">
-          <mat-icon class="header-icon">settings</mat-icon>
-          <div>
-            <h1>Admin Settings</h1>
-            <p>Manage announcements, users, and view system logs</p>
-          </div>
-        </div>
-      </div>
+      <app-page-header class="settings-header" [crumbs]="['Account', 'Admin settings']" title="Admin settings"
+                       subtitle="Only admins can see this page"></app-page-header>
 
       <mat-tab-group class="settings-tabs" animationDuration="200ms">
         <!-- POD Uploader Tab -->
@@ -189,7 +184,7 @@ import * as XLSX from 'xlsx';
                 @for (img of galleryImages; track img.id) {
                   <div class="gallery-item">
                     <img [src]="galleryUrl(img.id)" [alt]="img.fileName" />
-                    <button mat-icon-button color="warn" class="gallery-delete"
+                    <button aria-label="Delete image" mat-icon-button color="warn" class="gallery-delete"
                             matTooltip="Delete image" (click)="deleteDashboardImage(img)">
                       <mat-icon>delete</mat-icon>
                     </button>
@@ -269,7 +264,7 @@ import * as XLSX from 'xlsx';
                         </mat-chip>
                       </div>
                       <div class="announcement-actions">
-                        <button mat-icon-button [matMenuTriggerFor]="announcementMenu" matTooltip="Actions">
+                        <button aria-label="Actions" mat-icon-button [matMenuTriggerFor]="announcementMenu" matTooltip="Actions">
                           <mat-icon>more_vert</mat-icon>
                         </button>
                         <mat-menu #announcementMenu="matMenu">
@@ -382,19 +377,19 @@ import * as XLSX from 'xlsx';
                   <ng-container matColumnDef="actions">
                     <th mat-header-cell *matHeaderCellDef>Actions</th>
                     <td mat-cell *matCellDef="let user">
-                      <button mat-icon-button matTooltip="Edit" (click)="editUser(user)">
+                      <button aria-label="Edit" mat-icon-button matTooltip="Edit" (click)="editUser(user)">
                         <mat-icon>edit</mat-icon>
                       </button>
-                      <button mat-icon-button matTooltip="Toggle Status" (click)="toggleUserStatus(user)">
+                      <button aria-label="Toggle Status" mat-icon-button matTooltip="Toggle Status" (click)="toggleUserStatus(user)">
                         <mat-icon>{{ user.isActive ? 'block' : 'check_circle' }}</mat-icon>
                       </button>
-                      <button mat-icon-button matTooltip="Reset Password" (click)="openResetPasswordDialog(user)">
+                      <button aria-label="Reset Password" mat-icon-button matTooltip="Reset Password" (click)="openResetPasswordDialog(user)">
                         <mat-icon>lock_reset</mat-icon>
                       </button>
-                      <button mat-icon-button matTooltip="Delete (deactivate if linked)" color="warn" (click)="deleteUser(user)">
+                      <button aria-label="Delete (deactivate if linked)" mat-icon-button matTooltip="Delete (deactivate if linked)" color="warn" (click)="deleteUser(user)">
                         <mat-icon>delete</mat-icon>
                       </button>
-                      <button mat-icon-button matTooltip="Permanent delete (remove completely)" color="warn" (click)="deleteUser(user, true)">
+                      <button aria-label="Permanent delete (remove completely)" mat-icon-button matTooltip="Permanent delete (remove completely)" color="warn" (click)="deleteUser(user, true)">
                         <mat-icon>delete_forever</mat-icon>
                       </button>
                     </td>
@@ -517,10 +512,10 @@ import * as XLSX from 'xlsx';
                 <ng-container matColumnDef="actions">
                   <th mat-header-cell *matHeaderCellDef>Actions</th>
                   <td mat-cell *matCellDef="let e">
-                    <button mat-icon-button color="primary" (click)="openClockInEmployeeForm(e)" matTooltip="Edit">
+                    <button aria-label="Edit" mat-icon-button color="primary" (click)="openClockInEmployeeForm(e)" matTooltip="Edit">
                       <mat-icon>edit</mat-icon>
                     </button>
-                    <button mat-icon-button color="warn" (click)="deleteClockInEmployee(e)" matTooltip="Delete">
+                    <button aria-label="Delete" mat-icon-button color="warn" (click)="deleteClockInEmployee(e)" matTooltip="Delete">
                       <mat-icon>delete</mat-icon>
                     </button>
                   </td>
@@ -552,7 +547,7 @@ import * as XLSX from 'xlsx';
             <div class="stats-row">
               <mat-card class="stat-card">
                 <mat-card-content>
-                  <div class="stat-icon" style="background: #2196f3;">
+                  <div class="stat-icon" style="background: var(--color-primary);">
                     <mat-icon>list_alt</mat-icon>
                   </div>
                   <div class="stat-info">
@@ -563,7 +558,7 @@ import * as XLSX from 'xlsx';
               </mat-card>
               <mat-card class="stat-card">
                 <mat-card-content>
-                  <div class="stat-icon" style="background: #4caf50;">
+                  <div class="stat-icon" style="background: var(--color-ok);">
                     <mat-icon>today</mat-icon>
                   </div>
                   <div class="stat-info">
@@ -574,7 +569,7 @@ import * as XLSX from 'xlsx';
               </mat-card>
               <mat-card class="stat-card">
                 <mat-card-content>
-                  <div class="stat-icon" style="background: #f44336;">
+                  <div class="stat-icon" style="background: var(--color-danger);">
                     <mat-icon>security</mat-icon>
                   </div>
                   <div class="stat-info">
@@ -585,7 +580,7 @@ import * as XLSX from 'xlsx';
               </mat-card>
               <mat-card class="stat-card">
                 <mat-card-content>
-                  <div class="stat-icon" style="background: #ff9800;">
+                  <div class="stat-icon" style="background: var(--color-warn);">
                     <mat-icon>error_outline</mat-icon>
                   </div>
                   <div class="stat-info">
@@ -714,7 +709,7 @@ import * as XLSX from 'xlsx';
             <div class="settings-section">
               <div class="section-header">
                 <h3><mat-icon>info</mat-icon> Database Information</h3>
-                <button mat-icon-button (click)="loadDatabaseInfo()" matTooltip="Refresh">
+                <button aria-label="Refresh" mat-icon-button (click)="loadDatabaseInfo()" matTooltip="Refresh">
                   <mat-icon>refresh</mat-icon>
                 </button>
               </div>
@@ -819,7 +814,7 @@ import * as XLSX from 'xlsx';
                           </div>
                         </div>
                         <div class="backup-actions-row">
-                          <button mat-icon-button color="primary" matTooltip="Restore this backup" (click)="restoreBackup(backup)">
+                          <button aria-label="Restore this backup" mat-icon-button color="primary" matTooltip="Restore this backup" (click)="restoreBackup(backup)">
                             <mat-icon>restore</mat-icon>
                           </button>
                         </div>
@@ -904,7 +899,7 @@ import * as XLSX from 'xlsx';
                   <div class="import-file-info">
                     <mat-icon>description</mat-icon>
                     <span>{{ importDbFile.name }} ({{ formatBytes(importDbFile.size) }})</span>
-                    <button mat-icon-button (click)="removeDbFile()">
+                    <button aria-label="Close" mat-icon-button (click)="removeDbFile()">
                       <mat-icon>close</mat-icon>
                     </button>
                   </div>
@@ -1042,7 +1037,7 @@ import * as XLSX from 'xlsx';
                       <span class="file-size">{{ formatFileSize(importFile.size) }}</span>
                     </div>
                   </div>
-                  <button mat-icon-button color="warn" (click)="removeFile()">
+                  <button aria-label="Close" mat-icon-button color="warn" (click)="removeFile()">
                     <mat-icon>close</mat-icon>
                   </button>
                 </div>
@@ -1195,7 +1190,7 @@ import * as XLSX from 'xlsx';
                       </ul>
                     }
                   </div>
-                  <button mat-icon-button (click)="importResults = null">
+                  <button aria-label="Close" mat-icon-button (click)="importResults = null">
                     <mat-icon>close</mat-icon>
                   </button>
                 </div>
@@ -1295,10 +1290,10 @@ import * as XLSX from 'xlsx';
                       <div class="password-cell">
                         <code class="password-value" [class.hidden]="!acct._showPassword">{{ acct.password }}</code>
                         <code class="password-value" [class.hidden]="acct._showPassword">••••••••</code>
-                        <button mat-icon-button matTooltip="Toggle password" (click)="acct._showPassword = !acct._showPassword" class="toggle-pw-btn">
+                        <button aria-label="Toggle password" mat-icon-button matTooltip="Toggle password" (click)="acct._showPassword = !acct._showPassword" class="toggle-pw-btn">
                           <mat-icon>{{ acct._showPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
                         </button>
-                        <button mat-icon-button matTooltip="Copy password" (click)="copyToClipboard(acct.password)" class="copy-btn">
+                        <button aria-label="Copy password" mat-icon-button matTooltip="Copy password" (click)="copyToClipboard(acct.password)" class="copy-btn">
                           <mat-icon>content_copy</mat-icon>
                         </button>
                       </div>
@@ -1315,10 +1310,10 @@ import * as XLSX from 'xlsx';
                   <ng-container matColumnDef="actions">
                     <th mat-header-cell *matHeaderCellDef>Actions</th>
                     <td mat-cell *matCellDef="let acct">
-                      <button mat-icon-button matTooltip="Edit" (click)="editEmailAccount(acct)">
+                      <button aria-label="Edit" mat-icon-button matTooltip="Edit" (click)="editEmailAccount(acct)">
                         <mat-icon>edit</mat-icon>
                       </button>
-                      <button mat-icon-button matTooltip="Delete" color="warn" (click)="deleteEmailAccount(acct)">
+                      <button aria-label="Delete" mat-icon-button matTooltip="Delete" color="warn" (click)="deleteEmailAccount(acct)">
                         <mat-icon>delete</mat-icon>
                       </button>
                     </td>
@@ -1399,8 +1394,8 @@ import * as XLSX from 'xlsx';
                 <ng-container matColumnDef="assetActions">
                   <th mat-header-cell *matHeaderCellDef></th>
                   <td mat-cell *matCellDef="let a">
-                    <button mat-icon-button matTooltip="Edit / Reassign" (click)="openEditAssetDialog(a)"><mat-icon>edit</mat-icon></button>
-                    <button mat-icon-button matTooltip="Deactivate" color="warn" (click)="deactivateAsset(a)"><mat-icon>delete_outline</mat-icon></button>
+                    <button aria-label="Edit / Reassign" mat-icon-button matTooltip="Edit / Reassign" (click)="openEditAssetDialog(a)"><mat-icon>edit</mat-icon></button>
+                    <button aria-label="Deactivate" mat-icon-button matTooltip="Deactivate" color="warn" (click)="deactivateAsset(a)"><mat-icon>delete_outline</mat-icon></button>
                   </td>
                 </ng-container>
                 <tr mat-header-row *matHeaderRowDef="assetMgmtColumns"></tr>
@@ -1420,7 +1415,7 @@ import * as XLSX from 'xlsx';
         <div class="dialog-container" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h2>{{ editingAnnouncement ? 'Edit' : 'Create' }} Announcement</h2>
-            <button mat-icon-button (click)="closeAnnouncementDialog()">
+            <button aria-label="Close" mat-icon-button (click)="closeAnnouncementDialog()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -1492,7 +1487,7 @@ import * as XLSX from 'xlsx';
         <div class="dialog-container dialog-large" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h2>{{ editingUser ? 'Edit User' : 'Create New User' }}</h2>
-            <button mat-icon-button (click)="closeUserDialog()">
+            <button aria-label="Close" mat-icon-button (click)="closeUserDialog()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -1672,7 +1667,7 @@ import * as XLSX from 'xlsx';
               <div class="setting-item" style="padding: 8px 0;">
                 <div class="setting-info">
                   <h4 style="margin: 0;">Active</h4>
-                  <p style="margin: 0; font-size: 0.85rem; color: #666;">User can log in to the system</p>
+                  <p style="margin: 0; font-size: 0.85rem; color: var(--color-text-2);">User can log in to the system</p>
                 </div>
                 <mat-slide-toggle formControlName="isActive"></mat-slide-toggle>
               </div>
@@ -1698,7 +1693,7 @@ import * as XLSX from 'xlsx';
         <div class="dialog-container dialog-small" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h2>Reset Password</h2>
-            <button mat-icon-button (click)="closeResetPasswordDialog()">
+            <button aria-label="Close" mat-icon-button (click)="closeResetPasswordDialog()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -1709,7 +1704,7 @@ import * as XLSX from 'xlsx';
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>New Password</mat-label>
                 <input matInput formControlName="newPassword" [type]="showNewPassword ? 'text' : 'password'" required>
-                <button mat-icon-button matSuffix type="button" (click)="showNewPassword = !showNewPassword">
+                <button [attr.aria-label]="showNewPassword ? 'Hide password' : 'Show password'" mat-icon-button matSuffix type="button" (click)="showNewPassword = !showNewPassword">
                   <mat-icon>{{ showNewPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
                 </button>
                 <mat-hint>Minimum 6 characters</mat-hint>
@@ -1718,7 +1713,7 @@ import * as XLSX from 'xlsx';
               <mat-form-field appearance="outline" class="full-width">
                 <mat-label>Confirm Password</mat-label>
                 <input matInput formControlName="confirmPassword" [type]="showConfirmPassword ? 'text' : 'password'" required>
-                <button mat-icon-button matSuffix type="button" (click)="showConfirmPassword = !showConfirmPassword">
+                <button [attr.aria-label]="showConfirmPassword ? 'Hide password' : 'Show password'" mat-icon-button matSuffix type="button" (click)="showConfirmPassword = !showConfirmPassword">
                   <mat-icon>{{ showConfirmPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
                 </button>
               </mat-form-field>
@@ -1740,7 +1735,7 @@ import * as XLSX from 'xlsx';
         <div class="dialog-container" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h2>{{ editingEmailAccount ? 'Edit' : 'Add' }} Email Account</h2>
-            <button mat-icon-button (click)="closeEmailAccountDialog()">
+            <button aria-label="Close" mat-icon-button (click)="closeEmailAccountDialog()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -1783,7 +1778,7 @@ import * as XLSX from 'xlsx';
         <div class="dialog-container dialog-large" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h2>{{editingAsset ? 'Edit / Reassign Asset' : 'Add New Asset'}}</h2>
-            <button mat-icon-button (click)="closeAssetDialog()"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" mat-icon-button (click)="closeAssetDialog()"><mat-icon>close</mat-icon></button>
           </div>
           <div class="dialog-content">
             <div class="form-row">
@@ -1868,62 +1863,29 @@ import * as XLSX from 'xlsx';
       display: block;
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
     .settings-container {
-      padding: 80px;
+      padding: var(--space-5) var(--space-6) var(--space-8);
       max-width: 1400px;
       margin: 0 auto;
-      min-height: calc(100vh - 64px);
       background: transparent;
     }
 
     .settings-header {
-      margin-bottom: 24px;
-    }
-
-    .header-content {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .header-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-      color: #ffffff;
-    }
-
-    .header-content h1 {
-      margin: 0;
-      font-size: 2rem;
-      color: #ffffff;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .header-content p {
-      margin: 4px 0 0 0;
-      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: var(--space-5);
     }
 
     .settings-tabs {
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
     }
 
     ::ng-deep .mat-mdc-tab-labels {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 12px 12px 0 0;
     }
 
@@ -1947,7 +1909,7 @@ import * as XLSX from 'xlsx';
     }
 
     .tab-badge {
-      background: #f44336;
+      background: var(--color-danger);
       color: white;
       border-radius: 10px;
       padding: 2px 8px;
@@ -2000,7 +1962,7 @@ import * as XLSX from 'xlsx';
 
     .announcement-card.inactive {
       opacity: 0.7;
-      background: #f9f9f9;
+      background: var(--color-canvas);
     }
 
     .announcement-header {
@@ -2033,7 +1995,7 @@ import * as XLSX from 'xlsx';
       display: flex;
       flex-wrap: wrap;
       gap: 16px;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 0.85rem;
     }
 
@@ -2050,19 +2012,19 @@ import * as XLSX from 'xlsx';
     }
 
     .announcement-status mat-chip.active {
-      background: #e8f5e9 !important;
-      color: #2e7d32 !important;
+      background: var(--color-ok-soft) !important;
+      color: var(--color-ok) !important;
     }
 
     .announcement-status mat-chip.inactive {
-      background: #fafafa !important;
-      color: #9e9e9e !important;
+      background: var(--color-canvas) !important;
+      color: var(--color-text-3) !important;
     }
 
     .announcement-body {
       margin-top: 16px;
       padding-left: 64px;
-      color: #555;
+      color: var(--color-text-2);
     }
 
     .announcement-footer {
@@ -2071,7 +2033,7 @@ import * as XLSX from 'xlsx';
       gap: 8px;
       margin-top: 16px;
       padding-left: 64px;
-      color: #888;
+      color: var(--color-text-3);
       font-size: 0.85rem;
     }
 
@@ -2094,11 +2056,11 @@ import * as XLSX from 'xlsx';
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .user-name {
@@ -2107,20 +2069,20 @@ import * as XLSX from 'xlsx';
     }
 
     .user-name small {
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .status-indicator {
       padding: 4px 12px;
       border-radius: 12px;
       font-size: 0.85rem;
-      background: #ffebee;
-      color: #c62828;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
     }
 
     .status-indicator.active {
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: var(--color-ok-soft);
+      color: var(--color-ok);
     }
 
     /* Logs Styles */
@@ -2134,13 +2096,13 @@ import * as XLSX from 'xlsx';
       display: flex;
       gap: 16px;
       padding: 16px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 8px;
       transition: background 0.2s;
     }
 
     .log-item:hover {
-      background: #f0f0f0;
+      background: var(--color-surface-2);
     }
 
     .log-icon {
@@ -2167,27 +2129,27 @@ import * as XLSX from 'xlsx';
 
     .log-action {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .log-category {
-      background: #e0e0e0;
+      background: var(--color-line);
       padding: 2px 8px;
       border-radius: 4px;
       font-size: 0.75rem;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .log-description {
       margin: 0 0 8px 0;
-      color: #555;
+      color: var(--color-text-2);
     }
 
     .log-meta {
       display: flex;
       flex-wrap: wrap;
       gap: 16px;
-      color: #888;
+      color: var(--color-text-3);
       font-size: 0.85rem;
     }
 
@@ -2212,7 +2174,7 @@ import * as XLSX from 'xlsx';
     }
 
     .stat-card {
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
     }
 
@@ -2247,12 +2209,12 @@ import * as XLSX from 'xlsx';
     .stat-value {
       font-size: 1.75rem;
       font-weight: 700;
-      color: #333;
+      color: var(--color-text);
     }
 
     .stat-label {
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     /* Log Badges and Severity */
@@ -2271,18 +2233,18 @@ import * as XLSX from 'xlsx';
     }
 
     .severity-warning {
-      background: #fff3e0;
-      color: #e65100;
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
     }
 
     .severity-error, .severity-critical {
-      background: #ffebee;
-      color: #c62828;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
     }
 
     .log-failed-badge {
-      background: #ffebee;
-      color: #c62828;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
       padding: 2px 8px;
       border-radius: 4px;
       font-size: 0.7rem;
@@ -2290,17 +2252,17 @@ import * as XLSX from 'xlsx';
     }
 
     .log-item.log-warning {
-      border-left: 3px solid #ff9800;
+      border-left: 3px solid var(--color-warn);
     }
 
     .log-item.log-error, .log-item.log-failed {
-      border-left: 3px solid #f44336;
-      background: #fff5f5;
+      border-left: 3px solid var(--color-danger);
+      background: var(--color-danger-soft);
     }
 
     .log-error-message {
       margin: 0 0 8px 0;
-      color: #c62828;
+      color: var(--color-danger);
       font-size: 0.85rem;
       display: flex;
       align-items: center;
@@ -2314,8 +2276,8 @@ import * as XLSX from 'xlsx';
     }
 
     .user-role-badge {
-      background: #e3f2fd;
-      color: #1565c0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-hover);
       padding: 2px 8px;
       border-radius: 4px;
       font-size: 0.75rem;
@@ -2354,7 +2316,7 @@ import * as XLSX from 'xlsx';
 
     .settings-section h3 {
       margin: 0 0 16px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .setting-item {
@@ -2362,7 +2324,7 @@ import * as XLSX from 'xlsx';
       justify-content: space-between;
       align-items: center;
       padding: 16px 0;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
     }
 
     .setting-info h4 {
@@ -2372,7 +2334,7 @@ import * as XLSX from 'xlsx';
 
     .setting-info p {
       margin: 0;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 0.9rem;
     }
 
@@ -2395,7 +2357,7 @@ import * as XLSX from 'xlsx';
     }
 
     .dialog-container {
-      background: white;
+      background: var(--color-surface);
       border-radius: 12px;
       width: 100%;
       max-width: 600px;
@@ -2416,7 +2378,7 @@ import * as XLSX from 'xlsx';
       justify-content: space-between;
       align-items: center;
       padding: 20px 24px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--color-line);
     }
 
     .dialog-header h2 {
@@ -2432,7 +2394,7 @@ import * as XLSX from 'xlsx';
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 24px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--color-line);
     }
 
     .full-width {
@@ -2461,13 +2423,13 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 8px;
       font-size: 1rem;
-      color: #333;
+      color: var(--color-text);
     }
 
     .section-hint {
       margin: 0 0 16px 0;
       font-size: 0.85rem;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .birthday-section {
@@ -2479,37 +2441,37 @@ import * as XLSX from 'xlsx';
     }
 
     .clockin-section {
-      background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+      background: linear-gradient(135deg, var(--color-warn-soft) 0%, var(--color-warn-soft) 100%);
     }
 
     .clockin-section h4 {
-      color: #e65100;
+      color: var(--color-warn);
     }
 
     .linked-status {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #2e7d32;
+      color: var(--color-ok);
       font-size: 0.85rem;
       margin-top: 8px;
     }
 
     .companies-section {
-      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+      background: linear-gradient(135deg, var(--color-ok-soft) 0%, var(--color-ok-soft) 100%);
     }
 
     .companies-section h4 {
-      color: #2e7d32;
+      color: var(--color-ok);
     }
 
     /* Module Access Section */
     .module-access-section {
-      background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+      background: linear-gradient(135deg, var(--color-warn-soft) 0%, var(--color-warn-soft) 100%);
     }
 
     .module-access-section h4 {
-      color: #e65100;
+      color: var(--color-warn);
     }
 
     .section-header-row {
@@ -2566,12 +2528,12 @@ import * as XLSX from 'xlsx';
 
     .module-permission-card:hover {
       background: rgba(255,255,255,0.95);
-      border-color: #e65100;
+      border-color: var(--color-warn);
     }
 
     .module-permission-card.selected {
       background: rgba(255,255,255,0.95);
-      border-color: #e65100;
+      border-color: var(--color-warn);
       box-shadow: 0 2px 8px rgba(230, 81, 0, 0.15);
     }
 
@@ -2579,7 +2541,7 @@ import * as XLSX from 'xlsx';
       font-size: 24px;
       width: 24px;
       height: 24px;
-      color: #e65100;
+      color: var(--color-warn);
       flex-shrink: 0;
     }
 
@@ -2593,12 +2555,12 @@ import * as XLSX from 'xlsx';
     .module-permission-card .module-name {
       font-weight: 500;
       font-size: 0.9rem;
-      color: #333;
+      color: var(--color-text);
     }
 
     .module-permission-card .module-desc {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--color-text-2);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2609,28 +2571,28 @@ import * as XLSX from 'xlsx';
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #ccc;
+      color: var(--color-text-3);
       transition: color 0.2s;
     }
 
     .module-permission-card.selected .module-check {
-      color: #e65100;
+      color: var(--color-warn);
     }
 
     .module-count-hint {
       margin-top: 10px;
       font-size: 0.8rem;
-      color: #e65100;
+      color: var(--color-warn);
       font-weight: 500;
       text-align: right;
     }
 
     .permissions-section {
-      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
     }
 
     .permissions-section h4 {
-      color: #1565c0;
+      color: var(--color-primary-hover);
     }
 
     .checkbox-grid {
@@ -2654,7 +2616,7 @@ import * as XLSX from 'xlsx';
     .permission-category h5 {
       margin: 0 0 8px 0;
       font-size: 0.9rem;
-      color: #1565c0;
+      color: var(--color-primary-hover);
       border-bottom: 1px solid rgba(21, 101, 192, 0.2);
       padding-bottom: 6px;
     }
@@ -2665,7 +2627,7 @@ import * as XLSX from 'xlsx';
     }
 
     .no-data-hint {
-      color: #666;
+      color: var(--color-text-2);
       font-style: italic;
       font-size: 0.85rem;
     }
@@ -2677,20 +2639,20 @@ import * as XLSX from 'xlsx';
       align-items: center;
       justify-content: center;
       padding: 60px 20px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .empty-state mat-icon {
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #ccc;
+      color: var(--color-text-3);
       margin-bottom: 16px;
     }
 
     .empty-state h3 {
       margin: 0 0 8px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .empty-state p {
@@ -2698,7 +2660,7 @@ import * as XLSX from 'xlsx';
     }
 
     .delete-action {
-      color: #f44336 !important;
+      color: var(--color-danger) !important;
     }
 
     /* Data Import Styles */
@@ -2708,7 +2670,7 @@ import * as XLSX from 'xlsx';
 
     .import-type-selector h4 {
       margin: 0 0 16px 0;
-      color: #333;
+      color: var(--color-text);
       font-size: 18px;
     }
 
@@ -2719,8 +2681,8 @@ import * as XLSX from 'xlsx';
     }
 
     .import-type-card {
-      background: white;
-      border: 2px solid #e0e0e0;
+      background: var(--color-surface);
+      border: 2px solid var(--color-line);
       border-radius: 12px;
       padding: 20px;
       display: flex;
@@ -2731,21 +2693,21 @@ import * as XLSX from 'xlsx';
     }
 
     .import-type-card:hover {
-      border-color: #1976d2;
+      border-color: var(--color-primary);
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
     .import-type-card.selected {
-      border-color: #1976d2;
-      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      border-color: var(--color-primary);
+      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
     }
 
     .import-type-card mat-icon {
       font-size: 40px;
       width: 40px;
       height: 40px;
-      color: #1976d2;
+      color: var(--color-primary);
       flex-shrink: 0;
     }
 
@@ -2756,13 +2718,13 @@ import * as XLSX from 'xlsx';
 
     .import-type-card .type-info span {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       font-size: 1rem;
     }
 
     .import-type-card .type-info small {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--color-text-2);
       margin-top: 2px;
     }
 
@@ -2772,43 +2734,43 @@ import * as XLSX from 'xlsx';
 
     .file-upload-section h4, .column-mapping-section h4, .preview-section h4 {
       margin: 0 0 16px 0;
-      color: #333;
+      color: var(--color-text);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .file-drop-zone {
-      border: 2px dashed #ccc;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 12px;
       padding: 40px;
       text-align: center;
-      background: #fafafa;
+      background: var(--color-canvas);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .file-drop-zone:hover, .file-drop-zone.dragging {
-      border-color: #1976d2;
-      background: #e3f2fd;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
     }
 
     .file-drop-zone mat-icon {
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #1976d2;
+      color: var(--color-primary);
       margin-bottom: 12px;
     }
 
     .file-drop-zone p {
       margin: 0 0 8px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .file-drop-zone span {
       font-size: 12px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .selected-file {
@@ -2816,13 +2778,13 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 12px;
       padding: 16px;
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       border-radius: 8px;
       margin-top: 16px;
     }
 
     .selected-file mat-icon {
-      color: #4caf50;
+      color: var(--color-ok);
     }
 
     .file-info {
@@ -2831,12 +2793,12 @@ import * as XLSX from 'xlsx';
 
     .file-info .file-name {
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
     }
 
     .file-info .file-size {
       font-size: 12px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .sheet-selector {
@@ -2866,23 +2828,23 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 12px;
       padding: 12px;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       border-radius: 8px;
     }
 
     .mapping-row .system-field {
       min-width: 120px;
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
     }
 
     .mapping-row .system-field.required::after {
       content: ' *';
-      color: #f44336;
+      color: var(--color-danger);
     }
 
     .mapping-row mat-icon {
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .mapping-row mat-form-field {
@@ -2892,13 +2854,13 @@ import * as XLSX from 'xlsx';
     .company-selector {
       margin-top: 16px;
       padding: 16px;
-      background: #fff3e0;
+      background: var(--color-warn-soft);
       border-radius: 8px;
     }
 
     .company-selector h5 {
       margin: 0 0 12px 0;
-      color: #e65100;
+      color: var(--color-warn);
     }
 
     .preview-section {
@@ -2907,7 +2869,7 @@ import * as XLSX from 'xlsx';
 
     .preview-table-container {
       overflow-x: auto;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
       border-radius: 8px;
     }
 
@@ -2919,13 +2881,13 @@ import * as XLSX from 'xlsx';
     .preview-table th, .preview-table td {
       padding: 12px;
       text-align: left;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--color-line);
     }
 
     .preview-table th {
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
     }
 
     .preview-table tr:last-child td {
@@ -2933,7 +2895,7 @@ import * as XLSX from 'xlsx';
     }
 
     .preview-table tr:hover {
-      background: #fafafa;
+      background: var(--color-canvas);
     }
 
     .import-actions {
@@ -2948,7 +2910,7 @@ import * as XLSX from 'xlsx';
 
     .import-progress p {
       margin: 0 0 8px 0;
-      color: #1976d2;
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -2966,17 +2928,17 @@ import * as XLSX from 'xlsx';
     }
 
     .import-results.success {
-      background: #e8f5e9;
+      background: var(--color-ok-soft);
       border: 1px solid #a5d6a7;
     }
 
     .import-results.warning {
-      background: #fff3e0;
+      background: var(--color-warn-soft);
       border: 1px solid #ffcc80;
     }
 
     .import-results.error {
-      background: #ffebee;
+      background: var(--color-danger-soft);
       border: 1px solid #ef9a9a;
     }
 
@@ -2988,15 +2950,15 @@ import * as XLSX from 'xlsx';
     }
 
     .import-results.success h4 {
-      color: #2e7d32;
+      color: var(--color-ok);
     }
 
     .import-results.warning h4 {
-      color: #e65100;
+      color: var(--color-warn);
     }
 
     .import-results.error h4 {
-      color: #c62828;
+      color: var(--color-danger);
     }
 
     .import-results ul {
@@ -3006,18 +2968,18 @@ import * as XLSX from 'xlsx';
 
     .import-results li {
       margin: 4px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .templates-section {
       margin-top: 32px;
       padding-top: 24px;
-      border-top: 1px solid #e0e0e0;
+      border-top: 1px solid var(--color-line);
     }
 
     .templates-section h4 {
       margin: 0 0 8px 0;
-      color: #333;
+      color: var(--color-text);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -3025,7 +2987,7 @@ import * as XLSX from 'xlsx';
 
     .templates-section > p {
       margin: 0 0 16px 0;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 0.9rem;
     }
 
@@ -3040,7 +3002,7 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 16px;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+      background: linear-gradient(135deg, var(--color-warn-soft) 0%, var(--color-warn-soft) 100%);
       border: 2px solid #ffe082;
       border-radius: 12px;
       cursor: pointer;
@@ -3057,7 +3019,7 @@ import * as XLSX from 'xlsx';
       font-size: 36px;
       width: 36px;
       height: 36px;
-      color: #f57c00;
+      color: var(--color-warn);
       flex-shrink: 0;
     }
 
@@ -3069,13 +3031,13 @@ import * as XLSX from 'xlsx';
 
     .template-card .template-info span {
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
       font-size: 0.95rem;
     }
 
     .template-card .template-info small {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--color-text-2);
       margin-top: 2px;
     }
 
@@ -3083,7 +3045,7 @@ import * as XLSX from 'xlsx';
       font-size: 24px;
       width: 24px;
       height: 24px;
-      color: #f57c00;
+      color: var(--color-warn);
       opacity: 0.7;
       transition: opacity 0.2s;
     }
@@ -3105,16 +3067,16 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 16px;
       padding: 20px;
-      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+      background: linear-gradient(135deg, var(--color-surface-2) 0%, #e4e8ec 100%);
       border-radius: 12px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
     }
 
     .db-info-card mat-icon {
       font-size: 32px;
       width: 32px;
       height: 32px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .db-info-card .info-content {
@@ -3124,7 +3086,7 @@ import * as XLSX from 'xlsx';
 
     .db-info-card .label {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--color-text-2);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -3132,7 +3094,7 @@ import * as XLSX from 'xlsx';
     .db-info-card .value {
       font-size: 1.1rem;
       font-weight: 600;
-      color: #333;
+      color: var(--color-text);
     }
 
     .table-stats-section {
@@ -3144,14 +3106,14 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 8px;
       margin: 0 0 16px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .table-stats-section h4 mat-icon {
       font-size: 20px;
       width: 20px;
       height: 20px;
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .table-stats-grid {
@@ -3168,21 +3130,21 @@ import * as XLSX from 'xlsx';
       justify-content: space-between;
       align-items: center;
       padding: 8px 12px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 6px;
-      border: 1px solid #e8e8e8;
+      border: 1px solid var(--color-line);
     }
 
     .table-stat-item .table-name {
       font-size: 0.85rem;
-      color: #333;
+      color: var(--color-text);
       font-weight: 500;
     }
 
     .table-stat-item .row-count {
       font-size: 0.8rem;
-      color: #666;
-      background: #e3f2fd;
+      color: var(--color-text-2);
+      background: var(--color-primary-soft);
       padding: 2px 8px;
       border-radius: 10px;
     }
@@ -3195,7 +3157,7 @@ import * as XLSX from 'xlsx';
       display: flex;
       gap: 20px;
       padding: 24px;
-      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+      background: linear-gradient(135deg, var(--color-ok-soft) 0%, var(--color-ok-soft) 100%);
       border-radius: 12px;
       border: 1px solid #a5d6a7;
     }
@@ -3204,7 +3166,7 @@ import * as XLSX from 'xlsx';
       width: 60px;
       height: 60px;
       border-radius: 50%;
-      background: white;
+      background: var(--color-surface);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -3215,7 +3177,7 @@ import * as XLSX from 'xlsx';
       font-size: 32px;
       width: 32px;
       height: 32px;
-      color: #2e7d32;
+      color: var(--color-ok);
     }
 
     .backup-card .backup-content {
@@ -3242,7 +3204,7 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 8px;
       margin: 0 0 16px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .backup-history h4 mat-icon {
@@ -3254,7 +3216,7 @@ import * as XLSX from 'xlsx';
     .no-backups {
       text-align: center;
       padding: 40px;
-      color: #999;
+      color: var(--color-text-3);
     }
 
     .no-backups mat-icon {
@@ -3279,9 +3241,9 @@ import * as XLSX from 'xlsx';
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 8px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
     }
 
     .backup-item .backup-info {
@@ -3291,7 +3253,7 @@ import * as XLSX from 'xlsx';
     }
 
     .backup-item .backup-info mat-icon {
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .backup-item .backup-info > div {
@@ -3301,12 +3263,12 @@ import * as XLSX from 'xlsx';
 
     .backup-item .backup-date {
       font-weight: 500;
-      color: #333;
+      color: var(--color-text);
     }
 
     .backup-item .backup-details {
       font-size: 0.8rem;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .backup-item .backup-actions-row {
@@ -3320,7 +3282,7 @@ import * as XLSX from 'xlsx';
 
     .export-section > p {
       margin: 0 0 20px 0;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .export-options {
@@ -3331,19 +3293,19 @@ import * as XLSX from 'xlsx';
 
     .export-option {
       padding: 20px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 12px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
     }
 
     .export-option h4 {
       margin: 0 0 8px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .export-option p {
       margin: 0 0 16px 0;
-      color: #666;
+      color: var(--color-text-2);
       font-size: 0.9rem;
     }
 
@@ -3361,21 +3323,21 @@ import * as XLSX from 'xlsx';
       align-items: flex-start;
       gap: 12px;
       padding: 16px;
-      background: #fff3e0;
+      background: var(--color-warn-soft);
       border-radius: 8px;
       border: 1px solid #ffcc80;
       margin-bottom: 20px;
     }
 
     .import-warning mat-icon {
-      color: #f57c00;
+      color: var(--color-warn);
       flex-shrink: 0;
     }
 
     .import-warning p {
       margin: 0;
       font-size: 0.9rem;
-      color: #e65100;
+      color: var(--color-warn);
     }
 
     .file-drop-zone-db {
@@ -3384,34 +3346,34 @@ import * as XLSX from 'xlsx';
       align-items: center;
       justify-content: center;
       padding: 40px;
-      border: 2px dashed #bdbdbd;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 12px;
-      background: #fafafa;
+      background: var(--color-canvas);
       transition: all 0.2s;
       cursor: pointer;
     }
 
     .file-drop-zone-db:hover,
     .file-drop-zone-db.dragging {
-      border-color: #1976d2;
-      background: #e3f2fd;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
     }
 
     .file-drop-zone-db mat-icon {
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #9e9e9e;
+      color: var(--color-text-3);
       margin-bottom: 12px;
     }
 
     .file-drop-zone-db p {
       margin: 0 0 8px 0;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .file-drop-zone-db span {
-      color: #9e9e9e;
+      color: var(--color-text-3);
       margin-bottom: 12px;
     }
 
@@ -3420,18 +3382,18 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: #e3f2fd;
+      background: var(--color-primary-soft);
       border-radius: 8px;
       margin-top: 16px;
     }
 
     .import-file-info mat-icon {
-      color: #1976d2;
+      color: var(--color-primary);
     }
 
     .import-file-info span {
       flex: 1;
-      color: #333;
+      color: var(--color-text);
     }
 
     .import-options-db {
@@ -3441,14 +3403,14 @@ import * as XLSX from 'xlsx';
     .import-results {
       margin-top: 24px;
       padding: 20px;
-      background: #fafafa;
+      background: var(--color-canvas);
       border-radius: 12px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--color-line);
     }
 
     .import-results h4 {
       margin: 0 0 16px 0;
-      color: #333;
+      color: var(--color-text);
     }
 
     .import-result-item {
@@ -3456,7 +3418,7 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 8px;
       padding: 8px 0;
-      border-bottom: 1px solid #e8e8e8;
+      border-bottom: 1px solid var(--color-line);
     }
 
     .import-result-item:last-child {
@@ -3464,15 +3426,15 @@ import * as XLSX from 'xlsx';
     }
 
     .import-result-item.success mat-icon {
-      color: #2e7d32;
+      color: var(--color-ok);
     }
 
     .import-result-item.error mat-icon {
-      color: #c62828;
+      color: var(--color-danger);
     }
 
     .import-result-item span {
-      color: #333;
+      color: var(--color-text);
       font-size: 0.9rem;
     }
 
@@ -3481,7 +3443,7 @@ import * as XLSX from 'xlsx';
       flex-direction: column;
       align-items: center;
       padding: 40px;
-      color: #666;
+      color: var(--color-text-2);
     }
 
     .loading-state p {
@@ -3514,7 +3476,7 @@ import * as XLSX from 'xlsx';
     }
 
     .email-accounts-table-container {
-      background: #fff;
+      background: var(--color-surface);
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -3525,8 +3487,8 @@ import * as XLSX from 'xlsx';
     }
 
     .email-accounts-table th {
-      background: #f8f9fa;
-      color: #555;
+      background: var(--color-canvas);
+      color: var(--color-text-2);
       font-weight: 600;
       font-size: 0.85rem;
     }
@@ -3538,7 +3500,7 @@ import * as XLSX from 'xlsx';
     }
 
     .email-icon {
-      color: #1e90ff;
+      color: var(--color-primary);
       font-size: 20px;
       width: 20px;
       height: 20px;
@@ -3553,10 +3515,10 @@ import * as XLSX from 'xlsx';
     .password-value {
       font-family: 'Courier New', monospace;
       font-size: 0.85rem;
-      background: #f5f5f5;
+      background: var(--color-surface-2);
       padding: 2px 8px;
       border-radius: 4px;
-      color: #333;
+      color: var(--color-text);
     }
 
     .password-value.hidden {
@@ -3576,31 +3538,31 @@ import * as XLSX from 'xlsx';
     }
 
     .gallery-dropzone {
-      border: 2px dashed #cbd5e1;
+      border: 2px dashed var(--color-line-strong);
       border-radius: 12px;
       padding: 32px;
       text-align: center;
-      color: #64748b;
+      color: var(--color-text-3);
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
       margin-bottom: 24px;
     }
 
     .gallery-dropzone:hover {
-      border-color: #6366f1;
+      border-color: var(--color-primary);
       background: #f8faff;
     }
 
     .gallery-dropzone.dragover {
-      border-color: #6366f1;
-      background: #eef2ff;
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
     }
 
     .gallery-dropzone mat-icon {
       font-size: 40px;
       width: 40px;
       height: 40px;
-      color: #94a3b8;
+      color: var(--color-text-3);
     }
 
     .gallery-dropzone p {
@@ -3610,11 +3572,11 @@ import * as XLSX from 'xlsx';
 
     .gallery-dropzone .dropzone-hint {
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--color-text-3);
     }
 
     .gallery-intro p {
-      color: #64748b;
+      color: var(--color-text-3);
       margin: 0 0 16px 0;
       max-width: 720px;
     }
@@ -3627,7 +3589,7 @@ import * as XLSX from 'xlsx';
     }
 
     .gallery-count {
-      color: #64748b;
+      color: var(--color-text-3);
       font-weight: 500;
     }
 
@@ -3641,7 +3603,7 @@ import * as XLSX from 'xlsx';
       position: relative;
       border-radius: 12px;
       overflow: hidden;
-      background: #f1f5f9;
+      background: var(--color-surface-2);
       aspect-ratio: 4 / 3;
       display: flex;
       align-items: center;
@@ -3876,7 +3838,8 @@ export class SettingsComponent implements OnInit {
     public userService: UserManagementService,
     private apiService: ApiService,
     private snackBar: MatSnackBar,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private readonly confirmDialog: ConfirmService
   ) {
     this.initAnnouncementForm();
     this.initUserForm();
@@ -4157,8 +4120,12 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  deleteAnnouncement(announcement: Announcement): void {
-    if (confirm(`Are you sure you want to delete "${announcement.title}"?`)) {
+  async deleteAnnouncement(announcement: Announcement): Promise<void> {
+    if (await this.confirmDialog.ask({
+      title: `Delete announcement "${announcement.title}"?`,
+      confirmText: 'Delete announcement',
+      danger: true
+    })) {
       this.announcementService.deleteAnnouncement(announcement.id).subscribe(() => {
         this.snackBar.open('Announcement deleted', 'Close', { duration: 3000 });
         this.loadAnnouncements();
@@ -4295,8 +4262,12 @@ export class SettingsComponent implements OnInit {
     }
   }
 
-  deleteClockInEmployee(emp: ClockInEmployee): void {
-    if (!confirm(`Delete clock-in employee "${emp.name} ${emp.lastName}"?`)) return;
+  async deleteClockInEmployee(emp: ClockInEmployee): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete clock-in employee ${emp.name} ${emp.lastName}?`,
+      confirmText: 'Delete employee',
+      danger: true
+    }))) return;
     this.userService.deleteClockInEmployee(emp.empId).subscribe({
       next: (res: any) => {
         this.snackBar.open(res?.message || 'Employee deleted', 'Close', { duration: 3000 });
@@ -4519,11 +4490,21 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  deleteUser(user: User, permanent: boolean = false): void {
+  async deleteUser(user: User, permanent: boolean = false): Promise<void> {
     const name = `${user.name ?? ''} ${user.surname ?? ''}`.trim() || user.email;
     const confirmed = permanent
-      ? window.confirm(`PERMANENTLY delete ${name}?\n\nThis removes the user completely and unlinks/removes all their historical references. This cannot be undone.`)
-      : window.confirm(`Delete ${name}? If they have linked records they'll be deactivated & anonymised instead.`);
+      ? await this.confirmDialog.ask({
+          title: `Permanently delete ${name}?`,
+          message: 'This removes the user completely and unlinks or removes all their historical references. This cannot be undone.',
+          confirmText: 'Delete permanently',
+          danger: true
+        })
+      : await this.confirmDialog.ask({
+          title: `Delete ${name}?`,
+          message: "If they have linked records, they'll be deactivated and anonymised instead.",
+          confirmText: 'Delete user',
+          danger: true
+        });
     if (!confirmed) { return; }
 
     this.userService.deleteUser(user.userId, permanent).subscribe({
@@ -5287,29 +5268,23 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  restoreBackup(backup: any): void {
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Restore Backup',
-        message: `Are you sure you want to restore the database from this backup? This will overwrite all current data!\n\nBackup Date: ${new Date(backup.finishDate).toLocaleString()}`,
-        confirmText: 'Restore',
-        cancelText: 'Cancel'
-      }
-    });
+  async restoreBackup(backup: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Restore the database from the backup of ${new Date(backup.finishDate).toLocaleString()}?`,
+      message: 'Everything in the database now is replaced by the backup. Changes made since then are lost.',
+      confirmText: 'Restore backup',
+      cancelText: 'Keep current data',
+      danger: true
+    }))) return;
 
-    dialogRef.afterClosed().subscribe(confirmed => {
-      if (confirmed) {
-        this.http.post<any>('/api/database/restore', { backupPath: backup.filePath }).subscribe({
-          next: (result) => {
-            this.snackBar.open('Database restored successfully!', 'Close', { duration: 3000 });
-            this.loadDatabaseInfo();
-          },
-          error: (err) => {
-            console.error('Error restoring backup:', err);
-            this.snackBar.open('Error restoring backup: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
-          }
-        });
+    this.http.post<any>('/api/database/restore', { backupPath: backup.filePath }).subscribe({
+      next: (result) => {
+        this.snackBar.open('Database restored successfully!', 'Close', { duration: 3000 });
+        this.loadDatabaseInfo();
+      },
+      error: (err) => {
+        console.error('Error restoring backup:', err);
+        this.snackBar.open('Error restoring backup: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
       }
     });
   }
@@ -5431,26 +5406,24 @@ export class SettingsComponent implements OnInit {
     this.dbImportResultsList = [];
   }
 
-  importDbData(): void {
+  async importDbData(): Promise<void> {
     if (!this.importDbFile) return;
 
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Import Data',
-        message: this.clearBeforeImport 
-          ? 'WARNING: This will clear all existing data before import! Are you sure you want to continue?'
-          : 'This will import data into the database. Are you sure you want to continue?',
-        confirmText: 'Import',
-        cancelText: 'Cancel'
-      }
-    });
-
-    dialogRef.afterClosed().subscribe(confirmed => {
-      if (confirmed) {
-        this.performDbImport();
-      }
-    });
+    const confirmed = await this.confirmDialog.ask(this.clearBeforeImport
+      ? {
+          title: `Clear the tables and import ${this.importDbFile.name}?`,
+          message: 'The existing rows in every table in the file are deleted first, then replaced by the file\'s data.',
+          confirmText: 'Clear and import',
+          danger: true
+        }
+      : {
+          title: `Import ${this.importDbFile.name}?`,
+          message: 'The rows in the file are added to the database.',
+          confirmText: 'Import data'
+        });
+    if (confirmed) {
+      this.performDbImport();
+    }
   }
 
   private performDbImport(): void {
@@ -5626,27 +5599,21 @@ export class SettingsComponent implements OnInit {
     }
   }
 
-  deleteEmailAccount(acct: any): void {
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: 'Delete Email Account',
-        message: `Are you sure you want to delete ${acct.email}?`,
-        confirmText: 'Delete',
-        cancelText: 'Cancel'
-      }
-    });
+  async deleteEmailAccount(acct: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Delete the email account ${acct.email}?`,
+      message: 'The intranet stops using this mailbox. The mailbox itself is not deleted.',
+      confirmText: 'Delete account',
+      danger: true
+    }))) return;
 
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.http.delete(`${this.apiUrl}/emailaccounts/${acct.emailAccountId}`).subscribe({
-          next: () => {
-            this.snackBar.open('Email account deleted', 'Close', { duration: 3000 });
-            this.loadEmailAccounts();
-          },
-          error: () => {
-            this.snackBar.open('Failed to delete', 'Close', { duration: 3000 });
-          }
-        });
+    this.http.delete(`${this.apiUrl}/emailaccounts/${acct.emailAccountId}`).subscribe({
+      next: () => {
+        this.snackBar.open('Email account deleted', 'Close', { duration: 3000 });
+        this.loadEmailAccounts();
+      },
+      error: () => {
+        this.snackBar.open('Failed to delete', 'Close', { duration: 3000 });
       }
     });
   }
@@ -5765,17 +5732,17 @@ export class SettingsComponent implements OnInit {
     }
   }
 
-  deactivateAsset(a: any): void {
-    const ref = this.dialog.open(ConfirmDialogComponent, {
-      data: { title: 'Deactivate Asset', message: `Deactivate ${a.category} — ${a.model || a.assetCode || 'this asset'}?`, confirmText: 'Deactivate', cancelText: 'Cancel' }
-    });
-    ref.afterClosed().subscribe(result => {
-      if (result) {
-        this.http.delete(`${this.apiUrl}/asset-register/items/${a.itemId}`).subscribe({
-          next: () => { this.snackBar.open('Asset deactivated', 'Close', { duration: 3000 }); this.loadMgmtAssets(); },
-          error: () => this.snackBar.open('Failed to deactivate', 'Close', { duration: 3000 })
-        });
-      }
+  async deactivateAsset(a: any): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: `Deactivate ${a.category}, ${a.model || a.assetCode || 'this asset'}?`,
+      message: 'It is removed from the active asset register.',
+      confirmText: 'Deactivate asset',
+      danger: true
+    }))) return;
+
+    this.http.delete(`${this.apiUrl}/asset-register/items/${a.itemId}`).subscribe({
+      next: () => { this.snackBar.open('Asset deactivated', 'Close', { duration: 3000 }); this.loadMgmtAssets(); },
+      error: () => this.snackBar.open('Failed to deactivate', 'Close', { duration: 3000 })
     });
   }
 }

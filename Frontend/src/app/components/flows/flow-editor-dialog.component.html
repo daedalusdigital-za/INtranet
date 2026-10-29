@@ -1,0 +1,369 @@
+<h2 mat-dialog-title class="fe-title">
+  <mat-icon>account_tree</mat-icon>
+  <input class="fe-name" [(ngModel)]="name" placeholder="Untitled flow" aria-label="Flow name" />
+  @if (!isNew) { <span class="fe-ver">v{{ data.def!.version }}</span> }
+  <span class="fe-level-chip" [attr.data-level]="level" [matTooltip]="levelHint()[level]">L{{ level }}</span>
+  <span class="spacer"></span>
+  <button mat-stroked-button type="button" (click)="toggleJson()" matTooltip="Switch between the designer and raw JSON">
+    <mat-icon>{{ jsonMode ? 'account_tree' : 'data_object' }}</mat-icon>{{ jsonMode ? 'Designer' : 'JSON' }}
+  </button>
+</h2>
+
+<mat-dialog-content class="fe-body">
+  @if (jsonMode) {
+    <div class="fe-json">
+      <textarea [(ngModel)]="jsonText" spellcheck="false"></textarea>
+      @if (jsonError) { <div class="fe-err"><mat-icon>error</mat-icon>{{ jsonError }}</div> }
+    </div>
+  } @else {
+    <mat-tab-group [(selectedIndex)]="tab" animationDuration="0ms" class="fe-tabs">
+
+      <!-- ─── Design ─── -->
+      <mat-tab label="Design">
+        <div class="fe-design" [class.palette-closed]="!paletteOpen">
+
+          <!-- palette -->
+          <aside class="fe-palette">
+            <div class="fe-palette-groups">
+              @for (g of paletteGroups; track g.key) {
+                <button type="button" [class.sel]="paletteGroup === g.key" (click)="paletteGroup = g.key; paletteFilter = ''" [matTooltip]="g.label" matTooltipPosition="right"><mat-icon>{{ g.icon }}</mat-icon></button>
+              }
+              <span class="spacer"></span>
+              <button type="button" (click)="paletteOpen = !paletteOpen" [matTooltip]="paletteOpen ? 'Collapse' : 'Expand'" matTooltipPosition="right"><mat-icon>{{ paletteOpen ? 'chevron_left' : 'chevron_right' }}</mat-icon></button>
+            </div>
+            @if (paletteOpen) {
+              <div class="fe-palette-list">
+                <div class="fe-palette-search"><mat-icon>search</mat-icon><input [(ngModel)]="paletteFilter" [placeholder]="'Search ' + paletteGroup" /></div>
+                <p class="fe-palette-hint">
+                  @switch (paletteGroup) {
+                    @case ('steps') { Drag onto the canvas, or click to add after the selected step. }
+                    @case ('triggers') { Drop on the Trigger node to choose how the flow starts. }
+                    @case ('people') { Drop onto a task / approval / notify node to assign it, or onto empty space to create a task for them. }
+                    @case ('departments') { Drop onto a task to assign anyone in the department, or onto empty space for a new task. }
+                    @case ('roles') { Drop onto a task to assign anyone with the role. }
+                    @case ('actions') { Welly tools the flow can run. Drop to create an action step. }
+                  }
+                </p>
+                @for (it of paletteItems(); track it.label + (it.drag.key || it.drag.id || it.drag.type || '')) {
+                  <div class="fe-chip" draggable="true" (dragstart)="onDragStart($event, it.drag)" (click)="onPaletteClick(it.drag)" [style.--chip]="it.color || '#64748b'" [matTooltip]="it.hint || ''" matTooltipPosition="right" matTooltipShowDelay="400">
+                    <mat-icon>{{ it.icon }}</mat-icon>
+                    <div class="fe-chip-text"><b>{{ it.label }}</b>@if (it.hint && paletteGroup !== 'steps') { <small>{{ it.hint }}</small> }</div>
+                    <mat-icon class="fe-chip-grip">drag_indicator</mat-icon>
+                  </div>
+                }
+                @if (!paletteItems().length) { <p class="fe-palette-hint">Nothing matches.</p> }
+              </div>
+            }
+          </aside>
+
+          <!-- canvas -->
+          <div class="fe-canvas">
+            <app-flow-canvas [steps]="steps" [catalog]="catalog" [triggerType]="triggerType" [triggerLabel]="triggerLabel()"
+                             [(startStepId)]="startStepId" [(selectedId)]="selectedId"
+                             (changed)="onGraphChanged()" (triggerDrop)="onTriggerDrop($event)"></app-flow-canvas>
+            @if (warnings().length) {
+              <div class="fe-warnings fe-warnings-float">
+                @for (w of warnings(); track w) { <div><mat-icon>warning</mat-icon>{{ w }}</div> }
+                <button mat-icon-button type="button" class="fe-warn-close" (click)="warnings.set([])"><mat-icon>close</mat-icon></button>
+              </div>
+            }
+          </div>
+
+          <!-- inspector -->
+          <aside class="fe-inspector">
+            @if (selectedId === TRIGGER) {
+              <div class="fe-insp-head"><mat-icon style="color:#16a34a">{{ triggerType === 'event' ? 'bolt' : triggerType === 'schedule' ? 'schedule' : 'touch_app' }}</mat-icon><b>Trigger</b></div>
+              <div class="fe-insp-body">
+                <div class="fe-trig-pick">
+                  <button type="button" [class.sel]="triggerType === 'manual'" (click)="triggerType = 'manual'"><mat-icon>touch_app</mat-icon>Manual</button>
+                  <button type="button" [class.sel]="triggerType === 'event'" (click)="triggerType = 'event'"><mat-icon>bolt</mat-icon>Event</button>
+                  <button type="button" [class.sel]="triggerType === 'schedule'" (click)="triggerType = 'schedule'"><mat-icon>schedule</mat-icon>Schedule</button>
+                </div>
+                @if (triggerType === 'manual') {
+                  <p class="fe-hint"><mat-icon>info</mat-icon>Someone presses <b>Start</b> on the Flows page and fills in the <b>Inputs</b> (see tab).</p>
+                  <mat-form-field appearance="outline" class="full"><mat-label>Who may start it (blank = everyone)</mat-label>
+                    <input matInput [(ngModel)]="startPermissions" placeholder="role:Manager, dept:3, module:finance" />
+                    <mat-hint>role:Name · dept:Id · module:key</mat-hint>
+                  </mat-form-field>
+                }
+                @if (triggerType === 'event') {
+                  <mat-form-field appearance="outline" class="full"><mat-label>When this happens</mat-label>
+                    <mat-select [(ngModel)]="trigger.event">@for (e of catalog.events; track e.key) { <mat-option [value]="e.key">{{ e.key }}</mat-option> }</mat-select>
+                  </mat-form-field>
+                  @for (e of catalog.events; track e.key) { @if (e.key === trigger.event) { <p class="fe-hint"><mat-icon>info</mat-icon>{{ e.description }}</p> } }
+                  <mat-form-field appearance="outline" class="full"><mat-label>Only when (expression, optional)</mat-label>
+                    <input matInput [(ngModel)]="trigger.filter" placeholder='entity.status == "DELIVERY_FAILED"' />
+                  </mat-form-field>
+                }
+                @if (triggerType === 'schedule') {
+                  <mat-form-field appearance="outline" class="full"><mat-label>Data source</mat-label>
+                    <mat-select [(ngModel)]="trigger.dataSource">@for (d of catalog.dataSources; track d.key) { <mat-option [value]="d.key">{{ d.name }}</mat-option> }</mat-select>
+                  </mat-form-field>
+                  @for (d of catalog.dataSources; track d.key) { @if (d.key === trigger.dataSource) { <p class="fe-hint"><mat-icon>info</mat-icon>{{ d.description }}</p> } }
+                  <div class="fe-grid-2">
+                    <mat-form-field appearance="outline"><mat-label>Check every (min)</mat-label><input matInput type="number" min="1" [(ngModel)]="trigger.intervalMinutes" /></mat-form-field>
+                    <mat-form-field appearance="outline"><mat-label>Hours threshold</mat-label><input matInput type="number" [(ngModel)]="triggerParamsHours" placeholder="24" /></mat-form-field>
+                  </div>
+                }
+                @if (triggerType !== 'manual') {
+                  <mat-checkbox [(ngModel)]="trigger.dedupeByEntity">One open run per record</mat-checkbox>
+                }
+                <mat-form-field appearance="outline" class="full"><mat-label>Run title template</mat-label>
+                  <input matInput [(ngModel)]="trigger.titleTemplate" placeholder="Missing POD · {{ '{{' }}entity.waybillNo{{ '}}' }}" />
+                </mat-form-field>
+                <mat-slide-toggle [(ngModel)]="isEnabled">Flow enabled</mat-slide-toggle>
+                @if (!startStepId) { <p class="fe-hint warn"><mat-icon>warning</mat-icon>Drag from the Trigger's port to the first step.</p> }
+              </div>
+            } @else {
+              @if (selectedStep(); as s) {
+              <div class="fe-insp-head" [style.border-left-color]="colors[s.type]">
+                <mat-icon [style.color]="colors[s.type]">{{ stepType(s.type)?.icon }}</mat-icon>
+                <div><b>{{ stepType(s.type)?.name }}</b><small>{{ stepType(s.type)?.description }}</small></div>
+              </div>
+              <div class="fe-insp-body">
+                <div class="fe-grid-2">
+                  <mat-form-field appearance="outline"><mat-label>Step name</mat-label><input matInput [(ngModel)]="s.name" /></mat-form-field>
+                  <mat-form-field appearance="outline"><mat-label>Step id</mat-label><input matInput [ngModel]="s.id" (change)="renameId(s, $any($event.target).value)" /></mat-form-field>
+                </div>
+
+                @switch (s.type) {
+                  @case ('condition') {
+                    <mat-form-field appearance="outline" class="full"><mat-label>Expression (yes / no)</mat-label>
+                      <textarea matInput rows="2" [(ngModel)]="s.config['expression']" placeholder='inputs.amount > 20000 && ai.priority == "Urgent"'></textarea>
+                      <mat-hint>== != &gt; &lt; contains startsWith in && || ! exists() empty()</mat-hint>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="full"><mat-label>If yes → go to</mat-label><mat-select [(ngModel)]="s.config['trueStepId']"><mat-option [value]="null">— end of flow —</mat-option>@for (o of otherSteps(s.id); track o.id) { <mat-option [value]="o.id">{{ o.name || o.id }}</mat-option> }</mat-select></mat-form-field>
+                    <mat-form-field appearance="outline" class="full"><mat-label>If no → go to</mat-label><mat-select [(ngModel)]="s.config['falseStepId']"><mat-option [value]="null">— end of flow —</mat-option>@for (o of otherSteps(s.id); track o.id) { <mat-option [value]="o.id">{{ o.name || o.id }}</mat-option> }</mat-select></mat-form-field>
+                  }
+
+                  @case ('ai_analyze') {
+                    <mat-form-field appearance="outline" class="full"><mat-label>Instructions for Welly</mat-label><textarea matInput rows="5" [(ngModel)]="s.config['prompt']" placeholder="Classify the exception, decide if the customer is at fault and recommend the next action…"></textarea></mat-form-field>
+                    <mat-form-field appearance="outline" class="full"><mat-label>Store result as</mat-label><input matInput [(ngModel)]="s.config['outputKey']" placeholder="ai" /><mat-hint>Use later as {{ s.config['outputKey'] || 'ai' }}.field</mat-hint></mat-form-field>
+                    <label class="fe-sub">Fields Welly must return</label>
+                    @for (f of s.config['fields']; track $index; let fi = $index) {
+                      <div class="fe-row">
+                        <mat-form-field appearance="outline" class="w-xs"><mat-label>Key</mat-label><input matInput [(ngModel)]="f.key" /></mat-form-field>
+                        <mat-form-field appearance="outline" class="w-xl"><mat-label>Should contain</mat-label><input matInput [(ngModel)]="f.description" /></mat-form-field>
+                        <button mat-icon-button type="button" (click)="s.config['fields'].splice(fi, 1)"><mat-icon>delete</mat-icon></button>
+                      </div>
+                    }
+                    <button mat-stroked-button type="button" (click)="addAiField(s)"><mat-icon>add</mat-icon>Field</button>
+                    <ng-container *ngTemplateOutlet="nextPicker; context: { $implicit: s }"></ng-container>
+                  }
+
+                  @case ('task') {
+                    <ng-container *ngTemplateOutlet="humanStep; context: { $implicit: s }"></ng-container>
+                    <ng-container *ngTemplateOutlet="nextPicker; context: { $implicit: s }"></ng-container>
+                  }
+                  @case ('approval') {
+                    <ng-container *ngTemplateOutlet="humanStep; context: { $implicit: s }"></ng-container>
+                    <mat-form-field appearance="outline" class="full"><mat-label>If approved → go to</mat-label><mat-select [(ngModel)]="s.config['approvedStepId']"><mat-option [value]="null">(default next)</mat-option>@for (o of otherSteps(s.id); track o.id) { <mat-option [value]="o.id">{{ o.name || o.id }}</mat-option> }</mat-select></mat-form-field>
+                    <mat-form-field appearance="outline" class="full"><mat-label>If rejected → go to</mat-label><mat-select [(ngModel)]="s.config['rejectedStepId']"><mat-option [value]="null">(default next)</mat-option>@for (o of otherSteps(s.id); track o.id) { <mat-option [value]="o.id">{{ o.name || o.id }}</mat-option> }</mat-select></mat-form-field>
+                    <ng-container *ngTemplateOutlet="nextPicker; context: { $implicit: s, label: 'Default next step' }"></ng-container>
+                  }
+
+                  @case ('notify') {
+                    <ng-container *ngTemplateOutlet="assigneePicker; context: { step: s, key: 'to', label: 'Send to', modes: notifyMode }"></ng-container>
+                    <mat-form-field appearance="outline" class="full"><mat-label>Title</mat-label><input matInput [(ngModel)]="s.config['title']" /></mat-form-field>
+                    <mat-form-field appearance="outline" class="full"><mat-label>Message</mat-label><textarea matInput rows="3" [(ngModel)]="s.config['body']"></textarea></mat-form-field>
+                    <ng-container *ngTemplateOutlet="nextPicker; context: { $implicit: s }"></ng-container>
+                  }
+
+                  @case ('email') {
+                    <mat-form-field appearance="outline" class="full"><mat-label>To (emails or {{ '{{' }}entity.deliveryEmail{{ '}}' }})</mat-label><input matInput [(ngModel)]="s.config['to']" /></mat-form-field>
+                    <mat-form-field appearance="outline" class="full"><mat-label>Subject</mat-label><input matInput [(ngModel)]="s.config['subject']" /></mat-form-field>
+                    <mat-form-field appearance="outline" class="full"><mat-label>Body</mat-label><textarea matInput rows="5" [(ngModel)]="s.config['body']"></textarea></mat-form-field>
+                    <ng-container *ngTemplateOutlet="nextPicker; context: { $implicit: s }"></ng-container>
+                  }
+
+                  @case ('welly_action') {
+                    <mat-form-field appearance="outline" class="full"><mat-label>Welly tool</mat-label><mat-select [(ngModel)]="s.config['action']">@for (a of catalog.actions; track a) { <mat-option [value]="a">{{ a }}</mat-option> }</mat-select></mat-form-field>
+                    <mat-checkbox [(ngModel)]="s.config['failOnError']">Fail the run if the tool fails</mat-checkbox>
+                    <mat-form-field appearance="outline" class="full"><mat-label>Payload (JSON, templates allowed)</mat-label>
+                      <textarea matInput rows="6" [ngModel]="payloadText(s)" (ngModelChange)="setPayload(s, $event)" spellcheck="false"></textarea>
+                      @if (s.config['_payloadErr']) { <mat-error>{{ s.config['_payloadErr'] }}</mat-error> }
+                    </mat-form-field>
+                    <ng-container *ngTemplateOutlet="nextPicker; context: { $implicit: s }"></ng-container>
+                  }
+
+                  @case ('set') {
+                    <mat-form-field appearance="outline" class="full"><mat-label>Variable name</mat-label><input matInput [(ngModel)]="s.config['key']" /><mat-hint>Available as vars.{{ s.config['key'] || 'name' }}</mat-hint></mat-form-field>
+                    <mat-form-field appearance="outline" class="full"><mat-label>Value (template)</mat-label><input matInput [(ngModel)]="s.config['value']" /></mat-form-field>
+                    <ng-container *ngTemplateOutlet="nextPicker; context: { $implicit: s }"></ng-container>
+                  }
+
+                  @case ('wait') {
+                    <div class="fe-grid-2">
+                      <mat-form-field appearance="outline"><mat-label>Hours</mat-label><input matInput type="number" [(ngModel)]="s.config['hours']" /></mat-form-field>
+                      <mat-form-field appearance="outline"><mat-label>…or minutes</mat-label><input matInput type="number" [(ngModel)]="s.config['minutes']" /></mat-form-field>
+                    </div>
+                    <ng-container *ngTemplateOutlet="nextPicker; context: { $implicit: s }"></ng-container>
+                  }
+
+                  @case ('end') {
+                    <mat-form-field appearance="outline" class="full"><mat-label>Outcome label</mat-label><input matInput [(ngModel)]="s.config['outcome']" placeholder="approved / rejected / resolved" /></mat-form-field>
+                  }
+                }
+
+                <div class="fe-insp-actions">
+                  <button mat-stroked-button type="button" (click)="canvas?.duplicate(s)"><mat-icon>content_copy</mat-icon>Duplicate</button>
+                  <button mat-stroked-button type="button" color="warn" (click)="canvas?.removeStep(s.id)"><mat-icon>delete</mat-icon>Delete</button>
+                </div>
+              </div>
+            } @else {
+              <div class="fe-insp-empty">
+                <mat-icon>touch_app</mat-icon>
+                <b>Select a node</b>
+                <span>Click the Trigger or any step to configure it here.</span>
+                <ul>
+                  <li>Drag items from the left onto the canvas</li>
+                  <li>Drag from a port <span class="fe-dot"></span> to another node to connect</li>
+                  <li>Drop a connection on empty space to add a linked step</li>
+                  <li>Scroll to zoom · drag the background to pan</li>
+                  <li><kbd>Del</kbd> removes the selected node or connection</li>
+                </ul>
+              </div>
+              }
+            }
+          </aside>
+        </div>
+      </mat-tab>
+
+      <!-- ─── Settings ─── -->
+      <mat-tab label="Settings">
+        <div class="fe-section fe-section-pad">
+          <div class="fe-grid-2">
+            <mat-form-field appearance="outline"><mat-label>Flow name</mat-label><input matInput [(ngModel)]="name" required /></mat-form-field>
+            <mat-form-field appearance="outline"><mat-label>Category</mat-label>
+              <mat-select [(ngModel)]="category">@for (c of categories; track c) { <mat-option [value]="c">{{ c }}</mat-option> }</mat-select>
+            </mat-form-field>
+          </div>
+          <mat-form-field appearance="outline" class="full"><mat-label>What does this flow do? (shown to people who can start it)</mat-label><textarea matInput rows="2" [(ngModel)]="description"></textarea></mat-form-field>
+          <h4>Human flow</h4>
+          <mat-form-field appearance="outline" class="full"><mat-label>Department this flow describes (optional)</mat-label>
+            <mat-select [(ngModel)]="departmentName">
+              <mat-option [value]="null">— not a human flow —</mat-option>
+              @for (d of catalog.departments; track d.id) { <mat-option [value]="d.name">{{ d.name }}</mat-option> }
+            </mat-select>
+            <mat-hint>Human flows appear on the Human flows tab as that department's "how we work" diagram.</mat-hint>
+          </mat-form-field>
+          <h4>Level</h4>
+          <div class="fe-levels">
+            @for (l of [1,2,3]; track l) {
+              <button type="button" class="fe-level" [class.sel]="level === l" (click)="level = $any(l)"><b>Level {{ l }}</b><span>{{ levelHint()[l] }}</span></button>
+            }
+          </div>
+          <h4>Access</h4>
+          <mat-form-field appearance="outline" class="full"><mat-label>Who may start it manually (blank = everyone with Flows access)</mat-label>
+            <input matInput [(ngModel)]="startPermissions" placeholder="role:Manager, dept:3, module:finance" />
+            <mat-hint>Comma separated rules: role:Name · dept:Id · module:key. Flow designers can always start.</mat-hint>
+          </mat-form-field>
+          <mat-slide-toggle [(ngModel)]="isEnabled">Enabled</mat-slide-toggle>
+        </div>
+      </mat-tab>
+
+      <!-- ─── Inputs ─── -->
+      <mat-tab [label]="'Inputs (' + inputs.length + ')'">
+        <div class="fe-section fe-section-pad">
+          <p class="fe-hint"><mat-icon>info</mat-icon>Questions asked when someone starts the flow manually. Use them in steps as <code>{{ '{{' }}inputs.key{{ '}}' }}</code>.</p>
+          @if (triggerType !== 'manual') { <p class="fe-hint warn"><mat-icon>warning</mat-icon>This flow starts automatically, so inputs are only used when a designer starts it by hand.</p> }
+          @for (inp of inputs; track $index; let i = $index) {
+            <div class="fe-row">
+              <mat-form-field appearance="outline" class="w-s"><mat-label>Key</mat-label><input matInput [(ngModel)]="inp.key" /></mat-form-field>
+              <mat-form-field appearance="outline" class="w-l"><mat-label>Label</mat-label><input matInput [(ngModel)]="inp.label" /></mat-form-field>
+              <mat-form-field appearance="outline" class="w-s"><mat-label>Type</mat-label><mat-select [(ngModel)]="inp.type">@for (t of inputTypes; track t) { <mat-option [value]="t">{{ t }}</mat-option> }</mat-select></mat-form-field>
+              @if (inp.type === 'select') { <mat-form-field appearance="outline" class="w-l"><mat-label>Options (comma separated)</mat-label><input matInput [ngModel]="optionsText(inp.options)" (ngModelChange)="setOptions(inp, $event)" /></mat-form-field> }
+              <mat-checkbox [(ngModel)]="inp.required">Required</mat-checkbox>
+              <button mat-icon-button type="button" (click)="inputs.splice(i, 1)" matTooltip="Remove"><mat-icon>delete</mat-icon></button>
+            </div>
+          }
+          <div><button mat-stroked-button type="button" (click)="addInput()"><mat-icon>add</mat-icon>Add input</button></div>
+        </div>
+      </mat-tab>
+
+      <!-- ─── Variables ─── -->
+      <mat-tab label="Variables">
+        <div class="fe-section fe-section-pad">
+          <p class="fe-hint"><mat-icon>info</mat-icon>Click to copy. Wrap in <code>{{ '{{' }} {{ '}}' }}</code> inside titles, messages and payloads; use bare in decision expressions.</p>
+          <div class="fe-vars">@for (v of variableHints(); track v) { <code (click)="copyVar(v)" matTooltip="Copy">{{ v }}</code> }</div>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions class="fe-actions">
+  <button mat-button type="button" (click)="validate()" [disabled]="busy"><mat-icon>rule</mat-icon>Check</button>
+  <span class="fe-count">{{ steps.length }} step{{ steps.length === 1 ? '' : 's' }}</span>
+  <span class="spacer"></span>
+  <button mat-button mat-dialog-close [disabled]="busy">Cancel</button>
+  <button mat-flat-button color="primary" (click)="save()" [disabled]="busy">
+    @if (busy) { <mat-spinner diameter="18"></mat-spinner> } @else { <mat-icon>save</mat-icon> }
+    {{ isNew ? 'Create flow' : 'Save changes' }}
+  </button>
+</mat-dialog-actions>
+
+<!-- shared: "then go to" -->
+<ng-template #nextPicker let-s let-label="label">
+  <mat-form-field appearance="outline" class="full"><mat-label>{{ label || 'Then go to' }}</mat-label>
+    <mat-select [(ngModel)]="s.nextStepId"><mat-option [value]="null">— end of flow —</mat-option>@for (o of otherSteps(s.id); track o.id) { <mat-option [value]="o.id">{{ o.name || o.id }}</mat-option> }</mat-select>
+  </mat-form-field>
+</ng-template>
+
+<!-- shared: human step fields -->
+<ng-template #humanStep let-s>
+  <mat-form-field appearance="outline" class="full"><mat-label>{{ s.type === 'approval' ? 'What needs approving?' : 'Task title' }}</mat-label><input matInput [(ngModel)]="s.config['title']" placeholder="Approve purchase: {{ '{{' }}inputs.item{{ '}}' }}" /></mat-form-field>
+  <mat-form-field appearance="outline" class="full"><mat-label>Details shown to the assignee</mat-label><textarea matInput rows="3" [(ngModel)]="s.config['description']"></textarea></mat-form-field>
+  <ng-container *ngTemplateOutlet="assigneePicker; context: { step: s, key: 'assignTo', label: 'Assign to', modes: assigneeMode }"></ng-container>
+  <div class="fe-grid-2">
+    <mat-form-field appearance="outline"><mat-label>Priority</mat-label>
+      <mat-select [(ngModel)]="s.config['priority']">@for (p of priorities; track p) { <mat-option [value]="p">{{ p }}</mat-option> } <mat-option value="{{ '{{' }}ai.priority{{ '}}' }}">From Welly (ai.priority)</mat-option></mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Due in (hours)</mat-label><input matInput type="number" [(ngModel)]="s.config['dueInHours']" /></mat-form-field>
+  </div>
+  <mat-checkbox [ngModel]="s.config['mirrorTodo'] !== false" (ngModelChange)="s.config['mirrorTodo'] = $event">Also add to assignee's to-do list</mat-checkbox>
+  <ng-container *ngTemplateOutlet="assigneePicker; context: { step: s, key: 'escalateTo', label: 'If overdue, escalate to', modes: escalateMode }"></ng-container>
+  <label class="fe-sub">Form the assignee fills in (optional)</label>
+  @for (f of s.config['form']; track $index; let fi = $index) {
+    <div class="fe-row">
+      <mat-form-field appearance="outline" class="w-xs"><mat-label>Key</mat-label><input matInput [(ngModel)]="f.key" /></mat-form-field>
+      <mat-form-field appearance="outline" class="w-xl"><mat-label>Label</mat-label><input matInput [(ngModel)]="f.label" /></mat-form-field>
+      <mat-form-field appearance="outline" class="w-xs"><mat-label>Type</mat-label><mat-select [(ngModel)]="f.type">@for (t of formFieldTypes; track t) { <mat-option [value]="t">{{ t }}</mat-option> }</mat-select></mat-form-field>
+      @if (f.type === 'select') { <mat-form-field appearance="outline" class="full"><mat-label>Options</mat-label><input matInput [ngModel]="optionsText(f.options)" (ngModelChange)="setOptions(f, $event)" /></mat-form-field> }
+      <mat-checkbox [(ngModel)]="f.required">Required</mat-checkbox>
+      <button mat-icon-button type="button" (click)="s.config['form'].splice(fi, 1)"><mat-icon>delete</mat-icon></button>
+    </div>
+  }
+  <div><button mat-stroked-button type="button" (click)="addFormField(s)"><mat-icon>add</mat-icon>Form field</button></div>
+</ng-template>
+
+<!-- shared: assignee picker -->
+<ng-template #assigneePicker let-s="step" let-key="key" let-label="label" let-modes="modes">
+  <div class="fe-assign">
+    <mat-form-field appearance="outline" class="full"><mat-label>{{ label }}</mat-label>
+      <mat-select [ngModel]="modes[s.id]" (ngModelChange)="setMode(s, key, $event)">
+        <mat-option value="none">{{ key === 'assignTo' ? 'Whoever started the run' : 'Nobody' }}</mat-option>
+        <mat-option value="starter">Person who started the run</mat-option>
+        <mat-option value="starterManager">Starter's department manager</mat-option>
+        <mat-option value="user">A specific person</mat-option>
+        <mat-option value="department">Anyone in a department</mat-option>
+        <mat-option value="role">Anyone with a role</mat-option>
+        <mat-option value="deptRole">Role within a department</mat-option>
+        <mat-option value="expression">From a variable (user id / email / name)</mat-option>
+      </mat-select>
+    </mat-form-field>
+    @if (modes[s.id] === 'user') {
+      <mat-form-field appearance="outline" class="full"><mat-label>Person</mat-label><mat-select [(ngModel)]="s.config[key].userId">@for (u of catalog.users; track u.id) { <mat-option [value]="u.id">{{ u.name }} <span class="muted">· {{ u.role }}</span></mat-option> }</mat-select></mat-form-field>
+    }
+    @if (modes[s.id] === 'department' || modes[s.id] === 'deptRole') {
+      <mat-form-field appearance="outline" class="full"><mat-label>Department</mat-label><mat-select [(ngModel)]="s.config[key].departmentName">@for (d of catalog.departments; track d.id) { <mat-option [value]="d.name">{{ d.name }}</mat-option> }</mat-select></mat-form-field>
+    }
+    @if (modes[s.id] === 'role' || modes[s.id] === 'deptRole') {
+      <mat-form-field appearance="outline" class="full"><mat-label>Role</mat-label><mat-select [(ngModel)]="s.config[key].role">@for (r of catalog.roles; track r) { <mat-option [value]="r">{{ r }}</mat-option> }</mat-select></mat-form-field>
+    }
+    @if (modes[s.id] === 'expression') {
+      <mat-form-field appearance="outline" class="full"><mat-label>Expression</mat-label><input matInput [(ngModel)]="s.config[key].expression" placeholder="{{ '{{' }}inputs.manager{{ '}}' }}" /></mat-form-field>
+    }
+    <p class="fe-drop-hint"><mat-icon>tips_and_updates</mat-icon>Tip: drag a person, department or role from the palette straight onto this node.</p>
+  </div>
+</ng-template>

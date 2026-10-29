@@ -1,0 +1,65 @@
+// App shell offsets (design review D-05). The navbar renders a fixed sidebar and top bar
+// and adds `has-shell` to <body>; pages flow to the right of the sidebar.
+body.has-shell {
+  padding-left: var(--shell-sidebar-width);
+  transition: padding-left 0.18s ease;
+}
+
+body.has-shell.shell-collapsed {
+  padding-left: 68px;
+}
+
+@media (max-width: 900px) {
+  body.has-shell,
+  body.has-shell.shell-collapsed {
+    padding-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.has-shell {
+    transition: none;
+  }
+}
+
+// Toasts (ToastService, design review D-10): dark surface, coloured edge by kind.
+.app-toast .mdc-snackbar__surface {
+  background: var(--color-text) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-lg) !important;
+  border-left: 4px solid var(--color-focus);
+}
+.app-toast .mdc-snackbar__label {
+  color: var(--color-canvas) !important;
+  font: 600 13.5px var(--font-body) !important;
+}
+.app-toast .mat-mdc-snack-bar-action,
+.app-toast .mat-mdc-button.mat-mdc-snack-bar-action:not(:disabled) {
+  color: var(--color-focus) !important;
+  font-weight: 800 !important;
+}
+.toast-done .mdc-snackbar__surface { border-left-color: var(--color-ok); }
+.toast-warn .mdc-snackbar__surface { border-left-color: var(--color-warn); }
+.toast-error .mdc-snackbar__surface { border-left-color: var(--color-danger); }
+
+.confirm-dialog-panel .mat-mdc-dialog-surface {
+  border-radius: 14px !important;
+}
+
+// "Skip to main content": first thing a keyboard user reaches; hidden until focused.
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2000;
+  padding: 10px 16px;
+  border-radius: var(--radius-control);
+  background: var(--color-brand);
+  color: var(--color-on-primary);
+  font: 700 var(--text-sm) var(--font-body);
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}

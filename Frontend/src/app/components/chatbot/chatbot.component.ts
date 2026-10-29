@@ -1,8 +1,11 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
 import { Subscription } from 'rxjs';
-import { ChatService, ActionResult } from '../../services/chat.service';
+import { ChatService, ActionResult, ChatStreamEvent } from '../../services/chat.service';
+import { WellyMascotComponent, WellyMood } from './welly-mascot/welly-mascot.component';
 
 interface ChatMessage {
   text: string;
@@ -38,11 +41,18 @@ declare global {
 @Component({
   selector: 'app-chatbot',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, WellyMascotComponent],
   templateUrl: './chatbot.component.html',
   styleUrls: ['./chatbot.component.scss']
 })
 export class ChatbotComponent implements OnInit, OnDestroy {
+  @ViewChild(WellyMascotComponent) mascot?: WellyMascotComponent;
+  /** Face the floating mascot is holding ('idle' = mascot animates on its own). */
+  mascotMood: WellyMood = 'idle';
+  /** Unread Welly replies while the window is closed → badge + stronger pulse. */
+  unreadReplies = 0;
+  private mascotTimer?: any;
+
   isOpen = false;
   isMinimized = false;
   messages: ChatMessage[] = [];
@@ -50,6 +60,11 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   isTyping = false;
   isServiceAvailable = false;
   currentStreamingText = '';
+  /** Live reasoning from the model (shown in a collapsible panel, not part of the answer). */
+  currentThinkingText = '';
+  thinkingExpanded = false;
+  /** Progress note while Welly runs an action ("Checking fleet status…"). */
+  currentStatus = '';
   selectedFile: File | null = null;
   fileInputError = '';
   
@@ -86,6 +101,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
 
   private chatSubscription?: Subscription;
   private actionSubscription?: Subscription;
+  private streamEventSubscription?: Subscription;
   private readonly STORAGE_KEY = 'welly_chat_messages';
 
   constructor(private chatService: ChatService) {}
@@ -101,12 +117,15 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.actionSubscription = this.chatService.actionResults$.subscribe(action => {
       this.handleActionResult(action);
     });
+    this.streamEventSubscription = this.chatService.streamEvents$.subscribe(ev => this.handleStreamEvent(ev));
   }
 
   ngOnDestroy(): void {
     this.chatSubscription?.unsubscribe();
     this.actionSubscription?.unsubscribe();
+    this.streamEventSubscription?.unsubscribe();
     clearTimeout(this.silenceTimer);
+    clearTimeout(this.mascotTimer);
     this.stopListening();
     this.stopSpeaking();
   }
@@ -115,9 +134,28 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.chatService.checkHealth().subscribe(available => {
       this.isServiceAvailable = available;
       if (!available) {
-        this.addBotMessage('⚠️ AI is currently offline — using basic responses.');
+        this.addBotMessage('AI is currently offline — using basic responses.');
+        this.setMascotMood('error', 2500);
       }
     });
+  }
+
+  /**
+   * Drive the floating mascot. Pass a duration to auto-return to 'idle';
+   * without one the mood is held until the next call (e.g. 'thinking' while streaming).
+   */
+  private setMascotMood(mood: WellyMood, holdMs?: number): void {
+    clearTimeout(this.mascotTimer);
+    this.mascotMood = mood;
+    if (holdMs && mood !== 'idle') {
+      this.mascotTimer = setTimeout(() => { this.mascotMood = 'idle'; }, holdMs);
+    }
+  }
+
+  /** Click on the mascot: open the chat (and clear unread). */
+  onMascotClick(): void {
+    this.unreadReplies = 0;
+    this.toggleChat();
   }
 
   toggleChat(): void {
@@ -125,8 +163,9 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       this.isMinimized = false;
     }
     this.isOpen = !this.isOpen;
-    if (this.isOpen && !this.isServiceAvailable) {
-      this.checkServiceHealth();
+    if (this.isOpen) {
+      this.unreadReplies = 0;
+      if (!this.isServiceAvailable) this.checkServiceHealth();
     }
   }
 
@@ -161,7 +200,11 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.selectedFile = null;
     this.fileInputError = '';
     this.isTyping = true;
+    this.setMascotMood('thinking');
     this.currentStreamingText = '';
+    this.currentThinkingText = '';
+    this.currentStatus = '';
+    this.thinkingExpanded = false;
     this.scrollToBottom();
 
     // Use AI service if available, otherwise fall back to basic responses
@@ -195,6 +238,9 @@ export class ChatbotComponent implements OnInit, OnDestroy {
         console.error('AI Error:', error);
         this.isTyping = false;
         this.currentStreamingText = '';
+        this.currentThinkingText = '';
+        this.currentStatus = '';
+        this.setMascotMood('error', 3000);
         this.addBotMessage('Sorry, I encountered an error. Please try again.');
         this.scrollToBottom();
       },
@@ -205,7 +251,10 @@ export class ChatbotComponent implements OnInit, OnDestroy {
           this.addBotMessage(cleanText);
         }
         this.currentStreamingText = '';
+        this.currentThinkingText = '';
+        this.currentStatus = '';
         this.isTyping = false;
+        this.setMascotMood('happy', 2200);
         this.scrollToBottom();
       }
     });
@@ -226,9 +275,9 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     } else if (message.includes('employee') || message.includes('people')) {
       response = 'The **People** page shows who\'s in, out, or late — updated in real-time.';
     } else if (message.includes('thank') || message.includes('thanks')) {
-      response = 'Happy to help! Let me know if you need anything else. 🙌';
+      response = 'Happy to help! Let me know if you need anything else.';
     } else if (message.includes('hi') || message.includes('hello') || message.includes('hey')) {
-      response = 'Hi! 👋 How can I help?';
+      response = 'Hi! How can I help?';
     } else if (message.includes('who are you') || message.includes('what are you')) {
       response = 'I\'m Welly, the IT assistant for ProMed Technologies. I can help with attendance, projects, logistics, stock, and more.';
     } else {
@@ -246,10 +295,10 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     });
     this.saveMessages();
     this.speak(text);
+    if (!this.isOpen && this.messages.length > 1) this.unreadReplies++;
   }
 
   private handleActionResult(action: ActionResult): void {
-    const icon = action.success ? '✅' : '❌';
     const typeLabel = action.type === 'CREATE_TICKET' ? 'Support Ticket' :
                       action.type === 'CREATE_MEETING' ? 'Meeting' :
                       action.type === 'SEND_EMAIL' ? 'Email' :
@@ -271,13 +320,18 @@ export class ChatbotComponent implements OnInit, OnDestroy {
 
     // For TripSheet data-fetch actions and vehicle tracking, show the data as a regular bot message (not a small action banner)
     const isTripSheetData = action.type.startsWith('TRIPSHEET_') && action.type !== 'TRIPSHEET_CREATE';
-    const isTrackingData = action.type === 'TRACK_VEHICLE' || action.type === 'FLEET_STATUS';
+    const isTrackingData = action.type === 'TRACK_VEHICLE' || action.type === 'FLEET_STATUS' || action.type.startsWith('CONTROLLER_');
     const isAddressLookup = action.type === 'LOOKUP_ADDRESS';
-    const isOverview = action.type === 'SYSTEM_OVERVIEW';
+    const isOverview = action.type === 'SYSTEM_OVERVIEW' || action.type === 'SEARCH_WEB';
     const isDataAction = isTripSheetData || isTrackingData || isAddressLookup || isOverview;
+
+    // Tool loop: Welly reads data results himself and writes the answer — don't dump raw data twice.
+    if (action.summarized && isDataAction) {
+      return;
+    }
     
     this.messages.push({
-      text: isDataAction ? action.message : `${icon} **${typeLabel}**: ${action.message}`,
+      text: isDataAction ? action.message : `**${typeLabel}**: ${action.message}`,
       isUser: false,
       timestamp: new Date(),
       isAction: !isDataAction,
@@ -301,7 +355,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       }
     } catch { }
     // First visit — show welcome
-    this.addBotMessage('Hi there! 👋 I\'m Welly, your IT assistant. How can I help?');
+    this.addBotMessage('Hi there! I\'m Welly, your IT assistant. How can I help?');
   }
 
   private saveMessages(): void {
@@ -526,7 +580,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       this.permissionRequesting = false;
       if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
         this.permissionError =
-          'Microphone permission was denied. Click the padlock/🎤 icon in the address bar, ' +
+          'Microphone permission was denied. Click the padlock icon in the address bar, ' +
           'allow the microphone for this site, then try again.';
       } else if (err?.name === 'NotFoundError') {
         this.permissionError = 'No microphone was found. Please connect a mic and try again.';
@@ -777,7 +831,50 @@ export class ChatbotComponent implements OnInit, OnDestroy {
    */
   private stripActionTags(text: string): string {
     // Handle nested JSON (arrays, nested objects) in action tags
-    return text.replace(/\[ACTION:\w+\]\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*\[\/ACTION\]/g, '').trim();
+    return text
+      .replace(/\[ACTION:\w+\]\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*\[\/ACTION\]/g, '')
+      // Gemma native tool-call syntax (normalised server-side, but never show it raw)
+      .replace(/<\|tool_call>\s*call:\s*\w+\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*(?:<tool_call\|>|\[\/ACTION\])?/g, '')
+      .trim();
+  }
+
+  /**
+   * Streaming text safe to show: complete action tags removed, and anything after an
+   * unterminated "[ACTION:" (still being generated) hidden so users never see raw JSON.
+   */
+  get displayStreamingText(): string {
+    let text = this.stripActionTags(this.currentStreamingText);
+    const open = Math.max(text.lastIndexOf('[ACTION:'), text.lastIndexOf('<|tool_call>'));
+    if (open >= 0) {
+      text = text.substring(0, open);
+    }
+    // Hide a partial "[ACTIO" / "<|tool_c" prefix at the tail
+    const tail = text.match(/(?:\[(?:A(?:C(?:T(?:I(?:O(?:N:?)?)?)?)?)?)?|<(?:\|(?:t(?:o(?:o(?:l(?:_(?:c(?:a(?:l(?:l>?)?)?)?)?)?)?)?)?)?)?)$/);
+    if (tail && tail[0]) text = text.substring(0, text.length - tail[0].length);
+    return text;
+  }
+
+  /** True while the model is emitting an action tag (shows "Working on it…" instead of JSON). */
+  get isEmittingAction(): boolean {
+    const t = this.currentStreamingText;
+    const open = Math.max(t.lastIndexOf('[ACTION:'), t.lastIndexOf('<|tool_call>'));
+    return open >= 0 && this.stripActionTags(t.substring(open)).length > 0;
+  }
+
+  private handleStreamEvent(ev: ChatStreamEvent): void {
+    if (ev.type === 'thinking') {
+      this.currentThinkingText += ev.text;
+      if (this.voiceModeActive) this.voiceState = 'thinking';
+    } else if (ev.type === 'status') {
+      this.currentStatus = ev.text;
+      // Welly is running a tool/action → "updating" face while it works
+      if (this.isTyping) this.setMascotMood('updating');
+    }
+    this.scrollToBottom();
+  }
+
+  toggleThinking(): void {
+    this.thinkingExpanded = !this.thinkingExpanded;
   }
 }
 

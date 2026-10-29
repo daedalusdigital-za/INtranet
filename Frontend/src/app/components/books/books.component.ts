@@ -21,12 +21,30 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { BooksService, BookInvoice, BooksSummary, UploadResponse, ConfirmRequest } from '../../services/books.service';
 import { environment } from '../../../environments/environment';
 import { WellyActivityService } from '../../services/welly-activity.service';
+import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { ChipTone, StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+
+const STATUS_LABELS: Record<string, string> = {
+  'Draft': 'Submitted',
+  'Confirmed': 'Paid',
+  'Payment Requested': 'Payment Requested',
+  'Archived': 'Rejected'
+};
+
+const STATUS_TONES: Record<string, ChipTone> = {
+  'Draft': 'warn',
+  'Confirmed': 'ok',
+  'Payment Requested': 'warn',
+  'Archived': 'danger'
+};
 
 @Component({
   selector: 'app-books',
@@ -35,10 +53,10 @@ import { WellyActivityService } from '../../services/welly-activity.service';
     CommonModule, FormsModule, RouterModule,
     MatToolbarModule, MatCardModule, MatButtonModule, MatIconModule, MatMenuModule,
     MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatDatepickerModule, MatNativeDateModule, MatProgressBarModule, MatProgressSpinnerModule,
+    MatDatepickerModule, MatNativeDateModule, MatProgressBarModule,
     MatTooltipModule, MatBadgeModule, MatTabsModule, MatDividerModule,
-    MatSnackBarModule, MatDialogModule,
-    NavbarComponent
+    MatDialogModule,
+    NavbarComponent, SkeletonRowsComponent, EmptyStateComponent, StatusChipComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -121,10 +139,10 @@ import { WellyActivityService } from '../../services/welly-activity.service';
             <span class="sc-name">{{ s.supplier }}</span>
             <span class="sc-count">{{ s.count }}</span>
             <span class="sc-total">{{ s.total | currency:'ZAR':'symbol-narrow':'1.0-0' }}</span>
-            <button class="sc-upload-btn" matTooltip="Upload invoice for {{ s.supplier }}" (click)="uploadForSupplier(s.supplier, $event)">
+            <button [attr.aria-label]="'Upload invoice for ' + s.supplier" class="sc-upload-btn" matTooltip="Upload invoice for {{ s.supplier }}" (click)="uploadForSupplier(s.supplier, $event)">
               <mat-icon>add_circle</mat-icon>
             </button>
-            <button class="sc-upload-btn" matTooltip="Analyze with Welly" (click)="analyzeSupplier(s.supplier); $event.stopPropagation()" title="Ask Welly about this supplier's spending">
+            <button aria-label="Analyze with Welly" class="sc-upload-btn" matTooltip="Analyze with Welly" (click)="analyzeSupplier(s.supplier); $event.stopPropagation()" title="Ask Welly about this supplier's spending">
               <mat-icon>psychology</mat-icon>
             </button>
           </div>
@@ -137,7 +155,7 @@ import { WellyActivityService } from '../../services/welly-activity.service';
           <mat-icon class="search-icon">search</mat-icon>
           <input type="text" placeholder="Search invoices..." [(ngModel)]="searchQuery"
                  (input)="onSearchChange()" class="search-input">
-          <button *ngIf="searchQuery" mat-icon-button class="clear-btn" (click)="searchQuery=''; loadInvoices()">
+          <button aria-label="Close" *ngIf="searchQuery" mat-icon-button class="clear-btn" (click)="searchQuery=''; loadInvoices()">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -174,10 +192,10 @@ import { WellyActivityService } from '../../services/welly-activity.service';
           </select>
         </div>
         <div class="view-toggle">
-          <button mat-icon-button [class.active-view]="viewMode === 'grid'" (click)="viewMode='grid'" matTooltip="Grid view">
+          <button aria-label="Grid view" mat-icon-button [class.active-view]="viewMode === 'grid'" (click)="viewMode='grid'" matTooltip="Grid view">
             <mat-icon>grid_view</mat-icon>
           </button>
-          <button mat-icon-button [class.active-view]="viewMode === 'list'" (click)="viewMode='list'" matTooltip="List view">
+          <button aria-label="List view" mat-icon-button [class.active-view]="viewMode === 'list'" (click)="viewMode='list'" matTooltip="List view">
             <mat-icon>view_list</mat-icon>
           </button>
         </div>
@@ -185,18 +203,21 @@ import { WellyActivityService } from '../../services/welly-activity.service';
 
       <!-- Loading -->
       <div *ngIf="loading" class="loading-container">
-        <mat-spinner diameter="40"></mat-spinner>
-        <span>Loading invoices...</span>
+        <app-skeleton-rows [rows]="6" [avatar]="true"></app-skeleton-rows>
       </div>
 
       <!-- Empty State -->
       <div *ngIf="!loading && invoices.length === 0" class="empty-state">
-        <mat-icon>menu_book</mat-icon>
-        <h3>No invoices found</h3>
-        <p>Upload your first paid invoice PDF to get started</p>
-        <button mat-flat-button color="primary" (click)="openUploadDialog()">
-          <mat-icon>cloud_upload</mat-icon> Upload Invoice
-        </button>
+        <app-empty-state *ngIf="hasFilters" icon="filter_alt_off" title="No invoices match these filters"
+                         message="Nothing in these books matches the search, status, supplier, company, category or year you picked.">
+          <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
+        </app-empty-state>
+        <app-empty-state *ngIf="!hasFilters" icon="menu_book" title="No invoices yet"
+                         message="Upload your first paid invoice PDF to get started.">
+          <button mat-flat-button color="primary" (click)="openUploadDialog()">
+            <mat-icon>cloud_upload</mat-icon> Upload Invoice
+          </button>
+        </app-empty-state>
       </div>
 
       <!-- Grid View -->
@@ -204,11 +225,9 @@ import { WellyActivityService } from '../../services/welly-activity.service';
         <div class="invoice-card" *ngFor="let inv of invoices" [class.draft-card]="inv.status === 'Draft'" [class.archived-card]="inv.status === 'Archived'" [class.payment-requested-card]="inv.status === 'Payment Requested'">
           <div class="card-header">
             <div class="card-status">
-              <span class="status-badge" [class]="'badge-' + inv.status.toLowerCase().replace(' ', '-')">
-                {{ inv.status === 'Draft' ? 'Submitted' : (inv.status === 'Confirmed' ? 'Paid' : (inv.status === 'Payment Requested' ? 'Payment Requested' : (inv.status === 'Archived' ? 'Rejected' : inv.status))) }}
-              </span>
+              <app-status-chip [status]="statusLabel(inv.status)" [tone]="statusTone(inv.status)"></app-status-chip>
             </div>
-            <button mat-icon-button [matMenuTriggerFor]="cardMenu" class="card-menu-btn">
+            <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="cardMenu" class="card-menu-btn">
               <mat-icon>more_vert</mat-icon>
             </button>
             <mat-menu #cardMenu="matMenu">
@@ -283,7 +302,7 @@ import { WellyActivityService } from '../../services/welly-activity.service';
 
       <!-- List View -->
       <div *ngIf="!loading && invoices.length > 0 && viewMode === 'list'" class="invoices-table-wrap">
-        <table class="invoices-table">
+        <table class="app-table invoices-table">
           <thead>
             <tr>
               <th class="col-status">Status</th>
@@ -294,7 +313,7 @@ import { WellyActivityService } from '../../services/welly-activity.service';
               <th class="col-date" (click)="toggleSort('invoicedate')">
                 Date <mat-icon *ngIf="sortBy==='invoicedate'" class="sort-icon">{{ sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
               </th>
-              <th class="col-amount" (click)="toggleSort('total')">
+              <th class="num col-amount" (click)="toggleSort('total')">
                 Amount <mat-icon *ngIf="sortBy==='total'" class="sort-icon">{{ sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
               </th>
               <th class="col-category">Category</th>
@@ -306,14 +325,12 @@ import { WellyActivityService } from '../../services/welly-activity.service';
           <tbody>
             <tr *ngFor="let inv of invoices" [class.draft-row]="inv.status === 'Draft'" [class.archived-row]="inv.status === 'Archived'" [class.payment-requested-row]="inv.status === 'Payment Requested'">
               <td>
-                <span class="status-badge" [class]="'badge-' + inv.status.toLowerCase().replace(' ', '-')">
-                  {{ inv.status === 'Draft' ? 'Submitted' : (inv.status === 'Confirmed' ? 'Paid' : (inv.status === 'Payment Requested' ? 'Payment Requested' : (inv.status === 'Archived' ? 'Rejected' : inv.status))) }}
-                </span>
+                <app-status-chip [status]="statusLabel(inv.status)" [tone]="statusTone(inv.status)"></app-status-chip>
               </td>
               <td class="supplier-cell">{{ inv.supplierName }}</td>
-              <td>{{ inv.invoiceNumber || '—' }}</td>
+              <td class="ref">{{ inv.invoiceNumber || '—' }}</td>
               <td>{{ inv.invoiceDate | date:'dd MMM yyyy' }}</td>
-              <td class="amount-cell">{{ inv.total | currency:'ZAR':'symbol-narrow':'1.2-2' }}</td>
+              <td class="num amount-cell">{{ inv.total | currency:'ZAR':'symbol-narrow':'1.2-2' }}</td>
               <td>
                 <span class="category-tag" *ngIf="inv.category">{{ inv.category }}</span>
                 <span *ngIf="!inv.category" class="no-data">—</span>
@@ -325,13 +342,13 @@ import { WellyActivityService } from '../../services/welly-activity.service';
               <td>{{ inv.paymentMethod || '—' }}</td>
               <td>
                 <div class="action-btns">
-                  <button mat-icon-button matTooltip="View PDF" (click)="viewInvoicePdf(inv)">
+                  <button aria-label="View PDF" mat-icon-button matTooltip="View PDF" (click)="viewInvoicePdf(inv)">
                     <mat-icon>visibility</mat-icon>
                   </button>
-                  <button mat-icon-button matTooltip="Download" (click)="downloadInvoicePdf(inv)">
+                  <button aria-label="Download" mat-icon-button matTooltip="Download" (click)="downloadInvoicePdf(inv)">
                     <mat-icon>download</mat-icon>
                   </button>
-                  <button mat-icon-button [matMenuTriggerFor]="rowMenu">
+                  <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="rowMenu">
                     <mat-icon>more_vert</mat-icon>
                   </button>
                   <mat-menu #rowMenu="matMenu">
@@ -361,11 +378,11 @@ import { WellyActivityService } from '../../services/welly-activity.service';
 
       <!-- Pagination -->
       <div *ngIf="!loading && totalCount > pageSize" class="pagination">
-        <button mat-icon-button [disabled]="currentPage <= 1" (click)="goToPage(currentPage - 1)">
+        <button aria-label="Previous" mat-icon-button [disabled]="currentPage <= 1" (click)="goToPage(currentPage - 1)">
           <mat-icon>chevron_left</mat-icon>
         </button>
         <span class="page-info">Page {{ currentPage }} of {{ totalPages }} ({{ totalCount }} invoices)</span>
-        <button mat-icon-button [disabled]="currentPage >= totalPages" (click)="goToPage(currentPage + 1)">
+        <button aria-label="Next" mat-icon-button [disabled]="currentPage >= totalPages" (click)="goToPage(currentPage + 1)">
           <mat-icon>chevron_right</mat-icon>
         </button>
       </div>
@@ -376,14 +393,7 @@ import { WellyActivityService } from '../../services/welly-activity.service';
       display: block;
       min-height: 100vh;
       position: relative;
-      background: #0f172a;
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #0f172a 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
     .books-container { max-width: 1400px; margin: 0 auto; padding: 24px 20px 48px; }
@@ -391,130 +401,118 @@ import { WellyActivityService } from '../../services/welly-activity.service';
     /* Header */
     .books-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .header-left { display: flex; align-items: center; gap: 16px; }
-    .header-icon-wrap { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #2563eb, #1e40af); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(37,99,235,0.4); }
-    .header-icon { color: white; font-size: 28px; width: 28px; height: 28px; }
-    .books-header h1 { margin: 0; font-size: 28px; font-weight: 700; color: #ffffff; }
-    .subtitle { margin: 2px 0 0; color: rgba(255,255,255,0.85); font-size: 14px; }
-    .upload-btn { height: 44px; padding: 0 24px; border-radius: 12px; font-weight: 600; font-size: 14px; letter-spacing: .3px; }
+    .header-icon-wrap { width: 56px; height: 56px; border-radius: 16px; background: var(--color-primary-soft); display: flex; align-items: center; justify-content: center; }
+    .header-icon { color: var(--color-primary); font-size: 28px; width: 28px; height: 28px; }
+    .books-header h1 { margin: 0; font-size: var(--text-3xl); font-weight: 700; color: var(--color-text); }
+    .subtitle { margin: 2px 0 0; color: var(--color-text-2); font-size: var(--text-md); }
+    .upload-btn { height: 44px; padding: 0 24px; border-radius: 12px; font-weight: 600; font-size: var(--text-md); letter-spacing: .3px; }
     .upload-btn mat-icon { margin-right: 6px; }
 
     /* Summary */
     .summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
-    .summary-card { background: rgba(255,255,255,0.95); border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: transform 0.2s, box-shadow 0.2s; backdrop-filter: blur(10px); }
-    .summary-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .summary-card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: var(--shadow-sm); transition: transform 0.2s, box-shadow 0.2s; }
+    .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
     .summary-card mat-icon { font-size: 32px; width: 32px; height: 32px; padding: 12px; border-radius: 12px; }
-    .summary-card.total mat-icon { background: #e8eaf6; color: #3f51b5; }
-    .summary-card.amount mat-icon { background: #e8f5e9; color: #2e7d32; }
-    .summary-card.confirmed mat-icon { background: #e0f2f1; color: #00897b; }
-    .summary-card.draft mat-icon { background: #fff3e0; color: #ef6c00; }
-    .summary-card.payment-requested mat-icon { background: #fff3e0; color: #e65100; }
-    .summary-card.archived mat-icon { background: #ffebee; color: #e53935; }
+    .summary-card.total mat-icon { background: var(--color-primary-soft); color: var(--color-primary); }
+    .summary-card.amount mat-icon { background: var(--color-ok-soft); color: var(--color-ok); }
+    .summary-card.confirmed mat-icon { background: var(--color-ok-soft); color: var(--color-ok); }
+    .summary-card.draft mat-icon { background: var(--color-warn-soft); color: var(--color-warn); }
+    .summary-card.payment-requested mat-icon { background: var(--color-warn-soft); color: var(--color-warn); }
+    .summary-card.archived mat-icon { background: var(--color-danger-soft); color: var(--color-danger); }
     .summary-info { display: flex; flex-direction: column; }
-    .summary-value { font-size: 22px; font-weight: 700; color: #1a1a2e; line-height: 1.2; }
-    .summary-label { font-size: 12px; color: #6b7280; margin-top: 2px; text-transform: uppercase; letter-spacing: .5px; }
+    .summary-value { font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); line-height: 1.2; }
+    .summary-label { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 2px; text-transform: uppercase; letter-spacing: .5px; }
 
     /* Top Suppliers */
     .suppliers-row { margin-bottom: 20px; }
-    .section-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #ffffff; margin-bottom: 10px; }
-    .section-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(255,255,255,0.8); }
+    .section-title { display: flex; align-items: center; gap: 8px; font-size: var(--text-md); font-weight: 600; color: var(--color-text); margin-bottom: 10px; }
+    .section-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-text-3); }
     .supplier-chips { display: flex; gap: 10px; flex-wrap: wrap; }
-    .supplier-chip { background: rgba(255,255,255,0.95); border: 1.5px solid rgba(255,255,255,0.3); border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: all 0.2s; backdrop-filter: blur(10px); }
-    .supplier-chip:hover { border-color: #2563eb; background: #f5f3ff; }
-    .supplier-chip.active { border-color: #2563eb; background: #2563eb; }
-    .supplier-chip.active .sc-name, .supplier-chip.active .sc-total { color: white; }
-    .supplier-chip.active .sc-count { background: rgba(255,255,255,0.25); color: white; }
+    .supplier-chip { background: var(--color-surface); border: 1.5px solid var(--color-line); border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: all 0.2s; }
+    .supplier-chip:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
+    .supplier-chip.active { border-color: var(--color-primary); background: var(--color-primary); }
+    .supplier-chip.active .sc-name, .supplier-chip.active .sc-total { color: var(--color-on-primary); }
+    .supplier-chip.active .sc-count { background: var(--color-on-primary); color: var(--color-primary); }
     .sc-upload-btn { background: none; border: none; cursor: pointer; padding: 0; margin-left: 4px; display: flex; align-items: center; opacity: 0; transition: opacity 0.2s; }
-    .sc-upload-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: #2563eb; }
+    .sc-upload-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); }
     .supplier-chip:hover .sc-upload-btn { opacity: 1; }
-    .supplier-chip.active .sc-upload-btn mat-icon { color: white; }
-    .sc-name { font-weight: 600; font-size: 13px; color: #374151; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sc-count { background: #e8eaf6; color: #3f51b5; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
-    .sc-total { font-size: 12px; color: #6b7280; }
+    .supplier-chip.active .sc-upload-btn mat-icon { color: var(--color-on-primary); }
+    .sc-name { font-weight: 600; font-size: var(--text-sm); color: var(--color-text-2); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sc-count { background: var(--color-primary-soft); color: var(--color-primary); font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+    .sc-total { font-size: var(--text-xs); color: var(--color-text-3); }
 
     /* Filters */
-    .filters-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; background: rgba(255,255,255,0.95); border-radius: 16px; padding: 14px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); backdrop-filter: blur(10px); }
+    .filters-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 16px; padding: 14px 18px; box-shadow: var(--shadow-sm); }
     .search-box { position: relative; flex: 1; min-width: 200px; }
-    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 20px; }
-    .search-input { width: 100%; padding: 10px 36px 10px 40px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; background: #f9fafb; }
-    .search-input:focus { border-color: #2563eb; background: white; }
+    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-text-3); font-size: 20px; }
+    .search-input { width: 100%; padding: 10px 36px 10px 40px; border: 1.5px solid var(--color-line); border-radius: 10px; font-size: var(--text-md); outline: none; transition: border-color 0.2s; background: var(--color-canvas); color: var(--color-text); }
+    .search-input:focus { border-color: var(--color-primary); background: var(--color-surface); }
     .clear-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
     .filter-chips { display: flex; gap: 6px; }
-    .filter-chips button { border-radius: 20px; font-size: 12px; height: 34px; border-color: #e5e7eb; }
-    .filter-chips button.active-filter { background: #2563eb; color: white; border-color: #2563eb; }
+    .filter-chips button { border-radius: 20px; font-size: var(--text-xs); height: 34px; border-color: var(--color-line); }
+    .filter-chips button.active-filter { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
     .chip-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 2px; vertical-align: middle; }
-    .confirmed-icon { color: #00897b; }
-    .payment-requested-icon { color: #e65100; }
-    .draft-icon { color: #ef6c00; }
-    .archived-icon { color: #e53935; }
-    .active-filter .chip-icon { color: white !important; }
+    .confirmed-icon { color: var(--color-ok); }
+    .payment-requested-icon { color: var(--color-warn); }
+    .draft-icon { color: var(--color-warn); }
+    .archived-icon { color: var(--color-danger); }
+    .active-filter .chip-icon { color: var(--color-on-primary); }
     .filter-selects { display: flex; gap: 8px; }
-    .filter-select { padding: 8px 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 13px; background: #f9fafb; outline: none; cursor: pointer; }
-    .filter-select:focus { border-color: #2563eb; }
+    .filter-select { padding: 8px 12px; border: 1.5px solid var(--color-line); border-radius: 10px; font-size: var(--text-sm); background: var(--color-canvas); color: var(--color-text); outline: none; cursor: pointer; }
+    .filter-select:focus { border-color: var(--color-primary); }
     .view-toggle { display: flex; gap: 2px; margin-left: auto; }
-    .view-toggle button { color: #9ca3af; }
-    .view-toggle .active-view { color: #2563eb; background: #f0edff; }
+    .view-toggle button { color: var(--color-text-3); }
+    .view-toggle .active-view { color: var(--color-primary); background: var(--color-primary-soft); }
 
     /* Loading / Empty */
-    .loading-container { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 60px; color: rgba(255,255,255,0.85); }
-    .empty-state { text-align: center; padding: 80px 20px; }
-    .empty-state mat-icon { font-size: 64px; width: 64px; height: 64px; color: rgba(255,255,255,0.5); margin-bottom: 16px; }
-    .empty-state h3 { margin: 0 0 8px; color: #ffffff; font-size: 20px; }
-    .empty-state p { color: rgba(255,255,255,0.8); margin: 0 0 24px; }
+    .loading-container, .empty-state { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 16px; overflow: hidden; }
 
     /* Grid */
     .invoices-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-    .invoice-card { background: rgba(255,255,255,0.95); border-radius: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: all 0.2s; border: 1.5px solid transparent; backdrop-filter: blur(10px); }
-    .invoice-card:hover { box-shadow: 0 8px 25px rgba(0,0,0,0.12); transform: translateY(-2px); border-color: #e5e7eb; }
-    .invoice-card.draft-card { border-left: 4px solid #ef6c00; }
+    .invoice-card { background: var(--color-surface); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-sm); transition: all 0.2s; border: 1px solid var(--color-line); }
+    .invoice-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--color-line-strong); }
+    .invoice-card.draft-card { border-left: 4px solid var(--color-warn); }
     .invoice-card.archived-card { opacity: 0.7; }
-    .invoice-card.payment-requested-card { border-left: 4px solid #e65100; }
+    .invoice-card.payment-requested-card { border-left: 4px solid var(--color-warn); }
     .card-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 12px 0 16px; }
-    .card-menu-btn { color: #9ca3af; }
-    .status-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: .3px; }
-    .badge-confirmed { background: #e0f2f1; color: #00897b; }
-    .badge-payment-requested { background: #fff3e0; color: #e65100; }
-    .badge-draft { background: #fff3e0; color: #ef6c00; }
-    .badge-archived { background: #ffebee; color: #e53935; }
+    .card-menu-btn { color: var(--color-text-3); }
     .card-body { padding: 16px; cursor: pointer; }
     .card-icon-row { margin-bottom: 8px; }
-    .pdf-icon { color: #ef4444; font-size: 28px; width: 28px; height: 28px; }
-    .supplier-name { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #1a1a2e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .card-amount { font-size: 22px; font-weight: 800; color: #2e7d32; margin-bottom: 12px; }
+    .pdf-icon { color: var(--color-danger); font-size: 28px; width: 28px; height: 28px; }
+    .supplier-name { margin: 0 0 4px; font-size: var(--text-lg); font-weight: 700; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-amount { font-size: var(--text-2xl); font-weight: 800; color: var(--color-ok); margin-bottom: 12px; }
     .card-details { display: flex; flex-direction: column; gap: 6px; }
-    .detail-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6b7280; }
-    .detail-row mat-icon { font-size: 16px; width: 16px; height: 16px; color: #9ca3af; }
-    .card-footer { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid #f3f4f6; background: #fafafa; }
-    .file-info { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #9ca3af; }
+    .detail-row { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--color-text-3); }
+    .detail-row mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--color-text-3); }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--color-surface-2); background: var(--color-canvas); }
+    .file-info { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-text-3); }
     .file-info mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .upload-date { font-size: 11px; color: #9ca3af; }
+    .upload-date { font-size: var(--text-xs); color: var(--color-text-3); }
 
     /* List / Table */
-    .invoices-table-wrap { overflow-x: auto; background: rgba(255,255,255,0.95); border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); backdrop-filter: blur(10px); }
-    .invoices-table { width: 100%; border-collapse: collapse; }
-    .invoices-table th { padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; background: #f9fafb; border-bottom: 2px solid #e5e7eb; cursor: pointer; white-space: nowrap; }
-    .invoices-table td { padding: 14px 16px; font-size: 14px; color: #374151; border-bottom: 1px solid #f3f4f6; }
-    .invoices-table tr:hover { background: #f9fafb; }
-    .invoices-table tr.draft-row { border-left: 3px solid #ef6c00; }
+    .invoices-table-wrap { overflow-x: auto; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 16px; box-shadow: var(--shadow-sm); }
+    .invoices-table th.col-supplier, .invoices-table th.col-date, .invoices-table th.col-amount { cursor: pointer; }
+    .invoices-table tr.draft-row { border-left: 3px solid var(--color-warn); }
     .invoices-table tr.archived-row { opacity: 0.65; }
     .sort-icon { font-size: 14px; width: 14px; height: 14px; vertical-align: middle; }
-    .supplier-cell { font-weight: 600; color: #1a1a2e; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .amount-cell { font-weight: 700; color: #2e7d32; white-space: nowrap; }
-    .category-tag { background: #e8eaf6; color: #3f51b5; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-    .company-tag { background: #e0f2f1; color: #00695c; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-    .no-data { color: #d1d5db; }
+    .supplier-cell { font-weight: 600; color: var(--color-text); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .amount-cell { font-weight: 700; color: var(--color-ok); }
+    .category-tag { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); padding: 3px 10px; border-radius: 10px; font-size: var(--text-xs); font-weight: 600; }
+    .company-tag { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); padding: 3px 10px; border-radius: 10px; font-size: var(--text-xs); font-weight: 600; }
+    .no-data { color: var(--color-line-strong); }
     .action-btns { display: flex; align-items: center; gap: 2px; }
-    .action-btns button { color: #6b7280; }
-    .action-btns button:hover { color: #2563eb; }
+    .action-btns button { color: var(--color-text-3); }
+    .action-btns button:hover { color: var(--color-primary); }
 
     /* Pagination */
     .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 20px; }
-    .page-info { font-size: 13px; color: rgba(255,255,255,0.85); }
+    .page-info { font-size: var(--text-sm); color: var(--color-text-2); }
 
-    .delete-item { color: #ef4444; }
+    .delete-item { color: var(--color-danger); }
 
     @media (max-width: 768px) {
       .books-container { padding: 16px 12px; }
-      .books-header h1 { font-size: 22px; }
+      .books-header h1 { font-size: var(--text-2xl); }
       .summary-row { grid-template-columns: repeat(2, 1fr); }
       .filters-row { flex-direction: column; align-items: stretch; }
       .filter-chips { flex-wrap: wrap; }
@@ -550,9 +548,10 @@ export class BooksComponent implements OnInit {
   constructor(
     private booksService: BooksService,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private readonly confirmDialog: ConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -570,6 +569,31 @@ export class BooksComponent implements OnInit {
 
   get totalPages(): number {
     return Math.ceil(this.totalCount / this.pageSize);
+  }
+
+  get hasFilters(): boolean {
+    return !!(this.searchQuery || this.filterStatus || this.filterCategory || this.filterCompany || this.filterSupplier || this.filterYear);
+  }
+
+  statusLabel(status: string): string {
+    return STATUS_LABELS[status] ?? status;
+  }
+
+  statusTone(status: string): ChipTone | undefined {
+    return STATUS_TONES[status];
+  }
+
+  clearFilters(): void {
+    const yearWasSet = !!this.filterYear;
+    this.searchQuery = '';
+    this.filterStatus = '';
+    this.filterCategory = '';
+    this.filterCompany = '';
+    this.filterSupplier = '';
+    this.filterYear = '';
+    this.currentPage = 1;
+    this.loadInvoices();
+    if (yearWasSet) this.loadSummary();
   }
 
   loadInvoices(): void {
@@ -593,7 +617,7 @@ export class BooksComponent implements OnInit {
       },
       error: () => {
         this.loading = false;
-        this.snackBar.open('Failed to load invoices', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load invoices');
       }
     });
   }
@@ -684,11 +708,11 @@ export class BooksComponent implements OnInit {
       if (result === true) {
         this.loadInvoices();
         this.loadSummary();
-        this.snackBar.open('Invoice marked as paid!', 'Close', { duration: 3000, panelClass: 'success-snack' });
+        this.toast.done('Invoice marked as paid');
       } else if (result === 'payment-requested') {
         this.loadInvoices();
         this.loadSummary();
-        this.snackBar.open('Payment request submitted!', 'Close', { duration: 3000, panelClass: 'success-snack' });
+        this.toast.done('Payment request submitted');
       } else if (result === 'cancelled') {
         // Draft was deleted, refresh list
         this.loadInvoices();
@@ -711,11 +735,11 @@ export class BooksComponent implements OnInit {
           if (confirmed === true) {
             this.loadInvoices();
             this.loadSummary();
-            this.snackBar.open('Invoice marked as paid!', 'Close', { duration: 3000 });
+            this.toast.done('Invoice marked as paid');
           } else if (confirmed === 'payment-requested') {
             this.loadInvoices();
             this.loadSummary();
-            this.snackBar.open('Payment request submitted!', 'Close', { duration: 3000 });
+            this.toast.done('Payment request submitted');
           }
         });
       }
@@ -734,7 +758,7 @@ export class BooksComponent implements OnInit {
           if (updated) {
             this.loadInvoices();
             this.loadSummary();
-            this.snackBar.open('Invoice updated!', 'Close', { duration: 3000 });
+            this.toast.done('Invoice updated');
           }
         });
       }
@@ -747,7 +771,7 @@ export class BooksComponent implements OnInit {
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
       },
-      error: () => this.snackBar.open('Failed to load PDF', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to load PDF')
     });
   }
 
@@ -761,7 +785,7 @@ export class BooksComponent implements OnInit {
         a.click();
         URL.revokeObjectURL(url);
       },
-      error: () => this.snackBar.open('Failed to download', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to download')
     });
   }
 
@@ -770,9 +794,9 @@ export class BooksComponent implements OnInit {
       next: () => {
         this.loadInvoices();
         this.loadSummary();
-        this.snackBar.open('Invoice rejected', 'Close', { duration: 3000 });
+        this.toast.done('Invoice rejected');
       },
-      error: () => this.snackBar.open('Failed to reject', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to reject')
     });
   }
 
@@ -781,21 +805,26 @@ export class BooksComponent implements OnInit {
       next: () => {
         this.loadInvoices();
         this.loadSummary();
-        this.snackBar.open('Invoice restored', 'Close', { duration: 3000 });
+        this.toast.done('Invoice restored');
       },
-      error: () => this.snackBar.open('Failed to restore', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to restore')
     });
   }
 
-  deleteInvoice(inv: BookInvoice): void {
-    if (!confirm(`Delete invoice from ${inv.supplierName}? This cannot be undone.`)) return;
+  async deleteInvoice(inv: BookInvoice): Promise<void> {
+    if (!(await this.confirmDialog.ask({
+      title: inv.invoiceNumber ? `Delete invoice ${inv.invoiceNumber} from ${inv.supplierName}?` : `Delete invoice from ${inv.supplierName}?`,
+      message: 'This cannot be undone.',
+      confirmText: 'Delete invoice',
+      danger: true
+    }))) return;
     this.booksService.delete(inv.id).subscribe({
       next: () => {
         this.loadInvoices();
         this.loadSummary();
-        this.snackBar.open('Invoice deleted', 'Close', { duration: 3000 });
+        this.toast.done('Invoice deleted');
       },
-      error: () => this.snackBar.open('Failed to delete', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Failed to delete')
     });
   }
 
@@ -840,7 +869,7 @@ export class BooksComponent implements OnInit {
             <span class="file-name">{{ selectedFile.name }}</span>
             <span class="file-size">{{ formatSize(selectedFile.size) }}</span>
           </div>
-          <button mat-icon-button (click)="removeFile($event)" class="remove-btn">
+          <button aria-label="Close" mat-icon-button (click)="removeFile($event)" class="remove-btn">
             <mat-icon>close</mat-icon>
           </button>
         </div>
@@ -864,27 +893,27 @@ export class BooksComponent implements OnInit {
   styles: [`
     .upload-dialog { padding: 28px; }
     .dialog-header { text-align: center; margin-bottom: 24px; }
-    .dialog-header-icon { font-size: 40px; width: 40px; height: 40px; color: #2563eb; }
-    .dialog-header h2 { margin: 8px 0 4px; font-size: 22px; font-weight: 700; color: #1a1a2e; }
-    .dialog-header p { margin: 0; color: #6b7280; font-size: 14px; }
+    .dialog-header-icon { font-size: 40px; width: 40px; height: 40px; color: var(--color-primary); }
+    .dialog-header h2 { margin: 8px 0 4px; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
+    .dialog-header p { margin: 0; color: var(--color-text-3); font-size: var(--text-md); }
 
-    .drop-zone { border: 2px dashed #d1d5db; border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f9fafb; }
-    .drop-zone:hover, .drop-zone.drag-over { border-color: #2563eb; background: #f5f3ff; }
-    .drop-zone.has-file { border-color: #4ade80; background: #f0fdf4; border-style: solid; }
+    .drop-zone { border: 2px dashed var(--color-line-strong); border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--color-canvas); }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: var(--color-primary); background: var(--color-primary-soft); }
+    .drop-zone.has-file { border-color: var(--color-ok); background: var(--color-ok-soft); border-style: solid; }
     .drop-content { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .drop-icon { font-size: 48px; width: 48px; height: 48px; color: #ef4444; }
-    .drop-text { font-size: 15px; font-weight: 600; color: #374151; }
-    .drop-hint { font-size: 12px; color: #9ca3af; }
+    .drop-icon { font-size: 48px; width: 48px; height: 48px; color: var(--color-danger); }
+    .drop-text { font-size: var(--text-md); font-weight: 600; color: var(--color-text-2); }
+    .drop-hint { font-size: var(--text-xs); color: var(--color-text-3); }
 
     .file-preview { display: flex; align-items: center; gap: 12px; }
-    .file-icon { font-size: 36px; width: 36px; height: 36px; color: #ef4444; }
+    .file-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-danger); }
     .file-details { display: flex; flex-direction: column; flex: 1; text-align: left; }
-    .file-name { font-weight: 600; color: #1a1a2e; font-size: 14px; word-break: break-all; }
-    .file-size { font-size: 12px; color: #6b7280; }
-    .remove-btn { color: #9ca3af; }
+    .file-name { font-weight: 600; color: var(--color-text); font-size: var(--text-md); word-break: break-all; }
+    .file-size { font-size: var(--text-xs); color: var(--color-text-3); }
+    .remove-btn { color: var(--color-text-3); }
 
     .upload-progress { margin-top: 16px; border-radius: 8px; }
-    .error-msg { margin-top: 12px; padding: 10px 16px; background: #fef2f2; border-radius: 10px; color: #ef4444; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .error-msg { margin-top: 12px; padding: 10px 16px; background: var(--color-danger-soft); border-radius: 10px; color: var(--color-danger); font-size: var(--text-sm); display: flex; align-items: center; gap: 8px; }
     .error-msg mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
     .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
@@ -981,7 +1010,7 @@ export class UploadBookInvoiceDialog {
   template: `
     <div class="confirm-dialog">
       <div class="dialog-header">
-        <mat-icon class="header-icon" [class.edit-icon]="editMode">{{ editMode ? 'edit' : 'paid' }}</mat-icon>
+        <mat-icon class="header-icon">{{ editMode ? 'edit' : 'paid' }}</mat-icon>
         <h2>{{ editMode ? 'Edit Invoice' : 'Review & Pay' }}</h2>
         <p *ngIf="!editMode">We extracted these details from the PDF — please verify and mark as paid</p>
         <p *ngIf="editMode">Update the invoice details below</p>
@@ -998,7 +1027,7 @@ export class UploadBookInvoiceDialog {
           <input type="text" [(ngModel)]="form.supplierName" class="form-input" [class.highlight]="isNew && form.supplierName === 'Unknown Supplier'" placeholder="Start typing supplier name..." (input)="filterSuppliers()" [matAutocomplete]="supplierAuto" autocomplete="off">
           <mat-autocomplete #supplierAuto="matAutocomplete" (optionSelected)="onSupplierSelected($event)" class="supplier-autocomplete-panel">
             <mat-option *ngFor="let s of filteredSuppliers" [value]="s">
-              <mat-icon style="font-size:18px;width:18px;height:18px;color:#2563eb;margin-right:8px;">store</mat-icon>
+              <mat-icon style="font-size:18px;width:18px;height:18px;color:var(--color-primary);margin-right:8px;">store</mat-icon>
               {{ s }}
             </mat-option>
           </mat-autocomplete>
@@ -1145,7 +1174,7 @@ export class UploadBookInvoiceDialog {
 
       <div class="dialog-actions">
         <button mat-button (click)="cancel()" [disabled]="saving || deleting">{{ deleting ? 'Removing...' : 'Cancel' }}</button>
-        <button *ngIf="!editMode" mat-flat-button class="request-payment-btn" [disabled]="!form.supplierName || !form.total || saving" (click)="requestPayment()">
+        <button *ngIf="!editMode" mat-stroked-button color="primary" [disabled]="!form.supplierName || !form.total || saving" (click)="requestPayment()">
           <mat-icon>pending_actions</mat-icon>
           {{ saving ? 'Submitting...' : 'Request for Payment' }}
         </button>
@@ -1159,40 +1188,37 @@ export class UploadBookInvoiceDialog {
   styles: [`
     .confirm-dialog { padding: 28px; max-height: 85vh; overflow-y: auto; }
     .dialog-header { text-align: center; margin-bottom: 20px; }
-    .header-icon { font-size: 40px; width: 40px; height: 40px; color: #2563eb; }
-    .header-icon.edit-icon { color: #ef6c00; }
-    .dialog-header h2 { margin: 8px 0 4px; font-size: 22px; font-weight: 700; color: #1a1a2e; }
-    .dialog-header p { margin: 0; color: #6b7280; font-size: 14px; }
+    .header-icon { font-size: 40px; width: 40px; height: 40px; color: var(--color-primary); }
+    .dialog-header h2 { margin: 8px 0 4px; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
+    .dialog-header p { margin: 0; color: var(--color-text-3); font-size: var(--text-md); }
 
-    .extraction-banner { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; margin-bottom: 20px; font-size: 13px; color: #92400e; }
-    .extraction-banner mat-icon { color: #f59e0b; font-size: 20px; width: 20px; height: 20px; }
+    .extraction-banner { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--color-warn-soft); border-radius: 12px; margin-bottom: 20px; font-size: var(--text-sm); color: var(--color-warn); }
+    .extraction-banner mat-icon { color: var(--color-warn); font-size: 20px; width: 20px; height: 20px; }
 
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
     .form-group.full-width { grid-column: 1 / -1; }
-    .form-group label { font-size: 12px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: .3px; }
-    .form-input { padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; background: #f9fafb; font-family: inherit; }
-    .form-input:focus { border-color: #2563eb; background: white; }
-    .form-input.highlight { border-color: #f59e0b; background: #fffbeb; }
+    .form-group label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-2); text-transform: uppercase; letter-spacing: .3px; }
+    .form-input { padding: 10px 14px; border: 1.5px solid var(--color-line); border-radius: 10px; font-size: var(--text-md); outline: none; transition: border-color 0.2s; background: var(--color-canvas); color: var(--color-text); font-family: inherit; }
+    .form-input:focus { border-color: var(--color-primary); background: var(--color-surface); }
+    .form-input.highlight { border-color: var(--color-warn); background: var(--color-warn-soft); }
     .form-input.textarea { resize: vertical; min-height: 60px; }
     .amount-input-wrap { position: relative; display: flex; align-items: center; }
-    .currency-prefix { position: absolute; left: 14px; font-weight: 700; color: #6b7280; font-size: 14px; z-index: 1; }
-    .amount-input { padding-left: 32px !important; }
+    .currency-prefix { position: absolute; left: 14px; font-weight: 700; color: var(--color-text-3); font-size: var(--text-md); z-index: 1; }
+    .amount-input { padding-left: 32px; }
 
     mat-divider.full-width { grid-column: 1 / -1; margin: 4px 0; }
 
     .extracted-preview { margin-bottom: 16px; }
-    .preview-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: #6b7280; padding: 8px 0; }
-    .preview-toggle:hover { color: #2563eb; }
-    .preview-text { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; font-size: 12px; color: #6b7280; max-height: 150px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
+    .preview-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: var(--text-sm); color: var(--color-text-3); padding: 8px 0; }
+    .preview-toggle:hover { color: var(--color-primary); }
+    .preview-text { background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 12px; font-size: var(--text-xs); color: var(--color-text-3); max-height: 150px; overflow-y: auto; white-space: pre-wrap; font-family: var(--font-mono); }
 
-    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; border-top: 1px solid #f3f4f6; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; border-top: 1px solid var(--color-surface-2); }
     .dialog-actions button { border-radius: 10px; }
-    .request-payment-btn { background: linear-gradient(135deg, #e65100, #ff8f00) !important; color: white !important; }
-    .request-payment-btn:disabled { opacity: 0.5; }
 
     .supplier-autocomplete-wrap { position: relative; }
-    .autocomplete-hint-icon { position: absolute; right: 10px; top: 32px; font-size: 18px; width: 18px; height: 18px; color: #9ca3af; cursor: help; }
+    .autocomplete-hint-icon { position: absolute; right: 10px; top: 32px; font-size: 18px; width: 18px; height: 18px; color: var(--color-text-3); cursor: help; }
 
     @media (max-width: 600px) {
       .form-grid { grid-template-columns: 1fr; }
@@ -1356,7 +1382,7 @@ export class ConfirmBookInvoiceDialog {
 @Component({
   selector: 'supplier-analysis-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatFormFieldModule, MatSelectModule, MatInputModule, FormsModule],
+  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatFormFieldModule, MatSelectModule, MatInputModule, FormsModule, SkeletonRowsComponent],
   template: `
     <div class="analysis-dialog">
       <div class="dialog-header">
@@ -1407,7 +1433,7 @@ export class ConfirmBookInvoiceDialog {
 
       @if (analyzing) {
         <div class="analyzing-state">
-          <mat-spinner diameter="40"></mat-spinner>
+          <app-skeleton-rows [rows]="4" [avatar]="false"></app-skeleton-rows>
           <p>Welly is analyzing supplier invoices...</p>
           <p class="detail">Extracting items, costs, and patterns · {{ elapsed }}s elapsed</p>
         </div>
@@ -1431,7 +1457,7 @@ export class ConfirmBookInvoiceDialog {
                 </button>
               </div>
               <div class="hardware-table-scroll">
-                <table class="hardware-table">
+                <table class="app-table hardware-table">
                   <thead>
                     <tr>
                       <th>Item</th>
@@ -1448,7 +1474,7 @@ export class ConfirmBookInvoiceDialog {
                       <tr>
                         <td>{{ item.item }}</td>
                         <td>{{ item.category }}</td>
-                        <td>{{ item.invoiceNumber }}</td>
+                        <td class="ref">{{ item.invoiceNumber }}</td>
                         <td>{{ item.date }}</td>
                         <td class="num">{{ item.quantity }}</td>
                         <td class="num">R{{ item.unitPrice | number:'1.2-2' }}</td>
@@ -1490,49 +1516,45 @@ export class ConfirmBookInvoiceDialog {
   `,
   styles: [`
     .analysis-dialog { display: flex; flex-direction: column; gap: 20px; padding: 20px; max-height: 90vh; overflow-y: auto; }
-    .dialog-header { text-align: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px; }
-    .dialog-header h2 { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 4px; font-size: 20px; }
-    .dialog-header p { margin: 0; color: #6b7280; font-size: 14px; }
+    .dialog-header { text-align: center; border-bottom: 2px solid var(--color-line); padding-bottom: 16px; }
+    .dialog-header h2 { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 4px; font-size: var(--text-2xl); }
+    .dialog-header p { margin: 0; color: var(--color-text-3); font-size: var(--text-md); }
 
     .analysis-form { display: flex; flex-direction: column; gap: 16px; }
     .full-width { width: 100%; }
 
     .analyzing-state, .error-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 20px; text-align: center; }
-    .analyzing-state p { margin: 0; color: #4b5563; }
-    .analyzing-state .detail { color: #9ca3af; font-size: 12px; }
+    .analyzing-state app-skeleton-rows { align-self: stretch; }
+    .analyzing-state p { margin: 0; color: var(--color-text-2); }
+    .analyzing-state .detail { color: var(--color-text-3); font-size: var(--text-xs); }
 
     .analysis-results { display: flex; flex-direction: column; gap: 16px; }
-    .result-header { border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; }
-    .result-header h3 { margin: 0 0 4px; font-size: 18px; }
-    .result-header .meta { margin: 0; color: #6b7280; font-size: 13px; }
+    .result-header { border-bottom: 2px solid var(--color-line); padding-bottom: 12px; }
+    .result-header h3 { margin: 0 0 4px; font-size: var(--text-xl); }
+    .result-header .meta { margin: 0; color: var(--color-text-3); font-size: var(--text-sm); }
 
     .analysis-content { 
-      background: #f9fafb; 
-      border: 1px solid #e5e7eb; 
+      background: var(--color-canvas); 
+      border: 1px solid var(--color-line); 
       border-radius: 8px; 
       padding: 16px; 
       line-height: 1.6; 
-      color: #374151; 
-      font-size: 14px; 
+      color: var(--color-text-2); 
+      font-size: var(--text-md); 
       white-space: pre-wrap; 
       word-break: break-word;
       max-height: 400px;
       overflow-y: auto;
     }
 
-    .error-state { color: #dc2626; }
+    .error-state { color: var(--color-danger); }
     .error-state mat-icon { font-size: 40px; width: 40px; height: 40px; }
 
-    .hardware-table-wrap { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-    .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; }
-    .table-toolbar .item-count { font-size: 13px; color: #374151; }
+    .hardware-table-wrap { border: 1px solid var(--color-line); border-radius: 8px; overflow: hidden; }
+    .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--color-surface-2); border-bottom: 1px solid var(--color-line); flex-wrap: wrap; }
+    .table-toolbar .item-count { font-size: var(--text-sm); color: var(--color-text-2); }
     .hardware-table-scroll { max-height: 340px; overflow: auto; }
-    .hardware-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .hardware-table th, .hardware-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eef2f7; white-space: nowrap; }
-    .hardware-table th { position: sticky; top: 0; background: #ffffff; z-index: 1; font-weight: 600; color: #4b5563; }
-    .hardware-table td.num, .hardware-table th.num { text-align: right; }
-    .hardware-table tbody tr:hover { background: #f9fafb; }
-    .hardware-table tfoot td { background: #f3f4f6; border-top: 2px solid #e5e7eb; }
+    .hardware-table td { white-space: nowrap; }
 
     .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 
@@ -1561,7 +1583,7 @@ export class SupplierAnalysisDialog {
     @Inject(MAT_DIALOG_DATA) public data: { supplier: string; departmentId: number },
     public dialogRef: MatDialogRef<SupplierAnalysisDialog>,
     private http: HttpClient,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private wellyActivity: WellyActivityService
   ) {}
 
@@ -1578,7 +1600,7 @@ export class SupplierAnalysisDialog {
     if (!token) {
       this.error = 'No authentication token found. Please log in again.';
       this.analyzing = false;
-      this.snackBar.open(this.error, 'Close', { duration: 5000 });
+      this.toast.error(this.error);
       return;
     }
 
@@ -1607,7 +1629,7 @@ export class SupplierAnalysisDialog {
         const errorMsg = err.error?.error || err.statusText || 'Failed to analyze invoices. Please try again.';
         this.error = errorMsg;
         console.error('Analysis error:', err);
-        this.snackBar.open(this.error || 'Error', 'Close', { duration: 5000 });
+        this.toast.error(this.error || 'Error');
       }
     });
   }
@@ -1619,13 +1641,13 @@ export class SupplierAnalysisDialog {
   copyToClipboard(): void {
     if (this.analysis) {
       navigator.clipboard.writeText(this.analysis);
-      this.snackBar.open('Analysis copied to clipboard', 'Close', { duration: 2000 });
+      this.toast.done('Analysis copied to clipboard');
     }
   }
 
   exportCsv(): void {
     if (!this.lineItems || !this.lineItems.length) {
-      this.snackBar.open('No line items to export', 'Close', { duration: 2000 });
+      this.toast.info('No line items to export');
       return;
     }
 
@@ -1657,6 +1679,6 @@ export class SupplierAnalysisDialog {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    this.snackBar.open('Hardware breakdown exported', 'Close', { duration: 2500 });
+    this.toast.done('Hardware breakdown exported');
   }
 }

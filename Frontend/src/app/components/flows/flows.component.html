@@ -1,0 +1,317 @@
+<app-navbar></app-navbar>
+
+<div class="fl-container">
+  <div class="fl-inner">
+    <app-page-header [crumbs]="['Oversight', 'Flows']" title="Flows"
+                     subtitle="Automated business processes and human flows — a trigger starts a run, Welly analyses, people decide, the system acts, and every step is tracked. Your own tasks live on your dashboard to-do and calendar.">
+      @if (isDesigner()) {
+        <button mat-stroked-button (click)="selectedTab = 4"><mat-icon>auto_awesome</mat-icon>Templates</button>
+        <button mat-flat-button color="primary" (click)="newFlow()"><mat-icon>add</mat-icon>New flow</button>
+      }
+    </app-page-header>
+
+    @if (loading()) {
+      <div class="fl-loading"><app-skeleton-rows [rows]="6"></app-skeleton-rows></div>
+    } @else {
+
+      <!-- KPI strip -->
+      @if (stats(); as s) {
+        <div class="fl-kpis ui-stagger">
+          <button class="kpi" (click)="selectedTab = 1">
+            <mat-icon>diversity_3</mat-icon><div><b>{{ opsDepartments().length }}</b><span>Human flows</span></div>
+          </button>
+          <button class="kpi" (click)="selectedTab = 2; runStatus = 'running,waiting'; reloadRuns()">
+            <mat-icon>play_circle</mat-icon><div><b>{{ s.active }}</b><span>Active runs</span></div>
+          </button>
+          <button class="kpi" (click)="selectedTab = 2; runStatus = 'completed'; reloadRuns()">
+            <mat-icon>check_circle</mat-icon><div><b>{{ s.completed30 }}</b><span>Completed · 30d</span></div>
+            <em class="ok">avg {{ s.avgHours }}h</em>
+          </button>
+          <button class="kpi" [class.attention]="s.failed30 > 0" (click)="selectedTab = 2; runStatus = 'failed,cancelled'; reloadRuns()">
+            <mat-icon>error_outline</mat-icon><div><b>{{ s.failed30 }}</b><span>Failed · 30d</span></div>
+          </button>
+          <button class="kpi" (click)="selectedTab = 3">
+            <mat-icon>account_tree</mat-icon><div><b>{{ s.enabled }}</b><span>Flows enabled</span></div>
+          </button>
+        </div>
+      }
+
+      <mat-tab-group class="fl-tabs" animationDuration="150ms" [(selectedIndex)]="selectedTab">
+
+        <!-- ════════ OVERVIEW ════════ -->
+        <mat-tab>
+          <ng-template mat-tab-label><mat-icon>dashboard</mat-icon><span>Overview</span></ng-template>
+          <section class="tab-content fl-overview">
+            <div class="fl-col">
+              <h3><mat-icon>bolt</mat-icon>Start a flow</h3>
+              @if (startable().length) {
+                <div class="fl-start-grid">
+                  @for (f of startable(); track f.id) {
+                    <button class="fl-start-card" (click)="viewFlow(f)">
+                      <span class="lvl l{{ f.level }}">L{{ f.level }}</span>
+                      <b>{{ f.name }}</b>
+                      <small>{{ f.description }}</small>
+                      <span class="go" (click)="$event.stopPropagation(); startFlow(f)"><mat-icon>play_arrow</mat-icon>Start</span>
+                    </button>
+                  }
+                </div>
+              } @else {
+                <app-empty-state compact icon="touch_app" title="No flows you can start yet"
+                                 [message]="isDesigner() ? 'Create one or use a template.' : 'Ask a flow designer to give you access.'">
+                  @if (isDesigner()) { <button mat-stroked-button (click)="selectedTab = 4">Browse templates</button> }
+                </app-empty-state>
+              }
+
+              <h3 class="mt"><mat-icon>insights</mat-icon>Busiest flows · 30 days</h3>
+              @if (stats()?.byFlow?.length) {
+                <table class="fl-mini">
+                  <tbody>
+                    @for (b of stats()!.byFlow; track b.name) {
+                      <tr><td>{{ b.name }}</td><td class="num">{{ b.runs }} runs</td><td class="num">{{ b.active }} active</td><td class="num" [class.bad]="b.failed">{{ b.failed }} failed</td></tr>
+                    }
+                  </tbody>
+                </table>
+              } @else { <p class="fl-muted">No runs yet.</p> }
+            </div>
+
+            <div class="fl-col">
+              <h3><mat-icon>diversity_3</mat-icon>Human flows <span class="count">{{ opsDepartments().length }}</span></h3>
+              @if (opsDepartments().length) {
+                <div class="fl-task-list">
+                  @for (d of opsDepartments(); track d.name) {
+                    <button class="fl-task" (click)="pickDept(d.name); selectedTab = 1">
+                      <mat-icon>groups</mat-icon>
+                      <div class="main"><b>{{ d.name }}</b><small>{{ d.flows[0]?.name }}@if (d.flows.length > 1) { · +{{ d.flows.length - 1 }} more }</small></div>
+                      <div class="side">@if (d.active) { <span class="pri high">{{ d.active }} active</span> }</div>
+                    </button>
+                  }
+                </div>
+              } @else {
+                <app-empty-state compact icon="diversity_3" title="No human flows yet" message="Each department's operational flow — people, hand-offs and decisions — shows here."></app-empty-state>
+              }
+
+              <h3 class="mt"><mat-icon>history</mat-icon>Recent activity</h3>
+              @if (runs().length) {
+                <div class="fl-run-list">
+                  @for (r of runs().slice(0, 6); track r.id) {
+                    <button class="fl-run-row" (click)="openRun(r)">
+                      <span class="st" [attr.data-s]="r.status"></span>
+                      <div class="main"><b>{{ r.title }}</b><small>{{ r.runNumber }} · {{ r.flowName }} · {{ ago(r.startedAt) }}@if (r.currentAssignee) { · with {{ r.currentAssignee }} }</small></div>
+                      @if (r.overdueTasks) { <mat-icon class="warn" matTooltip="Overdue task">schedule</mat-icon> }
+                    </button>
+                  }
+                </div>
+              } @else { <p class="fl-muted">No active runs.</p> }
+            </div>
+          </section>
+        </mat-tab>
+
+        <!-- ════════ HUMAN FLOWS (department operational flows) ════════ -->
+        <mat-tab>
+          <ng-template mat-tab-label><mat-icon>diversity_3</mat-icon><span>Human flows</span><span class="tab-badge">{{ opsDepartments().length }}</span></ng-template>
+          <section class="tab-content fl-ops">
+            <aside class="fl-ops-depts">
+              <h3><mat-icon>business</mat-icon>Departments</h3>
+              @for (d of opsDepartments(); track d.name) {
+                <button class="fl-dept" [class.sel]="opsDept() === d.name" (click)="pickDept(d.name)">
+                  <b>{{ d.name }}</b>
+                  <small>{{ d.flows.length }} flow{{ d.flows.length === 1 ? '' : 's' }}@if (d.active) { · <em>{{ d.active }} active</em> }</small>
+                </button>
+              }
+              @if (!opsDepartments().length) { <p class="fl-muted">No human flows yet.</p> }
+              @if (isDesigner()) { <button mat-stroked-button class="fl-ops-add" (click)="newOpsFlow()"><mat-icon>add</mat-icon>Human flow</button> }
+            </aside>
+
+            <div class="fl-ops-main">
+              @if (opsCurrent(); as f) {
+                <div class="fl-ops-head">
+                  @if (opsCurrentFlows().length > 1) {
+                    <div class="fl-ops-switch">@for (x of opsCurrentFlows(); track x.id) { <button [class.sel]="x.id === f.id" (click)="pickOpsFlow(x.id)">{{ x.name }}</button> }</div>
+                  }
+                  <div class="t"><b>{{ f.name }}</b><small>{{ f.description }}</small></div>
+                  <span class="spacer"></span>
+                  <span class="lvl l{{ f.level }}">L{{ f.level }}</span>
+                  @if (f.canStart) { <button mat-flat-button color="primary" (click)="startFlow(f)"><mat-icon>play_arrow</mat-icon>Start</button> }
+                  @if (isDesigner()) { <button mat-stroked-button (click)="editFlow(f)"><mat-icon>edit</mat-icon>Edit</button> }
+                  <button mat-icon-button (click)="viewFlow(f)" matTooltip="Open full-screen walkthrough"><mat-icon>open_in_full</mat-icon></button>
+                </div>
+                <div class="fl-ops-body">
+                  <div class="fl-ops-canvas">
+                    <app-flow-canvas #opsCanvas [steps]="f.graph.steps" [startStepId]="f.graph.startStepId ?? null" [catalog]="catalog()!" [readonly]="true"
+                                     [triggerType]="f.triggerType" [triggerLabel]="triggerLabel(f)" [(selectedId)]="opsSelectedStep"></app-flow-canvas>
+                  </div>
+                  <aside class="fl-ops-side">
+                    @if (opsStep(); as s) {
+                      <div class="fl-ops-step" [attr.data-type]="s.type">
+                        <div class="h"><mat-icon>{{ stepIcon(s.type) }}</mat-icon><b>{{ s.name || s.id }}</b></div>
+                        @if (s.config['title']) { <p><b>{{ s.config['title'] }}</b></p> }
+                        @if (s.config['description']) { <p>{{ s.config['description'] }}</p> }
+                        @if (s.config['assignTo']) { <p><mat-icon>person</mat-icon>{{ who(s.config['assignTo']) }}@if (s.config['dueInHours']) { · due in {{ s.config['dueInHours'] }}h }</p> }
+                        @if (s.config['escalateTo']) { <p><mat-icon>trending_up</mat-icon>Escalates to {{ who(s.config['escalateTo']) }}</p> }
+                        @if (s.config['to']) { <p><mat-icon>notifications</mat-icon>Notifies {{ who(s.config['to']) }}</p> }
+                        @if (s.config['expression']) { <p><code>{{ s.config['expression'] }}</code></p> }
+                        @if (s.config['prompt']) { <p><mat-icon>psychology</mat-icon>{{ s.config['prompt'] }}</p> }
+                        @if (s.config['form']?.length) { <p><mat-icon>list_alt</mat-icon>Form: @for (ff of s.config['form']; track ff.key; let last = $last) { {{ ff.label || ff.key }}{{ last ? '' : ', ' }} }</p> }
+                      </div>
+                    } @else {
+                      <p class="fl-hint"><mat-icon>touch_app</mat-icon>Click a step on the diagram to see who does it and what they fill in.</p>
+                    }
+                    <h4><mat-icon>people</mat-icon>Who is involved</h4>
+                    <div class="fl-people">@for (p of opsPeople(); track p) { <span>{{ p }}</span> }</div>
+                    <h4><mat-icon>play_circle</mat-icon>Live runs <span class="count">{{ opsRuns().length }}</span></h4>
+                    @if (opsRuns().length) {
+                      <div class="fl-run-list">
+                        @for (r of opsRuns().slice(0, 8); track r.id) {
+                          <button class="fl-run-row" (click)="openRun(r)">
+                            <span class="st" [attr.data-s]="r.status"></span>
+                            <div class="main"><b>{{ r.title }}</b><small>{{ r.runNumber }} · {{ ago(r.startedAt) }}@if (r.currentAssignee) { · with {{ r.currentAssignee }} }</small></div>
+                          </button>
+                        }
+                      </div>
+                    } @else { <p class="fl-muted">Nothing running right now.</p> }
+                  </aside>
+                </div>
+              } @else {
+                <app-empty-state icon="diversity_3" title="No human flows" message="Human flows show how each department actually works — the people, hand-offs and decisions behind its day-to-day operations.">
+                  @if (isDesigner()) { <button mat-flat-button color="primary" (click)="newOpsFlow()">Create one</button> }
+                </app-empty-state>
+              }
+            </div>
+          </section>
+        </mat-tab>
+
+        <!-- ════════ RUNS ════════ -->
+        <mat-tab>
+          <ng-template mat-tab-label><mat-icon>view_kanban</mat-icon><span>Runs</span></ng-template>
+          <section class="tab-content">
+            <div class="fl-toolbar">
+              <mat-form-field appearance="outline" class="dense w-m"><mat-label>Status</mat-label>
+                <mat-select [(ngModel)]="runStatus" (selectionChange)="reloadRuns()">
+                  <mat-option value="running,waiting">Active</mat-option><mat-option value="waiting">Waiting on people</mat-option>
+                  <mat-option value="completed">Completed</mat-option><mat-option value="failed,cancelled">Failed / cancelled</mat-option><mat-option value="">Everything</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="dense w-m"><mat-label>Flow</mat-label>
+                <mat-select [(ngModel)]="runFlowId" (selectionChange)="reloadRuns()"><mat-option [value]="null">All flows</mat-option>@for (f of flows(); track f.id) { <mat-option [value]="f.id">{{ f.name }}</mat-option> }</mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="dense w-l"><mat-label>Search title / number / record</mat-label>
+                <input matInput [(ngModel)]="runQuery" (keyup.enter)="reloadRuns()" /><mat-icon matSuffix>search</mat-icon>
+              </mat-form-field>
+              <span class="spacer"></span>
+              <button mat-stroked-button (click)="reloadRuns()"><mat-icon>refresh</mat-icon>Refresh</button>
+            </div>
+
+            @if (runs().length) {
+              <div class="fl-board">
+                @for (col of runColumns(); track col.key) {
+                  <div class="fl-column" [attr.data-s]="col.key">
+                    <div class="fl-col-head"><mat-icon>{{ col.icon }}</mat-icon><b>{{ col.label }}</b><span class="count">{{ col.items.length }}</span></div>
+                    @for (r of col.items; track r.id) {
+                      <button class="fl-card" (click)="openRun(r)">
+                        <div class="top"><span class="num">{{ r.runNumber }}</span><span class="lvl l{{ r.level }}">L{{ r.level }}</span><span class="pri {{ r.priority | lowercase }}">{{ r.priority }}</span></div>
+                        <b>{{ r.title }}</b>
+                        <small>{{ r.flowName }}</small>
+                        <div class="foot">
+                          @if (r.currentAssignee) { <span><mat-icon>person</mat-icon>{{ r.currentAssignee }}</span> }
+                          @if (r.outcome && r.status !== 'running' && r.status !== 'waiting') { <span><mat-icon>flag</mat-icon>{{ r.outcome }}</span> }
+                          <span class="spacer"></span>
+                          @if (r.overdueTasks) { <span class="bad"><mat-icon>schedule</mat-icon>overdue</span> }
+                          <span>{{ duration(r.durationMinutes) }}</span>
+                        </div>
+                      </button>
+                    }
+                    @if (!col.items.length) { <p class="fl-muted center">None</p> }
+                  </div>
+                }
+              </div>
+            } @else {
+              <app-empty-state icon="view_kanban" title="No runs match" message="Change the filters, or start a flow from the Overview tab.">
+                <button mat-stroked-button (click)="runStatus = ''; runQuery = ''; runFlowId = null; reloadRuns()">Show everything</button>
+              </app-empty-state>
+            }
+          </section>
+        </mat-tab>
+
+        <!-- ════════ FLOWS ════════ -->
+        <mat-tab>
+          <ng-template mat-tab-label><mat-icon>account_tree</mat-icon><span>Flows</span><span class="tab-badge">{{ processFlows().length }}</span></ng-template>
+          <section class="tab-content">
+            @if (processFlows().length) {
+              @for (g of flowsByLevel(); track g.level) {
+                <h3 class="fl-level-head"><span class="lvl l{{ g.level }}">Level {{ g.level }}</span>{{ levelName(g.level) }}
+                  <small>{{ g.level === 1 ? 'A person starts it; people do the steps' : g.level === 2 ? 'Welly analyses and suggests; people decide' : 'Triggers itself from events or a schedule' }}</small></h3>
+                <div class="fl-def-grid">
+                  @for (f of g.items; track f.id) {
+                    <div class="fl-def clickable" [class.off]="!f.isEnabled" (click)="viewFlow(f)">
+                      <div class="fl-def-head">
+                        <mat-icon class="trig" [matTooltip]="triggerLabel(f)">{{ triggerIcon(f) }}</mat-icon>
+                        <div class="t"><b>{{ f.name }}</b><small>{{ f.category }} · {{ triggerLabel(f) }}</small></div>
+                        @if (isDesigner()) { <mat-slide-toggle [checked]="f.isEnabled" (click)="$event.stopPropagation()" (change)="toggleFlow(f)" [matTooltip]="f.isEnabled ? 'Pause' : 'Enable'"></mat-slide-toggle> }
+                      </div>
+                      <p>{{ f.description }}</p>
+                      <div class="fl-def-steps">
+                        @for (s of f.graph.steps; track s.id) { <mat-icon [matTooltip]="(s.name || s.id) + ' · ' + s.type" [attr.data-type]="s.type">{{ stepIcon(s.type) }}</mat-icon> }
+                      </div>
+                      <div class="fl-def-foot" (click)="$event.stopPropagation()">
+                        <span>{{ f.runCount }} runs · {{ f.activeRuns }} active · v{{ f.version }}</span>
+                        <span class="spacer"></span>
+                        <button mat-button (click)="viewFlow(f)"><mat-icon>account_tree</mat-icon>Diagram</button>
+                        @if (f.canStart) { <button mat-flat-button color="primary" (click)="startFlow(f)"><mat-icon>play_arrow</mat-icon>Start</button> }
+                        @else if (f.triggerType === 'schedule' && isDesigner()) { <button mat-stroked-button (click)="startFlow(f)" matTooltip="Check the data source now"><mat-icon>play_arrow</mat-icon>Run now</button> }
+                        @if (isDesigner()) {
+                          <button mat-icon-button [matMenuTriggerFor]="defMenu" [matMenuTriggerData]="{ f: f }"><mat-icon>more_vert</mat-icon></button>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            } @else {
+              <app-empty-state icon="account_tree" title="No flows yet" message="Start from a template — Missing POD chaser, Delivery exception triage, Purchase approval — or design your own.">
+                @if (isDesigner()) { <button mat-flat-button color="primary" (click)="selectedTab = 4">Browse templates</button><button mat-stroked-button (click)="newFlow()">New flow</button> }
+              </app-empty-state>
+            }
+          </section>
+        </mat-tab>
+
+        <!-- ════════ TEMPLATES ════════ -->
+        <mat-tab>
+          <ng-template mat-tab-label><mat-icon>auto_awesome</mat-icon><span>Templates</span></ng-template>
+          <section class="tab-content">
+            <p class="fl-intro">Ready-made flows showing each level. “Use” copies a template into your flows where you can tweak assignees, deadlines and wording before enabling it.</p>
+            <div class="fl-def-grid">
+              @for (f of templates(); track f.id) {
+                <div class="fl-def tpl clickable" (click)="viewFlow(f)">
+                  <div class="fl-def-head">
+                    <span class="lvl l{{ f.level }}">L{{ f.level }}</span>
+                    <div class="t"><b>{{ f.name }}</b><small>{{ f.category }} · {{ triggerLabel(f) }}</small></div>
+                  </div>
+                  <p>{{ f.description }}</p>
+                  <div class="fl-def-steps">
+                    @for (s of f.graph.steps; track s.id) { <mat-icon [matTooltip]="(s.name || s.id) + ' · ' + s.type" [attr.data-type]="s.type">{{ stepIcon(s.type) }}</mat-icon> }
+                  </div>
+                  <div class="fl-def-foot" (click)="$event.stopPropagation()">
+                    <span>{{ stepCount(f) }} steps</span><span class="spacer"></span>
+                    <button mat-button (click)="viewFlow(f)"><mat-icon>account_tree</mat-icon>Diagram</button>
+                    @if (isDesigner()) {
+                      <button mat-flat-button color="primary" (click)="useTemplate(f)"><mat-icon>content_copy</mat-icon>Use</button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        </mat-tab>
+      </mat-tab-group>
+    }
+  </div>
+</div>
+
+<mat-menu #defMenu="matMenu">
+  <ng-template matMenuContent let-f="f">
+    <button mat-menu-item (click)="editFlow(f)"><mat-icon>edit</mat-icon>Edit</button>
+    <button mat-menu-item (click)="cloneFlow(f)"><mat-icon>content_copy</mat-icon>Duplicate</button>
+    <button mat-menu-item (click)="selectedTab = 2; runFlowId = f.id; runStatus = ''; reloadRuns()"><mat-icon>history</mat-icon>Run history</button>
+    <button mat-menu-item (click)="deleteFlow(f)"><mat-icon color="warn">delete</mat-icon>Delete</button>
+  </ng-template>
+</mat-menu>

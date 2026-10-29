@@ -1,0 +1,170 @@
+// ============================================================
+// Dark-mode safety net.
+// Component styles were migrated to tokens (tools/tokenize-colors.mjs), but native
+// elements, inline styles, third-party widgets and a few left-over light tints still
+// assume a white page. Everything here applies ONLY under data-theme="dark" and
+// uses the dark token values, so light mode is untouched.
+// ============================================================
+:root[data-theme='dark'] {
+
+  // ---------- native form controls ----------
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not(.mat-mdc-input-element):not(.mdc-text-field__input),
+  select:not(.mat-mdc-select),
+  textarea:not(.mat-mdc-input-element):not(.mdc-text-field__input) {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    border-color: var(--color-line-strong);
+    color-scheme: dark;
+
+    &::placeholder { color: var(--color-text-3); }
+    &:disabled { background-color: var(--color-surface-2); color: var(--color-text-3); }
+  }
+  select option { background-color: var(--color-surface); color: var(--color-text); }
+  input[type='date'], input[type='time'], input[type='datetime-local'], input[type='month'] { color-scheme: dark; }
+
+  // ---------- native tables that are not .app-table / mat-table ----------
+  table:not(.mat-mdc-table):not(.app-table) {
+    color: var(--color-text);
+
+    th {
+      background-color: var(--color-surface-2);
+      color: var(--color-text-2);
+      border-color: var(--color-line);
+    }
+    td { border-color: var(--color-line); color: var(--color-text); }
+    tbody tr:nth-child(even) td { background-color: transparent; }
+    tbody tr:hover td { background-color: var(--color-surface-2); }
+  }
+  thead, th, .table-header, .thead { background-color: var(--color-surface-2); }
+
+  // Material table wrapper surfaces that components often paint white
+  .mat-mdc-table,
+  .table-container, .table-wrapper, .table-wrap, .table-scroll, .table-responsive,
+  .data-table, .grid-container {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+  }
+  .mat-mdc-header-row, .mat-mdc-header-cell { background-color: var(--color-surface-2) !important; }
+  .mat-mdc-row:hover .mat-mdc-cell { background-color: var(--color-surface-2); }
+  .mat-mdc-cell, .mat-mdc-header-cell, .mat-mdc-footer-cell { border-bottom-color: var(--color-line) !important; }
+
+  // ---------- common containers: cards, panels, modals, sections ----------
+  .card, .panel, .box, .section-card, .content-card, .info-card, .stat-card, .kpi-card,
+  .summary-card, .detail-card, .widget, .tile, .list-item, .item-card, .form-card,
+  .dialog-content, .modal-body, .modal-content, .drawer, .sidebar-panel, .side-panel,
+  .mat-mdc-card, .mat-expansion-panel, .mat-mdc-dialog-surface, .mat-mdc-menu-panel,
+  .mat-mdc-select-panel, .mat-mdc-autocomplete-panel, .mat-datepicker-content,
+  .mat-mdc-snack-bar-container .mdc-snackbar__surface, .cdk-overlay-pane .mat-mdc-tooltip {
+    color: var(--color-text);
+  }
+  .mat-mdc-card, .mat-expansion-panel, .mat-mdc-dialog-surface, .mat-mdc-menu-panel,
+  .mat-mdc-select-panel, .mat-mdc-autocomplete-panel, .mat-datepicker-content, .mat-bottom-sheet-container {
+    background-color: var(--color-surface) !important;
+  }
+  .mat-mdc-dialog-container .mdc-dialog__surface { background-color: var(--color-surface) !important; color: var(--color-text); }
+  .mat-mdc-dialog-container .mdc-dialog__title, .mat-mdc-dialog-container .mdc-dialog__content { color: var(--color-text) !important; }
+  .mat-mdc-menu-item .mat-mdc-menu-item-text, .mat-mdc-option .mdc-list-item__primary-text { color: var(--color-text) !important; }
+  .mat-mdc-option:hover:not(.mdc-list-item--disabled), .mat-mdc-option.mat-mdc-option-active { background-color: var(--color-surface-2) !important; }
+  .mat-mdc-menu-item:hover:not([disabled]) { background-color: var(--color-surface-2) !important; }
+  .mat-mdc-tooltip .mdc-tooltip__surface { background-color: var(--color-surface-3) !important; color: var(--color-text) !important; }
+  .mat-mdc-snack-bar-container .mdc-snackbar__surface { background-color: var(--color-surface-3) !important; }
+  .mat-mdc-snack-bar-container .mdc-snackbar__label { color: var(--color-text) !important; }
+  .mat-mdc-tab-header, .mat-mdc-tab-nav-bar { background-color: transparent; }
+  .mat-mdc-paginator { background-color: var(--color-surface) !important; color: var(--color-text); }
+  .mat-mdc-chip:not(.mat-mdc-chip-selected) { --mdc-chip-elevated-container-color: var(--color-surface-3); }
+  .mat-mdc-chip .mdc-evolution-chip__text-label { color: var(--color-text) !important; }
+  .mat-mdc-slide-toggle .mdc-label, .mat-mdc-checkbox .mdc-label, .mat-mdc-radio-button .mdc-label { color: var(--color-text); }
+  .mat-mdc-form-field .mat-mdc-form-field-hint, .mat-mdc-form-field .mat-mdc-form-field-subscript-wrapper { color: var(--color-text-3); }
+  .mat-mdc-form-field .mdc-floating-label, .mat-mdc-form-field .mat-mdc-select-value, .mat-mdc-form-field .mat-mdc-input-element { color: var(--color-text) !important; }
+  .mat-mdc-form-field .mdc-text-field--filled:not(.mdc-text-field--disabled) { background-color: var(--color-surface-2) !important; }
+  .mat-calendar-body-cell-content { color: var(--color-text); }
+  .mat-calendar-body-label, .mat-calendar-table-header th { color: var(--color-text-2); }
+  .mat-step-header .mat-step-label { color: var(--color-text-2); }
+  .mat-step-header .mat-step-label.mat-step-label-selected { color: var(--color-text); }
+  .mat-mdc-list-item .mdc-list-item__primary-text { color: var(--color-text) !important; }
+
+  // ---------- inline styles & stragglers (components that paint white directly) ----------
+  [style*='background: white'], [style*='background:white'],
+  [style*='background-color: white'], [style*='background-color:white'],
+  [style*='background: #fff'], [style*='background:#fff'],
+  [style*='background-color: #fff'], [style*='background-color:#fff'] {
+    background-color: var(--color-surface) !important;
+  }
+  [style*='color: #333'], [style*='color:#333'], [style*='color: #000'], [style*='color:#000'],
+  [style*='color: black'], [style*='color:black'] {
+    color: var(--color-text) !important;
+  }
+  [style*='color: #666'], [style*='color:#666'], [style*='color: #555'], [style*='color:#555'] {
+    color: var(--color-text-2) !important;
+  }
+  [style*='border-top:1px solid #eee'], [style*='border-top: 1px solid #eee'],
+  [style*='border:1px solid #eee'], [style*='border: 1px solid #eee'],
+  [style*='border:1px solid #ddd'], [style*='border: 1px solid #ddd'] {
+    border-color: var(--color-line) !important;
+  }
+
+  // ---------- code / pre / blockquote / hr ----------
+  pre, code:not([class*='language-']), kbd, samp {
+    background-color: var(--color-surface-2);
+    color: var(--color-text);
+    border-color: var(--color-line);
+  }
+  blockquote { border-left-color: var(--color-line-strong); color: var(--color-text-2); }
+  hr { border-color: var(--color-line); }
+  a:not([class]) { color: var(--color-primary); }
+  ::selection { background: rgba(106, 169, 230, 0.35); }
+  mark { background: var(--color-warn-soft); color: var(--color-text); }
+
+  // ---------- scrollbars ----------
+  * {
+    scrollbar-color: var(--color-line-strong) var(--color-canvas);
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--color-canvas); }
+  ::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 6px; border: 2px solid var(--color-canvas); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-text-3); }
+
+  // ---------- images / logos that are dark-on-transparent ----------
+  img.logo-dark, .invert-on-dark { filter: invert(1) hue-rotate(180deg); }
+
+  // ---------- third party ----------
+  // Google Places autocomplete
+  .pac-container { background-color: var(--color-surface); border-color: var(--color-line); color: var(--color-text); }
+  .pac-item { border-color: var(--color-line); color: var(--color-text-2); }
+  .pac-item:hover, .pac-item-selected { background-color: var(--color-surface-2); }
+  .pac-item-query { color: var(--color-text); }
+  // Leaflet
+  .leaflet-container { background: var(--color-surface-2); }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip, .leaflet-bar a, .leaflet-control-layers {
+    background-color: var(--color-surface) !important; color: var(--color-text) !important; border-color: var(--color-line) !important;
+  }
+  .leaflet-control-attribution { background: rgba(14, 15, 34, 0.75) !important; color: var(--color-text-3) !important; }
+  // Google Maps info windows
+  .gm-style .gm-style-iw-c, .gm-style .gm-style-iw-d { background-color: var(--color-surface) !important; color: var(--color-text); }
+  .gm-style .gm-style-iw-tc::after { background: var(--color-surface) !important; }
+  // Quill / TipTap / contenteditable editors
+  .ql-toolbar, .ql-container, .ProseMirror, .tiptap, [contenteditable='true']:not(.mat-mdc-input-element) {
+    background-color: var(--color-surface); color: var(--color-text); border-color: var(--color-line);
+  }
+  .ql-snow .ql-stroke { stroke: var(--color-text-2); }
+  .ql-snow .ql-fill { fill: var(--color-text-2); }
+  .ql-snow .ql-picker-label { color: var(--color-text-2); }
+  // PDF.js / iframes keep their own theme; frame them so the white doesn't glare
+  iframe, embed, object { color-scheme: light; }
+
+  // ---------- status chips with light-only backgrounds ----------
+  .badge, .chip, .tag, .pill, .status, .status-badge, .status-chip, .label {
+    &.success, &.ok, &.active, &.approved, &.completed, &.paid, &.delivered { background-color: var(--color-ok-soft) !important; color: var(--color-ok) !important; }
+    &.warning, &.warn, &.pending, &.in-progress, &.partial, &.on-hold { background-color: var(--color-warn-soft) !important; color: var(--color-warn) !important; }
+    &.danger, &.error, &.rejected, &.cancelled, &.overdue, &.failed, &.inactive { background-color: var(--color-danger-soft) !important; color: var(--color-danger) !important; }
+    &.info, &.new, &.open, &.draft { background-color: var(--color-primary-soft) !important; color: var(--color-primary) !important; }
+  }
+
+  // ---------- empty / loading / helper text ----------
+  .empty-state, .no-data, .no-results, .placeholder-text, .hint, .help-text, .muted, .text-muted, .subtitle, .caption {
+    color: var(--color-text-3);
+  }
+
+  // Shadows read as dark halos; keep them subtle
+  .mat-mdc-card, .card, .panel { box-shadow: var(--shadow-sm); }
+}
