@@ -33,6 +33,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { CdkDragDrop, CdkDrag, CdkDropList, CdkDragHandle, moveItemInArray } from '@angular/cdk/drag-drop';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
+import { WellySuggestionsDialogComponent } from './welly-suggestions-dialog.component';
 import { ImportTripsheetDialog, CreateTripsheetDialog, EditPodDialog, UploadPodDocumentDialog } from '../logistics/logistics-dashboard.component';
 import { environment } from '../../../environments/environment';
 import { WellyActivityService } from '../../services/welly-activity.service';
@@ -632,7 +633,7 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
 
   // Table columns
   customerColumns = ['customerCode', 'name', 'contact', 'location', 'status', 'actions'];
-  invoiceColumns = ['transactionNumber', 'date', 'customer', 'product', 'amount', 'province', 'source', 'status', 'actions'];
+  invoiceColumns = ['transactionNumber', 'date', 'company', 'customer', 'product', 'qty', 'amount', 'stock', 'status', 'actions'];
 
   // Pagination state
   customerPageIndex = signal(0);
@@ -699,6 +700,11 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
 
     if (status !== 'all') {
       list = list.filter(i => i.status === status);
+    }
+
+    const stock = this.invoiceStockFilter();
+    if (stock) {
+      list = list.filter(i => this.invoiceStockState(i) === stock);
     }
 
     return list;
@@ -931,6 +937,109 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
     const info = this.backOrderStockInfo(bo);
     if (!info || info.onHand <= 0) return;
     this.dialog.open(BackOrderStockDialog, { width: '620px', data: { bo, info } });
+  }
+
+  // ---------------------------------------------------------------
+  // Invoice ↔ Stock availability (what can be fulfilled, and from where)
+  // ---------------------------------------------------------------
+  invoiceStock = signal<{ [code: string]: BackOrderStockInfo }>({});
+  invoiceStockLoaded = signal(false);
+  invoiceStockFilter = signal<'' | 'full' | 'partial' | 'none' | 'unmapped'>('');
+
+  loadInvoiceStockCheck(): void {
+    this.http.get<{ items: BackOrderStockInfo[] }>(`${this.apiUrl}/logistics/importedinvoices/stock-check`).subscribe({
+      next: (res) => {
+        const map: { [code: string]: BackOrderStockInfo } = {};
+        for (const it of res?.items || []) map[it.code] = it;
+        this.invoiceStock.set(map);
+        this.invoiceStockLoaded.set(true);
+      },
+      error: () => this.invoiceStockLoaded.set(true)
+    });
+  }
+
+  /** Mirrors CommodityCodeMatcher.Normalize: letters and digits only, upper case. */
+  private invoiceStockKey(code: string | undefined): string {
+    return (code || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+  }
+
+  /** Delivered and cancelled invoices no longer need stock, so they get no state. */
+  invoiceNeedsStock(inv: Invoice): boolean {
+    return inv.status !== 'Delivered' && inv.status !== 'Cancelled';
+  }
+
+  invoiceStockInfo(inv: Invoice): BackOrderStockInfo | undefined {
+    const key = this.invoiceStockKey(inv.productCode);
+    const stock = this.invoiceStock();
+    // Codes shared between companies are keyed CODE@COMPANY by the API; fall back to the plain code
+    const company = this.invoiceStockCompany(inv.sourceCompany);
+    return (company && stock[`${key}@${company}`]) || stock[key];
+  }
+
+  /** Sage company code → the company name used on stock items. */
+  private invoiceStockCompany(code: string | undefined): string {
+    switch ((code || '').toUpperCase()) {
+      case 'PMT': return 'PROMED';
+      case 'ACM': return 'ACCESS';
+      case 'SBT': return 'SEBENZANI';
+      case 'PHT': return 'PHARMACARE';
+      case 'KOG': return 'KOG';
+      default: return (code || '').toUpperCase();
+    }
+  }
+
+  invoiceStockState(inv: Invoice): '' | 'full' | 'partial' | 'none' | 'unmapped' {
+    if (!this.invoiceNeedsStock(inv)) return '';
+    const info = this.invoiceStockInfo(inv);
+    if (!info) return 'unmapped';
+    if (info.onHand <= 0) return 'none';
+    return info.onHand >= (inv.quantity || 0) ? 'full' : 'partial';
+  }
+
+  invoiceStockTooltip(inv: Invoice): string {
+    const info = this.invoiceStockInfo(inv);
+    if (!info) return 'Product code is not linked to a stock item';
+    if (!info.warehouses?.length) return `${info.commodityName}: no stock in any warehouse`;
+    return 'Click to see stock per warehouse';
+  }
+
+  /** Warehouse holding the most of this product, shown under the badge. */
+  invoiceTopWarehouse(inv: Invoice): string {
+    return this.invoiceStockInfo(inv)?.warehouses?.[0]?.name || '';
+  }
+
+  /** Counts for open invoices, after search and status filters but before the stock filter. */
+  invoiceStockCounts = computed(() => {
+    const c = { full: 0, partial: 0, none: 0, unmapped: 0 };
+    const search = this.invoiceSearch().toLowerCase();
+    const status = this.invoiceStatusFilter();
+    let lines = 0, value = 0;
+    for (const inv of this.invoices()) {
+      if (status !== 'all' && inv.status !== status) continue;
+      if (search && !(inv.transactionNumber?.toLowerCase().includes(search) ||
+        inv.customerName?.toLowerCase().includes(search) ||
+        inv.customerNumber?.toLowerCase().includes(search) ||
+        inv.productDescription?.toLowerCase().includes(search))) continue;
+      const st = this.invoiceStockState(inv);
+      if (!st) continue;
+      c[st]++;
+      if (st === 'full') { lines++; value += (inv.salesAmount || 0) * 1.15; }
+    }
+    return { ...c, lines, value };
+  });
+
+  /** Click on a stock badge: which warehouses hold the product and how much of the invoice each covers. */
+  openInvoiceStock(inv: Invoice): void {
+    const info = this.invoiceStockInfo(inv);
+    if (!info || info.onHand <= 0) return;
+    const line = {
+      orderNumber: inv.transactionNumber,
+      customerName: inv.customerName,
+      poNo: '',
+      uom: '',
+      qtyBackOrder: inv.quantity || 0
+    } as BackOrderItem;
+    this.dialog.open(BackOrderStockDialog, { width: '620px', data: { bo: line, info, kind: 'invoice' } });
   }
 
   // Attention computed values
@@ -2074,6 +2183,7 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
         const invTotal = parseInt(response.headers.get('X-Total-Count') || '0', 10);
         this.totalInvoiceCount = invTotal;
         this.loadingInvoices.set(false);
+        this.loadInvoiceStockCheck();
         this.updateStats();
       },
       error: (err) => {
@@ -2814,6 +2924,16 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
   openAttentionDialog(): void {
     this.showAttentionDialog = true;
     this.bulkProvince = '';
+  }
+
+  openWellySuggestions(): void {
+    this.dialog.open(WellySuggestionsDialogComponent, {
+      width: '1180px',
+      maxWidth: '96vw',
+      maxHeight: '92vh',
+      panelClass: 'welly-suggestions-panel',
+      autoFocus: false
+    });
   }
 
   closeAttentionDialog(): void {

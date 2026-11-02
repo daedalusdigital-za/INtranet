@@ -31,6 +31,7 @@ import { AppearanceService, Density, ThemeChoice } from '../../../ui/appearance.
 import { LOGISTICS_SECTIONS } from '../../logistics/logistics-sections';
 import { SALES_SECTIONS } from '../../sales/sales-sections';
 import { STOCK_SECTIONS } from '../../stock-management/stock-sections';
+import { SETTINGS_SECTIONS } from '../../settings/settings-sections';
 import { Subscription } from 'rxjs';
 
 interface NavItem {
@@ -970,6 +971,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
     const account: PaletteCommand[] = [
       { group: 'Account', label: 'Profile and password', icon: 'person', run: () => this.goToProfile() },
       ...(this.isAdmin() ? [{ group: 'Account' as const, label: 'Admin settings', icon: 'settings', keywords: 'users permissions', run: () => this.router.navigate(['/settings']) }] : []),
+      // Each admin settings section, so typing "backup" or "clock-in" goes straight there.
+      ...(this.isAdmin() ? SETTINGS_SECTIONS.map(s => ({ group: 'Account' as const, label: `Admin settings: ${s.label}`, icon: s.icon, hint: s.group, keywords: s.hint, run: () => this.router.navigate(['/settings', s.slug]) })) : []),
       { group: 'Account', label: 'Sign out', icon: 'logout', run: () => this.logout() },
     ];
     return [...pages, ...tools, ...account];

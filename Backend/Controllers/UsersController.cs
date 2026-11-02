@@ -503,7 +503,14 @@ namespace ProjectTracker.API.Controllers
                 user.Title = dto.Title;
 
             if (dto.Permissions != null)
-                user.Permissions = string.Join(',', dto.Permissions);
+            {
+                // Guard against the list arriving as a string that was then spread into characters ("s,a,l,e,s"): every
+                // permission key must be a word like "sales" or "boards.view", never a single letter or blank.
+                var perms = dto.Permissions.Select(p => (p ?? "").Trim()).Where(p => p.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                var bad = perms.Where(p => p.Length < 2 || !System.Text.RegularExpressions.Regex.IsMatch(p, @"^[a-z][a-z0-9_.\-]*$")).ToList();
+                if (bad.Count > 0) return BadRequest(new { message = $"Permissions must be keys like 'sales' or 'boards.view'. Rejected: {string.Join(", ", bad.Take(5))}{(bad.Count > 5 ? "…" : "")}" });
+                user.Permissions = string.Join(',', perms);
+            }
 
             if (dto.DepartmentId.HasValue)
                 user.DepartmentId = dto.DepartmentId.Value == 0 ? null : dto.DepartmentId;

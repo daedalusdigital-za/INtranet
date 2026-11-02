@@ -10,7 +10,6 @@ import { MatTableModule } from '@angular/material/table';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -23,7 +22,6 @@ import {
   MatDialogRef,
   MAT_DIALOG_DATA
 } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { FinanceService } from '../../../services/finance.service';
 import {
   Expense,
@@ -33,6 +31,11 @@ import {
 } from '../../../models/finance.model';
 import { environment } from '../../../../environments/environment';
 import { ConfirmService } from '../../../ui/confirm.service';
+import { ToastService } from '../../../ui/toast.service';
+import { PageHeaderComponent } from '../../../ui/page-header/page-header.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { ChipTone, StatusChipComponent } from '../../../ui/status-chip/status-chip.component';
 import { NavbarComponent } from '../../shared/navbar/navbar.component';
 
 const VAT_RATE = 0.15; // South African VAT
@@ -56,68 +59,59 @@ interface Department {
     MatChipsModule,
     MatMenuModule,
     MatTooltipModule,
-    MatProgressSpinnerModule,
     MatDialogModule,
-    MatSnackBarModule,
-    NavbarComponent
+    NavbarComponent,
+    PageHeaderComponent,
+    EmptyStateComponent,
+    SkeletonRowsComponent,
+    StatusChipComponent
   ],
   template: `
     <app-navbar></app-navbar>
-    <div class="exp-container">
-      <!-- Header -->
-      <div class="exp-header">
-        <div class="exp-header-left">
-          <button aria-label="Back to Finance" mat-icon-button class="back-btn" (click)="goBack()" matTooltip="Back to Finance">
-            <mat-icon>arrow_back</mat-icon>
-          </button>
-          <div class="exp-icon-ring"><mat-icon>receipt_long</mat-icon></div>
-          <div>
-            <h1>Expenses & Claims</h1>
-            <p>Capture, approve and pay company expenses</p>
-          </div>
-        </div>
-        <button mat-flat-button class="new-btn" (click)="openDialog()">
-          <mat-icon>add</mat-icon> New Expense
-        </button>
-      </div>
+    <main class="exp-container">
+      <app-page-header [crumbs]="['People and money', 'Finance']" title="Expenses and claims"
+                       subtitle="Capture, approve and pay company expenses">
+        <button mat-stroked-button (click)="goBack()"><mat-icon>arrow_back</mat-icon>Finance overview</button>
+        <button mat-flat-button color="primary" (click)="openDialog()"><mat-icon>add</mat-icon>New expense</button>
+      </app-page-header>
 
       <!-- Summary cards -->
       <div class="summary-grid">
-        <div class="sum-card pending" [class.active]="statusFilter === 'Pending'" (click)="setFilter('Pending')">
+        <button type="button" class="sum-card pending" [class.active]="statusFilter === 'Pending'" [attr.aria-pressed]="statusFilter === 'Pending'" (click)="setFilter('Pending')">
           <div class="sum-icon"><mat-icon>pending_actions</mat-icon></div>
           <div class="sum-body">
             <span class="sum-value">{{ totals.pending | currency:'ZAR':'symbol':'1.0-0' }}</span>
             <span class="sum-label">Pending · {{ counts.pending }}</span>
           </div>
-        </div>
-        <div class="sum-card approved" [class.active]="statusFilter === 'Approved'" (click)="setFilter('Approved')">
+        </button>
+        <button type="button" class="sum-card approved" [class.active]="statusFilter === 'Approved'" [attr.aria-pressed]="statusFilter === 'Approved'" (click)="setFilter('Approved')">
           <div class="sum-icon"><mat-icon>verified</mat-icon></div>
           <div class="sum-body">
             <span class="sum-value">{{ totals.approved | currency:'ZAR':'symbol':'1.0-0' }}</span>
             <span class="sum-label">Approved · {{ counts.approved }}</span>
           </div>
-        </div>
-        <div class="sum-card paid" [class.active]="statusFilter === 'Paid'" (click)="setFilter('Paid')">
+        </button>
+        <button type="button" class="sum-card paid" [class.active]="statusFilter === 'Paid'" [attr.aria-pressed]="statusFilter === 'Paid'" (click)="setFilter('Paid')">
           <div class="sum-icon"><mat-icon>task_alt</mat-icon></div>
           <div class="sum-body">
             <span class="sum-value">{{ totals.paid | currency:'ZAR':'symbol':'1.0-0' }}</span>
             <span class="sum-label">Paid · {{ counts.paid }}</span>
           </div>
-        </div>
-        <div class="sum-card all" [class.active]="statusFilter === ''" (click)="setFilter('')">
+        </button>
+        <button type="button" class="sum-card all" [class.active]="statusFilter === ''" [attr.aria-pressed]="statusFilter === ''" (click)="setFilter('')">
           <div class="sum-icon"><mat-icon>summarize</mat-icon></div>
           <div class="sum-body">
             <span class="sum-value">{{ totals.all | currency:'ZAR':'symbol':'1.0-0' }}</span>
             <span class="sum-label">All · {{ counts.all }}</span>
           </div>
-        </div>
+        </button>
       </div>
 
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="search-box">
           <mat-icon>search</mat-icon>
-          <input type="text" placeholder="Search vendor, description, number…"
+          <input type="text" aria-label="Search expenses" placeholder="Search vendor, description, number…"
                  [(ngModel)]="search" (ngModelChange)="applyFilters()" />
         </div>
         <div class="chip-filters">
@@ -131,127 +125,115 @@ interface Department {
 
       <!-- Table -->
       <div class="table-wrap">
-        <div *ngIf="loading" class="loading"><mat-spinner diameter="40"></mat-spinner></div>
-
-        <table *ngIf="!loading" class="exp-table">
-          <thead>
-            <tr>
-              <th>Expense #</th>
-              <th>Vendor / Description</th>
-              <th>Category</th>
-              <th>Department</th>
-              <th>Date</th>
-              <th class="num">Amount</th>
-              <th class="num">VAT</th>
-              <th class="num">Total</th>
-              <th>Status</th>
-              <th class="actions-col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let e of filtered">
-              <td class="mono">{{ e.expenseNumber }}</td>
-              <td>
-                <div class="vend">{{ e.vendor }}</div>
-                <div class="desc">{{ e.description }}</div>
-              </td>
-              <td>{{ e.categoryName || '—' }}</td>
-              <td>{{ e.department || '—' }}</td>
-              <td>{{ e.expenseDate | date:'dd MMM yyyy' }}</td>
-              <td class="num">{{ e.amount | currency:'ZAR':'symbol':'1.2-2' }}</td>
-              <td class="num">{{ (e.vatAmount || 0) | currency:'ZAR':'symbol':'1.2-2' }}</td>
-              <td class="num strong">{{ e.totalAmount | currency:'ZAR':'symbol':'1.2-2' }}</td>
-              <td>
-                <span class="status-badge" [ngClass]="e.status.toLowerCase()">{{ e.status }}</span>
-              </td>
-              <td class="actions-col">
-                <button aria-label="More actions" mat-icon-button [matMenuTriggerFor]="menu"><mat-icon>more_vert</mat-icon></button>
-                <mat-menu #menu="matMenu">
-                  <button mat-menu-item (click)="openDialog(e)">
-                    <mat-icon>edit</mat-icon><span>Edit</span>
-                  </button>
-                  <button mat-menu-item *ngIf="e.status === 'Pending'" (click)="setStatus(e, 'Approved')">
-                    <mat-icon color="primary">check_circle</mat-icon><span>Approve</span>
-                  </button>
-                  <button mat-menu-item *ngIf="e.status === 'Pending' || e.status === 'Approved'" (click)="setStatus(e, 'Rejected')">
-                    <mat-icon color="warn">cancel</mat-icon><span>Reject</span>
-                  </button>
-                  <button mat-menu-item *ngIf="e.status === 'Approved'" (click)="markPaid(e)">
-                    <mat-icon>payments</mat-icon><span>Mark Paid</span>
-                  </button>
-                  <button mat-menu-item *ngIf="e.receiptFileName" (click)="downloadReceipt(e)">
-                    <mat-icon>download</mat-icon><span>Receipt</span>
-                  </button>
-                  <button mat-menu-item (click)="remove(e)">
-                    <mat-icon color="warn">delete</mat-icon><span>Delete</span>
-                  </button>
-                </mat-menu>
-              </td>
-            </tr>
-            <tr *ngIf="filtered.length === 0">
-              <td colspan="10" class="empty">
-                <mat-icon>inbox</mat-icon>
-                <p>No expenses{{ statusFilter ? ' with status ' + statusFilter : '' }} yet.</p>
-                <button mat-stroked-button (click)="openDialog()"><mat-icon>add</mat-icon> Capture your first expense</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        @if (loading) {
+          <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
+        } @else if (filtered.length === 0) {
+          @if (expenses.length === 0) {
+            <app-empty-state icon="receipt_long" title="No expenses yet"
+                             message="Capture an expense to start tracking claims and company spend.">
+              <button mat-flat-button color="primary" (click)="openDialog()"><mat-icon>add</mat-icon>Capture your first expense</button>
+            </app-empty-state>
+          } @else {
+            <app-empty-state icon="filter_alt_off" title="No expenses match"
+                             message="Nothing fits the status or search you have chosen.">
+              <button mat-stroked-button (click)="clearFilters()">Show all expenses</button>
+            </app-empty-state>
+          }
+        } @else {
+          <div class="table-scroll">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th>Expense #</th>
+                  <th>Vendor / Description</th>
+                  <th>Category</th>
+                  <th>Department</th>
+                  <th>Date</th>
+                  <th class="num">Amount</th>
+                  <th class="num">VAT</th>
+                  <th class="num">Total</th>
+                  <th>Status</th>
+                  <th class="actions-col"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let e of filtered">
+                  <td class="ref">{{ e.expenseNumber }}</td>
+                  <td>
+                    <div class="vend">{{ e.vendor }}</div>
+                    <small>{{ e.description }}</small>
+                  </td>
+                  <td>{{ e.categoryName || '—' }}</td>
+                  <td>{{ e.department || '—' }}</td>
+                  <td>{{ e.expenseDate | date:'dd MMM yyyy' }}</td>
+                  <td class="num">{{ e.amount | currency:'ZAR':'symbol':'1.2-2' }}</td>
+                  <td class="num">{{ (e.vatAmount || 0) | currency:'ZAR':'symbol':'1.2-2' }}</td>
+                  <td class="num strong">{{ e.totalAmount | currency:'ZAR':'symbol':'1.2-2' }}</td>
+                  <td><app-status-chip [status]="e.status" [tone]="statusTone(e.status)"></app-status-chip></td>
+                  <td class="actions-col">
+                    <button [attr.aria-label]="'Actions for ' + e.expenseNumber" mat-icon-button [matMenuTriggerFor]="menu"><mat-icon>more_vert</mat-icon></button>
+                    <mat-menu #menu="matMenu">
+                      <button mat-menu-item (click)="openDialog(e)">
+                        <mat-icon>edit</mat-icon><span>Edit</span>
+                      </button>
+                      <button mat-menu-item *ngIf="e.status === 'Pending'" (click)="setStatus(e, 'Approved')">
+                        <mat-icon color="primary">check_circle</mat-icon><span>Approve</span>
+                      </button>
+                      <button mat-menu-item *ngIf="e.status === 'Pending' || e.status === 'Approved'" (click)="setStatus(e, 'Rejected')">
+                        <mat-icon color="warn">cancel</mat-icon><span>Reject</span>
+                      </button>
+                      <button mat-menu-item *ngIf="e.status === 'Approved'" (click)="markPaid(e)">
+                        <mat-icon>payments</mat-icon><span>Mark paid</span>
+                      </button>
+                      <button mat-menu-item *ngIf="e.receiptFileName" (click)="downloadReceipt(e)">
+                        <mat-icon>download</mat-icon><span>Receipt</span>
+                      </button>
+                      <button mat-menu-item (click)="remove(e)">
+                        <mat-icon color="warn">delete</mat-icon><span>Delete</span>
+                      </button>
+                    </mat-menu>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        }
       </div>
-    </div>
+    </main>
   `,
   styles: [`
-    .exp-container { max-width: 1400px; margin: 0 auto; padding: 24px; }
-    .exp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
-    .exp-header-left { display: flex; align-items: center; gap: 16px; }
-    .back-btn { color: var(--color-text-3); }
-    .exp-icon-ring { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg,var(--color-primary),var(--color-primary)); display:flex; align-items:center; justify-content:center; }
-    .exp-icon-ring mat-icon { color:#fff; font-size:28px; width:28px; height:28px; }
-    .exp-header h1 { margin:0; font-size:26px; font-weight:700; color:var(--color-text); }
-    .exp-header p { margin:2px 0 0; color:var(--color-text-3); font-size:14px; }
-    .new-btn { background: linear-gradient(135deg,var(--color-primary),var(--color-primary)); color:#fff; height:44px; border-radius:12px; padding:0 20px; font-weight:600; }
+    :host { display:block; }
+    .exp-container { max-width:1320px; margin:0 auto; padding:var(--space-5) var(--space-5) var(--space-8); display:grid; gap:var(--space-4); }
+    @media (max-width:600px) { .exp-container { padding:var(--space-4) var(--space-4) var(--space-6); } }
 
-    .summary-grid { display:grid; grid-template-columns: repeat(4,1fr); gap:16px; margin-bottom:24px; }
-    .sum-card { display:flex; align-items:center; gap:14px; padding:18px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:16px; cursor:pointer; transition:all .18s; }
-    .sum-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,.06); }
-    .sum-card.active { border-color:var(--color-primary); box-shadow:0 0 0 2px rgba(99,102,241,.15); }
-    .sum-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; }
+    .summary-grid { display:grid; grid-template-columns: repeat(4,1fr); gap:var(--space-4); }
+    .sum-card { display:flex; align-items:center; gap:14px; padding:var(--space-3) var(--space-4); background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-md); cursor:pointer; text-align:left; font-family:inherit; color:inherit; transition:border-color .15s, box-shadow .15s; }
+    .sum-card:hover { border-color:var(--color-line-strong); box-shadow:var(--shadow-sm); }
+    .sum-card.active { border-color:var(--color-primary); box-shadow:0 0 0 1px var(--color-primary); }
+    .sum-icon { width:44px; height:44px; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; }
     .sum-card.pending .sum-icon { background:var(--color-warn-soft); color:var(--color-warn); }
     .sum-card.approved .sum-icon { background:var(--color-primary-soft); color:var(--color-primary); }
     .sum-card.paid .sum-icon { background:var(--color-ok-soft); color:var(--color-ok); }
     .sum-card.all .sum-icon { background:var(--color-primary-soft); color:var(--color-primary); }
     .sum-body { display:flex; flex-direction:column; }
-    .sum-value { font-size:20px; font-weight:700; color:var(--color-text); }
-    .sum-label { font-size:13px; color:var(--color-text-3); }
+    .sum-value { font-size:var(--text-2xl); font-weight:700; color:var(--color-text); font-variant-numeric:tabular-nums; }
+    .sum-label { font-size:var(--text-sm); color:var(--color-text-3); }
 
-    .toolbar { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
-    .search-box { display:flex; align-items:center; gap:8px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:12px; padding:8px 14px; min-width:320px; flex:1; max-width:420px; }
+    .toolbar { display:flex; justify-content:space-between; align-items:center; gap:var(--space-4); flex-wrap:wrap; }
+    .search-box { display:flex; align-items:center; gap:var(--space-2); background:var(--color-surface); border:1px solid var(--color-line-strong); border-radius:var(--radius-control); padding:6px 12px; min-width:320px; flex:1; max-width:420px; }
+    .search-box:focus-within { border-color:var(--color-primary); box-shadow:0 0 0 3px var(--color-primary-soft); }
     .search-box mat-icon { color:var(--color-text-3); }
-    .search-box input { border:none; outline:none; flex:1; font-size:14px; background:transparent; }
-    .chip-filters { display:flex; gap:8px; flex-wrap:wrap; }
-    .chip { border:1px solid var(--color-line); background:var(--color-surface); border-radius:999px; padding:6px 14px; font-size:13px; cursor:pointer; color:var(--color-text-2); transition:all .15s; }
-    .chip.on { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+    .search-box input { border:none; outline:none; flex:1; font-size:var(--text-md); background:transparent; color:var(--color-text); }
+    .chip-filters { display:flex; gap:var(--space-2); flex-wrap:wrap; }
+    .chip { border:1px solid var(--color-line); background:var(--color-surface); border-radius:999px; padding:6px 14px; font-size:var(--text-sm); cursor:pointer; color:var(--color-text-2); font-family:inherit; transition:background .15s, color .15s; }
+    .chip.on { background:var(--color-primary); border-color:var(--color-primary); color:var(--color-on-primary); }
 
-    .table-wrap { background:var(--color-surface); border:1px solid var(--color-line); border-radius:16px; overflow:hidden; }
-    .loading { display:flex; justify-content:center; padding:60px; }
-    .exp-table { width:100%; border-collapse:collapse; }
-    .exp-table thead th { text-align:left; padding:14px 16px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--color-text-3); background:var(--color-canvas); border-bottom:1px solid var(--color-line); }
-    .exp-table th.num, .exp-table td.num { text-align:right; }
-    .exp-table tbody td { padding:14px 16px; border-bottom:1px solid var(--color-surface-2); font-size:14px; color:var(--color-text-2); vertical-align:top; }
-    .exp-table tbody tr:hover { background:var(--color-canvas); }
-    .mono { font-family:'SF Mono',Menlo,monospace; font-size:13px; color:var(--color-primary); font-weight:600; }
+    .table-wrap { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-md); overflow:hidden; }
+    .table-scroll { overflow-x:auto; }
+    .app-table td { vertical-align:top; }
     .vend { font-weight:600; color:var(--color-text); }
-    .desc { font-size:12.5px; color:var(--color-text-3); margin-top:2px; }
     .num.strong { font-weight:700; color:var(--color-text); }
     .actions-col { text-align:center; width:60px; }
-    .status-badge { padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; text-transform:capitalize; }
-    .status-badge.pending { background:var(--color-warn-soft); color:#b45309; }
-    .status-badge.approved { background:var(--color-primary-soft); color:var(--color-primary-hover); }
-    .status-badge.paid { background:var(--color-ok-soft); color:#15803d; }
-    .status-badge.rejected { background:var(--color-danger-soft); color:var(--color-danger); }
-    .empty { text-align:center; padding:60px 20px; color:var(--color-text-3); }
-    .empty mat-icon { font-size:48px; width:48px; height:48px; color:var(--color-line-strong); }
-    .empty p { margin:12px 0; }
 
     @media (max-width: 900px) {
       .summary-grid { grid-template-columns: repeat(2,1fr); }
@@ -271,7 +253,7 @@ export class ExpensesComponent implements OnInit {
   constructor(
     private financeService: FinanceService,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar,
+    private readonly toast: ToastService,
     private router: Router,
     private readonly confirmDialog: ConfirmService
   ) {}
@@ -292,7 +274,7 @@ export class ExpensesComponent implements OnInit {
         this.loading = false;
       },
       error: () => {
-        this.snackBar.open('Failed to load expenses', 'Close', { duration: 3000 });
+        this.toast.error("Couldn't load expenses. Refresh the page to try again.");
         this.loading = false;
       }
     });
@@ -311,6 +293,18 @@ export class ExpensesComponent implements OnInit {
   }
 
   setFilter(status: string): void { this.statusFilter = status; this.applyFilters(); }
+
+  clearFilters(): void { this.statusFilter = ''; this.search = ''; this.applyFilters(); }
+
+  statusTone(status: string): ChipTone {
+    switch (status) {
+      case 'Pending': return 'warn';
+      case 'Approved': return 'info';
+      case 'Paid': return 'ok';
+      case 'Rejected': return 'danger';
+      default: return 'neutral';
+    }
+  }
 
   applyFilters(): void {
     const q = this.search.trim().toLowerCase();
@@ -338,9 +332,9 @@ export class ExpensesComponent implements OnInit {
       next: () => {
         e.status = status;
         this.computeTotals(); this.applyFilters();
-        this.snackBar.open(`Expense ${status.toLowerCase()}`, 'Close', { duration: 2000 });
+        this.toast.done(`Expense ${status.toLowerCase()}`);
       },
-      error: () => this.snackBar.open('Failed to update expense', 'Close', { duration: 3000 })
+      error: () => this.toast.error("Couldn't update the expense. Try again.")
     });
   }
 
@@ -350,9 +344,9 @@ export class ExpensesComponent implements OnInit {
       next: () => {
         e.status = 'Paid';
         this.computeTotals(); this.applyFilters();
-        this.snackBar.open('Expense marked as paid', 'Close', { duration: 2000 });
+        this.toast.done('Expense marked as paid');
       },
-      error: () => this.snackBar.open('Failed to mark as paid', 'Close', { duration: 3000 })
+      error: () => this.toast.error("Couldn't mark the expense as paid. Try again.")
     });
   }
 
@@ -368,10 +362,10 @@ export class ExpensesComponent implements OnInit {
     }))) return;
     this.financeService.deleteExpense(e.id).subscribe({
       next: () => {
-        this.snackBar.open('Expense deleted', 'Close', { duration: 2000 });
+        this.toast.done('Expense deleted');
         this.loadExpenses();
       },
-      error: () => this.snackBar.open('Failed to delete expense', 'Close', { duration: 3000 })
+      error: () => this.toast.error("Couldn't delete the expense. Try again.")
     });
   }
 }
@@ -487,15 +481,15 @@ export class ExpensesComponent implements OnInit {
     </mat-dialog-actions>
   `,
   styles: [`
-    h2[mat-dialog-title] { display:flex; align-items:center; gap:10px; font-size:20px; font-weight:700; color:var(--color-text); }
-    .dlg-content { padding-top:8px !important; }
+    h2[mat-dialog-title] { display:flex; align-items:center; gap:10px; font-size:var(--text-2xl); font-weight:700; color:var(--color-text); }
+    .dlg-content.mat-mdc-dialog-content { padding-top:8px; }
     .row { display:flex; gap:12px; }
     .row > mat-form-field { flex:1; }
-    .grow { flex:2 !important; }
+    .row > .grow { flex:2; }
     .full { width:100%; }
     .total-box { flex:1; display:flex; flex-direction:column; justify-content:center; background:var(--color-surface-2); border-radius:8px; padding:8px 14px; margin-bottom:22px; }
-    .tl { font-size:12px; color:var(--color-text-3); }
-    .tv { font-size:18px; font-weight:700; color:var(--color-primary); }
+    .tl { font-size:var(--text-xs); color:var(--color-text-3); }
+    .tv { font-size:var(--text-xl); font-weight:700; color:var(--color-primary); }
     .vat-toggle { margin:-6px 0 12px; }
   `]
 })

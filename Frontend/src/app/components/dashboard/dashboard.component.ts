@@ -4,7 +4,6 @@ import { Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -13,13 +12,16 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatMenuModule } from '@angular/material/menu';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { Department } from '../../models/models';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
+import { ToastService } from '../../ui/toast.service';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 @Component({
   selector: 'app-dashboard',
@@ -30,7 +32,6 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     MatCardModule,
     MatButtonModule,
     MatIconModule,
-    MatProgressSpinnerModule,
     MatProgressBarModule,
     MatDialogModule,
     MatTooltipModule,
@@ -38,7 +39,10 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     MatSelectModule,
     MatButtonToggleModule,
     MatMenuModule,
-    NavbarComponent
+    NavbarComponent,
+    StatusChipComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -46,7 +50,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     <div class="dashboard-container">
       <div class="page-header">
         <h1>Project Management</h1>
-        <button mat-raised-button color="accent" (click)="openCreateBoardDialog()">
+        <button mat-flat-button color="primary" (click)="openCreateBoardDialog()">
           <mat-icon>add</mat-icon>
           Create New Board
         </button>
@@ -106,17 +110,21 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       <div class="projects-section">
         @if (loading) {
           <div class="loading-spinner">
-            <mat-spinner></mat-spinner>
+            <app-skeleton-rows [rows]="5" [avatar]="false" />
           </div>
         } @else {
           <!-- List View -->
           @if (currentView === 'list') {
             <div class="projects-list">
+              @if (filteredProjects.length === 0) {
+                <app-empty-state icon="dashboard_customize" title="No boards to show"
+                                 message="No boards match the filters, or none have been created yet." />
+              }
               @for (project of filteredProjects; track project.id) {
                 <mat-card class="project-list-item">
                   <div class="list-item-content">
                     <div class="list-item-main">
-                      <div class="project-type-badge-small" [style.background]="getProjectTypeColor(project.type)">
+                      <div class="project-type-badge-small" [class]="'project-type-badge-small type-' + project.type">
                         <mat-icon>{{ getProjectTypeIcon(project.type) }}</mat-icon>
                       </div>
                       <div class="list-item-details">
@@ -126,9 +134,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
                     </div>
 
                     <div class="list-item-meta">
-                      <mat-chip [style.background]="getWorkflowColor(project.workflow)">
-                        {{ project.workflow }}
-                      </mat-chip>
+                      <app-status-chip [status]="project.workflow" />
                       <div class="progress-inline">
                         <span>{{ project.progress }}%</span>
                         <mat-progress-bar mode="determinate" [value]="project.progress"></mat-progress-bar>
@@ -161,9 +167,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
                       <mat-card class="kanban-card">
                         <div class="kanban-card-header">
                           <h4>{{ project.name }}</h4>
-                          <mat-chip [style.background]="getProjectTypeColor(project.type)" class="type-chip-small">
-                            {{ project.type }}
-                          </mat-chip>
+                          <span [class]="'type-chip-small type-' + project.type">{{ project.type }}</span>
                         </div>
                         <p class="kanban-description">{{ project.description }}</p>
                         <div class="kanban-progress">
@@ -191,18 +195,20 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
           <!-- Timeline View -->
           @if (currentView === 'timeline') {
             <div class="timeline-view">
+              @if (filteredProjects.length === 0) {
+                <app-empty-state icon="timeline" title="No boards to show"
+                                 message="No boards match the filters, or none have been created yet." />
+              }
               @for (project of filteredProjects; track project.id) {
                 <div class="timeline-item">
-                  <div class="timeline-marker" [style.background]="getStatusColor(project.status)"></div>
+                  <div [class]="'timeline-marker ' + project.status"></div>
                   <mat-card class="timeline-card">
                     <div class="timeline-header">
                       <div>
                         <h3>{{ project.name }}</h3>
                         <p>{{ project.description }}</p>
                       </div>
-                      <mat-chip [style.background]="getWorkflowColor(project.workflow)">
-                        {{ project.workflow }}
-                      </mat-chip>
+                      <app-status-chip [status]="project.workflow" />
                     </div>
                     <div class="timeline-dates">
                       <div class="date-item">
@@ -246,19 +252,8 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       display: block;
       min-height: 100vh;
       position: relative;
-      background: var(--color-text);
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, var(--color-text) 0%, #1e1b4b 55%, var(--color-text) 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
-    }
-
-    .spacer {
-      flex: 1 1 auto;
     }
 
     .dashboard-container {
@@ -266,14 +261,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       max-width: 1400px;
       margin: 0 auto;
       min-height: calc(100vh - 64px);
-      background: transparent;
     }
-
-
-
-
-
-
 
     .page-header {
       display: flex;
@@ -284,38 +272,21 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .page-header h1 {
       margin: 0;
-      color: #ffffff;
-      font-size: 2.5rem;
+      color: var(--color-text);
+      font-size: var(--text-4xl);
       font-weight: 600;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .page-header button {
       height: 48px;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 600;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       padding: 0 24px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    h1 {
-      margin-bottom: 24px;
-      color: #ffffff;
-      font-size: 2.5rem;
-      font-weight: 600;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .loading-spinner {
-      display: flex;
-      justify-content: center;
-      align-items: center;
       min-height: 400px;
-    }
-
-    .loading-spinner ::ng-deep .mat-progress-spinner circle {
-      stroke: #ffffff;
     }
 
     /* Controls Bar */
@@ -324,10 +295,10 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       justify-content: space-between;
       align-items: center;
       margin-bottom: 24px;
-      background: rgba(255, 255, 255, 0.95);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
       padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      border-radius: var(--radius-md);
     }
 
     .filters {
@@ -348,8 +319,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .view-controls ::ng-deep .mat-button-toggle-group {
       background: var(--color-surface);
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border-radius: var(--radius-control);
     }
 
     .view-controls ::ng-deep .mat-button-toggle {
@@ -357,8 +327,8 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .view-controls ::ng-deep .mat-button-toggle-checked {
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-      color: white;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
 
     /* List View */
@@ -371,15 +341,15 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .project-list-item {
       background: var(--color-surface);
-      border-radius: 12px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 20px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.2s ease;
     }
 
     .project-list-item:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      transform: translateX(4px);
+      box-shadow: var(--shadow-md);
     }
 
     .list-item-content {
@@ -399,7 +369,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .list-item-main h3 {
       margin: 0;
-      font-size: 1.1rem;
+      font-size: var(--text-xl);
       font-weight: 600;
       color: var(--color-text);
     }
@@ -411,11 +381,41 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .list-item-main p {
       margin: 4px 0 0 0;
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .project-type-badge-small {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
+
+    .type-software { background: var(--color-primary-soft); color: var(--color-primary); }
+    .type-infrastructure { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .type-marketing { background: var(--color-cat-pink-soft); color: var(--color-cat-pink); }
+    .type-research { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); }
+    .type-operations { background: var(--color-cat-amber-soft); color: var(--color-cat-amber); }
+
+    .type-chip-small {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 9px;
+      border-radius: 999px;
+      font-size: var(--text-xs);
+      font-weight: 700;
+      text-transform: capitalize;
+      white-space: nowrap;
     }
 
     .list-item-meta {
@@ -429,12 +429,8 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       display: flex;
       flex-direction: column;
       min-width: 150px;
-    }
-
-    .progress-inline-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
 
     .progress-inline ::ng-deep .mat-mdc-progress-bar {
@@ -446,18 +442,18 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .resource-inline {
       display: flex;
       gap: 16px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
     }
 
-    .resource-inline div {
+    .resource-inline span {
       display: flex;
       align-items: center;
       gap: 4px;
     }
 
     .resource-inline mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -474,10 +470,10 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .kanban-column {
       min-width: 320px;
       max-width: 320px;
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 12px;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 16px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .column-header {
@@ -491,7 +487,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .column-header h3 {
       margin: 0;
-      font-size: 1rem;
+      font-size: var(--text-lg);
       font-weight: 600;
       color: var(--color-text);
       text-transform: capitalize;
@@ -500,7 +496,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     .column-count {
       background: var(--color-line);
       color: var(--color-text-2);
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
       padding: 4px 8px;
       border-radius: 12px;
@@ -515,17 +511,16 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .kanban-card {
       background: var(--color-surface);
-      border-radius: 8px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
       padding: 16px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-sm);
       cursor: grab;
-      transition: all 0.2s ease;
-      border-left: 3px solid transparent;
+      transition: box-shadow 0.2s ease;
     }
 
     .kanban-card:hover {
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
     }
 
     .kanban-card:active {
@@ -541,7 +536,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .kanban-card-header h4 {
       margin: 0;
-      font-size: 0.95rem;
+      font-size: var(--text-md);
       font-weight: 600;
       color: var(--color-text);
       flex: 1;
@@ -550,7 +545,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .kanban-description {
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
       margin: 0 0 8px 0;
       display: -webkit-box;
@@ -563,25 +558,10 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       line-height: 1.4;
     }
 
-    .kanban-type-badge {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .kanban-type-badge mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-      color: white;
-    }
-
     .kanban-progress {
       margin: 12px 0;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
 
     .kanban-progress ::ng-deep .mat-mdc-progress-bar {
@@ -607,22 +587,13 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 600;
-      font-size: 11px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-    }
-
-    .avatar-small:nth-child(2) {
-      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
-    }
-
-    .avatar-small:nth-child(3) {
-      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      font-size: var(--text-xs);
     }
 
     /* Timeline View */
@@ -639,7 +610,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       top: 30px;
       bottom: 30px;
       width: 3px;
-      background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary) 100%);
+      background: var(--color-line-strong);
       border-radius: 2px;
     }
 
@@ -657,43 +628,32 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       border-radius: 50%;
       background: var(--color-surface);
       border: 4px solid var(--color-primary);
-      box-shadow: 0 0 0 4px rgba(65, 105, 225, 0.2);
       z-index: 2;
     }
 
     .timeline-marker.on-track {
       border-color: var(--color-ok);
-      box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.2);
     }
 
     .timeline-marker.at-risk {
       border-color: var(--color-warn);
-      box-shadow: 0 0 0 4px rgba(255, 152, 0, 0.2);
     }
 
     .timeline-marker.delayed {
       border-color: var(--color-danger);
-      box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.2);
     }
 
     .timeline-card {
       background: var(--color-surface);
-      border-radius: 12px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 20px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.2s ease;
     }
 
     .timeline-card:hover {
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-      transform: translateX(4px);
-    }
-
-    .timeline-card-header {
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
-      margin-bottom: 16px;
+      box-shadow: var(--shadow-md);
     }
 
     .timeline-header {
@@ -704,12 +664,11 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       overflow: hidden;
     }
 
-    .timeline-card-header h3 {
+    .timeline-header h3 {
       margin: 0;
-      font-size: 1.2rem;
+      font-size: var(--text-xl);
       font-weight: 600;
       color: var(--color-text);
-      flex: 1;
     }
 
     .timeline-header > div {
@@ -719,7 +678,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 
     .timeline-header p {
       margin: 4px 0 0 0;
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -735,8 +694,13 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       display: flex;
       gap: 24px;
       margin: 12px 0;
-      font-size: 13px;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
+    }
+
+    .timeline-progress {
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
     }
 
     .date-item {
@@ -746,7 +710,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
     }
 
     .date-item mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
       color: var(--color-primary);
@@ -813,161 +777,6 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
       .timeline-marker {
         left: -30px;
       }
-    }
-
-
-
-    /* Notification Dropdown Styles */
-    .notification-dropdown {
-      position: absolute;
-      top: 60px;
-      right: 100px;
-      width: 420px;
-      max-height: 600px;
-      background: var(--color-surface);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .notification-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--color-line);
-      background: var(--color-surface-2);
-    }
-
-    .notification-header h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--color-text);
-    }
-
-    .notification-list {
-      flex: 1;
-      overflow-y: auto;
-      max-height: 450px;
-    }
-
-    .no-notifications {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--color-text-3);
-      text-align: center;
-    }
-
-    .no-notifications mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .notification-item {
-      display: flex;
-      gap: 12px;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--color-line);
-      transition: background-color 0.2s;
-      cursor: pointer;
-    }
-
-    .notification-item:hover {
-      background-color: var(--color-canvas);
-    }
-
-    .notification-item.unread {
-      background-color: var(--color-primary-soft);
-    }
-
-    .notification-item.unread:hover {
-      background-color: #d1e7f9;
-    }
-
-    .notification-icon {
-      flex-shrink: 0;
-    }
-
-    .notification-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-    }
-
-    .notification-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .notification-title {
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--color-text);
-      margin: 0 0 4px 0;
-    }
-
-    .notification-message {
-      font-size: 13px;
-      color: var(--color-text-2);
-      margin: 0 0 8px 0;
-      line-height: 1.4;
-    }
-
-    .notification-time {
-      font-size: 12px;
-      color: var(--color-text-3);
-    }
-
-    .notification-footer {
-      padding: 12px 20px;
-      border-top: 1px solid var(--color-line);
-      background: var(--color-surface-2);
-      text-align: center;
-    }
-
-    /* Departments Section */
-    .departments-section {
-      margin-top: 48px;
-      padding-top: 32px;
-      border-top: 3px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .section-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: white;
-      font-size: 2rem;
-      font-weight: 600;
-      margin-bottom: 24px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .section-title mat-icon {
-      font-size: 36px;
-      width: 36px;
-      height: 36px;
-    }
-
-    .loading-spinner {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 400px;
-    }
-
-    .loading-spinner ::ng-deep .mat-progress-spinner circle {
-      stroke: #ffffff;
     }
   `]
 })
@@ -1044,7 +853,7 @@ export class DashboardComponent implements OnInit {
     private authService: AuthService,
     private router: Router,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {
     this.currentUser = this.authService.currentUserValue;
   }
@@ -1157,17 +966,6 @@ export class DashboardComponent implements OnInit {
     return this.filteredProjects.filter(p => p.workflow === workflow);
   }
 
-  getProjectTypeColor(type: string): string {
-    const colors: any = {
-      'software': 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)',
-      'infrastructure': 'linear-gradient(135deg, #60a5fa 0%, #f5576c 100%)',
-      'marketing': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-      'research': 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-      'operations': 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
-    };
-    return colors[type] || '#cccccc';
-  }
-
   getProjectTypeIcon(type: string): string {
     const icons: any = {
       'software': 'code',
@@ -1177,25 +975,6 @@ export class DashboardComponent implements OnInit {
       'operations': 'settings'
     };
     return icons[type] || 'folder';
-  }
-
-  getWorkflowColor(workflow: string): string {
-    const colors: any = {
-      'Planning': '#7c3aed',
-      'In Progress': '#2196F3',
-      'Testing': '#059669',
-      'Completed': '#4CAF50'
-    };
-    return colors[workflow] || '#cccccc';
-  }
-
-  getStatusColor(status: string): string {
-    const colors: any = {
-      'on-track': '#4CAF50',
-      'at-risk': '#FF9800',
-      'delayed': '#F44336'
-    };
-    return colors[status] || '#cccccc';
   }
 
   getProgressColor(progress: number): string {
@@ -1251,12 +1030,12 @@ export class DashboardComponent implements OnInit {
       if (result) {
         this.apiService.createBoard(result).subscribe({
           next: (newBoard) => {
-            this.snackBar.open('Board created successfully!', 'Close', { duration: 3000 });
+            this.toast.done('Board created.');
             this.loadBoards();
           },
           error: (error) => {
             console.error('Error creating board:', error);
-            this.snackBar.open('Failed to create board', 'Close', { duration: 3000 });
+            this.toast.error('Could not create the board. Please try again.');
           }
         });
       }
@@ -1272,12 +1051,12 @@ export class DashboardComponent implements OnInit {
       if (result) {
         this.apiService.createDepartment(result).subscribe({
           next: () => {
-            this.snackBar.open('Department created successfully!', 'Close', { duration: 3000 });
+            this.toast.done('Department created.');
             this.loadDepartments();
           },
           error: (error) => {
             console.error('Error creating department:', error);
-            this.snackBar.open('Failed to create department', 'Close', { duration: 3000 });
+            this.toast.error('Could not create the department. Please try again.');
           }
         });
       }
@@ -1373,20 +1152,20 @@ export class DashboardComponent implements OnInit {
     }
 
     h2 mat-icon {
-      font-size: 28px;
+      font-size: var(--text-3xl);
       width: 28px;
       height: 28px;
     }
 
     .info-text {
       color: var(--color-text);
-      font-size: 15px;
+      font-size: var(--text-md);
       margin: 0 0 8px 0;
     }
 
     .contact-text {
       color: var(--color-text-2);
-      font-size: 14px;
+      font-size: var(--text-md);
       font-style: italic;
       margin: 0;
     }
@@ -1396,22 +1175,22 @@ export class DashboardComponent implements OnInit {
       align-items: center;
       gap: 8px;
       color: var(--color-danger);
-      font-size: 14px;
+      font-size: var(--text-md);
       margin: 8px 0 0 0;
       padding: 8px;
       background: var(--color-danger-soft);
-      border-radius: 4px;
+      border-radius: var(--radius-sm);
     }
 
     .error-message mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
 
     mat-dialog-actions {
-      padding: 16px 24px !important;
-      margin: 0 !important;
+      padding: 16px 24px;
+      margin: 0;
     }
 
     mat-dialog-actions button {
@@ -1456,8 +1235,7 @@ export class BoardPasswordDialogComponent {
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
-    MatButtonModule,
-    MatSnackBarModule
+    MatButtonModule
   ],
   template: `
     <h2 mat-dialog-title>Create New Department</h2>

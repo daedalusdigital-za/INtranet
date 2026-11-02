@@ -9,10 +9,11 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../ui/toast.service';
+import { StatusChipComponent } from '../../../ui/status-chip/status-chip.component';
 
 @Component({
   selector: 'app-leave-request-dialog',
@@ -28,8 +29,8 @@ import { environment } from '../../../../environments/environment';
     MatNativeDateModule,
     MatButtonModule,
     MatIconModule,
-    MatSnackBarModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    StatusChipComponent
   ],
   template: `
     <div class="leave-request-dialog">
@@ -105,7 +106,7 @@ import { environment } from '../../../../environments/environment';
                 <div class="past-item">
                   <span class="leave-type-label">{{r.leaveType}}</span>
                   <span class="date-range">{{r.startDate | date:'d MMM'}} – {{r.endDate | date:'d MMM yyyy'}}</span>
-                  <span class="status-pill" [class]="'status-' + r.status.toLowerCase()">{{r.status}}</span>
+                  <app-status-chip [status]="r.status" />
                 </div>
               }
             </div>
@@ -137,26 +138,28 @@ import { environment } from '../../../../environments/environment';
       justify-content: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, var(--color-ok) 0%, #45a049 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       position: relative;
     }
 
     .header-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
+      color: var(--color-primary);
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: var(--text-3xl);
       text-align: center;
     }
 
     .close-btn {
-      color: white;
+      color: var(--color-text-2);
       position: absolute;
       right: 16px;
       top: 50%;
@@ -192,7 +195,7 @@ import { environment } from '../../../../environments/environment';
     }
 
     .days-info mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -214,15 +217,11 @@ import { environment } from '../../../../environments/environment';
     }
 
     .past-requests { margin-top: 16px; border-top: 1px solid var(--color-line); padding-top: 12px; }
-    .past-title { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--color-text-2); font-weight:600; margin-bottom:8px; }
-    .past-title mat-icon { font-size:16px; width:16px; height:16px; }
-    .past-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; background:var(--color-canvas); margin-bottom:6px; font-size:13px; }
+    .past-title { display:flex; align-items:center; gap:6px; font-size:var(--text-sm); color:var(--color-text-2); font-weight:600; margin-bottom:8px; }
+    .past-title mat-icon { font-size:var(--text-lg); width:16px; height:16px; }
+    .past-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:var(--radius-control); background:var(--color-canvas); margin-bottom:6px; font-size:var(--text-sm); }
     .leave-type-label { font-weight:600; color:var(--color-text); flex:1; }
     .date-range { color:var(--color-text-2); white-space:nowrap; }
-    .status-pill { padding:2px 10px; border-radius:10px; font-size:11px; font-weight:700; }
-    .status-pending { background:#fff3cd; color:#856404; }
-    .status-approved { background:var(--color-ok-soft); color:#065f46; }
-    .status-rejected { background:var(--color-danger-soft); color:#991b1b; }
   `]
 })
 export class LeaveRequestDialogComponent implements OnInit {
@@ -233,7 +232,7 @@ export class LeaveRequestDialogComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private dialogRef: MatDialogRef<LeaveRequestDialogComponent>,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private http: HttpClient
   ) {}
 
@@ -285,14 +284,12 @@ export class LeaveRequestDialogComponent implements OnInit {
       this.http.post(`${environment.apiUrl}/leave-requests`, payload, { headers: this.headers() }).subscribe({
         next: () => {
           this.isSubmitting = false;
-          this.snackBar.open('Leave request submitted successfully!', 'Close', {
-            duration: 3000, horizontalPosition: 'center', verticalPosition: 'top'
-          });
+          this.toast.done('Leave request submitted.');
           this.dialogRef.close(true);
         },
         error: () => {
           this.isSubmitting = false;
-          this.snackBar.open('Failed to submit request. Please try again.', 'Close', { duration: 3000 });
+          this.toast.error('Could not submit the request. Please try again.');
         }
       });
     }

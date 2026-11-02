@@ -452,7 +452,7 @@ interface Permission {
     }
 
     .clockin-linked-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
       color: var(--color-warn);
@@ -509,7 +509,7 @@ interface Permission {
     }
 
     .action-buttons mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
 
     @media (max-width: 1200px) {
@@ -1086,7 +1086,7 @@ export class UserManagementComponent implements OnInit {
     }
 
     .form-error-summary mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
       color: var(--color-danger);
@@ -1108,7 +1108,7 @@ export class UserManagementComponent implements OnInit {
     }
 
     .birthday-section h4 mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -1129,7 +1129,7 @@ export class UserManagementComponent implements OnInit {
     }
 
     .clockin-section h4 mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -1147,7 +1147,7 @@ export class UserManagementComponent implements OnInit {
     }
 
     .linked-status mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }

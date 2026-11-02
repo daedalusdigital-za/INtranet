@@ -8,7 +8,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ToastService } from '../../ui/toast.service';
 import { environment } from '../../../environments/environment';
 import { ConfirmService } from '../../ui/confirm.service';
@@ -74,7 +73,7 @@ interface HrCase {
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatIconModule, MatButtonModule,
-    MatTooltipModule, MatProgressSpinnerModule, SkeletonRowsComponent, EmptyStateComponent
+    MatTooltipModule, SkeletonRowsComponent, EmptyStateComponent
   ],
   template: `
   <div class="dir-root">
@@ -88,10 +87,10 @@ interface HrCase {
         </div>
       </div>
       <div class="dir-header-actions">
-        <button mat-stroked-button class="hbtn" (click)="importFromSources()" [disabled]="importing" matTooltip="Import from biometric clock-in &amp; logistics drivers">
+        <button mat-stroked-button (click)="importFromSources()" [disabled]="importing" matTooltip="Import from biometric clock-in &amp; logistics drivers">
           <mat-icon>{{ importing ? 'hourglass_empty' : 'sync' }}</mat-icon> Import
         </button>
-        <button mat-flat-button class="hbtn primary" (click)="newEmployee()">
+        <button mat-flat-button color="primary" (click)="newEmployee()">
           <mat-icon>person_add</mat-icon> Add Employee
         </button>
         <button aria-label="Close" mat-icon-button class="close-btn" (click)="close()"><mat-icon>close</mat-icon></button>
@@ -140,17 +139,16 @@ interface HrCase {
       <!-- List -->
       <div class="dir-list">
         @if (loading) {
-          <div class="dir-loading"><mat-spinner diameter="34"></mat-spinner></div>
+          <app-skeleton-rows [rows]="6" />
         } @else if (employees.length === 0) {
-          <div class="dir-empty">
-            <mat-icon>person_search</mat-icon>
-            <p>No employees found.</p>
+          <app-empty-state icon="person_search" title="No employees found"
+                           message="Try a different search, or change the site, status and type filters.">
             @if (total === 0) {
-              <button mat-flat-button class="hbtn primary" (click)="importFromSources()">
+              <button mat-flat-button color="primary" (click)="importFromSources()">
                 <mat-icon>sync</mat-icon> Import existing employees
               </button>
             }
-          </div>
+          </app-empty-state>
         } @else {
           @for (e of employees; track e.id) {
             <div class="emp-row" (click)="open(e)">
@@ -185,7 +183,7 @@ interface HrCase {
     <!-- Detail / edit view -->
     @if (selected || editing) {
       <div class="detail-wrap">
-        <button mat-button class="back-link" (click)="backToList()"><mat-icon>arrow_back</mat-icon> Back to directory</button>
+        <button mat-button color="primary" class="back-link" (click)="backToList()"><mat-icon>arrow_back</mat-icon> Back to directory</button>
 
         <div class="detail-grid">
           <!-- Left: profile / form -->
@@ -255,7 +253,7 @@ interface HrCase {
               }
               <span class="spacer"></span>
               <button mat-button (click)="backToList()">Cancel</button>
-              <button mat-flat-button class="hbtn primary" (click)="save()" [disabled]="saving">
+              <button mat-flat-button color="primary" (click)="save()" [disabled]="saving">
                 <mat-icon>{{ saving ? 'hourglass_empty' : 'save' }}</mat-icon> Save
               </button>
             </div>
@@ -294,16 +292,17 @@ interface HrCase {
                     <input type="file" hidden (change)="onFile($event)"
                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx,.txt">
                   </label>
-                  <button mat-flat-button class="hbtn primary" (click)="uploadDoc()" [disabled]="!pickedFile || uploading">
+                  <button mat-flat-button color="primary" (click)="uploadDoc()" [disabled]="!pickedFile || uploading">
                     <mat-icon>{{ uploading ? 'hourglass_empty' : 'add' }}</mat-icon> Upload
                   </button>
                 </div>
               </div>
 
               @if (docsLoading) {
-                <div class="dir-loading"><mat-spinner diameter="28"></mat-spinner></div>
+                <app-skeleton-rows [rows]="3" [avatar]="false" />
               } @else if (documents.length === 0) {
-                <div class="docs-empty"><mat-icon>description</mat-icon><p>No documents yet.</p></div>
+                <app-empty-state compact icon="description" title="No documents yet"
+                                 message="Contracts, IDs and certificates you upload appear here." />
               } @else {
                 <div class="docs-list">
                   @for (d of documents; track d.id) {
@@ -335,7 +334,7 @@ interface HrCase {
           <div class="disc-head">
             <h3><mat-icon>gavel</mat-icon> Warnings, Suspensions &amp; Cases</h3>
             @if (form.id) {
-              <button mat-flat-button class="hbtn primary" (click)="showCaseForm = !showCaseForm">
+              <button mat-flat-button color="primary" (click)="showCaseForm = !showCaseForm">
                 <mat-icon>add</mat-icon> New Case
               </button>
             }
@@ -366,7 +365,7 @@ interface HrCase {
                     @else if (newCase.type === 'Dismissal') { <mat-icon>info</mat-icon> Will set status to Terminated }
                   </span>
                   <button mat-button (click)="showCaseForm=false">Cancel</button>
-                  <button mat-flat-button class="hbtn primary" (click)="saveCase()" [disabled]="savingCase || !newCase.title">
+                  <button mat-flat-button color="primary" (click)="saveCase()" [disabled]="savingCase || !newCase.title">
                     <mat-icon>save</mat-icon> Log Case
                   </button>
                 </div>
@@ -374,9 +373,10 @@ interface HrCase {
             }
 
             @if (casesLoading) {
-              <div class="dir-loading"><mat-spinner diameter="26"></mat-spinner></div>
+              <app-skeleton-rows [rows]="3" [avatar]="false" />
             } @else if (cases.length === 0) {
-              <div class="docs-empty"><mat-icon>verified_user</mat-icon><p>No disciplinary records — clean history.</p></div>
+              <app-empty-state compact icon="verified_user" title="No disciplinary records"
+                               message="This employee has a clean history." />
             } @else {
               <div class="case-list">
                 @for (c of cases; track c.id) {
@@ -416,143 +416,141 @@ interface HrCase {
   `,
   styles: [`
     :host { display:block; }
-    .dir-root { display:flex; flex-direction:column; height:80vh; max-height:900px; background:var(--color-text); color:var(--color-line); }
-    .dir-header { display:flex; align-items:center; justify-content:space-between; padding:18px 24px; border-bottom:1px solid rgba(255,255,255,0.08);
-      background:linear-gradient(135deg,#1e1b4b,var(--color-text)); }
+    .dir-root { display:flex; flex-direction:column; height:80vh; max-height:900px; background:var(--color-surface); color:var(--color-text); }
+    .dir-header { display:flex; align-items:center; justify-content:space-between; padding:18px 24px; border-bottom:1px solid var(--color-line);
+      background:var(--color-surface); }
     .dir-title { display:flex; align-items:center; gap:14px; }
-    .dir-title mat-icon { font-size:30px; width:30px; height:30px; color:#60a5fa; }
-    .dir-title h2 { margin:0; font-size:20px; font-weight:800; }
-    .dir-sub { font-size:12px; color:var(--color-text-3); }
+    .dir-title mat-icon { font-size:var(--text-4xl); width:30px; height:30px; color:var(--color-primary); }
+    .dir-title h2 { margin:0; font-size:var(--text-2xl); font-weight:800; color:var(--color-text); }
+    .dir-sub { font-size:var(--text-xs); color:var(--color-text-3); }
     .dir-header-actions { display:flex; align-items:center; gap:10px; }
-    .hbtn { font-size:13px !important; }
-    .hbtn.primary { background:var(--color-primary) !important; color:#fff !important; }
     .close-btn { color:var(--color-text-3); }
 
-    .dir-controls { padding:16px 24px 8px; border-bottom:1px solid rgba(255,255,255,0.06); }
-    .dir-search { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
-      border-radius:12px; padding:8px 14px; margin-bottom:12px; }
+    .dir-controls { padding:16px 24px 8px; border-bottom:1px solid var(--color-line); }
+    .dir-search { display:flex; align-items:center; gap:10px; background:var(--color-surface-2); border:1px solid var(--color-line);
+      border-radius:var(--radius-md); padding:8px 14px; margin-bottom:12px; }
     .dir-search mat-icon { color:var(--color-text-3); }
-    .dir-search input { flex:1; background:transparent; border:none; outline:none; color:var(--color-line); font-size:14px; }
+    .dir-search input { flex:1; background:transparent; border:none; outline:none; color:var(--color-text); font-size:var(--text-md); }
     .site-chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
-    .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:12.5px; cursor:pointer;
-      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:var(--color-line-strong); transition:all .15s; }
-    .chip:hover { background:rgba(255,255,255,0.1); }
-    .chip.active { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
-    .chip-count { font-size:11px; background:rgba(0,0,0,0.25); padding:1px 7px; border-radius:10px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:var(--text-sm); cursor:pointer;
+      background:var(--color-surface-2); border:1px solid var(--color-line); color:var(--color-text-2); transition:all .15s; }
+    .chip:hover { background:var(--color-surface-3); }
+    .chip.active { background:var(--color-primary); border-color:var(--color-primary); color:var(--color-on-primary); }
+    .chip-count { font-size:var(--text-xs); background:var(--color-surface-3); color:var(--color-text-2); padding:1px 7px; border-radius:10px; }
+    .chip.active .chip-count { background:var(--color-primary-hover); color:var(--color-on-primary); }
     .status-row { display:flex; align-items:center; gap:10px; }
-    .status-row select { background:rgba(255,255,255,0.06); color:var(--color-line); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:6px 10px; font-size:13px; }
-    .result-count { margin-left:auto; font-size:12px; color:var(--color-text-3); }
+    .status-row select { background:var(--color-surface); color:var(--color-text); border:1px solid var(--color-line-strong); border-radius:var(--radius-control); padding:6px 10px; font-size:var(--text-sm); }
+    .result-count { margin-left:auto; font-size:var(--text-xs); color:var(--color-text-3); }
 
     .dir-list { flex:1; overflow:auto; padding:12px 24px 24px; }
-    .dir-loading, .dir-empty, .docs-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:48px; color:var(--color-text-3); }
-    .dir-empty mat-icon, .docs-empty mat-icon { font-size:44px; width:44px; height:44px; color:var(--color-text-2); }
 
-    .emp-row { display:flex; align-items:center; gap:14px; padding:12px 14px; border-radius:12px; cursor:pointer;
-      background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); margin-bottom:8px; transition:all .15s; }
-    .emp-row:hover { background:rgba(255,255,255,0.09); transform:translateX(2px); }
-    .emp-avatar { width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,var(--color-primary),var(--color-primary)); color:#fff;
-      font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; position:relative; cursor:pointer; }
+    .emp-row { display:flex; align-items:center; gap:14px; padding:12px 14px; border-radius:var(--radius-md); cursor:pointer;
+      background:var(--color-surface); border:1px solid var(--color-line); margin-bottom:8px; transition:background .15s; }
+    .emp-row:hover { background:var(--color-surface-2); }
+    .emp-avatar { width:42px; height:42px; border-radius:50%; background:var(--color-primary-soft); color:var(--color-primary);
+      font-size:var(--text-md); font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; position:relative; cursor:pointer; }
     .emp-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
-    .emp-avatar.big { width:64px; height:64px; font-size:20px; }
-    .emp-avatar .photo-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center;
+    .emp-avatar.big { width:64px; height:64px; font-size:var(--text-2xl); }
+    .emp-avatar .photo-overlay { position:absolute; inset:0; background:var(--color-scrim); display:flex; align-items:center; justify-content:center;
       opacity:0; transition:opacity .2s; border-radius:50%; }
     .emp-avatar.big:hover .photo-overlay { opacity:1; }
-    .emp-avatar .photo-overlay mat-icon { color:#fff; font-size:22px; }
-    .emp-avatar[data-status='Terminated'] { background:linear-gradient(135deg,var(--color-text-3),var(--color-text-2)); }
-    .emp-avatar[data-status='Suspended'] { background:linear-gradient(135deg,var(--color-warn),var(--color-warn)); }
+    .emp-avatar .photo-overlay mat-icon { color:var(--color-on-dark); font-size:var(--text-2xl); }
+    .emp-avatar[data-status='Terminated'] { background:var(--color-surface-3); color:var(--color-text-3); }
+    .emp-avatar[data-status='Suspended'] { background:var(--color-warn-soft); color:var(--color-warn); }
     .emp-main { flex:1; min-width:0; }
-    .emp-name { font-size:14.5px; font-weight:600; color:var(--color-surface-2); display:flex; align-items:center; gap:8px; }
-    .emp-type { font-size:10.5px; font-weight:600; color:#a5b4fc; background:rgba(129,140,248,0.15); padding:2px 8px; border-radius:10px; }
-    .emp-meta { font-size:12px; color:var(--color-text-3); display:flex; align-items:center; gap:6px; margin-top:2px; }
+    .emp-name { font-size:var(--text-md); font-weight:600; color:var(--color-text); display:flex; align-items:center; gap:8px; }
+    .emp-type { font-size:var(--text-xs); font-weight:600; color:var(--color-text-2); background:var(--color-surface-2); padding:2px 8px; border-radius:10px; }
+    .emp-meta { font-size:var(--text-xs); color:var(--color-text-3); display:flex; align-items:center; gap:6px; margin-top:2px; }
     .emp-meta .dot { opacity:.5; }
     .emp-side { display:flex; align-items:center; gap:8px; }
-    .site-tag { font-size:11px; padding:3px 9px; border-radius:8px; background:rgba(56,189,248,0.15); color:#7dd3fc; }
-    .status-tag { font-size:11px; padding:3px 9px; border-radius:8px; }
-    .status-tag[data-status='Active'] { background:rgba(16,185,129,0.15); color:#6ee7b7; }
-    .status-tag[data-status='On Leave'] { background:rgba(139,92,246,0.15); color:#c4b5fd; }
-    .status-tag[data-status='Serving Notice'] { background:rgba(245,158,11,0.15); color:#fcd34d; }
-    .status-tag[data-status='Suspended'] { background:rgba(239,68,68,0.15); color:#fca5a5; }
-    .status-tag[data-status='Terminated'] { background:rgba(100,116,139,0.2); color:var(--color-line-strong); }
-    .doc-tag { display:inline-flex; align-items:center; gap:3px; font-size:11px; color:var(--color-text-3); }
-    .doc-tag mat-icon { font-size:15px; width:15px; height:15px; }
-    .emp-go { color:var(--color-text-2); }
+    .site-tag { font-size:var(--text-xs); padding:3px 9px; border-radius:8px; background:var(--color-primary-soft); color:var(--color-primary); }
+    .status-tag { font-size:var(--text-xs); padding:3px 9px; border-radius:8px; }
+    .status-tag[data-status='Active'] { background:var(--color-ok-soft); color:var(--color-ok); }
+    .status-tag[data-status='On Leave'] { background:var(--color-cat-purple-soft); color:var(--color-cat-purple); }
+    .status-tag[data-status='Serving Notice'] { background:var(--color-warn-soft); color:var(--color-warn); }
+    .status-tag[data-status='Suspended'] { background:var(--color-danger-soft); color:var(--color-danger); }
+    .status-tag[data-status='Terminated'] { background:var(--color-surface-2); color:var(--color-text-2); }
+    .doc-tag { display:inline-flex; align-items:center; gap:3px; font-size:var(--text-xs); color:var(--color-text-3); }
+    .doc-tag mat-icon { font-size:var(--text-md); width:15px; height:15px; }
+    .emp-go { color:var(--color-text-3); }
 
     /* Detail / edit */
     .detail-wrap { flex:1; overflow:auto; padding:16px 24px 28px; }
-    .back-link { color:#a5b4fc !important; margin-bottom:12px; }
+    .back-link { margin-bottom:12px; }
     .detail-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:18px; }
     @media (max-width:1000px){ .detail-grid { grid-template-columns:1fr; } }
-    .detail-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:20px; }
+    .detail-card { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-lg); padding:20px; }
     .dc-head { display:flex; align-items:center; gap:16px; margin-bottom:18px; }
-    .edit-inline { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:8px 10px; color:var(--color-surface-2); font-size:14px; }
-    .edit-inline.name { font-size:16px; font-weight:700; margin-right:8px; width:150px; }
+    .edit-inline { background:var(--color-surface); border:1px solid var(--color-line-strong); border-radius:var(--radius-control); padding:8px 10px; color:var(--color-text); font-size:var(--text-md); }
+    .edit-inline.name { font-size:var(--text-lg); font-weight:700; margin-right:8px; width:150px; }
     .field-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
-    .field-grid label { display:flex; flex-direction:column; gap:5px; font-size:11.5px; color:var(--color-text-3); text-transform:uppercase; letter-spacing:.4px; }
+    .field-grid label { display:flex; flex-direction:column; gap:5px; font-size:var(--text-xs); color:var(--color-text-3); text-transform:uppercase; letter-spacing:.4px; }
     .field-grid label.full { grid-column:1 / -1; }
-    .field-grid input, .field-grid select { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px;
-      padding:8px 10px; color:var(--color-surface-2); font-size:13.5px; text-transform:none; letter-spacing:normal; }
-    .dc-actions { display:flex; align-items:center; gap:10px; margin-top:20px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.08); }
+    .field-grid input, .field-grid select { background:var(--color-surface); border:1px solid var(--color-line-strong); border-radius:var(--radius-control);
+      padding:8px 10px; color:var(--color-text); font-size:var(--text-sm); text-transform:none; letter-spacing:normal; }
+    .dc-actions { display:flex; align-items:center; gap:10px; margin-top:20px; padding-top:16px; border-top:1px solid var(--color-line); }
     .dc-actions .spacer { flex:1; }
-    .danger { color:#fca5a5 !important; border-color:rgba(252,165,165,0.4) !important; }
+    .dc-actions .danger { --mdc-outlined-button-label-text-color:var(--color-danger); --mdc-outlined-button-outline-color:var(--color-danger); color:var(--color-danger); border-color:var(--color-danger); }
+    .docs-list .danger, .case-actions .danger { --mdc-icon-button-icon-color:var(--color-danger); color:var(--color-danger); }
 
     .docs-card { display:flex; flex-direction:column; }
-    .docs-head h3 { margin:0 0 14px; font-size:15px; display:flex; align-items:center; gap:8px; color:var(--color-line); }
-    .docs-head mat-icon { color:#60a5fa; }
-    .docs-hint, .docs-empty { color:var(--color-text-3); font-size:13px; display:flex; align-items:center; gap:8px; padding:16px; }
-    .upload-box { background:rgba(255,255,255,0.04); border:1px dashed rgba(255,255,255,0.15); border-radius:12px; padding:12px; margin-bottom:14px; }
+    .docs-head h3 { margin:0 0 14px; font-size:var(--text-md); display:flex; align-items:center; gap:8px; color:var(--color-text); }
+    .docs-head mat-icon { color:var(--color-primary); }
+    .docs-hint { color:var(--color-text-3); font-size:var(--text-sm); display:flex; align-items:center; gap:8px; padding:16px; }
+    .upload-box { background:var(--color-surface-2); border:1px dashed var(--color-line-strong); border-radius:var(--radius-md); padding:12px; margin-bottom:14px; }
     .up-row { display:flex; gap:8px; margin-bottom:8px; align-items:center; }
     .up-row:last-child { margin-bottom:0; }
-    .upload-box select, .upload-box input { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:7px 9px; color:var(--color-surface-2); font-size:12.5px; }
+    .upload-box select, .upload-box input { background:var(--color-surface); border:1px solid var(--color-line-strong); border-radius:var(--radius-control); padding:7px 9px; color:var(--color-text); font-size:var(--text-sm); }
     .up-title { flex:1; }
     .up-expiry { width:140px; }
-    .file-btn { flex:1; display:flex; align-items:center; gap:8px; cursor:pointer; background:rgba(255,255,255,0.06);
-      border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:7px 10px; font-size:12.5px; color:var(--color-line-strong); overflow:hidden; }
+    .file-btn { flex:1; display:flex; align-items:center; gap:8px; cursor:pointer; background:var(--color-surface);
+      border:1px solid var(--color-line-strong); border-radius:var(--radius-control); padding:7px 10px; font-size:var(--text-sm); color:var(--color-text-2); overflow:hidden; }
     .file-btn span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .docs-list { display:flex; flex-direction:column; gap:8px; overflow:auto; }
-    .doc-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.04); }
-    .doc-ico { color:#a5b4fc; }
+    .doc-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--radius-md); background:var(--color-surface-2); }
+    .doc-ico { color:var(--color-primary); }
     .doc-info { flex:1; min-width:0; }
-    .doc-title { font-size:13px; font-weight:600; color:var(--color-surface-2); display:flex; align-items:center; gap:8px; }
-    .doc-cat { font-size:10px; font-weight:600; padding:1px 7px; border-radius:8px; background:rgba(129,140,248,0.15); color:#c7d2fe; text-transform:uppercase; }
-    .doc-meta { font-size:11px; color:var(--color-text-3); margin-top:2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .doc-expiry { display:inline-flex; align-items:center; gap:3px; color:#fcd34d; }
-    .doc-expiry.expired { color:#fca5a5; }
-    .doc-expiry mat-icon { font-size:13px; width:13px; height:13px; }
+    .doc-title { font-size:var(--text-sm); font-weight:600; color:var(--color-text); display:flex; align-items:center; gap:8px; }
+    .doc-cat { font-size:var(--text-xs); font-weight:600; padding:1px 7px; border-radius:8px; background:var(--color-surface-3); color:var(--color-text-2); text-transform:uppercase; }
+    .doc-meta { font-size:var(--text-xs); color:var(--color-text-3); margin-top:2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .doc-expiry { display:inline-flex; align-items:center; gap:3px; color:var(--color-warn); }
+    .doc-expiry.expired { color:var(--color-danger); }
+    .doc-expiry mat-icon { font-size:var(--text-sm); width:13px; height:13px; }
 
     /* Disciplinary */
     .disc-card { grid-column:1 / -1; }
     .disc-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
-    .disc-head h3 { margin:0; font-size:15px; display:flex; align-items:center; gap:8px; color:var(--color-line); }
-    .disc-head mat-icon { color:#fca5a5; }
-    .case-form { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:14px; margin-bottom:14px; }
+    .disc-head h3 { margin:0; font-size:var(--text-md); display:flex; align-items:center; gap:8px; color:var(--color-text); }
+    .disc-head mat-icon { color:var(--color-danger); }
+    .case-form { background:var(--color-surface-2); border:1px solid var(--color-line); border-radius:var(--radius-md); padding:14px; margin-bottom:14px; }
     .case-form .cf-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:10px; }
-    .case-form label { display:flex; flex-direction:column; gap:5px; font-size:11.5px; color:var(--color-text-3); text-transform:uppercase; letter-spacing:.4px; margin-bottom:10px; }
+    .case-form label { display:flex; flex-direction:column; gap:5px; font-size:var(--text-xs); color:var(--color-text-3); text-transform:uppercase; letter-spacing:.4px; margin-bottom:10px; }
     .case-form label.full { grid-column:1 / -1; }
     .case-form label.chk { flex-direction:row; align-items:center; gap:8px; text-transform:none; }
-    .case-form input, .case-form select, .case-form textarea { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
-      border-radius:8px; padding:8px 10px; color:var(--color-surface-2); font-size:13.5px; text-transform:none; letter-spacing:normal; }
+    .case-form input, .case-form select, .case-form textarea { background:var(--color-surface); border:1px solid var(--color-line-strong);
+      border-radius:var(--radius-control); padding:8px 10px; color:var(--color-text); font-size:var(--text-sm); text-transform:none; letter-spacing:normal; }
     .cf-actions { display:flex; align-items:center; gap:10px; }
-    .cf-note { flex:1; display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--color-text-3); }
-    .cf-note.warn { color:#fcd34d; }
-    .cf-note mat-icon { font-size:15px; width:15px; height:15px; }
+    .cf-note { flex:1; display:flex; align-items:center; gap:4px; font-size:var(--text-xs); color:var(--color-text-3); }
+    .cf-note.warn { color:var(--color-warn); }
+    .cf-note mat-icon { font-size:var(--text-md); width:15px; height:15px; }
     .case-list { display:flex; flex-direction:column; gap:8px; }
-    .case-item { display:flex; align-items:flex-start; gap:12px; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.04); border-left:3px solid var(--color-text-3); }
+    .case-item { display:flex; align-items:flex-start; gap:12px; padding:12px 14px; border-radius:var(--radius-md); background:var(--color-surface-2); border-left:3px solid var(--color-text-3); }
     .case-item[data-type='Suspension'] { border-left-color:var(--color-danger); }
     .case-item[data-type='Final Written Warning'] { border-left-color:var(--color-warn); }
-    .case-item[data-type='Written Warning'] { border-left-color:#eab308; }
-    .case-item[data-type='Dismissal'] { border-left-color:#991b1b; }
-    .case-ico { color:var(--color-line-strong); margin-top:2px; }
+    .case-item[data-type='Written Warning'] { border-left-color:var(--color-cat-amber); }
+    .case-item[data-type='Dismissal'] { border-left-color:var(--color-danger); }
+    .case-ico { color:var(--color-text-2); margin-top:2px; }
     .case-info { flex:1; min-width:0; }
-    .case-title { font-size:13.5px; font-weight:600; color:var(--color-surface-2); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .case-type { font-size:10px; font-weight:600; padding:1px 7px; border-radius:8px; background:rgba(148,163,184,0.2); color:var(--color-line-strong); text-transform:uppercase; }
-    .case-status { font-size:10px; font-weight:600; padding:1px 7px; border-radius:8px; }
-    .case-status[data-status='Active'] { background:rgba(239,68,68,0.16); color:#fca5a5; }
-    .case-status[data-status='Resolved'] { background:rgba(16,185,129,0.16); color:#6ee7b7; }
-    .case-status[data-status='Expired'] { background:rgba(148,163,184,0.2); color:var(--color-line-strong); }
-    .case-meta { font-size:11.5px; color:var(--color-text-3); margin-top:2px; }
-    .case-desc { font-size:12.5px; color:var(--color-line-strong); margin-top:5px; }
+    .case-title { font-size:var(--text-sm); font-weight:600; color:var(--color-text); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .case-type { font-size:var(--text-xs); font-weight:600; padding:1px 7px; border-radius:8px; background:var(--color-surface-3); color:var(--color-text-2); text-transform:uppercase; }
+    .case-status { font-size:var(--text-xs); font-weight:600; padding:1px 7px; border-radius:8px; }
+    .case-status[data-status='Active'] { background:var(--color-danger-soft); color:var(--color-danger); }
+    .case-status[data-status='Resolved'] { background:var(--color-ok-soft); color:var(--color-ok); }
+    .case-status[data-status='Expired'] { background:var(--color-surface-3); color:var(--color-text-2); }
+    .case-meta { font-size:var(--text-xs); color:var(--color-text-3); margin-top:2px; }
+    .case-desc { font-size:var(--text-xs); color:var(--color-text-2); margin-top:5px; }
     .case-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-    .reinstate { color:#6ee7b7 !important; border-color:rgba(110,231,183,0.4) !important; }
+    .case-actions .reinstate { --mdc-outlined-button-label-text-color:var(--color-ok); --mdc-outlined-button-outline-color:var(--color-ok); color:var(--color-ok); border-color:var(--color-ok); }
   `]
 })
 export class EmployeeDirectoryComponent implements OnInit {

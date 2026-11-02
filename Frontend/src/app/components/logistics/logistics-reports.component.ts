@@ -299,7 +299,7 @@ interface Incident {
 
     .rep-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
     .rep-title { display:flex; align-items:center; gap:12px; }
-    .rep-title > mat-icon { font-size:32px; width:32px; height:32px; color:var(--color-primary); }
+    .rep-title > mat-icon { font-size:var(--text-4xl); width:32px; height:32px; color:var(--color-primary); }
     .rep-title > div { display:flex; flex-direction:column; gap:4px; }
     .rep-title h2 { margin:0; font-size:var(--text-2xl); color:var(--color-text); }
     .rep-title p { margin:0; font-size:var(--text-xs); color:var(--color-text-3); }
@@ -311,7 +311,7 @@ interface Incident {
     .sum-card { display:flex; align-items:center; gap:12px; padding:14px; background:var(--color-surface); border:1px solid var(--color-line); border-radius:8px; cursor:pointer; transition:all .2s ease; box-shadow: var(--shadow-sm); }
     .sum-card:hover { border-color:var(--color-line-strong); transform:translateY(-2px); box-shadow: var(--shadow-md); }
     .sum-card.on { background:var(--color-primary-soft); border-color:var(--color-primary); }
-    .sum-card > mat-icon { font-size:24px; width:24px; height:24px; }
+    .sum-card > mat-icon { font-size:var(--text-3xl); width:24px; height:24px; }
     .sum-card.total > mat-icon { color:var(--color-primary); }
     .sum-card.speeding > mat-icon { color:var(--color-warn); }
     .sum-card.curfew > mat-icon { color:var(--color-cat-purple); }
@@ -325,7 +325,7 @@ interface Incident {
     .rep-table-wrap .mono { font-family:var(--font-mono); font-size:var(--text-xs); }
     .rep-table-wrap .strong { font-weight:600; }
     .type-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:6px; font-size:var(--text-xs); font-weight:600; white-space:nowrap; }
-    .type-badge > mat-icon { font-size:14px; width:14px; height:14px; }
+    .type-badge > mat-icon { font-size:var(--text-md); width:14px; height:14px; }
     .t-Speeding { background:var(--color-warn-soft); color:var(--color-warn); }
     .t-CurfewMovement { background:var(--color-cat-purple-soft); color:var(--color-cat-purple); }
     .t-GeofenceExit { background:var(--color-danger-soft); color:var(--color-danger); }
@@ -334,7 +334,7 @@ interface Incident {
     /* Fuel Health Section */
     .fuel-health-section { display:flex; flex-direction:column; gap:20px; }
     .fuel-title { display:flex; align-items:center; gap:12px; }
-    .fuel-title > mat-icon { font-size:32px; width:32px; height:32px; color:var(--color-warn); }
+    .fuel-title > mat-icon { font-size:var(--text-4xl); width:32px; height:32px; color:var(--color-warn); }
     .fuel-title > div { display:flex; flex-direction:column; gap:4px; }
     .fuel-title h2 { margin:0; font-size:var(--text-2xl); color:var(--color-text); }
     .fuel-title p { margin:0; font-size:var(--text-xs); color:var(--color-text-3); }
@@ -351,7 +351,7 @@ interface Incident {
 
     .fuel-card-header { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
     .reg-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; background:var(--color-primary-soft); color:var(--color-primary); border-radius:6px; font-weight:700; font-size:var(--text-md); letter-spacing:0.3px; }
-    .reg-badge mat-icon { font-size:18px; width:18px; height:18px; }
+    .reg-badge mat-icon { font-size:var(--text-xl); width:18px; height:18px; }
     .veh-sub { font-size:var(--text-xs); color:var(--color-text-3); margin-bottom:10px; }
 
     .fuel-card-content { display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
@@ -362,12 +362,12 @@ interface Incident {
 
     .fuel-card-footer { display:flex; justify-content:space-between; align-items:center; gap:8px; padding-top:10px; border-top:1px solid var(--color-line); }
     .reason { font-size:var(--text-xs); color:var(--color-text-3); flex:1; }
-    .fuel-card-footer > mat-icon { font-size:20px; width:20px; height:20px; color:var(--color-text-3); flex-shrink:0; }
+    .fuel-card-footer > mat-icon { font-size:var(--text-2xl); width:20px; height:20px; color:var(--color-text-3); flex-shrink:0; }
 
     /* Expanded detail */
     .fuel-detail { margin-top:14px; padding-top:14px; border-top:2px dashed var(--color-line); display:flex; flex-direction:column; gap:16px; cursor:default; }
     .detail-block h4 { display:flex; align-items:center; gap:6px; margin:0 0 10px; font-size:var(--text-sm); color:var(--color-text-2); }
-    .detail-block h4 mat-icon { font-size:18px; width:18px; height:18px; color:var(--color-warn); }
+    .detail-block h4 mat-icon { font-size:var(--text-xl); width:18px; height:18px; color:var(--color-warn); }
     .finding { display:flex; align-items:flex-start; gap:8px; padding:8px 10px; border-radius:6px; background:var(--color-canvas); margin-bottom:6px; }
     .finding .sev-dot { width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0; }
     .finding.sev-high .sev-dot { background:var(--color-danger); }
@@ -383,7 +383,7 @@ interface Incident {
     .fill-row.flagged { background:var(--color-warn-soft); }
     .fill-row:last-child { border-bottom:none; }
     .fill-flag { display:flex; justify-content:center; }
-    .fill-flag mat-icon { font-size:16px; width:16px; height:16px; color:var(--color-ok); }
+    .fill-flag mat-icon { font-size:var(--text-lg); width:16px; height:16px; color:var(--color-ok); }
     .fill-flag mat-icon.flag-on { color:var(--color-warn); }
     .detail-empty { font-size:var(--text-xs); color:var(--color-text-3); padding:10px; text-align:center; }
   `]

@@ -30,9 +30,9 @@ import { OpenMapComponent } from './open-map.component';
     :host { display:block; min-height:100vh; background:#0b1220; }
     .omp-container { max-width:1600px; margin:0 auto; padding:20px 18px 60px; }
     .omp-header { display:flex; align-items:center; gap:14px; margin-bottom:18px; }
-    .omp-header mat-icon { font-size:34px; width:34px; height:34px; color:#60a5fa; }
-    .omp-header h1 { margin:0; color:#fff; font-size:22px; font-weight:700; }
-    .omp-header p { margin:2px 0 0; color:rgba(255,255,255,0.6); font-size:13px; }
+    .omp-header mat-icon { font-size:var(--text-4xl); width:32px; height:32px; color:#60a5fa; }
+    .omp-header h1 { margin:0; color:#fff; font-size:var(--text-2xl); font-weight:700; }
+    .omp-header p { margin:2px 0 0; color:rgba(255,255,255,0.6); font-size:var(--text-sm); }
   `]
 })
 export class OpenMapPageComponent {}

@@ -9,7 +9,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
@@ -105,7 +104,6 @@ export interface SalesImportDialogResult {
     MatInputModule,
     MatDatepickerModule,
     MatNativeDateModule,
-    MatProgressSpinnerModule,
     MatProgressBarModule,
     MatTableModule,
     MatPaginatorModule,
@@ -180,7 +178,6 @@ export interface SalesImportDialogResult {
         <!-- Step 2: Uploading/Parsing -->
         @if (currentStep() === 'uploading') {
           <div class="uploading-section">
-            <mat-spinner diameter="60"></mat-spinner>
             <h3>Processing Sales Report...</h3>
             <p>Parsing transactions and validating data</p>
             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -253,15 +250,15 @@ export interface SalesImportDialogResult {
                       </mat-panel-title>
                     </mat-expansion-panel-header>
                     <div class="duplicates-list">
-                      <table class="duplicates-table">
+                      <table class="duplicates-table app-table">
                         <thead>
                           <tr>
                             <th>Row</th>
                             <th>Trans #</th>
                             <th>Customer</th>
                             <th>Date</th>
-                            <th class="right">New Amount</th>
-                            <th class="right">Existing</th>
+                            <th class="num">New Amount</th>
+                            <th class="num">Existing</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -271,8 +268,8 @@ export interface SalesImportDialogResult {
                               <td>{{ dup.transactionNumber }}</td>
                               <td>{{ dup.customerNumber }}</td>
                               <td>{{ dup.transactionDate }}</td>
-                              <td class="right">{{ formatCurrency(dup.salesAmount) }}</td>
-                              <td class="right existing">{{ formatCurrency(dup.existingSalesAmount) }}</td>
+                              <td class="num">{{ formatCurrency(dup.salesAmount) }}</td>
+                              <td class="num existing">{{ formatCurrency(dup.existingSalesAmount) }}</td>
                             </tr>
                           }
                         </tbody>
@@ -322,13 +319,13 @@ export interface SalesImportDialogResult {
                   </mat-panel-title>
                 </mat-expansion-panel-header>
                 <div class="customer-list">
-                  <table class="customer-table">
+                  <table class="customer-table app-table">
                     <thead>
                       <tr>
                         <th>Customer</th>
-                        <th class="right">Trans.</th>
-                        <th class="right">Sales</th>
-                        <th class="right">Cost</th>
+                        <th class="num">Trans.</th>
+                        <th class="num">Sales</th>
+                        <th class="num">Cost</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -340,9 +337,9 @@ export interface SalesImportDialogResult {
                               <span class="cust-name">{{ cust.customerName }}</span>
                             </div>
                           </td>
-                          <td class="right">{{ cust.transactionCount }}</td>
-                          <td class="right">{{ formatCurrency(cust.salesTotal) }}</td>
-                          <td class="right">{{ formatCurrency(cust.costTotal) }}</td>
+                          <td class="num">{{ cust.transactionCount }}</td>
+                          <td class="num">{{ formatCurrency(cust.salesTotal) }}</td>
+                          <td class="num">{{ formatCurrency(cust.costTotal) }}</td>
                         </tr>
                       }
                     </tbody>
@@ -363,16 +360,16 @@ export interface SalesImportDialogResult {
                 </mat-panel-title>
               </mat-expansion-panel-header>
               <div class="transactions-preview">
-                <table class="transactions-table">
+                <table class="transactions-table app-table">
                   <thead>
                     <tr>
                       <th>Date</th>
                       <th>Trans #</th>
                       <th>Customer</th>
                       <th>Type</th>
-                      <th class="right">Qty</th>
-                      <th class="right">Sales</th>
-                      <th class="right">Cost</th>
+                      <th class="num">Qty</th>
+                      <th class="num">Sales</th>
+                      <th class="num">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -387,9 +384,9 @@ export interface SalesImportDialogResult {
                           </div>
                         </td>
                         <td>{{ tx.type }}</td>
-                        <td class="right">{{ tx.quantity }}</td>
-                        <td class="right">{{ formatCurrency(tx.salesAmount) }}</td>
-                        <td class="right">{{ formatCurrency(tx.costOfSales) }}</td>
+                        <td class="num">{{ tx.quantity }}</td>
+                        <td class="num">{{ formatCurrency(tx.salesAmount) }}</td>
+                        <td class="num">{{ formatCurrency(tx.costOfSales) }}</td>
                       </tr>
                     }
                   </tbody>
@@ -409,7 +406,6 @@ export interface SalesImportDialogResult {
         <!-- Step 4: Committing -->
         @if (currentStep() === 'committing') {
           <div class="committing-section">
-            <mat-spinner diameter="60"></mat-spinner>
             <h3>Committing Import...</h3>
             <p>Saving {{ importSummary()?.transactions || 0 }} transactions to database</p>
             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -473,14 +469,14 @@ export interface SalesImportDialogResult {
       gap: 12px;
       margin: 0;
       padding: 16px 24px;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-      color: white;
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0;
 
       mat-icon {
         font-size: 28px;
         width: 28px;
         height: 28px;
+        color: var(--color-primary);
       }
     }
 
@@ -513,12 +509,12 @@ export interface SalesImportDialogResult {
 
         .file-name {
           font-weight: 500;
-          font-size: 16px;
+          font-size: var(--text-lg);
         }
 
         .file-size {
           color: var(--color-text-2);
-          font-size: 13px;
+          font-size: var(--text-sm);
         }
       }
     }
@@ -541,7 +537,7 @@ export interface SalesImportDialogResult {
 
       .hint {
         color: var(--color-text-2);
-        font-size: 13px;
+        font-size: var(--text-sm);
         margin: 0 0 16px;
       }
     }
@@ -569,21 +565,21 @@ export interface SalesImportDialogResult {
       &.selected {
         border-color: var(--color-primary);
         background: var(--color-primary);
-        color: white;
+        color: var(--color-on-primary);
 
         .company-code {
-          color: white;
+          color: var(--color-on-primary);
         }
       }
 
       .company-code {
         font-weight: 700;
-        font-size: 18px;
+        font-size: var(--text-xl);
         color: var(--color-primary);
       }
 
       .company-name {
-        font-size: 11px;
+        font-size: var(--text-xs);
         margin-top: 4px;
         white-space: nowrap;
         overflow: hidden;
@@ -651,13 +647,13 @@ export interface SalesImportDialogResult {
       }
 
       .value {
-        font-size: 18px;
+        font-size: var(--text-xl);
         font-weight: 700;
         margin: 4px 0;
       }
 
       .label {
-        font-size: 11px;
+        font-size: var(--text-xs);
         color: var(--color-text-2);
         text-transform: uppercase;
       }
@@ -725,12 +721,12 @@ export interface SalesImportDialogResult {
 
           strong {
             color: var(--color-warn);
-            font-size: 16px;
+            font-size: var(--text-lg);
           }
 
           span {
             color: var(--color-text-2);
-            font-size: 13px;
+            font-size: var(--text-sm);
           }
         }
       }
@@ -739,13 +735,13 @@ export interface SalesImportDialogResult {
         display: flex;
         gap: 24px;
         padding: 8px 0;
-        border-top: 1px solid #ffcc80;
+        border-top: 1px solid var(--color-line-strong);
 
         .stat {
           display: flex;
           align-items: center;
           gap: 6px;
-          font-size: 14px;
+          font-size: var(--text-md);
           color: var(--color-text-2);
 
           mat-icon {
@@ -767,24 +763,7 @@ export interface SalesImportDialogResult {
       }
 
       .duplicates-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-
-        th, td {
-          padding: 6px 10px;
-          text-align: left;
-          border-bottom: 1px solid var(--color-line);
-        }
-
-        th {
-          background: var(--color-canvas);
-          font-weight: 500;
-        }
-
-        .right {
-          text-align: right;
-        }
+        font-size: var(--text-xs);
 
         .existing {
           color: var(--color-text-2);
@@ -797,7 +776,7 @@ export interface SalesImportDialogResult {
         padding: 8px;
         color: var(--color-text-2);
         font-style: italic;
-        font-size: 12px;
+        font-size: var(--text-xs);
       }
     }
 
@@ -819,7 +798,7 @@ export interface SalesImportDialogResult {
       gap: 8px;
       padding: 8px 12px;
       border-radius: 4px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       margin-bottom: 4px;
 
       &.warning {
@@ -836,7 +815,7 @@ export interface SalesImportDialogResult {
       }
 
       .issue-code {
-        font-family: monospace;
+        font-family: var(--font-mono);
         color: var(--color-text-3);
       }
     }
@@ -850,64 +829,24 @@ export interface SalesImportDialogResult {
 
     /* Customer Table */
     .customer-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-
-      th, td {
-        padding: 8px 12px;
-        text-align: left;
-        border-bottom: 1px solid var(--color-line);
-      }
-
-      th {
-        background: var(--color-canvas);
-        font-weight: 500;
-      }
-
-      .right {
-        text-align: right;
-      }
-
       .customer-info {
         display: flex;
         flex-direction: column;
 
         .cust-number {
           font-weight: 500;
-          font-size: 12px;
+          font-size: var(--text-xs);
         }
 
         .cust-name {
           color: var(--color-text-2);
-          font-size: 11px;
+          font-size: var(--text-xs);
         }
       }
     }
 
     /* Transactions Table */
     .transactions-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-
-      th, td {
-        padding: 8px 12px;
-        text-align: left;
-        border-bottom: 1px solid var(--color-line);
-      }
-
-      th {
-        background: var(--color-canvas);
-        font-weight: 500;
-        position: sticky;
-        top: 0;
-      }
-
-      .right {
-        text-align: right;
-      }
-
       tr.has-issues {
         background: var(--color-warn-soft);
       }
@@ -918,12 +857,12 @@ export interface SalesImportDialogResult {
 
         .cust-number {
           font-weight: 500;
-          font-size: 11px;
+          font-size: var(--text-xs);
         }
 
         .cust-name {
           color: var(--color-text-2);
-          font-size: 10px;
+          font-size: var(--text-xs);
           max-width: 150px;
           white-space: nowrap;
           overflow: hidden;

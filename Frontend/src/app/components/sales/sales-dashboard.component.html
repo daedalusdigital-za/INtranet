@@ -9,8 +9,8 @@
                   [matBadgeHidden]="attentionCount() === 0">
             <mat-icon>warning</mat-icon>Attention
           </button>
-          <button mat-stroked-button (click)="promptImportPassword('sales')">
-            <mat-icon>upload_file</mat-icon>Import sales
+          <button mat-stroked-button class="welly-btn" (click)="openWellySuggestions()" matTooltip="Welly looks at open invoices, stock in each warehouse and free trucks, then suggests what to fulfil and what to move">
+            <img src="/welly/default.png" alt="" class="welly-btn-img">Welly suggestions
           </button>
           <button mat-stroked-button [matMenuTriggerFor]="salesMoreMenu" aria-label="More actions">
             <mat-icon>more_horiz</mat-icon>More
@@ -24,6 +24,9 @@
       </app-page-header>
       <!-- Outside the header so the empty menu host doesn't take a slot in the actions row -->
       <mat-menu #salesMoreMenu="matMenu" xPosition="before">
+        <button mat-menu-item (click)="promptImportPassword('sales')">
+          <mat-icon>upload_file</mat-icon><span>Import sales</span>
+        </button>
         <button mat-menu-item (click)="promptImportPassword('customers')">
           <mat-icon>group_add</mat-icon><span>Import customers</span>
         </button>
@@ -225,8 +228,8 @@
                   </select>
                 </div>
                 <div class="edit-field">
-                  <label>Source Company</label>
-                  <input type="text" [(ngModel)]="editInvoiceForm.sourceCompany" placeholder="Source company" />
+                  <label>Company</label>
+                  <input type="text" [(ngModel)]="editInvoiceForm.sourceCompany" placeholder="Company" />
                 </div>
                 <div class="edit-field full-width">
                   <label>Delivery Address</label>
@@ -919,13 +922,36 @@
                 </div>
               </div>
 
+              <!-- Stock availability for invoices not yet delivered -->
+              @if (invoiceStockLoaded() && invoices().length > 0) {
+                <div class="bo-stock-bar">
+                  <span class="bo-stock-title" matTooltip="Stock on hand for invoices that are not yet delivered"><mat-icon>warehouse</mat-icon> Stock check</span>
+                  <button class="bo-stock-chip full" [class.active]="invoiceStockFilter() === 'full'" (click)="invoiceStockFilter.set(invoiceStockFilter() === 'full' ? '' : 'full'); invoicePageIndex.set(0)">
+                    In stock <b>{{ invoiceStockCounts().full }}</b>
+                  </button>
+                  <button class="bo-stock-chip partial" [class.active]="invoiceStockFilter() === 'partial'" (click)="invoiceStockFilter.set(invoiceStockFilter() === 'partial' ? '' : 'partial'); invoicePageIndex.set(0)">
+                    Partial <b>{{ invoiceStockCounts().partial }}</b>
+                  </button>
+                  <button class="bo-stock-chip none" [class.active]="invoiceStockFilter() === 'none'" (click)="invoiceStockFilter.set(invoiceStockFilter() === 'none' ? '' : 'none'); invoicePageIndex.set(0)">
+                    No stock <b>{{ invoiceStockCounts().none }}</b>
+                  </button>
+                  <button class="bo-stock-chip unmapped" [class.active]="invoiceStockFilter() === 'unmapped'" (click)="invoiceStockFilter.set(invoiceStockFilter() === 'unmapped' ? '' : 'unmapped'); invoicePageIndex.set(0)">
+                    Unmapped <b>{{ invoiceStockCounts().unmapped }}</b>
+                  </button>
+                  <span class="bo-coverable">
+                    <mat-icon>bolt</mat-icon>
+                    <strong>{{ invoiceStockCounts().lines }}</strong> lines worth <strong>R{{ formatCurrency(invoiceStockCounts().value) }}</strong> can be fulfilled from stock on hand
+                  </span>
+                </div>
+              }
+
               @if (loadingInvoices()) {
                 <app-skeleton-rows [rows]="8" [avatar]="false"></app-skeleton-rows>
               } @else if (allFilteredInvoices().length === 0) {
                 @if (invoices().length > 0) {
                   <app-empty-state icon="filter_alt_off" title="No invoices match the filters"
-                                   message="No invoice matches this search and status.">
-                    <button mat-stroked-button (click)="invoiceSearch.set(''); invoiceStatusFilter.set('all'); invoicePageIndex.set(0)">Clear the filters</button>
+                                   message="No invoice matches this search, status and stock filter.">
+                    <button mat-stroked-button (click)="invoiceSearch.set(''); invoiceStatusFilter.set('all'); invoiceStockFilter.set(''); invoicePageIndex.set(0)">Clear the filters</button>
                   </app-empty-state>
                 } @else {
                   <app-empty-state icon="receipt_long" title="No invoices yet"
@@ -944,6 +970,20 @@
                     <ng-container matColumnDef="date">
                       <th mat-header-cell *matHeaderCellDef>Date</th>
                       <td mat-cell *matCellDef="let inv">{{ inv.transactionDate | date:'dd/MM/yyyy' }}</td>
+                    </ng-container>
+
+                    <ng-container matColumnDef="company">
+                      <th mat-header-cell *matHeaderCellDef>Company</th>
+                      <td mat-cell *matCellDef="let inv">
+                        @if (inv.sourceCompany) {
+                          <span class="inv-company" [matTooltip]="getCompanyName(inv.sourceCompany)">
+                            <span class="dot" [style.background]="getCompanyColor(inv.sourceCompany)"></span>
+                            {{ getCompanyShortName(inv.sourceCompany) }}
+                          </span>
+                        } @else {
+                          <span class="inv-muted">—</span>
+                        }
+                      </td>
                     </ng-container>
 
                     <ng-container matColumnDef="customer">
@@ -966,6 +1006,11 @@
                       </td>
                     </ng-container>
 
+                    <ng-container matColumnDef="qty">
+                      <th mat-header-cell *matHeaderCellDef class="num">Qty</th>
+                      <td mat-cell *matCellDef="let inv" class="num">{{ inv.quantity | number:'1.0-2' }}</td>
+                    </ng-container>
+
                     <ng-container matColumnDef="amount">
                       <th mat-header-cell *matHeaderCellDef>Amount (incl. VAT)</th>
                       <td mat-cell *matCellDef="let inv">
@@ -978,32 +1023,33 @@
                       </td>
                     </ng-container>
 
-                    <ng-container matColumnDef="province">
-                      <th mat-header-cell *matHeaderCellDef>Province</th>
+                    <ng-container matColumnDef="stock">
+                      <th mat-header-cell *matHeaderCellDef>Stock</th>
                       <td mat-cell *matCellDef="let inv">
-                        @if (inv.deliveryProvince) {
-                          <span>{{ inv.deliveryProvince }}</span>
-                        } @else {
-                          <span class="no-data">Not set</span>
-                        }
-                      </td>
-                    </ng-container>
-
-                    <ng-container matColumnDef="source">
-                      <th mat-header-cell *matHeaderCellDef>Source</th>
-                      <td mat-cell *matCellDef="let inv">
-                        @if (inv.sourceCompany) {
-                          <mat-chip class="company-chip" [style.background-color]="getCompanyColor(inv.sourceCompany)">
-                            {{ getCompanyShortName(inv.sourceCompany) }}
-                          </mat-chip>
-                        } @else {
-                          <span class="no-data">-</span>
+                        @let st = invoiceStockState(inv);
+                        @if (!st) {
+                          <span class="inv-muted" matTooltip="Delivered — stock already left the warehouse">—</span>
+                        } @else if (invoiceStockLoaded()) {
+                          <div class="inv-stock">
+                            <span [class]="'bo-stock-badge ' + st" [class.clickable]="st === 'full' || st === 'partial'"
+                                  [matTooltip]="invoiceStockTooltip(inv)" (click)="openInvoiceStock(inv)">
+                              {{ backOrderStockLabel(st) }}
+                              @if (st !== 'unmapped') { <small>{{ invoiceStockInfo(inv)?.onHand | number:'1.0-0' }}</small> }
+                              @if (st === 'full' || st === 'partial') { <mat-icon class="bo-stock-open">open_in_new</mat-icon> }
+                            </span>
+                            @if (invoiceTopWarehouse(inv); as wh) {
+                              <span class="inv-wh"><mat-icon>store</mat-icon>{{ wh }}</span>
+                            }
+                          </div>
                         }
                       </td>
                     </ng-container>
 
                     <ng-container matColumnDef="status">
-                      <th mat-header-cell *matHeaderCellDef>Status</th>
+                      <th mat-header-cell *matHeaderCellDef>
+                        Status
+                        <mat-icon class="inv-status-help" matTooltip="Pending: not on a tripsheet yet · Assigned: on a tripsheet/load · Delivered: load delivered or POD captured" matTooltipClass="bo-stock-tip">help_outline</mat-icon>
+                      </th>
                       <td mat-cell *matCellDef="let inv">
                         <app-status-chip [status]="inv.status"></app-status-chip>
                       </td>

@@ -5,7 +5,7 @@
   @if (view() === 'locked') {
     <div class="lock-screen">
       <div class="lock-card">
-        <div class="lock-icon">🔒</div>
+        <div class="lock-icon"><mat-icon>lock</mat-icon></div>
         <h1>Email Archives</h1>
         <p>Enter the archives password to continue.</p>
         <input type="password" [(ngModel)]="passwordModel" (keyup.enter)="unlock()"
@@ -30,7 +30,7 @@
       <div class="grid">
         @for (c of companies(); track c.key) {
           <button class="card company" [class.disabled]="!c.exists" (click)="pickCompany(c)">
-            <div class="card-icon">🏢</div>
+            <div class="card-icon"><mat-icon>business</mat-icon></div>
             <div class="card-title">{{ c.label }}</div>
             <div class="card-sub">{{ c.exists ? c.archiveCount + ' archive(s)' : 'unavailable' }}</div>
           </button>
@@ -57,7 +57,7 @@
       <div class="file-list">
         @for (f of files(); track f.relativePath) {
           <button class="file-row" (click)="pickFile(f)">
-            <span class="fi">📦</span>
+            <span class="fi"><mat-icon>inventory_2</mat-icon></span>
             <span class="fname">{{ f.relativePath }}</span>
             <span class="fsize">{{ formatSize(f.sizeBytes) }}</span>
           </button>
@@ -98,7 +98,7 @@
                 <div class="msg-from">{{ m.from || '—' }}</div>
                 <div class="msg-subject">
                   {{ m.subject }}
-                  @if (m.hasAttachments) { <span class="clip">📎</span> }
+                  @if (m.hasAttachments) { <span class="clip"><mat-icon>attach_file</mat-icon></span> }
                 </div>
                 <div class="msg-date">{{ m.date ? (m.date | date:'yyyy-MM-dd HH:mm') : '' }}</div>
               </button>
@@ -128,7 +128,7 @@
               <div class="rd-atts">
                 @for (a of d.attachments; track a.attIndex) {
                   <button class="att" (click)="openAttachment(a)" title="Open / download">
-                    📎 {{ a.fileName }} ({{ formatSize(a.size) }})
+                    <mat-icon>attach_file</mat-icon> {{ a.fileName }} ({{ formatSize(a.size) }})
                   </button>
                 }
               </div>

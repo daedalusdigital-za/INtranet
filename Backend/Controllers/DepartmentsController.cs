@@ -21,10 +21,11 @@ namespace ProjectTracker.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<DepartmentDto>>> GetDepartments()
+        public async Task<ActionResult<IEnumerable<DepartmentDto>>> GetDepartments([FromQuery] bool includeInactive = false)
         {
             // Read departments from database
             var departments = await _context.Departments
+                .Where(d => includeInactive || d.IsActive)
                 .OrderBy(d => d.Name)
                 .Select(d => new DepartmentDto
                 {
@@ -66,6 +67,10 @@ namespace ProjectTracker.API.Controllers
         [Authorize(Roles = "Super Admin,Admin")]
         public async Task<ActionResult<DepartmentDto>> CreateDepartment([FromBody] Department department)
         {
+            department.Name = (department.Name ?? "").Trim();
+            if (department.Name.Length == 0) return BadRequest(new { message = "A department needs a name." });
+            if (await NameTakenAsync(department.Name, null)) return Conflict(new { message = $"A department called \"{department.Name}\" already exists. Use it, or rename this one so people are not split across two records." });
+            department.IsActive = true;
             department.CreatedAt = DateTime.UtcNow;
             _context.Departments.Add(department);
             await _context.SaveChangesAsync();
@@ -97,7 +102,11 @@ namespace ProjectTracker.API.Controllers
                 return NotFound();
             }
 
-            existingDepartment.Name = department.Name;
+            var newName = (department.Name ?? "").Trim();
+            if (newName.Length == 0) return BadRequest(new { message = "A department needs a name." });
+            if (await NameTakenAsync(newName, id)) return Conflict(new { message = $"A department called \"{newName}\" already exists." });
+
+            existingDepartment.Name = newName;
             existingDepartment.ManagerName = department.ManagerName;
             existingDepartment.UpdatedAt = DateTime.UtcNow;
 
@@ -106,6 +115,7 @@ namespace ProjectTracker.API.Controllers
             return NoContent();
         }
 
+        /// <summary>Retire a department. Nothing is deleted: the record stays for history; it disappears from pickers and the map.</summary>
         [HttpDelete("{id}")]
         [Authorize(Roles = "Super Admin,Admin")]
         public async Task<IActionResult> DeleteDepartment(int id)
@@ -116,10 +126,23 @@ namespace ProjectTracker.API.Controllers
                 return NotFound();
             }
 
-            _context.Departments.Remove(department);
+            var users = await _context.Users.CountAsync(u => u.DepartmentId == id);
+            if (users > 0) return Conflict(new { message = $"{users} user(s) are still in this department. Move them first, or merge the department into another one." });
+
+            department.IsActive = false;
+            department.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        /// <summary>Case-insensitive, trimmed, among active departments; "X" and "X Department" are treated as the same name.</summary>
+        private async Task<bool> NameTakenAsync(string name, int? exceptId)
+        {
+            static string Key(string s) => System.Text.RegularExpressions.Regex.Replace(s.Trim().ToLowerInvariant(), @"\s+department$", "");
+            var k = Key(name);
+            var names = await _context.Departments.Where(d => d.IsActive && (exceptId == null || d.DepartmentId != exceptId)).Select(d => d.Name).ToListAsync();
+            return names.Any(n => Key(n) == k);
         }
     }
 }

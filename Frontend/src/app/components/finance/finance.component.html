@@ -3,6 +3,13 @@
   <app-page-header class="finance-header" [crumbs]="['People and money', 'Finance']" title="Finance"
                    [subtitle]="(stats.totalAmount | currency:'ZAR':'symbol':'1.0-0') + ' across all invoices'"></app-page-header>
 
+  <mat-tab-group class="finance-tabs" animationDuration="150ms" [selectedIndex]="tabIndex" (selectedIndexChange)="onTabChange($event)" mat-stretch-tabs="false">
+
+  <!-- ═══════════ OVERVIEW ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label><mat-icon class="tab-icon">dashboard</mat-icon> Overview</ng-template>
+    <div class="tab-body">
+
   <!-- Creditors / Debtors split entry -->
   <div class="split-grid animate-in delay-1">
     <div class="split-card creditors" (click)="goToCreditors()">
@@ -80,6 +87,34 @@
       </div>
     </div>
 
+    <div class="stat-card-modern is-link pods-card-stat" (click)="goTab('pods')">
+      <div class="stat-card-accent"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern">
+          <mat-icon>fact_check</mat-icon>
+        </div>
+        <div class="stat-detail">
+          <span class="stat-number">{{ podUnlinked }}</span>
+          <span class="stat-title">Unlinked PODs</span>
+        </div>
+        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
+      </div>
+    </div>
+
+    <div class="stat-card-modern is-link vault-card-stat" [class.alert]="vaultExpired > 0" (click)="goTab('vault')">
+      <div class="stat-card-accent"></div>
+      <div class="stat-card-body">
+        <div class="stat-icon-modern">
+          <mat-icon>shield</mat-icon>
+        </div>
+        <div class="stat-detail">
+          <span class="stat-number">{{ vaultExpiring + vaultExpired }}</span>
+          <span class="stat-title">Vault renewals due</span>
+        </div>
+        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
+      </div>
+    </div>
+
     <div class="stat-card-modern payments-card-stat">
       <div class="stat-card-accent"></div>
       <div class="stat-card-body">
@@ -106,7 +141,7 @@
       </div>
     </div>
 
-    <div class="stat-card-modern stationery-card-stat is-link" (click)="toggleStationeryPanel()">
+    <div class="stat-card-modern stationery-card-stat is-link" (click)="goTab('approvals', 'stationery')">
       <div class="stat-card-accent"></div>
       <div class="stat-card-body">
         <div class="stat-icon-modern">
@@ -120,7 +155,7 @@
       </div>
     </div>
 
-    <div class="stat-card-modern is-link" (click)="toggleRequisitionsPanel()">
+    <div class="stat-card-modern is-link" (click)="goTab('approvals', 'requisitions')">
       <div class="stat-card-accent"></div>
       <div class="stat-card-body">
         <div class="stat-icon-modern">
@@ -149,8 +184,141 @@
     </div>
   </div>
 
-@if (showStationeryPanel) {
-  <div class="stationery-panel animate-in">
+  <!-- Quick Actions -->
+  <div class="quick-actions animate-in delay-3">
+    <h2 class="section-label">
+      <mat-icon>bolt</mat-icon>
+      Quick Actions
+    </h2>
+    <div class="actions-grid-modern">
+      <button class="action-card" (click)="goToBooks()">
+        <div class="action-card-icon invoices-action">
+          <mat-icon>description</mat-icon>
+        </div>
+        <span class="action-card-label">Manage Invoices</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" routerLink="/finance/expenses">
+        <div class="action-card-icon expenses-action">
+          <mat-icon>receipt</mat-icon>
+        </div>
+        <span class="action-card-label">Expenses</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" routerLink="/finance/purchase-orders">
+        <div class="action-card-icon po-action">
+          <mat-icon>shopping_cart</mat-icon>
+        </div>
+        <span class="action-card-label">Purchase Orders</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" routerLink="/finance/payments">
+        <div class="action-card-icon payments-action">
+          <mat-icon>payment</mat-icon>
+        </div>
+        <span class="action-card-label">Payments</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" routerLink="/finance/categories">
+        <div class="action-card-icon categories-action">
+          <mat-icon>category</mat-icon>
+        </div>
+        <span class="action-card-label">Categories</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" (click)="goTab('pods')">
+        <div class="action-card-icon pods-action">
+          <mat-icon>fact_check</mat-icon>
+        </div>
+        <span class="action-card-label">Proof of Delivery</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+      <button class="action-card" (click)="goTab('vault')">
+        <div class="action-card-icon vault-action">
+          <mat-icon>shield</mat-icon>
+        </div>
+        <span class="action-card-label">Compliance Vault</span>
+        <mat-icon class="action-arrow">arrow_forward</mat-icon>
+      </button>
+    </div>
+  </div>
+
+    </div>
+  </mat-tab>
+
+  <!-- ═══════════ APPROVALS ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">approval</mat-icon> Approvals
+      @if (approvalsBadge > 0) { <span class="tab-badge">{{ approvalsBadge }}</span> }
+    </ng-template>
+    <div class="tab-body">
+
+  <div class="approvals-grid">
+    <!-- Requested payments (invoices awaiting finance) -->
+    <div class="stationery-panel animate-in">
+      <div class="sp-header">
+        <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Requested Payments</h3></div>
+        <div class="sp-filters">
+          <span class="sp-filter active">Pending ({{ stats.requestedPayments }})</span>
+        </div>
+        <button mat-stroked-button (click)="openRequestedPayments()"><mat-icon>business</mat-icon> Review by company</button>
+      </div>
+      <p class="sp-hint">Invoices departments have asked Finance to pay. Pick a company to review, preview and approve or reject each one.</p>
+    </div>
+
+    <!-- Requisitions -->
+    <div class="stationery-panel animate-in" id="requisitions">
+    <div class="sp-header">
+      <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Requisitions</h3></div>
+      <div class="sp-filters">
+        <button class="sp-filter sp-pending" [class.active]="requisitionFilter==='Requested'" (click)="setRequisitionFilter('Requested')">Requested ({{requisitionCounts.requested}})</button>
+        <button class="sp-filter sp-approved" [class.active]="requisitionFilter==='Paid'" (click)="setRequisitionFilter('Paid')">Paid ({{requisitionCounts.paid}})</button>
+        <button class="sp-filter sp-declined" [class.active]="requisitionFilter==='Rejected'" (click)="setRequisitionFilter('Rejected')">Rejected ({{requisitionCounts.rejected}})</button>
+        <button class="sp-filter" [class.active]="requisitionFilter==='all'" (click)="setRequisitionFilter('all')">All ({{requisitionCounts.total}})</button>
+      </div>
+    </div>
+    @if (requisitionsLoading) {
+      <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
+    } @else if (requisitions.length === 0) {
+      <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No requisitions</p></div>
+    } @else {
+      <div class="sp-list">
+        @for (r of requisitions; track r.id) {
+          <div class="sp-item" [class]="'sp-' + r.financeStatus.toLowerCase()">
+            <div class="sp-avatar">{{spInitials(r.paidTo)}}</div>
+            <div class="sp-info">
+              <div class="sp-name">{{r.paidTo || 'Unknown'}} <span class="sp-dept">{{r.department || 'Logistics'}}</span></div>
+              <div class="sp-items-text"><mat-icon>receipt_long</mat-icon> {{r.rfNumber ? 'RF ' + r.rfNumber : 'No RF'}} · {{r.total | currency:'ZAR':'symbol':'1.2-2'}}</div>
+              @if (r.reason) { <div class="sp-purpose">{{r.reason}}</div> }
+              <div class="sp-meta">
+                @if (r.paymentMethod) { <span class="sp-priority prio-normal">{{r.paymentMethod}}</span> }
+                <span class="sp-date">{{r.date | date:'d MMM yyyy'}}</span>
+              </div>
+              @if (r.financeNotes) { <div class="sp-rnote"><mat-icon>comment</mat-icon> {{r.financeNotes}}</div> }
+            </div>
+            <div class="sp-right">
+              <span class="sp-status" [class]="'spill-' + r.financeStatus.toLowerCase()">{{r.financeStatus}}</span>
+              @if (r.financeStatus !== 'Paid') {
+                <div class="sp-actions">
+                  <button aria-label="Mark Paid" mat-icon-button class="sp-approve" matTooltip="Mark Paid" (click)="setRequisitionStatus(r, 'Paid')"><mat-icon>check_circle</mat-icon></button>
+                  @if (r.financeStatus !== 'Rejected') {
+                    <button aria-label="Reject" mat-icon-button class="sp-decline" matTooltip="Reject" (click)="setRequisitionStatus(r, 'Rejected')"><mat-icon>cancel</mat-icon></button>
+                  }
+                </div>
+              }
+              @if (r.financeStatus !== 'Requested') {
+                <button aria-label="Move back to Requested" mat-icon-button matTooltip="Move back to Requested" (click)="setRequisitionStatus(r, 'Requested')"><mat-icon>undo</mat-icon></button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+    </div>
+
+    <!-- Stationery -->
+    <div class="stationery-panel animate-in" id="stationery">
     <div class="sp-header">
       <div class="sp-title"><mat-icon>edit_note</mat-icon><h3>Stationery Requests</h3></div>
       <div class="sp-filters">
@@ -159,7 +327,6 @@
         <button class="sp-filter sp-approved" [class.active]="stationeryFilter==='Approved'" (click)="setStationeryFilter('Approved')">Approved ({{stationeryCounts.approved}})</button>
         <button class="sp-filter sp-declined" [class.active]="stationeryFilter==='Declined'" (click)="setStationeryFilter('Declined')">Declined ({{stationeryCounts.declined}})</button>
       </div>
-      <button aria-label="Close" mat-icon-button (click)="showStationeryPanel=false"><mat-icon>close</mat-icon></button>
     </div>
     @if (stationeryLoading) {
       <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
@@ -202,60 +369,16 @@
         }
       </div>
     }
-  </div>
-}
-
-@if (showRequisitionsPanel) {
-  <div class="stationery-panel animate-in">
-    <div class="sp-header">
-      <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Requisitions</h3></div>
-      <div class="sp-filters">
-        <button class="sp-filter sp-pending" [class.active]="requisitionFilter==='Requested'" (click)="setRequisitionFilter('Requested')">Requested ({{requisitionCounts.requested}})</button>
-        <button class="sp-filter sp-approved" [class.active]="requisitionFilter==='Paid'" (click)="setRequisitionFilter('Paid')">Paid ({{requisitionCounts.paid}})</button>
-        <button class="sp-filter sp-declined" [class.active]="requisitionFilter==='Rejected'" (click)="setRequisitionFilter('Rejected')">Rejected ({{requisitionCounts.rejected}})</button>
-        <button class="sp-filter" [class.active]="requisitionFilter==='all'" (click)="setRequisitionFilter('all')">All ({{requisitionCounts.total}})</button>
-      </div>
-      <button aria-label="Close" mat-icon-button (click)="showRequisitionsPanel=false"><mat-icon>close</mat-icon></button>
     </div>
-    @if (requisitionsLoading) {
-      <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
-    } @else if (requisitions.length === 0) {
-      <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No requisitions</p></div>
-    } @else {
-      <div class="sp-list">
-        @for (r of requisitions; track r.id) {
-          <div class="sp-item" [class]="'sp-' + r.financeStatus.toLowerCase()">
-            <div class="sp-avatar">{{spInitials(r.paidTo)}}</div>
-            <div class="sp-info">
-              <div class="sp-name">{{r.paidTo || 'Unknown'}} <span class="sp-dept">{{r.department || 'Logistics'}}</span></div>
-              <div class="sp-items-text"><mat-icon>receipt_long</mat-icon> {{r.rfNumber ? 'RF ' + r.rfNumber : 'No RF'}} · {{r.total | currency:'ZAR':'symbol':'1.2-2'}}</div>
-              @if (r.reason) { <div class="sp-purpose">{{r.reason}}</div> }
-              <div class="sp-meta">
-                @if (r.paymentMethod) { <span class="sp-priority prio-normal">{{r.paymentMethod}}</span> }
-                <span class="sp-date">{{r.date | date:'d MMM yyyy'}}</span>
-              </div>
-              @if (r.financeNotes) { <div class="sp-rnote"><mat-icon>comment</mat-icon> {{r.financeNotes}}</div> }
-            </div>
-            <div class="sp-right">
-              <span class="sp-status" [class]="'spill-' + r.financeStatus.toLowerCase()">{{r.financeStatus}}</span>
-              @if (r.financeStatus !== 'Paid') {
-                <div class="sp-actions">
-                  <button aria-label="Mark Paid" mat-icon-button class="sp-approve" matTooltip="Mark Paid" (click)="setRequisitionStatus(r, 'Paid')"><mat-icon>check_circle</mat-icon></button>
-                  @if (r.financeStatus !== 'Rejected') {
-                    <button aria-label="Reject" mat-icon-button class="sp-decline" matTooltip="Reject" (click)="setRequisitionStatus(r, 'Rejected')"><mat-icon>cancel</mat-icon></button>
-                  }
-                </div>
-              }
-              @if (r.financeStatus !== 'Requested') {
-                <button aria-label="Move back to Requested" mat-icon-button matTooltip="Move back to Requested" (click)="setRequisitionStatus(r, 'Requested')"><mat-icon>undo</mat-icon></button>
-              }
-            </div>
-          </div>
-        }
-      </div>
-    }
   </div>
-}
+
+    </div>
+  </mat-tab>
+
+  <!-- ═══════════ INVOICES ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label><mat-icon class="tab-icon">description</mat-icon> Invoices</ng-template>
+    <div class="tab-body">
 
   <!-- Invoice Management Panel -->
   <div class="invoice-panel animate-in delay-2">
@@ -452,50 +575,40 @@
     </div>
   </div>
 
-  <!-- Quick Actions -->
-  <div class="quick-actions animate-in delay-3">
-    <h2 class="section-label">
-      <mat-icon>bolt</mat-icon>
-      Quick Actions
-    </h2>
-    <div class="actions-grid-modern">
-      <button class="action-card" (click)="goToBooks()">
-        <div class="action-card-icon invoices-action">
-          <mat-icon>description</mat-icon>
-        </div>
-        <span class="action-card-label">Manage Invoices</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" routerLink="/finance/expenses">
-        <div class="action-card-icon expenses-action">
-          <mat-icon>receipt</mat-icon>
-        </div>
-        <span class="action-card-label">Expenses</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" routerLink="/finance/purchase-orders">
-        <div class="action-card-icon po-action">
-          <mat-icon>shopping_cart</mat-icon>
-        </div>
-        <span class="action-card-label">Purchase Orders</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" routerLink="/finance/payments">
-        <div class="action-card-icon payments-action">
-          <mat-icon>payment</mat-icon>
-        </div>
-        <span class="action-card-label">Payments</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" routerLink="/finance/categories">
-        <div class="action-card-icon categories-action">
-          <mat-icon>category</mat-icon>
-        </div>
-        <span class="action-card-label">Categories</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
     </div>
-  </div>
+  </mat-tab>
+
+  <!-- ═══════════ PODs ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">fact_check</mat-icon> PODs
+      @if (podUnlinked > 0) { <span class="tab-badge warn">{{ podUnlinked }}</span> }
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Proof of Delivery</h2>
+        <p>A signed POD is what lets Finance invoice and collect. Unlinked PODs are deliveries we can't yet bill — link them to their invoice numbers or run Reconcile.</p>
+      </div>
+      @if (tabIndex === 3) { <app-finance-pods></app-finance-pods> }
+    </div>
+  </mat-tab>
+
+  <!-- ═══════════ VAULT ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">shield</mat-icon> Vault
+      @if (vaultExpired + vaultExpiring > 0) { <span class="tab-badge" [class.danger]="vaultExpired > 0" [class.warn]="vaultExpired === 0">{{ vaultExpired + vaultExpiring }}</span> }
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Compliance Vault</h2>
+        <p>Statutory documents every company must keep current — tax clearance, B-BBEE, CSD, bank confirmation. Finance owns the renewals; the Tenders team reads the same vault.</p>
+      </div>
+      @if (tabIndex === 4) { <app-finance-vault></app-finance-vault> }
+    </div>
+  </mat-tab>
+
+  </mat-tab-group>
 </div>
 
 <!-- ═══════════════════════════════════════════════ -->

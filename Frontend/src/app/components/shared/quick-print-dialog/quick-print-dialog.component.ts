@@ -9,7 +9,6 @@ export interface Printer {
   name: string;
   ip: string;
   icon: string;
-  color: string;
 }
 
 @Component({
@@ -32,7 +31,6 @@ export interface Printer {
           @for (printer of printers; track printer.name) {
             <div 
               class="printer-box" 
-              [style.background]="printer.color"
               (click)="selectPrinter(printer)">
               <mat-icon class="printer-icon">{{ printer.icon }}</mat-icon>
               <span class="printer-name">{{ printer.name }}</span>
@@ -54,21 +52,22 @@ export interface Printer {
       justify-content: center;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       position: relative;
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: var(--text-3xl);
       font-weight: 500;
       text-align: center;
     }
 
     .dialog-header button {
-      color: white;
+      color: var(--color-text-2);
       position: absolute;
       right: 16px;
       top: 50%;
@@ -83,7 +82,7 @@ export interface Printer {
       text-align: center;
       color: var(--color-text-2);
       margin-bottom: 24px;
-      font-size: 1rem;
+      font-size: var(--text-lg);
     }
 
     .printers-grid {
@@ -98,17 +97,19 @@ export interface Printer {
       align-items: center;
       justify-content: center;
       padding: 20px 16px;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-line);
+      background: var(--color-surface);
       cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      color: white;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      color: var(--color-text);
       min-height: 120px;
       text-align: center;
     }
 
     .printer-box:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      border-color: var(--color-primary);
+      box-shadow: var(--shadow-md);
     }
 
     .printer-icon {
@@ -116,32 +117,33 @@ export interface Printer {
       width: 36px;
       height: 36px;
       margin-bottom: 8px;
+      color: var(--color-primary);
     }
 
     .printer-name {
-      font-size: 1rem;
+      font-size: var(--text-lg);
       font-weight: 600;
       margin-bottom: 4px;
     }
 
     .printer-ip {
-      font-size: 0.75rem;
-      opacity: 0.85;
-      font-family: monospace;
+      font-size: var(--text-xs);
+      color: var(--color-text-2);
+      font-family: var(--font-mono);
     }
   `]
 })
 export class QuickPrintDialogComponent {
   printers: Printer[] = [
-    { name: 'Admin Printer', ip: '192.168.10.134', icon: 'print', color: '#3f51b5' },
-    { name: 'Finance Printer', ip: '192.168.10.103', icon: 'print', color: '#4caf50' },
-    { name: 'Condom Printer', ip: '192.168.10.161', icon: 'print', color: '#e91e63' },
-    { name: 'HR Printer', ip: '192.168.10.130', icon: 'print', color: '#ff9800' },
-    { name: 'Sales Printer', ip: '192.168.10.104', icon: 'print', color: '#9c27b0' },
-    { name: 'Pharmatech Printer', ip: '192.168.10.136', icon: 'print', color: '#00bcd4' },
-    { name: 'Logistics Printer', ip: '192.168.10.248', icon: 'print', color: '#795548' },
-    { name: 'Projects Printer', ip: '192.168.10.5', icon: 'print', color: '#607d8b' },
-    { name: 'Tender Printer', ip: '192.168.10.128', icon: 'print', color: '#f44336' }
+    { name: 'Admin Printer', ip: '192.168.10.134', icon: 'print' },
+    { name: 'Finance Printer', ip: '192.168.10.103', icon: 'print' },
+    { name: 'Condom Printer', ip: '192.168.10.161', icon: 'print' },
+    { name: 'HR Printer', ip: '192.168.10.130', icon: 'print' },
+    { name: 'Sales Printer', ip: '192.168.10.104', icon: 'print' },
+    { name: 'Pharmatech Printer', ip: '192.168.10.136', icon: 'print' },
+    { name: 'Logistics Printer', ip: '192.168.10.248', icon: 'print' },
+    { name: 'Projects Printer', ip: '192.168.10.5', icon: 'print' },
+    { name: 'Tender Printer', ip: '192.168.10.128', icon: 'print' }
   ];
 
   constructor(

@@ -402,7 +402,7 @@ const STATUS_TONES: Record<string, ChipTone> = {
     .books-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
     .header-left { display: flex; align-items: center; gap: 16px; }
     .header-icon-wrap { width: 56px; height: 56px; border-radius: 16px; background: var(--color-primary-soft); display: flex; align-items: center; justify-content: center; }
-    .header-icon { color: var(--color-primary); font-size: 28px; width: 28px; height: 28px; }
+    .header-icon { color: var(--color-primary); font-size: var(--text-3xl); width: 24px; height: 24px; }
     .books-header h1 { margin: 0; font-size: var(--text-3xl); font-weight: 700; color: var(--color-text); }
     .subtitle { margin: 2px 0 0; color: var(--color-text-2); font-size: var(--text-md); }
     .upload-btn { height: 44px; padding: 0 24px; border-radius: 12px; font-weight: 600; font-size: var(--text-md); letter-spacing: .3px; }
@@ -412,7 +412,7 @@ const STATUS_TONES: Record<string, ChipTone> = {
     .summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
     .summary-card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: var(--shadow-sm); transition: transform 0.2s, box-shadow 0.2s; }
     .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-    .summary-card mat-icon { font-size: 32px; width: 32px; height: 32px; padding: 12px; border-radius: 12px; }
+    .summary-card mat-icon { font-size: var(--text-4xl); width: 32px; height: 32px; padding: 12px; border-radius: 12px; }
     .summary-card.total mat-icon { background: var(--color-primary-soft); color: var(--color-primary); }
     .summary-card.amount mat-icon { background: var(--color-ok-soft); color: var(--color-ok); }
     .summary-card.confirmed mat-icon { background: var(--color-ok-soft); color: var(--color-ok); }
@@ -426,7 +426,7 @@ const STATUS_TONES: Record<string, ChipTone> = {
     /* Top Suppliers */
     .suppliers-row { margin-bottom: 20px; }
     .section-title { display: flex; align-items: center; gap: 8px; font-size: var(--text-md); font-weight: 600; color: var(--color-text); margin-bottom: 10px; }
-    .section-title mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-text-3); }
+    .section-title mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-text-3); }
     .supplier-chips { display: flex; gap: 10px; flex-wrap: wrap; }
     .supplier-chip { background: var(--color-surface); border: 1.5px solid var(--color-line); border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: all 0.2s; }
     .supplier-chip:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
@@ -434,7 +434,7 @@ const STATUS_TONES: Record<string, ChipTone> = {
     .supplier-chip.active .sc-name, .supplier-chip.active .sc-total { color: var(--color-on-primary); }
     .supplier-chip.active .sc-count { background: var(--color-on-primary); color: var(--color-primary); }
     .sc-upload-btn { background: none; border: none; cursor: pointer; padding: 0; margin-left: 4px; display: flex; align-items: center; opacity: 0; transition: opacity 0.2s; }
-    .sc-upload-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); }
+    .sc-upload-btn mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-primary); }
     .supplier-chip:hover .sc-upload-btn { opacity: 1; }
     .supplier-chip.active .sc-upload-btn mat-icon { color: var(--color-on-primary); }
     .sc-name { font-weight: 600; font-size: var(--text-sm); color: var(--color-text-2); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -444,14 +444,14 @@ const STATUS_TONES: Record<string, ChipTone> = {
     /* Filters */
     .filters-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 16px; padding: 14px 18px; box-shadow: var(--shadow-sm); }
     .search-box { position: relative; flex: 1; min-width: 200px; }
-    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-text-3); font-size: 20px; }
+    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-text-3); font-size: var(--text-2xl); }
     .search-input { width: 100%; padding: 10px 36px 10px 40px; border: 1.5px solid var(--color-line); border-radius: 10px; font-size: var(--text-md); outline: none; transition: border-color 0.2s; background: var(--color-canvas); color: var(--color-text); }
     .search-input:focus { border-color: var(--color-primary); background: var(--color-surface); }
     .clear-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
     .filter-chips { display: flex; gap: 6px; }
     .filter-chips button { border-radius: 20px; font-size: var(--text-xs); height: 34px; border-color: var(--color-line); }
     .filter-chips button.active-filter { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
-    .chip-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 2px; vertical-align: middle; }
+    .chip-icon { font-size: var(--text-lg); width: 16px; height: 16px; margin-right: 2px; vertical-align: middle; }
     .confirmed-icon { color: var(--color-ok); }
     .payment-requested-icon { color: var(--color-warn); }
     .draft-icon { color: var(--color-warn); }
@@ -478,15 +478,15 @@ const STATUS_TONES: Record<string, ChipTone> = {
     .card-menu-btn { color: var(--color-text-3); }
     .card-body { padding: 16px; cursor: pointer; }
     .card-icon-row { margin-bottom: 8px; }
-    .pdf-icon { color: var(--color-danger); font-size: 28px; width: 28px; height: 28px; }
+    .pdf-icon { color: var(--color-danger); font-size: var(--text-3xl); width: 24px; height: 24px; }
     .supplier-name { margin: 0 0 4px; font-size: var(--text-lg); font-weight: 700; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .card-amount { font-size: var(--text-2xl); font-weight: 800; color: var(--color-ok); margin-bottom: 12px; }
     .card-details { display: flex; flex-direction: column; gap: 6px; }
     .detail-row { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--color-text-3); }
-    .detail-row mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--color-text-3); }
+    .detail-row mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-text-3); }
     .card-footer { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--color-surface-2); background: var(--color-canvas); }
     .file-info { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-text-3); }
-    .file-info mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .file-info mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
     .upload-date { font-size: var(--text-xs); color: var(--color-text-3); }
 
     /* List / Table */
@@ -494,7 +494,7 @@ const STATUS_TONES: Record<string, ChipTone> = {
     .invoices-table th.col-supplier, .invoices-table th.col-date, .invoices-table th.col-amount { cursor: pointer; }
     .invoices-table tr.draft-row { border-left: 3px solid var(--color-warn); }
     .invoices-table tr.archived-row { opacity: 0.65; }
-    .sort-icon { font-size: 14px; width: 14px; height: 14px; vertical-align: middle; }
+    .sort-icon { font-size: var(--text-md); width: 14px; height: 14px; vertical-align: middle; }
     .supplier-cell { font-weight: 600; color: var(--color-text); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .amount-cell { font-weight: 700; color: var(--color-ok); }
     .category-tag { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); padding: 3px 10px; border-radius: 10px; font-size: var(--text-xs); font-weight: 600; }
@@ -893,7 +893,7 @@ export class BooksComponent implements OnInit {
   styles: [`
     .upload-dialog { padding: 28px; }
     .dialog-header { text-align: center; margin-bottom: 24px; }
-    .dialog-header-icon { font-size: 40px; width: 40px; height: 40px; color: var(--color-primary); }
+    .dialog-header-icon { font-size: var(--text-4xl); width: 32px; height: 32px; color: var(--color-primary); }
     .dialog-header h2 { margin: 8px 0 4px; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
     .dialog-header p { margin: 0; color: var(--color-text-3); font-size: var(--text-md); }
 
@@ -901,12 +901,12 @@ export class BooksComponent implements OnInit {
     .drop-zone:hover, .drop-zone.drag-over { border-color: var(--color-primary); background: var(--color-primary-soft); }
     .drop-zone.has-file { border-color: var(--color-ok); background: var(--color-ok-soft); border-style: solid; }
     .drop-content { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .drop-icon { font-size: 48px; width: 48px; height: 48px; color: var(--color-danger); }
+    .drop-icon { font-size: var(--text-4xl); width: 32px; height: 32px; color: var(--color-danger); }
     .drop-text { font-size: var(--text-md); font-weight: 600; color: var(--color-text-2); }
     .drop-hint { font-size: var(--text-xs); color: var(--color-text-3); }
 
     .file-preview { display: flex; align-items: center; gap: 12px; }
-    .file-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-danger); }
+    .file-icon { font-size: var(--text-4xl); width: 32px; height: 32px; color: var(--color-danger); }
     .file-details { display: flex; flex-direction: column; flex: 1; text-align: left; }
     .file-name { font-weight: 600; color: var(--color-text); font-size: var(--text-md); word-break: break-all; }
     .file-size { font-size: var(--text-xs); color: var(--color-text-3); }
@@ -914,7 +914,7 @@ export class BooksComponent implements OnInit {
 
     .upload-progress { margin-top: 16px; border-radius: 8px; }
     .error-msg { margin-top: 12px; padding: 10px 16px; background: var(--color-danger-soft); border-radius: 10px; color: var(--color-danger); font-size: var(--text-sm); display: flex; align-items: center; gap: 8px; }
-    .error-msg mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .error-msg mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
 
     .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
     .dialog-actions button { border-radius: 10px; }
@@ -1027,7 +1027,7 @@ export class UploadBookInvoiceDialog {
           <input type="text" [(ngModel)]="form.supplierName" class="form-input" [class.highlight]="isNew && form.supplierName === 'Unknown Supplier'" placeholder="Start typing supplier name..." (input)="filterSuppliers()" [matAutocomplete]="supplierAuto" autocomplete="off">
           <mat-autocomplete #supplierAuto="matAutocomplete" (optionSelected)="onSupplierSelected($event)" class="supplier-autocomplete-panel">
             <mat-option *ngFor="let s of filteredSuppliers" [value]="s">
-              <mat-icon style="font-size:18px;width:18px;height:18px;color:var(--color-primary);margin-right:8px;">store</mat-icon>
+              <mat-icon style="font-size:var(--text-xl);width:18px;height:18px;color:var(--color-primary);margin-right:8px;">store</mat-icon>
               {{ s }}
             </mat-option>
           </mat-autocomplete>
@@ -1188,12 +1188,12 @@ export class UploadBookInvoiceDialog {
   styles: [`
     .confirm-dialog { padding: 28px; max-height: 85vh; overflow-y: auto; }
     .dialog-header { text-align: center; margin-bottom: 20px; }
-    .header-icon { font-size: 40px; width: 40px; height: 40px; color: var(--color-primary); }
+    .header-icon { font-size: var(--text-4xl); width: 32px; height: 32px; color: var(--color-primary); }
     .dialog-header h2 { margin: 8px 0 4px; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
     .dialog-header p { margin: 0; color: var(--color-text-3); font-size: var(--text-md); }
 
     .extraction-banner { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--color-warn-soft); border-radius: 12px; margin-bottom: 20px; font-size: var(--text-sm); color: var(--color-warn); }
-    .extraction-banner mat-icon { color: var(--color-warn); font-size: 20px; width: 20px; height: 20px; }
+    .extraction-banner mat-icon { color: var(--color-warn); font-size: var(--text-2xl); width: 20px; height: 20px; }
 
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
@@ -1218,7 +1218,7 @@ export class UploadBookInvoiceDialog {
     .dialog-actions button { border-radius: 10px; }
 
     .supplier-autocomplete-wrap { position: relative; }
-    .autocomplete-hint-icon { position: absolute; right: 10px; top: 32px; font-size: 18px; width: 18px; height: 18px; color: var(--color-text-3); cursor: help; }
+    .autocomplete-hint-icon { position: absolute; right: 10px; top: 32px; font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-text-3); cursor: help; }
 
     @media (max-width: 600px) {
       .form-grid { grid-template-columns: 1fr; }
@@ -1548,7 +1548,7 @@ export class ConfirmBookInvoiceDialog {
     }
 
     .error-state { color: var(--color-danger); }
-    .error-state mat-icon { font-size: 40px; width: 40px; height: 40px; }
+    .error-state mat-icon { font-size: var(--text-4xl); width: 32px; height: 32px; }
 
     .hardware-table-wrap { border: 1px solid var(--color-line); border-radius: 8px; overflow: hidden; }
     .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--color-surface-2); border-bottom: 1px solid var(--color-line); flex-wrap: wrap; }

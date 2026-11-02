@@ -10,8 +10,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AnnouncementService, CreateAnnouncementDto } from '../../../services/announcement.service';
+import { ToastService } from '../../../ui/toast.service';
 
 @Component({
   selector: 'app-announcement-dialog',
@@ -27,8 +27,7 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
     MatSelectModule,
     MatDatepickerModule,
     MatNativeDateModule,
-    MatProgressSpinnerModule,
-    MatSnackBarModule
+    MatProgressSpinnerModule
   ],
   template: `
     <div class="announcement-dialog">
@@ -159,14 +158,14 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
 
     .header-icon {
       color: var(--color-primary);
-      font-size: 28px;
+      font-size: var(--text-3xl);
       width: 28px;
       height: 28px;
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       font-weight: 500;
       color: var(--color-text);
     }
@@ -200,7 +199,7 @@ import { AnnouncementService, CreateAnnouncementDto } from '../../../services/an
     }
 
     .priority-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
       margin-right: 8px;
@@ -251,7 +250,7 @@ export class AnnouncementDialogComponent implements OnInit {
     private dialogRef: MatDialogRef<AnnouncementDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: any,
     private announcementService: AnnouncementService,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -279,22 +278,12 @@ export class AnnouncementDialogComponent implements OnInit {
 
       this.announcementService.createAnnouncement(announcement).subscribe({
         next: (result) => {
-          this.snackBar.open('Announcement created successfully!', 'Close', {
-            duration: 3000,
-            horizontalPosition: 'end',
-            verticalPosition: 'top',
-            panelClass: ['success-snackbar']
-          });
+          this.toast.done('Announcement created.');
           this.dialogRef.close(result);
         },
         error: (error) => {
           console.error('Error creating announcement:', error);
-          this.snackBar.open('Failed to create announcement. Please try again.', 'Close', {
-            duration: 5000,
-            horizontalPosition: 'end',
-            verticalPosition: 'top',
-            panelClass: ['error-snackbar']
-          });
+          this.toast.error('Could not create the announcement. Please try again.');
           this.isSubmitting = false;
         }
       });

@@ -63,3 +63,14 @@ body.has-shell.shell-collapsed {
 .skip-link:focus {
   transform: none;
 }
+
+/* Search box pinned at the top of a long mat-select list (rendered in the CDK overlay, so global). */
+.fe-opt-filter {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+  mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-text-3); }
+  input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; font-size: var(--text-sm); color: var(--color-text); }
+}
+.fe-opt-sub { color: var(--color-text-3); font-size: var(--text-xs); }

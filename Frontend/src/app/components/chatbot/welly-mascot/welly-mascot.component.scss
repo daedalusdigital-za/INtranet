@@ -129,11 +129,11 @@
   height: 20px;
   padding: 0 6px;
   border-radius: 10px;
-  background: #ef4444;
-  color: #fff;
-  font: 700 11px/20px system-ui, sans-serif;
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+  font: 700 var(--text-xs)/20px var(--font-body);
   text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-md);
   animation: wm-badge-pop 0.3s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 

@@ -442,7 +442,7 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
     }
 
     .department-badge mat-icon, .creator-badge mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
       color: var(--color-primary);
@@ -596,7 +596,7 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
     .fold-icon {
       transition: transform 0.25s ease;
       color: var(--color-text-2);
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
 
     .fold-icon.collapsed {
@@ -718,9 +718,9 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
 
     .member-avatar mat-icon {
       color: var(--color-primary);
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
 
     .member-info {
@@ -902,7 +902,7 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
     }
 
     .card-meta mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
       color: var(--color-primary);
@@ -928,7 +928,7 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
     }
 
     .card-badge mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
       color: var(--color-primary);

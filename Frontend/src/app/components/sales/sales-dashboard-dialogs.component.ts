@@ -28,7 +28,6 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatDialogModule, MatDialog, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
@@ -42,6 +41,7 @@ import { WellyActivityService } from '../../services/welly-activity.service';
 import { PROMED_BACK_ORDERS, ACCESS_BACK_ORDERS, PHARMATECH_BACK_ORDERS, SEBENZANI_BACK_ORDERS, BackOrderItem } from './back-orders-data';
 import * as XLSX from 'xlsx';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../ui/toast.service';
 
 // Company definitions
 import { Invoice, IncomingOrderEmail } from './sales.models';
@@ -60,19 +60,19 @@ import { Invoice, IncomingOrderEmail } from './sales.models';
   ],
   template: `
     <h2 mat-dialog-title style="display: flex; align-items: center; gap: 8px;">
-      <mat-icon style="color:#1a237e;">receipt_long</mat-icon>
+      <mat-icon style="color:var(--color-brand);">receipt_long</mat-icon>
       {{ data.pod.podNumber || ('POD' + data.pod.id) }} — Invoices
     </h2>
     <mat-dialog-content style="min-width: 380px;">
       @if (invoices.length > 0) {
-        <div style="color:var(--color-text-2); font-size:13px; margin-bottom:8px;">
+        <div style="color:var(--color-text-2); font-size:var(--text-sm); margin-bottom:8px;">
           {{ invoices.length }} invoice{{ invoices.length === 1 ? '' : 's' }} linked to this POD
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           @for (inv of invoices; track inv) {
             <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--color-surface-2); border-radius:8px;">
-              <mat-icon style="color:#3f51b5; font-size:20px; width:20px; height:20px;">receipt</mat-icon>
-              <span style="font-family:monospace; font-weight:600;">{{ inv }}</span>
+              <mat-icon style="color:var(--color-primary); font-size:20px; width:20px; height:20px;">receipt</mat-icon>
+              <span style="font-family:var(--font-mono); font-weight:600;">{{ inv }}</span>
             </div>
           }
         </div>
@@ -88,8 +88,8 @@ import { Invoice, IncomingOrderEmail } from './sales.models';
         <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--color-ok-soft); border-radius:8px;">
           <mat-icon style="color:var(--color-ok);">local_shipping</mat-icon>
           <div>
-            <div style="font-size:12px; color:var(--color-text-2);">Linked Tripsheet</div>
-            <div style="font-weight:600; color:#1b5e20;">{{ data.pod.loadNumber || ('Load #' + data.pod.loadId) }}</div>
+            <div style="font-size:var(--text-xs); color:var(--color-text-2);">Linked Tripsheet</div>
+            <div style="font-weight:600; color:var(--color-ok);">{{ data.pod.loadNumber || ('Load #' + data.pod.loadId) }}</div>
           </div>
         </div>
       }
@@ -141,21 +141,21 @@ export class PodInvoicesDialog {
     <mat-dialog-content style="min-width: 500px;">
       <div style="margin-bottom: 16px;">
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-          <div style="width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #1a237e, #3f51b5); color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 600;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--color-primary-soft); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: var(--text-2xl); font-weight: 600;">
             {{ data.from.charAt(0).toUpperCase() }}
           </div>
           <div style="flex: 1;">
-            <div style="font-weight: 600; font-size: 16px;">{{ data.from }}</div>
-            <div style="color: var(--color-text-2); font-size: 13px;">{{ data.fromEmail }}</div>
+            <div style="font-weight: 600; font-size: var(--text-lg);">{{ data.from }}</div>
+            <div style="color: var(--color-text-2); font-size: var(--text-sm);">{{ data.fromEmail }}</div>
           </div>
-          <div style="text-align: right; color: var(--color-text-3); font-size: 13px;">
+          <div style="text-align: right; color: var(--color-text-3); font-size: var(--text-sm);">
             <div>{{ data.date | date:'dd MMM yyyy' }}</div>
             <div>{{ data.date | date:'HH:mm:ss' }}</div>
           </div>
         </div>
 
         <div style="background: var(--color-surface-2); padding: 12px 16px; border-radius: 8px; margin-bottom: 12px;">
-          <div style="font-weight: 600; font-size: 18px; margin-bottom: 4px;">{{ data.subject }}</div>
+          <div style="font-weight: 600; font-size: var(--text-xl); margin-bottom: 4px;">{{ data.subject }}</div>
           @if (data.hasAttachments) {
             <mat-chip style="margin-top: 4px;">
               <mat-icon style="font-size: 16px; width: 16px; height: 16px;">attach_file</mat-icon>
@@ -167,17 +167,17 @@ export class PodInvoicesDialog {
         <mat-divider></mat-divider>
 
         <div style="margin-top: 12px;">
-          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: 13px;">
+          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: var(--text-sm);">
             <strong style="min-width: 60px;">To:</strong>
             <span>{{ data.to.join(', ') || 'N/A' }}</span>
           </div>
           @if (data.cc.length > 0) {
-            <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: 13px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: var(--text-sm);">
               <strong style="min-width: 60px;">Cc:</strong>
               <span>{{ data.cc.join(', ') }}</span>
             </div>
           }
-          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: 13px;">
+          <div style="display: flex; gap: 8px; margin-bottom: 6px; color: var(--color-text-2); font-size: var(--text-sm);">
             <strong style="min-width: 60px;">Mailbox:</strong>
             <span>{{ data.foundInAccounts?.join(', ') || data.accountEmail }}</span>
           </div>
@@ -185,7 +185,7 @@ export class PodInvoicesDialog {
 
         @if (data.preview) {
           <mat-divider style="margin: 12px 0;"></mat-divider>
-          <div style="padding: 12px; background: var(--color-canvas); border-radius: 8px; border-left: 3px solid #1a237e; font-size: 14px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">
+          <div style="padding: 12px; background: var(--color-canvas); border-radius: 8px; border-left: 3px solid var(--color-brand); font-size: var(--text-md); line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">
             {{ data.preview }}
           </div>
         }
@@ -203,11 +203,11 @@ export class PodInvoicesDialog {
 })
 export class EmailDetailDialogComponent {
   data = inject<IncomingOrderEmail>(MAT_DIALOG_DATA);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   copyEmail(): void {
     navigator.clipboard.writeText(this.data.fromEmail).then(() => {
-      this.snackBar.open(`Copied: ${this.data.fromEmail}`, 'Close', { duration: 2000 });
+      this.toast.done(`Copied: ${this.data.fromEmail}`);
     });
   }
 }

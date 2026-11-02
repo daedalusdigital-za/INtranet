@@ -449,7 +449,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
 
     .separator {
       color: var(--color-text-3);
-      font-size: 20px;
+      font-size: var(--text-2xl);
     }
 
     .crumb {
@@ -481,7 +481,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     }
 
     .stat-chip mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -527,7 +527,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     }
 
     .clear-btn mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
     }
 
     .toolbar-actions {
@@ -1324,7 +1324,7 @@ export class DepartmentHubComponent implements OnInit {
 @Component({
   selector: 'app-document-preview-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, SkeletonRowsComponent],
   template: `
     <div class="preview-dialog">
       <div class="preview-header">
@@ -1347,8 +1347,7 @@ export class DepartmentHubComponent implements OnInit {
       <div class="preview-content">
         @if (isLoading) {
           <div class="loading">
-            <mat-spinner diameter="48"></mat-spinner>
-            <p>Loading preview...</p>
+            <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
           </div>
         }
 
@@ -1390,8 +1389,7 @@ export class DepartmentHubComponent implements OnInit {
     .file-info mat-icon.image { color: var(--color-cat-purple); }
     .header-actions { display: flex; gap: 8px; }
     .preview-content { flex: 1; overflow: auto; background: var(--color-surface-2); display: flex; align-items: center; justify-content: center; }
-    .loading { text-align: center; color: var(--color-text-2); }
-    .loading p { margin-top: 16px; }
+    .loading { width: min(420px, 100%); }
     .pdf-viewer { width: 100%; height: 100%; border: none; }
     .image-viewer { max-width: 100%; max-height: 100%; object-fit: contain; }
     .office-notice { text-align: center; padding: 40px; background: var(--color-surface); border-radius: var(--radius-md); box-shadow: var(--shadow-md); }

@@ -1,4 +1,4 @@
-import { Component, Inject, signal } from '@angular/core';
+import { Component, Inject, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -8,8 +8,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { ToastService } from '../../ui/toast.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 export interface BackOrderStockInfo {
   code: string;
@@ -48,7 +49,7 @@ interface CommoditySearchHit { id: number; name: string; code?: string | null; u
 @Component({
   selector: 'app-unmapped-products-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTooltipModule, MatProgressBarModule],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTooltipModule, SkeletonRowsComponent, EmptyStateComponent],
   template: `
     <h2 mat-dialog-title>
       <mat-icon>link_off</mat-icon>
@@ -60,7 +61,7 @@ interface CommoditySearchHit { id: number; name: string; code?: string | null; u
         These back-order item codes don't exist in the product master, so no stock check is possible for them.
         Create the product, or link the code to an existing product.
       </p>
-      <mat-progress-bar mode="indeterminate" *ngIf="loading()"></mat-progress-bar>
+      <app-skeleton-rows *ngIf="loading()" [rows]="6" [avatar]="false"></app-skeleton-rows>
 
       <div class="toolbar" *ngIf="!loading()">
         <mat-form-field appearance="outline" class="search">
@@ -71,19 +72,17 @@ interface CommoditySearchHit { id: number; name: string; code?: string | null; u
         <span class="totals">{{ visible().length }} products · {{ sumLines() }} lines · R{{ sumValue() | number:'1.0-0' }}</span>
       </div>
 
-      <div class="empty" *ngIf="!loading() && pending().length === 0">
-        <mat-icon>check_circle</mat-icon>
-        <span>All back-order item codes are mapped.</span>
-      </div>
+      <app-empty-state *ngIf="!loading() && pending().length === 0" icon="check_circle" title="All back-order item codes are mapped"
+                       message="Stock can be checked for every back-order line."></app-empty-state>
 
-      <table class="q" *ngIf="!loading() && visible().length > 0">
+      <table class="q app-table" *ngIf="!loading() && visible().length > 0">
         <thead>
           <tr><th>Code</th><th>Description</th><th>Co.</th><th class="num">Lines</th><th class="num">Qty</th><th class="num">Value</th><th class="act">Action</th></tr>
         </thead>
         <tbody>
           @for (p of visible(); track p.code) {
             <tr [class.done]="p.done">
-              <td class="mono">{{ p.code }}</td>
+              <td class="ref">{{ p.code }}</td>
               <td>
                 @if (p.mode === 'create') {
                   <input class="inline" [(ngModel)]="p.description" placeholder="Product name">
@@ -143,14 +142,10 @@ interface CommoditySearchHit { id: number; name: string; code?: string | null; u
     .toolbar { display:flex; align-items:center; gap:16px; }
     .search { flex:1; }
     .totals { color:var(--color-text-2); font-size:.85rem; white-space:nowrap; }
-    .empty { display:flex; align-items:center; gap:8px; padding:24px; color:var(--color-ok); justify-content:center; }
-    table.q { width:100%; border-collapse:collapse; font-size:.85rem; }
-    .q th { text-align:left; padding:8px; border-bottom:2px solid var(--color-line); color:var(--color-text-2); font-weight:600; position:sticky; top:0; background:var(--color-surface); }
-    .q td { padding:8px; border-bottom:1px solid var(--color-line); vertical-align:top; }
-    .q .num { text-align:right; white-space:nowrap; }
-    .q .mono { font-family:monospace; font-weight:600; }
+    .q td { vertical-align:top; }
+    .q .ref { font-weight:600; }
     .q .act { width:260px; }
-    .q tr.done td { background:#f1f8e9; color:var(--color-text-3); }
+    .q tr.done td { background:var(--color-ok-soft); color:var(--color-text-3); }
     .ok { color:var(--color-ok); font-weight:600; display:inline-flex; align-items:center; gap:4px; }
     .inline { width:100%; padding:6px 8px; border:1px solid var(--color-line-strong); border-radius:4px; font:inherit; }
     .row-actions { display:flex; gap:6px; margin-top:6px; }
@@ -171,16 +166,16 @@ export class UnmappedProductsDialog {
   filter = '';
   changed = false;
   private searchTimer: any;
+  private toast = inject(ToastService);
 
   constructor(
     public ref: MatDialogRef<UnmappedProductsDialog>,
     @Inject(MAT_DIALOG_DATA) public data: { apiUrl: string },
-    private http: HttpClient,
-    private snack: MatSnackBar
+    private http: HttpClient
   ) {
     this.http.get<UnmappedProduct[]>(`${data.apiUrl}/backorders/unmapped`).subscribe({
       next: rows => { this.items.set(rows || []); this.loading.set(false); },
-      error: () => { this.loading.set(false); this.snack.open('Failed to load unmapped products', 'Close', { duration: 3000 }); }
+      error: () => { this.loading.set(false); this.toast.error('Unmapped products could not be loaded.'); }
     });
   }
 
@@ -220,7 +215,7 @@ export class UnmappedProductsDialog {
     this.http.post<any>(`${this.data.apiUrl}/backorders/map`, body).subscribe({
       next: res => {
         p.busy = false; p.done = true; p.mode = undefined; this.changed = true;
-        this.snack.open(`${p.code} → ${res.name}${res.created ? ' (created)' : ''}`, 'Close', { duration: 2500 });
+        this.toast.done(`${p.code} → ${res.name}${res.created ? ' (created)' : ''}`);
       },
       error: err => {
         p.busy = false;

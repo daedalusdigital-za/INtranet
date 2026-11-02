@@ -9,11 +9,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatBadgeModule } from '@angular/material/badge';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 
 interface EmailFolder {
   name: string;
@@ -63,10 +64,11 @@ interface EmailDetail {
     MatIconModule,
     MatInputModule,
     MatFormFieldModule,
-    MatProgressSpinnerModule,
     MatTooltipModule,
     MatBadgeModule,
-    NavbarComponent
+    NavbarComponent,
+    EmptyStateComponent,
+    SkeletonRowsComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -81,7 +83,7 @@ interface EmailDetail {
 
         @if (foldersLoading) {
           <div class="sidebar-loading">
-            <mat-spinner diameter="24"></mat-spinner>
+            <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
           </div>
         } @else {
           <div class="folder-list">
@@ -124,7 +126,7 @@ interface EmailDetail {
                      [(ngModel)]="searchQuery"
                      (keydown.enter)="searchEmails()">
               @if (searchQuery) {
-                <button aria-label="Close" class="clear-search" (click)="clearSearch()">
+                <button aria-label="Clear search" class="clear-search" (click)="clearSearch()">
                   <mat-icon>close</mat-icon>
                 </button>
               }
@@ -137,15 +139,16 @@ interface EmailDetail {
 
         @if (emailsLoading && emails.length === 0) {
           <div class="list-loading">
-            <mat-spinner diameter="36"></mat-spinner>
-            <p>Loading emails...</p>
+            <app-skeleton-rows [rows]="8"></app-skeleton-rows>
           </div>
         } @else if (emails.length === 0) {
-          <div class="list-empty">
-            <mat-icon>mail_outline</mat-icon>
-            <p>No emails found</p>
-            <span>{{ searchQuery ? 'Try a different search' : 'This folder is empty' }}</span>
-          </div>
+          <app-empty-state class="list-empty" icon="mail_outline"
+                           [title]="searchQuery ? 'No emails match your search' : 'No emails in this folder'"
+                           [message]="searchQuery ? 'Try a different search term.' : 'New mail will show up here.'">
+            @if (searchQuery) {
+              <button mat-stroked-button (click)="clearSearch()">Clear search</button>
+            }
+          </app-empty-state>
         } @else {
           <div class="email-items" (scroll)="onListScroll($event)">
             @for (email of emails; track email.uid) {
@@ -178,7 +181,7 @@ interface EmailDetail {
             }
             @if (emailsLoading) {
               <div class="list-loading-more">
-                <mat-spinner diameter="24"></mat-spinner>
+                <app-skeleton-rows [rows]="2"></app-skeleton-rows>
               </div>
             }
           </div>
@@ -190,7 +193,7 @@ interface EmailDetail {
                 <mat-icon>chevron_left</mat-icon>
               </button>
               <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
-              <button class="page-btn" [disabled]="currentPage >= totalPages" (click)="goToPage(currentPage + 1)">
+              <button aria-label="Next" class="page-btn" [disabled]="currentPage >= totalPages" (click)="goToPage(currentPage + 1)">
                 <mat-icon>chevron_right</mat-icon>
               </button>
             </div>
@@ -202,8 +205,7 @@ interface EmailDetail {
       <div class="email-detail-panel">
         @if (detailLoading) {
           <div class="detail-loading">
-            <mat-spinner diameter="36"></mat-spinner>
-            <p>Loading email...</p>
+            <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
           </div>
         } @else if (emailDetail) {
           <div class="detail-content">
@@ -264,17 +266,14 @@ interface EmailDetail {
             </div>
           </div>
         } @else {
-          <div class="detail-empty">
-            <mat-icon>markunread_mailbox</mat-icon>
-            <h3>Select an email to read</h3>
-            <p>Choose an email from the list to view its contents</p>
-          </div>
+          <app-empty-state class="detail-empty" icon="markunread_mailbox" title="Select an email to read"
+                           message="Choose an email from the list to view its contents."></app-empty-state>
         }
       </div>
     </div>
   `,
   styles: [`
-    :host { display: block; height: 100vh; background: #0d1117; }
+    :host { display: block; height: 100vh; background: var(--color-canvas); }
 
     .email-container {
       display: flex;
@@ -286,8 +285,8 @@ interface EmailDetail {
     .email-sidebar {
       width: 220px;
       min-width: 220px;
-      background: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
-      border-right: 1px solid rgba(255,255,255,0.06);
+      background: var(--color-surface);
+      border-right: 1px solid var(--color-line);
       display: flex;
       flex-direction: column;
       overflow-y: auto;
@@ -298,13 +297,13 @@ interface EmailDetail {
       align-items: center;
       gap: 10px;
       padding: 18px 16px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid var(--color-line);
     }
 
-    .sidebar-icon { color: #58a6ff; font-size: 22px; }
-    .sidebar-header h3 { color: #e6edf3; font-size: 15px; font-weight: 600; margin: 0; }
+    .sidebar-icon { color: var(--color-primary); font-size: var(--text-2xl); }
+    .sidebar-header h3 { color: var(--color-text); font-size: var(--text-md); font-weight: 600; margin: 0; }
 
-    .sidebar-loading { display: flex; justify-content: center; padding: 30px; }
+    .sidebar-loading { padding: 8px 0; }
 
     .folder-list { padding: 8px; }
 
@@ -315,26 +314,26 @@ interface EmailDetail {
       width: 100%;
       padding: 9px 12px;
       border: none;
-      border-radius: 8px;
+      border-radius: var(--radius-control);
       background: transparent;
-      color: rgba(255,255,255,0.65);
-      font-size: 13px;
+      color: var(--color-text-2);
+      font-size: var(--text-sm);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background 0.2s, color 0.2s;
       text-align: left;
     }
 
-    .folder-item:hover { background: rgba(255,255,255,0.06); color: #e6edf3; }
-    .folder-item.active { background: rgba(88,166,255,0.12); color: #58a6ff; }
-    .folder-item.active .folder-icon { color: #58a6ff; }
+    .folder-item:hover { background: var(--color-surface-2); color: var(--color-text); }
+    .folder-item.active { background: var(--color-primary-soft); color: var(--color-primary); }
+    .folder-item.active .folder-icon { color: var(--color-primary); }
 
-    .folder-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(255,255,255,0.4); }
+    .folder-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-text-3); }
     .folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .folder-badge {
-      background: #58a6ff;
-      color: #0d1117;
-      font-size: 10px;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      font-size: var(--text-xs);
       font-weight: 700;
       padding: 2px 7px;
       border-radius: 10px;
@@ -350,8 +349,8 @@ interface EmailDetail {
       gap: 8px;
       text-align: center;
     }
-    .no-account-msg mat-icon { color: #f0883e; font-size: 28px; width: 28px; height: 28px; }
-    .no-account-msg p { color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; }
+    .no-account-msg mat-icon { color: var(--color-warn); font-size: var(--text-3xl); width: 28px; height: 28px; }
+    .no-account-msg p { color: var(--color-text-3); font-size: var(--text-xs); margin: 0; }
 
     /* ===== Email List ===== */
     .email-list-panel {
@@ -359,8 +358,8 @@ interface EmailDetail {
       min-width: 320px;
       display: flex;
       flex-direction: column;
-      border-right: 1px solid rgba(255,255,255,0.06);
-      background: #0d1117;
+      border-right: 1px solid var(--color-line);
+      background: var(--color-surface);
     }
 
     .list-toolbar {
@@ -368,14 +367,14 @@ interface EmailDetail {
       align-items: center;
       justify-content: space-between;
       padding: 12px 14px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid var(--color-line);
       gap: 8px;
       flex-wrap: wrap;
     }
 
     .list-toolbar-left { display: flex; align-items: center; gap: 8px; }
-    .list-toolbar-left h3 { color: #e6edf3; font-size: 14px; font-weight: 600; margin: 0; }
-    .email-count { color: rgba(255,255,255,0.35); font-size: 11px; }
+    .list-toolbar-left h3 { color: var(--color-text); font-size: var(--text-md); font-weight: 600; margin: 0; }
+    .email-count { color: var(--color-text-3); font-size: var(--text-xs); }
 
     .list-toolbar-right { display: flex; align-items: center; gap: 6px; }
 
@@ -383,46 +382,36 @@ interface EmailDetail {
       display: flex;
       align-items: center;
       gap: 6px;
-      background: rgba(255,255,255,0.06);
-      border-radius: 8px;
+      background: var(--color-surface);
+      border-radius: var(--radius-control);
       padding: 5px 10px;
-      border: 1px solid rgba(255,255,255,0.08);
+      border: 1px solid var(--color-line-strong);
       transition: border-color 0.2s;
     }
-    .search-box:focus-within { border-color: #58a6ff; }
-    .search-box mat-icon { font-size: 16px; width: 16px; height: 16px; color: rgba(255,255,255,0.35); }
+    .search-box:focus-within { border-color: var(--color-primary); }
+    .search-box mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-text-3); }
     .search-box input {
       background: none; border: none; outline: none;
-      color: #e6edf3; font-size: 12px; width: 130px;
+      color: var(--color-text); font-size: var(--text-xs); width: 130px;
     }
-    .search-box input::placeholder { color: rgba(255,255,255,0.3); }
+    .search-box input::placeholder { color: var(--color-text-3); }
     .clear-search {
       background: none; border: none; cursor: pointer; padding: 0;
       display: flex; align-items: center;
     }
-    .clear-search mat-icon { font-size: 14px; width: 14px; height: 14px; color: rgba(255,255,255,0.4); }
+    .clear-search mat-icon { font-size: var(--text-md); width: 14px; height: 14px; color: var(--color-text-3); }
 
     .refresh-btn {
       background: none; border: none; cursor: pointer; padding: 4px;
-      border-radius: 6px; transition: background 0.2s; display: flex; align-items: center;
+      border-radius: var(--radius-sm); transition: background 0.2s; display: flex; align-items: center;
     }
-    .refresh-btn:hover { background: rgba(255,255,255,0.08); }
-    .refresh-btn mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(255,255,255,0.5); }
+    .refresh-btn:hover { background: var(--color-surface-2); }
+    .refresh-btn mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-text-3); }
     .spinning { animation: spin 1s linear infinite; }
     @keyframes spin { 100% { transform: rotate(360deg); } }
 
-    .list-loading, .list-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      gap: 12px;
-      flex: 1;
-    }
-    .list-loading p, .list-empty p { color: rgba(255,255,255,0.5); font-size: 13px; margin: 0; }
-    .list-empty mat-icon { font-size: 40px; width: 40px; height: 40px; color: rgba(255,255,255,0.15); }
-    .list-empty span { color: rgba(255,255,255,0.3); font-size: 12px; }
+    .list-loading { flex: 1; }
+    .list-empty { flex: 1; display: block; }
 
     .email-items { flex: 1; overflow-y: auto; }
 
@@ -432,33 +421,32 @@ interface EmailDetail {
       padding: 12px 14px;
       cursor: pointer;
       transition: background 0.15s;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
+      border-bottom: 1px solid var(--color-line);
     }
-    .email-item:hover { background: rgba(255,255,255,0.04); }
-    .email-item.selected { background: rgba(88,166,255,0.08); border-left: 3px solid #58a6ff; }
-    .email-item.unread { background: rgba(255,255,255,0.02); }
+    .email-item:hover { background: var(--color-surface-2); }
+    .email-item.selected { background: var(--color-primary-soft); border-left: 3px solid var(--color-primary); }
 
     .email-item-indicator { width: 8px; display: flex; align-items: flex-start; padding-top: 6px; }
     .unread-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: #58a6ff;
+      background: var(--color-primary);
     }
 
     .email-item-content { flex: 1; min-width: 0; }
 
     .email-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-    .email-from { color: rgba(255,255,255,0.8); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
-    .email-date { color: rgba(255,255,255,0.3); font-size: 10.5px; white-space: nowrap; }
+    .email-from { color: var(--color-text); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+    .email-date { color: var(--color-text-3); font-size: var(--text-xs); white-space: nowrap; }
 
-    .email-subject { color: rgba(255,255,255,0.65); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .email-subject { color: var(--color-text-2); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    .fw-bold { font-weight: 600 !important; color: #e6edf3 !important; }
+    .fw-bold { font-weight: 600; color: var(--color-text); }
 
     .email-meta { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
-    .attach-icon { font-size: 14px; width: 14px; height: 14px; color: rgba(255,255,255,0.3); }
-    .flag-icon { font-size: 14px; width: 14px; height: 14px; color: #f0883e; }
+    .attach-icon { font-size: var(--text-md); width: 14px; height: 14px; color: var(--color-text-3); }
+    .flag-icon { font-size: var(--text-md); width: 14px; height: 14px; color: var(--color-warn); }
 
-    .list-loading-more { display: flex; justify-content: center; padding: 16px; }
+    .list-loading-more { padding: 4px 0; }
 
     .pagination {
       display: flex;
@@ -466,20 +454,20 @@ interface EmailDetail {
       justify-content: center;
       gap: 12px;
       padding: 10px;
-      border-top: 1px solid rgba(255,255,255,0.06);
+      border-top: 1px solid var(--color-line);
     }
     .page-btn {
-      background: rgba(255,255,255,0.06);
-      border: none; border-radius: 6px;
-      color: rgba(255,255,255,0.6);
+      background: var(--color-surface-2);
+      border: none; border-radius: var(--radius-sm);
+      color: var(--color-text-2);
       cursor: pointer; padding: 4px;
       display: flex; align-items: center;
       transition: background 0.2s;
     }
-    .page-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
-    .page-btn:disabled { opacity: 0.3; cursor: default; }
-    .page-btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .page-info { color: rgba(255,255,255,0.4); font-size: 12px; }
+    .page-btn:hover:not(:disabled) { background: var(--color-surface-3); }
+    .page-btn:disabled { opacity: 0.4; cursor: default; }
+    .page-btn mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
+    .page-info { color: var(--color-text-3); font-size: var(--text-xs); }
 
     /* ===== Email Detail ===== */
     .email-detail-panel {
@@ -487,26 +475,16 @@ interface EmailDetail {
       display: flex;
       flex-direction: column;
       overflow-y: auto;
-      background: #0d1117;
+      background: var(--color-surface);
     }
 
-    .detail-loading, .detail-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      gap: 12px;
-    }
-    .detail-loading p { color: rgba(255,255,255,0.5); font-size: 13px; }
-    .detail-empty mat-icon { font-size: 56px; width: 56px; height: 56px; color: rgba(255,255,255,0.08); }
-    .detail-empty h3 { color: rgba(255,255,255,0.5); font-size: 16px; margin: 0; font-weight: 500; }
-    .detail-empty p { color: rgba(255,255,255,0.25); font-size: 13px; margin: 0; }
+    .detail-loading { padding: 24px; }
+    .detail-empty { display: block; padding-top: 12vh; }
 
     .detail-content { padding: 24px; }
 
     .detail-header { margin-bottom: 20px; }
-    .detail-subject { color: #e6edf3; font-size: 20px; font-weight: 600; margin: 0 0 16px 0; line-height: 1.4; }
+    .detail-subject { color: var(--color-text); font-size: var(--text-2xl); font-weight: 600; margin: 0 0 16px 0; line-height: 1.4; }
 
     .detail-meta {
       display: flex;
@@ -522,16 +500,16 @@ interface EmailDetail {
 
     .detail-avatar {
       width: 40px; height: 40px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+      background: var(--color-primary);
       display: flex; align-items: center; justify-content: center;
-      color: white; font-size: 14px; font-weight: 700;
+      color: var(--color-on-primary); font-size: var(--text-md); font-weight: 700;
       flex-shrink: 0;
     }
 
     .detail-from-info { display: flex; flex-direction: column; flex: 1; }
-    .detail-from-name { color: #e6edf3; font-size: 14px; font-weight: 600; }
-    .detail-from-email { color: rgba(255,255,255,0.4); font-size: 12px; }
-    .detail-date { color: rgba(255,255,255,0.35); font-size: 12px; white-space: nowrap; }
+    .detail-from-name { color: var(--color-text); font-size: var(--text-md); font-weight: 600; }
+    .detail-from-email { color: var(--color-text-3); font-size: var(--text-xs); }
+    .detail-date { color: var(--color-text-3); font-size: var(--text-xs); white-space: nowrap; }
 
     .detail-recipients {
       display: flex;
@@ -541,13 +519,13 @@ interface EmailDetail {
       padding-left: 52px;
     }
 
-    .recipient-label { color: rgba(255,255,255,0.35); font-size: 11.5px; font-weight: 600; }
+    .recipient-label { color: var(--color-text-3); font-size: var(--text-xs); font-weight: 600; }
     .recipient-chip {
-      background: rgba(255,255,255,0.06);
-      color: rgba(255,255,255,0.6);
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
       padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 11.5px;
+      border-radius: var(--radius-sm);
+      font-size: var(--text-xs);
     }
 
     .detail-attachments {
@@ -556,53 +534,59 @@ interface EmailDetail {
       gap: 8px;
       padding: 12px 16px;
       margin-bottom: 16px;
-      background: rgba(255,255,255,0.03);
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.06);
+      background: var(--color-surface-2);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-line);
       flex-wrap: wrap;
     }
-    .detail-attachments > mat-icon { color: rgba(255,255,255,0.4); font-size: 18px; width: 18px; height: 18px; margin-top: 2px; }
-    .attach-label { color: rgba(255,255,255,0.5); font-size: 12px; margin-right: 4px; }
+    .detail-attachments > mat-icon { color: var(--color-text-3); font-size: var(--text-xl); width: 18px; height: 18px; margin-top: 2px; }
+    .attach-label { color: var(--color-text-2); font-size: var(--text-xs); margin-right: 4px; }
 
     .attachment-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .attachment-chip {
       display: flex; align-items: center; gap: 4px;
-      background: rgba(88,166,255,0.08);
-      color: #58a6ff;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 11.5px;
+      border-radius: var(--radius-sm);
+      font-size: var(--text-xs);
     }
-    .attachment-chip mat-icon { font-size: 14px; width: 14px; height: 14px; }
-    .att-size { color: rgba(255,255,255,0.3); font-size: 10px; }
+    .attachment-chip mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
+    .att-size { color: var(--color-text-3); font-size: var(--text-xs); }
 
     .detail-body {
       padding: 16px 0;
-      border-top: 1px solid rgba(255,255,255,0.06);
+      border-top: 1px solid var(--color-line);
     }
 
+    /* Sent HTML is written for a white page, so it sits on a white sheet in both themes */
     .email-html-body {
-      color: #e6edf3;
-      font-size: 14px;
+      background: var(--color-on-dark);
+      color: var(--nav-bg);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-size: var(--text-md);
       line-height: 1.6;
       word-break: break-word;
       overflow-x: auto;
     }
 
     :host ::ng-deep .email-html-body img { max-width: 100%; height: auto; }
-    :host ::ng-deep .email-html-body a { color: #58a6ff; }
+    :host ::ng-deep .email-html-body a { color: inherit; text-decoration: underline; }
     :host ::ng-deep .email-html-body table { border-collapse: collapse; max-width: 100%; }
     :host ::ng-deep .email-html-body td, :host ::ng-deep .email-html-body th { padding: 4px 8px; }
     :host ::ng-deep .email-html-body blockquote {
-      border-left: 3px solid rgba(255,255,255,0.15);
+      border-left: 3px solid var(--color-line-strong);
       margin: 8px 0;
       padding: 4px 12px;
-      color: rgba(255,255,255,0.55);
+      color: inherit;
+      opacity: 0.7;
     }
 
     .email-text-body {
-      color: rgba(255,255,255,0.75);
-      font-size: 13px;
+      color: var(--color-text);
+      font-size: var(--text-sm);
       line-height: 1.6;
       white-space: pre-wrap;
       word-break: break-word;
@@ -610,7 +594,7 @@ interface EmailDetail {
       margin: 0;
     }
 
-    .no-body { color: rgba(255,255,255,0.3); font-style: italic; }
+    .no-body { color: var(--color-text-3); font-style: italic; }
 
     /* Responsive */
     @media (max-width: 1024px) {
@@ -620,7 +604,7 @@ interface EmailDetail {
 
     @media (max-width: 768px) {
       .email-container { flex-direction: column; }
-      .email-sidebar { width: 100%; min-width: auto; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06); }
+      .email-sidebar { width: 100%; min-width: auto; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--color-line); }
       .sidebar-header { display: none; }
       .folder-list { display: flex; padding: 6px; gap: 4px; }
       .folder-item { white-space: nowrap; }

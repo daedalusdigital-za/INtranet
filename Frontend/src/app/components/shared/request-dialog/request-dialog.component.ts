@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { MatDialogModule, MatDialogRef, MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -24,11 +23,14 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Observable, map, startWith } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../ui/toast.service';
+import { StatusChipComponent } from '../../../ui/status-chip/status-chip.component';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
 
 interface RequestCategory {
   name: string;
   icon: string;
-  color: string;
+  tone: 'purple' | 'primary' | 'teal' | 'amber';
   description: string;
   type: string;
 }
@@ -36,7 +38,7 @@ interface RequestCategory {
 @Component({
   selector: 'app-request-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatIconModule, MatButtonModule, MatSnackBarModule],
+  imports: [CommonModule, MatDialogModule, MatIconModule, MatButtonModule],
   template: `
     <div class="request-dialog">
       <div class="dialog-header">
@@ -53,7 +55,7 @@ interface RequestCategory {
           @for (category of categories; track category.name) {
             <div 
               class="category-box" 
-              [style.background]="category.color"
+              [class]="'category-box tone-' + category.tone"
               (click)="selectCategory(category)">
               <mat-icon class="category-icon">{{ category.icon }}</mat-icon>
               <span class="category-name">{{ category.name }}</span>
@@ -75,21 +77,22 @@ interface RequestCategory {
       justify-content: center;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       position: relative;
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: var(--text-3xl);
       font-weight: 500;
       text-align: center;
     }
 
     .dialog-header button {
-      color: white;
+      color: var(--color-text-2);
       position: absolute;
       right: 16px;
       top: 50%;
@@ -104,7 +107,7 @@ interface RequestCategory {
       text-align: center;
       color: var(--color-text-2);
       margin-bottom: 24px;
-      font-size: 1rem;
+      font-size: var(--text-lg);
     }
 
     .categories-grid {
@@ -119,35 +122,45 @@ interface RequestCategory {
       align-items: center;
       justify-content: center;
       padding: 24px;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-line);
+      background: var(--color-surface);
       cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      color: white;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      color: var(--color-text);
       min-height: 140px;
       text-align: center;
     }
 
     .category-box:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      border-color: var(--color-primary);
+      box-shadow: var(--shadow-md);
     }
 
     .category-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
+      font-size: var(--text-4xl);
+      width: 56px;
+      height: 56px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-md);
       margin-bottom: 12px;
     }
 
+    .tone-purple .category-icon { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+    .tone-primary .category-icon { background: var(--color-primary-soft); color: var(--color-primary); }
+    .tone-teal .category-icon { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); }
+    .tone-amber .category-icon { background: var(--color-cat-amber-soft); color: var(--color-cat-amber); }
+
     .category-name {
-      font-size: 1.25rem;
+      font-size: var(--text-2xl);
       font-weight: 600;
       margin-bottom: 4px;
     }
 
     .category-desc {
-      font-size: 0.85rem;
-      opacity: 0.9;
+      font-size: var(--text-sm);
+      color: var(--color-text-2);
     }
   `]
 })
@@ -156,28 +169,28 @@ export class RequestDialogComponent {
     {
       name: 'Meeting',
       icon: 'event',
-      color: '#9c27b0',
+      tone: 'purple',
       description: 'Schedule a meeting with colleagues',
       type: 'meeting'
     },
     {
       name: 'Finance',
       icon: 'account_balance',
-      color: '#2196f3',
+      tone: 'primary',
       description: 'Expense claims, petty cash, invoices',
       type: 'finance'
     },
     {
       name: 'HR',
       icon: 'badge',
-      color: '#4caf50',
+      tone: 'teal',
       description: 'Leave requests, payslips, private meetings',
       type: 'hr'
     },
     {
       name: 'Stationery',
       icon: 'edit_note',
-      color: '#ff9800',
+      tone: 'amber',
       description: 'Request pens, paper, and office supplies',
       type: 'stationery'
     }
@@ -186,8 +199,7 @@ export class RequestDialogComponent {
   constructor(
     private dialogRef: MatDialogRef<RequestDialogComponent>,
     private dialog: MatDialog,
-    private router: Router,
-    private snackBar: MatSnackBar
+    private router: Router
   ) {}
 
   selectCategory(category: RequestCategory): void {
@@ -268,7 +280,7 @@ export class RequestDialogComponent {
           </div>
           
           <div class="option-item" (click)="openMeetingRequest()">
-            <mat-icon class="option-icon" style="color: #9c27b0">meeting_room</mat-icon>
+            <mat-icon class="option-icon" style="color: var(--color-cat-purple)">meeting_room</mat-icon>
             <div class="option-text">
               <span class="option-name">Private Meeting</span>
               <span class="option-desc">Request a private meeting with HR/Manager</span>
@@ -290,20 +302,21 @@ export class RequestDialogComponent {
       justify-content: center;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, var(--color-ok) 0%, var(--color-ok) 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       position: relative;
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: var(--text-3xl);
       font-weight: 500;
     }
 
     .dialog-header button {
-      color: white;
+      color: var(--color-text-2);
       position: absolute;
       right: 16px;
       top: 50%;
@@ -330,7 +343,7 @@ export class RequestDialogComponent {
       display: flex;
       align-items: center;
       padding: 16px;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       background: var(--color-surface-2);
       cursor: pointer;
       transition: all 0.2s ease;
@@ -338,11 +351,10 @@ export class RequestDialogComponent {
 
     .option-item:hover {
       background: var(--color-primary-soft);
-      transform: translateX(4px);
     }
 
     .option-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
       margin-right: 16px;
@@ -356,12 +368,12 @@ export class RequestDialogComponent {
 
     .option-name {
       font-weight: 600;
-      font-size: 1rem;
+      font-size: var(--text-lg);
       color: var(--color-text);
     }
 
     .option-desc {
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
     }
 
@@ -434,7 +446,6 @@ interface UserOption {
     MatChipsModule,
     MatAutocompleteModule,
     MatRadioModule,
-    MatSnackBarModule,
     MatProgressSpinnerModule
   ],
   template: `
@@ -586,20 +597,6 @@ interface UserOption {
       width: 100%;
       color: var(--color-text);
     }
-    /* Ensure form inputs are always dark-on-light regardless of global theme */
-    .meeting-dialog ::ng-deep .mat-mdc-form-field { color: var(--color-text); }
-    .meeting-dialog ::ng-deep input.mat-mdc-input-element,
-    .meeting-dialog ::ng-deep textarea.mat-mdc-input-element { color: var(--color-text) !important; caret-color: var(--color-text); }
-    .meeting-dialog ::ng-deep .mat-mdc-select-value,
-    .meeting-dialog ::ng-deep .mat-mdc-select-value-text { color: var(--color-text) !important; }
-    .meeting-dialog ::ng-deep .mat-mdc-form-field-infix input::placeholder,
-    .meeting-dialog ::ng-deep .mat-mdc-form-field-infix textarea::placeholder { color: #9aa0ab !important; }
-    .meeting-dialog ::ng-deep .mdc-floating-label,
-    .meeting-dialog ::ng-deep .mat-mdc-form-field-label,
-    .meeting-dialog ::ng-deep .mdc-text-field__affix { color: #5b6270 !important; }
-    .meeting-dialog ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__leading,
-    .meeting-dialog ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__notch,
-    .meeting-dialog ::ng-deep .mdc-text-field--outlined .mdc-notched-outline__trailing { border-color: #c7ccd6; }
 
     .dialog-header {
       display: flex;
@@ -607,26 +604,28 @@ interface UserOption {
       justify-content: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       position: relative;
     }
 
     .header-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
+      color: var(--color-primary);
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: var(--text-3xl);
       text-align: center;
     }
 
     .close-btn {
-      color: white;
+      color: var(--color-text-2);
       position: absolute;
       right: 16px;
       top: 50%;
@@ -653,7 +652,7 @@ interface UserOption {
     .section-label {
       display: block;
       margin-bottom: 12px;
-      font-size: 0.9rem;
+      font-size: var(--text-md);
       font-weight: 500;
       color: var(--color-text-2);
     }
@@ -674,7 +673,7 @@ interface UserOption {
     }
 
     .location-option mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -694,12 +693,12 @@ interface UserOption {
       width: 32px;
       height: 32px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-      color: white;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 600;
     }
 
@@ -710,11 +709,11 @@ interface UserOption {
 
     .user-name {
       font-weight: 500;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .user-dept {
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-2);
     }
 
@@ -735,12 +734,12 @@ interface UserOption {
       width: 24px;
       height: 24px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-      color: white;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: var(--text-xs);
       font-weight: 600;
     }
 
@@ -762,7 +761,7 @@ interface UserOption {
 export class ScheduleMeetingDialogComponent implements OnInit {
   private http = inject(HttpClient);
   private fb = inject(FormBuilder);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private dialogRef = inject(MatDialogRef<ScheduleMeetingDialogComponent>);
 
   meetingForm: FormGroup;
@@ -862,16 +861,12 @@ export class ScheduleMeetingDialogComponent implements OnInit {
     this.http.post(`${environment.apiUrl}/meetings`, meetingRequest).subscribe({
       next: () => {
         this.isSubmitting = false;
-        this.snackBar.open(
-          `Meeting scheduled! Invitations sent to ${this.selectedAttendees.length} attendee(s).`,
-          'OK',
-          { duration: 5000 }
-        );
+        this.toast.done(`Meeting scheduled. Invitations sent to ${this.selectedAttendees.length} attendee(s).`);
         this.dialogRef.close(true);
       },
       error: (err) => {
         this.isSubmitting = false;
-        this.snackBar.open('Failed to schedule meeting. Please try again.', 'OK', { duration: 4000 });
+        this.toast.error('Could not schedule the meeting. Please try again.');
       }
     });
   }
@@ -920,8 +915,8 @@ interface BookDepartment {
     MatButtonModule,
     MatIconModule,
     MatAutocompleteModule,
-    MatSnackBarModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    SkeletonRowsComponent
   ],
   template: `
     <div class="finance-dialog">
@@ -957,8 +952,7 @@ interface BookDepartment {
               }
               @if (departments.length === 0) {
                 <div class="loading-hint">
-                  <mat-spinner diameter="20"></mat-spinner>
-                  <span>Loading departments...</span>
+                  <app-skeleton-rows [rows]="2" [avatar]="false" />
                 </div>
               }
             </div>
@@ -1109,26 +1103,28 @@ interface BookDepartment {
       justify-content: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       position: relative;
     }
 
     .header-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
+      color: var(--color-primary);
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.4rem;
+      font-size: var(--text-2xl);
       text-align: center;
     }
 
     .close-btn {
-      color: white;
+      color: var(--color-text-2);
       position: absolute;
       right: 16px;
       top: 50%;
@@ -1143,7 +1139,7 @@ interface BookDepartment {
       text-align: center;
       color: var(--color-text-2);
       margin-bottom: 20px;
-      font-size: 0.95rem;
+      font-size: var(--text-md);
     }
 
     .full-width { width: 100%; }
@@ -1160,7 +1156,7 @@ interface BookDepartment {
 
     .step.completed {
       background: var(--color-ok-soft);
-      border-color: #a5d6a7;
+      border-color: var(--color-ok);
     }
 
     .step-header {
@@ -1180,35 +1176,35 @@ interface BookDepartment {
       align-items: center;
       justify-content: center;
       font-weight: 700;
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
       flex-shrink: 0;
     }
 
     .step-number.active {
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .step.completed .step-number {
       background: var(--color-ok);
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .step-label {
       font-weight: 600;
-      font-size: 0.95rem;
+      font-size: var(--text-md);
       color: var(--color-text);
     }
 
-    .change-btn {
+    .step-header .change-btn {
       margin-left: auto;
-      width: 32px !important;
-      height: 32px !important;
-      line-height: 32px !important;
+      width: 32px;
+      height: 32px;
+      line-height: 32px;
     }
 
     .change-btn mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -1227,9 +1223,9 @@ interface BookDepartment {
       padding: 10px 14px;
       background: var(--color-surface);
       border: 1px solid var(--color-line);
-      border-radius: 10px;
+      border-radius: var(--radius-md);
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: var(--text-md);
       font-weight: 500;
       color: var(--color-text);
       transition: all 0.2s;
@@ -1238,12 +1234,11 @@ interface BookDepartment {
     .dept-chip:hover {
       border-color: var(--color-primary);
       background: var(--color-primary-soft);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+      box-shadow: var(--shadow-md);
     }
 
     .dept-chip mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
       color: var(--color-primary);
@@ -1263,7 +1258,7 @@ interface BookDepartment {
 
     .selected-dept-chip mat-icon {
       color: var(--color-ok);
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -1273,9 +1268,11 @@ interface BookDepartment {
       align-items: center;
       gap: 10px;
       color: var(--color-text-2);
-      font-size: 0.9rem;
+      font-size: var(--text-md);
       grid-column: 1 / -1;
     }
+
+    .loading-hint app-skeleton-rows { width: 100%; }
 
     /* Invoice Option in autocomplete */
     .invoice-option {
@@ -1293,19 +1290,19 @@ interface BookDepartment {
     .inv-number {
       font-weight: 600;
       color: var(--color-primary-hover);
-      font-size: 0.9rem;
+      font-size: var(--text-md);
     }
 
     .inv-supplier {
       color: var(--color-text-2);
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
     }
 
     .invoice-option-sub {
       display: flex;
       gap: 12px;
       align-items: center;
-      font-size: 0.8rem;
+      font-size: var(--text-xs);
       color: var(--color-text-3);
       margin-top: 2px;
     }
@@ -1318,7 +1315,7 @@ interface BookDepartment {
     .inv-status, .inv-status-badge {
       padding: 2px 8px;
       border-radius: 12px;
-      font-size: 0.75rem;
+      font-size: var(--text-xs);
       font-weight: 600;
     }
 
@@ -1338,7 +1335,7 @@ interface BookDepartment {
     .invoice-card {
       background: var(--color-surface);
       border: 1px solid var(--color-line);
-      border-radius: 10px;
+      border-radius: var(--radius-md);
       overflow: hidden;
     }
 
@@ -1352,13 +1349,13 @@ interface BookDepartment {
     .invoice-card-row:last-child { border-bottom: none; }
 
     .invoice-card-row .label {
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
       font-weight: 500;
     }
 
     .invoice-card-row .value {
-      font-size: 0.9rem;
+      font-size: var(--text-md);
       font-weight: 500;
       color: var(--color-text);
     }
@@ -1386,7 +1383,7 @@ interface BookDepartment {
 })
 export class FinanceInquiryDialogComponent implements OnInit {
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private dialogRef = inject(MatDialogRef<FinanceInquiryDialogComponent>);
 
   departments: BookDepartment[] = [];
@@ -1482,16 +1479,12 @@ export class FinanceInquiryDialogComponent implements OnInit {
     this.http.post<any>(`${environment.apiUrl}/Books/payment-inquiry`, body).subscribe({
       next: (res) => {
         this.isSending = false;
-        this.snackBar.open(
-          'Payment inquiry sent to finance for invoice ' + (this.selectedInvoice?.invoiceNumber || 'N/A') + '!',
-          'OK',
-          { duration: 5000 }
-        );
+        this.toast.done('Payment inquiry sent to finance for invoice ' + (this.selectedInvoice?.invoiceNumber || 'N/A') + '.');
         this.dialogRef.close(true);
       },
       error: (err) => {
         this.isSending = false;
-        this.snackBar.open('Failed to send inquiry. Please try again.', 'OK', { duration: 4000 });
+        this.toast.error('Could not send the inquiry. Please try again.');
       }
     });
   }
@@ -1515,10 +1508,10 @@ export class FinanceInquiryDialogComponent implements OnInit {
     MatSelectModule,
     MatButtonModule,
     MatIconModule,
-    MatSnackBarModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
-    MatChipsModule
+    MatChipsModule,
+    StatusChipComponent
   ],
   template: `
     <div class="stat-dialog">
@@ -1606,7 +1599,7 @@ export class FinanceInquiryDialogComponent implements OnInit {
               <div class="past-row">
                 <span class="past-items">{{r.items}}</span>
                 <span class="past-date">{{r.submittedAt | date:'d MMM'}}</span>
-                <span class="stat-pill" [class]="'pill-' + r.status.toLowerCase()">{{r.status}}</span>
+                <app-status-chip [status]="r.status" />
               </div>
             }
           </div>
@@ -1615,7 +1608,7 @@ export class FinanceInquiryDialogComponent implements OnInit {
 
       <div class="stat-actions">
         <button mat-button (click)="close()">Cancel</button>
-        <button mat-raised-button color="warn" (click)="submitStat()" [disabled]="!isValid() || submitting">
+        <button mat-flat-button color="primary" (click)="submitStat()" [disabled]="!isValid() || submitting">
           @if (submitting) { <mat-spinner diameter="18"></mat-spinner> }
           @else { <mat-icon>send</mat-icon> Send to Finance }
         </button>
@@ -1624,54 +1617,50 @@ export class FinanceInquiryDialogComponent implements OnInit {
   `,
   styles: [`
     .stat-dialog { min-width: 520px; }
-    .stat-header { display:flex; align-items:center; gap:12px; padding:18px 24px; background:linear-gradient(135deg,var(--color-warn),var(--color-warn)); color:white; margin:-24px -24px 0; position:relative; }
-    .stat-hicon { font-size:30px; width:30px; height:30px; }
-    .stat-header h2 { margin:0; font-size:1.4rem; font-weight:700; flex:1; }
-    .stat-close { color:white; position:absolute; right:12px; top:50%; transform:translateY(-50%); }
+    .stat-header { display:flex; align-items:center; gap:12px; padding:18px 24px; background:var(--color-surface); color:var(--color-text); border-bottom:1px solid var(--color-line); margin:-24px -24px 0; position:relative; }
+    .stat-hicon { font-size:var(--text-3xl); width:30px; height:30px; color:var(--color-primary); }
+    .stat-header h2 { margin:0; font-size:var(--text-2xl); font-weight:700; flex:1; }
+    .stat-close { color:var(--color-text-2); position:absolute; right:12px; top:50%; transform:translateY(-50%); }
     .stat-content { padding:20px 0 8px; }
-    .stat-subtitle { color:var(--color-text-2); font-size:13px; margin-bottom:16px; }
+    .stat-subtitle { color:var(--color-text-2); font-size:var(--text-sm); margin-bottom:16px; }
     .quick-chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:18px; }
-    .qc-label { font-size:12px; color:var(--color-text-3); font-weight:600; }
-    .qc-chip { background:var(--color-warn-soft); color:var(--color-warn); border:1px solid #ffcc80; border-radius:14px; padding:4px 12px; font-size:12px; cursor:pointer; transition:background 0.15s; }
-    .qc-chip:hover { background:var(--color-warn-soft); }
-    .items-section { background:var(--color-canvas); border-radius:12px; padding:12px; margin-bottom:16px; }
-    .items-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; color:var(--color-text-2); margin-bottom:10px; }
-    .items-header button { color:var(--color-warn); }
+    .qc-label { font-size:var(--text-xs); color:var(--color-text-3); font-weight:600; }
+    .qc-chip { background:var(--color-surface-2); color:var(--color-text-2); border:1px solid var(--color-line); border-radius:14px; padding:4px 12px; font-size:var(--text-xs); cursor:pointer; transition:background 0.15s; }
+    .qc-chip:hover { background:var(--color-primary-soft); color:var(--color-primary); }
+    .items-section { background:var(--color-canvas); border-radius:var(--radius-md); padding:12px; margin-bottom:16px; }
+    .items-header { display:flex; justify-content:space-between; align-items:center; font-size:var(--text-sm); font-weight:700; color:var(--color-text-2); margin-bottom:10px; }
+    .items-header button { color:var(--color-primary); }
     .item-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
     .item-inputs { display:flex; gap:8px; flex:1; }
-    .item-input { border:1px solid var(--color-line); border-radius:8px; padding:8px 10px; font-size:13px; outline:none; transition:border-color 0.15s; }
-    .item-input:focus { border-color:var(--color-warn); }
+    .item-input { border:1px solid var(--color-line); border-radius:var(--radius-control); padding:8px 10px; font-size:var(--text-sm); outline:none; background:var(--color-surface); color:var(--color-text); transition:border-color 0.15s; }
+    .item-input:focus { border-color:var(--color-primary); }
     .name-input { flex:2; min-width:0; }
     .qty-input { width:70px; }
     .unit-input { width:100px; }
-    .remove-btn { color:var(--color-danger) !important; flex-shrink:0; }
+    .item-row .remove-btn { color:var(--color-danger); flex-shrink:0; }
     .stat-form-row { display:flex; gap:16px; }
     .stat-form-row .full-width { flex:2; }
     .stat-form-row mat-form-field:last-child { flex:1; }
     .full-width { width:100%; }
     .past-section { border-top:1px solid var(--color-line); padding-top:12px; margin-top:8px; }
-    .past-title { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--color-text-2); margin-bottom:8px; }
-    .past-title mat-icon { font-size:15px; width:15px; height:15px; }
-    .past-row { display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:8px; background:var(--color-canvas); margin-bottom:5px; font-size:12px; }
+    .past-title { display:flex; align-items:center; gap:6px; font-size:var(--text-sm); font-weight:600; color:var(--color-text-2); margin-bottom:8px; }
+    .past-title mat-icon { font-size:var(--text-md); width:15px; height:15px; }
+    .past-row { display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:var(--radius-control); background:var(--color-canvas); margin-bottom:5px; font-size:var(--text-xs); }
     .past-items { flex:1; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .past-date { color:var(--color-text-3); white-space:nowrap; }
-    .stat-pill { padding:2px 9px; border-radius:10px; font-size:11px; font-weight:700; }
-    .pill-pending { background:#fff3cd; color:#856404; }
-    .pill-approved { background:var(--color-ok-soft); color:#065f46; }
-    .pill-declined { background:var(--color-danger-soft); color:#991b1b; }
     .quotes-section { margin-bottom:16px; }
-    .quotes-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--color-text-2); cursor:pointer; user-select:none; }
-    .quotes-toggle input { width:16px; height:16px; cursor:pointer; accent-color:var(--color-warn); }
+    .quotes-toggle { display:flex; align-items:center; gap:8px; font-size:var(--text-sm); color:var(--color-text-2); cursor:pointer; user-select:none; }
+    .quotes-toggle input { width:16px; height:16px; cursor:pointer; accent-color:var(--color-primary); }
     .quote-files { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
     .quote-file-row { display:flex; align-items:center; }
-    .quote-upload-btn { display:inline-flex; align-items:center; gap:6px; background:var(--color-warn-soft); color:var(--color-warn); border:1px dashed #ffcc80; border-radius:8px; padding:7px 14px; font-size:12px; cursor:pointer; transition:background 0.15s; }
-    .quote-upload-btn:hover { background:var(--color-warn-soft); }
-    .quote-upload-btn mat-icon { font-size:16px; width:16px; height:16px; }
-    .quote-attached { display:flex; align-items:center; gap:8px; background:var(--color-ok-soft); border:1px solid #bbf7d0; border-radius:8px; padding:6px 10px; flex:1; }
-    .quote-icon { font-size:16px; width:16px; height:16px; color:var(--color-ok); }
-    .quote-name { flex:1; font-size:12px; color:#166534; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .quote-remove { color:var(--color-danger) !important; width:28px; height:28px; line-height:28px; }
-    .quote-remove mat-icon { font-size:16px; width:16px; height:16px; }
+    .quote-upload-btn { display:inline-flex; align-items:center; gap:6px; background:var(--color-primary-soft); color:var(--color-primary); border:1px dashed var(--color-primary); border-radius:var(--radius-control); padding:7px 14px; font-size:var(--text-xs); cursor:pointer; transition:background 0.15s; }
+    .quote-upload-btn:hover { background:var(--color-surface-2); }
+    .quote-upload-btn mat-icon { font-size:var(--text-lg); width:16px; height:16px; }
+    .quote-attached { display:flex; align-items:center; gap:8px; background:var(--color-ok-soft); border:1px solid var(--color-ok); border-radius:var(--radius-control); padding:6px 10px; flex:1; }
+    .quote-icon { font-size:var(--text-lg); width:16px; height:16px; color:var(--color-ok); }
+    .quote-name { flex:1; font-size:var(--text-xs); color:var(--color-ok); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .quote-attached .quote-remove { color:var(--color-danger); width:28px; height:28px; line-height:28px; }
+    .quote-remove mat-icon { font-size:var(--text-lg); width:16px; height:16px; }
     .stat-actions { display:flex; justify-content:flex-end; gap:12px; padding-top:16px; border-top:1px solid var(--color-line); }
     .stat-actions mat-spinner { display:inline-block; }
     .stat-actions mat-icon { margin-right:6px; vertical-align:middle; }
@@ -1692,7 +1681,7 @@ export class StationeryRequestDialogComponent implements OnInit {
   constructor(
     private dialogRef: MatDialogRef<StationeryRequestDialogComponent>,
     private http: HttpClient,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   private headers(): HttpHeaders {
@@ -1746,12 +1735,12 @@ export class StationeryRequestDialogComponent implements OnInit {
     this.http.post(`${environment.apiUrl}/stationery-requests`, fd, { headers }).subscribe({
       next: () => {
         this.submitting = false;
-        this.snackBar.open('Stationery / Equipment request sent to Finance!', 'Close', { duration: 4000, horizontalPosition: 'center', verticalPosition: 'top' });
+        this.toast.done('Stationery / equipment request sent to Finance.');
         this.dialogRef.close(true);
       },
       error: () => {
         this.submitting = false;
-        this.snackBar.open('Failed to submit. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Could not submit the request. Please try again.');
       }
     });
   }

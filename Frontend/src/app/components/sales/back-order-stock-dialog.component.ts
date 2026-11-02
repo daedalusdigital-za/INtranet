@@ -7,8 +7,8 @@ import { BackOrderStockInfo } from './unmapped-products-dialog.component';
 import { BackOrderItem } from './back-orders-data';
 
 /**
- * Where is the stock for this back-order line? Lists each warehouse holding
- * the product with quantity on hand, and how much of the back-ordered
+ * Where is the stock for this back-order or invoice line? Lists each warehouse
+ * holding the product with quantity on hand, and how much of the line's
  * quantity each one could cover.
  */
 @Component({
@@ -25,14 +25,14 @@ import { BackOrderItem } from './back-orders-data';
         <div class="code">{{ data.info.code }}</div>
         <div class="name">{{ data.info.commodityName }}</div>
         <div class="meta">
-          Order <strong>{{ data.bo.orderNumber }}</strong> · {{ data.bo.customerName }}
+          {{ data.kind === 'invoice' ? 'Invoice' : 'Order' }} <strong>{{ data.bo.orderNumber }}</strong> · {{ data.bo.customerName }}
           <span *ngIf="data.bo.poNo"> · PO {{ data.bo.poNo }}</span>
         </div>
       </div>
 
       <div class="summary" [class.full]="covered >= data.bo.qtyBackOrder" [class.partial]="covered < data.bo.qtyBackOrder">
         <div class="cell">
-          <span class="lbl">Back ordered</span>
+          <span class="lbl">{{ data.kind === 'invoice' ? 'Invoiced' : 'Back ordered' }}</span>
           <span class="val">{{ data.bo.qtyBackOrder | number:'1.0-0' }} <small>{{ data.bo.uom }}</small></span>
         </div>
         <div class="cell">
@@ -45,7 +45,7 @@ import { BackOrderItem } from './back-orders-data';
         </div>
       </div>
 
-      <table class="wh" *ngIf="data.info.warehouses?.length; else none">
+      <table class="wh app-table" *ngIf="data.info.warehouses?.length; else none">
         <thead>
           <tr><th>Warehouse</th><th class="num">On hand</th><th class="num">Can cover</th><th class="bar"></th></tr>
         </thead>
@@ -74,7 +74,7 @@ import { BackOrderItem } from './back-orders-data';
   styles: [`
     h2 { display:flex; align-items:center; gap:8px; }
     .item { margin-bottom:14px; }
-    .code { font-family:monospace; font-weight:700; color:#37474f; }
+    .code { font-family:monospace; font-weight:700; color:var(--color-text-2); }
     .name { font-size:1.05rem; font-weight:600; }
     .meta { color:var(--color-text-2); font-size:.85rem; margin-top:2px; }
     .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:12px; border-radius:8px; margin-bottom:14px; background:var(--color-surface-2); }
@@ -84,16 +84,12 @@ import { BackOrderItem } from './back-orders-data';
     .lbl { font-size:.75rem; color:var(--color-text-2); text-transform:uppercase; letter-spacing:.3px; }
     .val { font-size:1.2rem; font-weight:700; }
     .val small { font-size:.75rem; font-weight:500; color:var(--color-text-3); }
-    table.wh { width:100%; border-collapse:collapse; font-size:.9rem; }
-    .wh th { text-align:left; padding:8px; border-bottom:2px solid var(--color-line); color:var(--color-text-2); font-weight:600; }
-    .wh td { padding:8px; border-bottom:1px solid var(--color-line); vertical-align:middle; }
-    .wh td mat-icon { vertical-align:-3px; margin-right:4px; color:#78909c; }
-    .num { text-align:right; white-space:nowrap; }
+    .wh td mat-icon { vertical-align:-3px; margin-right:4px; color:var(--color-text-3); }
     .num small { color:var(--color-text-3); }
     .num.ok { color:var(--color-ok); font-weight:600; }
     .bar { width:140px; }
-    .track { height:8px; background:#eceff1; border-radius:4px; overflow:hidden; }
-    .fill { height:100%; background:#ffb300; }
+    .track { height:8px; background:var(--color-surface-3); border-radius:4px; overflow:hidden; }
+    .fill { height:100%; background:var(--color-warn); }
     .fill.ok { background:var(--color-ok); }
     .empty { display:flex; align-items:center; gap:8px; color:var(--color-text-3); padding:16px 0; }
     mat-dialog-content { min-width:520px; }
@@ -104,7 +100,7 @@ export class BackOrderStockDialog {
 
   constructor(
     public ref: MatDialogRef<BackOrderStockDialog>,
-    @Inject(MAT_DIALOG_DATA) public data: { bo: BackOrderItem; info: BackOrderStockInfo }
+    @Inject(MAT_DIALOG_DATA) public data: { bo: BackOrderItem; info: BackOrderStockInfo; kind?: 'backorder' | 'invoice' }
   ) {
     this.covered = Math.max(0, data.info.onHand);
   }

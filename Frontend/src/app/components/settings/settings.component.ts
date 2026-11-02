@@ -1,8 +1,7 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { MatTabsModule } from '@angular/material/tabs';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -14,7 +13,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { ToastService } from '../../ui/toast.service';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatDividerModule } from '@angular/material/divider';
@@ -24,7 +23,8 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatMenuModule } from '@angular/material/menu';
-import { RouterModule } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router, RouterModule } from '@angular/router';
+import { Subscription, filter } from 'rxjs';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { SystemLogsService, SystemLog } from '../../services/system-logs.service';
@@ -34,10 +34,13 @@ import { ApiService } from '../../services/api.service';
 import { UserManagementService, User, Department, CreateUserDto, Permission, ModulePermission, OperatingCompany, ClockInEmployee, ClockInEmployeeRequest } from '../../services/user-management.service';
 import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogResult } from '../shared/sales-import-dialog/sales-import-dialog.component';
 import { ConfirmService } from '../../ui/confirm.service';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { environment } from '../../../environments/environment';
 import { PodUploaderComponent } from './pod-uploader.component';
 import { DocumentTemplatesComponent } from '../admin/document-templates/document-templates.component';
 import { ClientLocationsComponent } from '../admin/client-locations/client-locations.component';
+import { SETTINGS_SECTIONS, SettingsSlug, groupSections, settingsSection } from './settings-sections';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -48,7 +51,6 @@ import * as XLSX from 'xlsx';
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
-    MatTabsModule,
     MatCardModule,
     MatButtonModule,
     MatIconModule,
@@ -60,7 +62,6 @@ import * as XLSX from 'xlsx';
     MatChipsModule,
     MatCheckboxModule,
     MatDialogModule,
-    MatSnackBarModule,
     MatTooltipModule,
     MatBadgeModule,
     MatDividerModule,
@@ -72,6 +73,8 @@ import * as XLSX from 'xlsx';
     MatMenuModule,
     NavbarComponent,
     PageHeaderComponent,
+    SkeletonRowsComponent,
+    EmptyStateComponent,
     PodUploaderComponent,
     DocumentTemplatesComponent,
     ClientLocationsComponent
@@ -82,46 +85,80 @@ import * as XLSX from 'xlsx';
       <app-page-header class="settings-header" [crumbs]="['Account', 'Admin settings']" title="Admin settings"
                        subtitle="Only admins can see this page"></app-page-header>
 
-      <mat-tab-group class="settings-tabs" animationDuration="200ms">
+      <div class="st-layout">
+        <!-- Sections, grouped. A column beside the page on wide screens, a menu on phones. -->
+        <aside class="st-nav">
+          <div class="st-search">
+            <mat-icon aria-hidden="true">search</mat-icon>
+            <input type="search" placeholder="Find a setting" aria-label="Find a setting"
+                   [ngModel]="navFilter()" (ngModelChange)="navFilter.set($event)" (keydown.enter)="openFirstMatch()" />
+          </div>
+          <nav aria-label="Settings sections">
+            @for (g of navGroups(); track g.label) {
+              <div class="st-group">
+                <h2 class="st-group-label">{{ g.label }}</h2>
+                @for (s of g.sections; track s.slug) {
+                  <a class="st-link" [routerLink]="['/settings', s.slug]" [class.active]="section() === s.slug"
+                     [attr.aria-current]="section() === s.slug ? 'page' : null" [title]="s.hint">
+                    <mat-icon aria-hidden="true">{{ s.icon }}</mat-icon>
+                    <span class="st-link-label">{{ s.label }}</span>
+                    @if (sectionCount(s.slug)) { <span class="st-count">{{ sectionCount(s.slug) }}</span> }
+                  </a>
+                }
+              </div>
+            } @empty {
+              <p class="st-none">No setting matches "{{ navFilter() }}"</p>
+            }
+          </nav>
+        </aside>
+
+        <mat-form-field class="st-picker" appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Section</mat-label>
+          <mat-select [value]="section()" (selectionChange)="openSection($event.value)">
+            @for (g of allGroups; track g.label) {
+              <mat-optgroup [label]="g.label">
+                @for (s of g.sections; track s.slug) {
+                  <mat-option [value]="s.slug">{{ s.label }}</mat-option>
+                }
+              </mat-optgroup>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <main class="st-panel">
+          @if (currentSection(); as cur) {
+            <header class="st-panel-head">
+              <mat-icon aria-hidden="true">{{ cur.icon }}</mat-icon>
+              <div>
+                <h2>{{ cur.label }}</h2>
+                <p>{{ cur.hint }}</p>
+              </div>
+            </header>
+          }
+          @switch (section()) {
         <!-- POD Uploader Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>fact_check</mat-icon>
-            <span>POD Uploader</span>
-          </ng-template>
+        @case ('pod-uploader') {
           <div class="tab-content">
             <app-pod-uploader></app-pod-uploader>
           </div>
-        </mat-tab>
+        }
 
         <!-- Sage Document Templates Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>auto_awesome</mat-icon>
-            <span>Document Templates</span>
-          </ng-template>
+        @case ('document-templates') {
           <div class="tab-content">
             <app-document-templates></app-document-templates>
           </div>
-        </mat-tab>
+        }
 
         <!-- Client Locations Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>where_to_vote</mat-icon>
-            <span>Client Locations</span>
-          </ng-template>
+        @case ('client-locations') {
           <div class="tab-content">
             <app-client-locations></app-client-locations>
           </div>
-        </mat-tab>
+        }
 
         <!-- Dashboard Gallery Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>photo_library</mat-icon>
-            <span>Dashboard Gallery</span>
-          </ng-template>
+        @case ('gallery') {
           <div class="tab-content">
             <div class="gallery-intro">
               <p>
@@ -172,13 +209,9 @@ import * as XLSX from 'xlsx';
             </div>
 
             @if (galleryLoading) {
-              <div class="loading-state"><mat-spinner diameter="40"></mat-spinner></div>
+              <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
             } @else if (galleryImages.length === 0) {
-              <div class="empty-state">
-                <mat-icon>photo_library</mat-icon>
-                <h3>No images yet</h3>
-                <p>Upload your first image to start the dashboard slideshow</p>
-              </div>
+              <app-empty-state icon="photo_library" title="No images yet" message="Upload your first image to start the dashboard slideshow"></app-empty-state>
             } @else {
               <div class="gallery-grid">
                 @for (img of galleryImages; track img.id) {
@@ -193,15 +226,10 @@ import * as XLSX from 'xlsx';
               </div>
             }
           </div>
-        </mat-tab>
+        }
 
         <!-- Announcements Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>campaign</mat-icon>
-            <span>Announcements</span>
-            <span class="tab-badge" *ngIf="activeAnnouncementsCount > 0">{{ activeAnnouncementsCount }}</span>
-          </ng-template>
+        @case ('announcements') {
           
           <div class="tab-content">
             <div class="tab-toolbar">
@@ -233,15 +261,9 @@ import * as XLSX from 'xlsx';
 
             <div class="announcements-list">
               @if (announcementsLoading) {
-                <div class="loading-state">
-                  <mat-spinner diameter="40"></mat-spinner>
-                </div>
+                <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
               } @else if (announcements.length === 0) {
-                <div class="empty-state">
-                  <mat-icon>campaign</mat-icon>
-                  <h3>No announcements found</h3>
-                  <p>Create your first announcement to get started</p>
-                </div>
+                <app-empty-state icon="campaign" title="No announcements found" message="Create your first announcement to get started"></app-empty-state>
               } @else {
                 @for (announcement of paginatedAnnouncements; track announcement.id) {
                   <mat-card class="announcement-card" [class.inactive]="!announcement.isActive">
@@ -303,14 +325,10 @@ import * as XLSX from 'xlsx';
               }
             </div>
           </div>
-        </mat-tab>
+        }
 
         <!-- User Management Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>people</mat-icon>
-            <span>User Management</span>
-          </ng-template>
+        @case ('users') {
           
           <div class="tab-content">
             <div class="tab-toolbar">
@@ -327,9 +345,7 @@ import * as XLSX from 'xlsx';
 
             <div class="users-table-container">
               @if (usersLoading) {
-                <div class="loading-state">
-                  <mat-spinner diameter="40"></mat-spinner>
-                </div>
+                <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
               } @else {
                 <table mat-table [dataSource]="filteredUsers" class="users-table">
                   <ng-container matColumnDef="avatar">
@@ -401,22 +417,14 @@ import * as XLSX from 'xlsx';
               }
               
               @if (!usersLoading && filteredUsers.length === 0) {
-                <div class="empty-state">
-                  <mat-icon>people_outline</mat-icon>
-                  <h3>No users found</h3>
-                  <p>Try adjusting your search criteria</p>
-                </div>
+                <app-empty-state icon="people_outline" title="No users found" message="Try adjusting your search criteria"></app-empty-state>
               }
             </div>
           </div>
-        </mat-tab>
+        }
 
         <!-- Clock-In Employees Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>fingerprint</mat-icon>
-            <span>Clock-In Employees</span>
-          </ng-template>
+        @case ('clock-in') {
 
           <div class="tab-content">
             <div class="tab-toolbar">
@@ -432,7 +440,7 @@ import * as XLSX from 'xlsx';
             </div>
 
             @if (showClockInForm) {
-              <div class="form-section" style="background:#f8f9ff;border:1px solid #e0e3ff;border-radius:12px;padding:20px;margin-bottom:20px;">
+              <div class="form-section" style="background:var(--color-surface-2);border:1px solid var(--color-line);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;">
                 <h4 style="margin-top:0;">
                   <mat-icon style="vertical-align:middle;">{{ editingClockInEmpId ? 'edit' : 'person_add' }}</mat-icon>
                   {{ editingClockInEmpId ? 'Edit Clock-In Employee' : 'New Clock-In Employee' }}
@@ -483,9 +491,9 @@ import * as XLSX from 'xlsx';
                   <th mat-header-cell *matHeaderCellDef></th>
                   <td mat-cell *matCellDef="let e">
                     @if (e.hasPhoto) {
-                      <img [src]="clockInPhotoUrl(e.empId)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #e0e3ff;" />
+                      <img [src]="clockInPhotoUrl(e.empId)" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--color-line);" />
                     } @else {
-                      <mat-icon style="color:#c5cae9;">account_circle</mat-icon>
+                      <mat-icon style="color:var(--color-text-3);">account_circle</mat-icon>
                     }
                   </td>
                 </ng-container>
@@ -525,22 +533,14 @@ import * as XLSX from 'xlsx';
               </table>
 
               @if (filteredClockInEmployees.length === 0) {
-                <div class="empty-state">
-                  <mat-icon>fingerprint</mat-icon>
-                  <h3>No clock-in employees found</h3>
-                  <p>Add an employee to the clock-in / main building register</p>
-                </div>
+                <app-empty-state icon="fingerprint" title="No clock-in employees found" message="Add an employee to the clock-in / main building register"></app-empty-state>
               }
             </div>
           </div>
-        </mat-tab>
+        }
 
         <!-- System Logs Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>history</mat-icon>
-            <span>System Logs</span>
-          </ng-template>
+        @case ('logs') {
           
           <div class="tab-content">
             <!-- Stats Cards -->
@@ -637,15 +637,9 @@ import * as XLSX from 'xlsx';
 
             <div class="logs-list">
               @if (logsLoading) {
-                <div class="loading-state">
-                  <mat-spinner diameter="40"></mat-spinner>
-                </div>
+                <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
               } @else if (logs.length === 0) {
-                <div class="empty-state">
-                  <mat-icon>history</mat-icon>
-                  <h3>No logs found</h3>
-                  <p>System activity logs will appear here</p>
-                </div>
+                <app-empty-state icon="history" title="No logs found" message="System activity logs will appear here"></app-empty-state>
               } @else {
                 <div class="logs-timeline">
                   @for (log of paginatedLogs; track log.id) {
@@ -695,14 +689,10 @@ import * as XLSX from 'xlsx';
               }
             </div>
           </div>
-        </mat-tab>
+        }
 
         <!-- Database & Backup Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>storage</mat-icon>
-            <span>Database & Backup</span>
-          </ng-template>
+        @case ('database') {
           
           <div class="tab-content">
             <!-- Database Info Section -->
@@ -716,10 +706,7 @@ import * as XLSX from 'xlsx';
               <mat-divider></mat-divider>
               
               @if (dbInfoLoading) {
-                <div class="loading-state">
-                  <mat-spinner diameter="40"></mat-spinner>
-                  <p>Loading database info...</p>
-                </div>
+                <app-skeleton-rows [rows]="3" [avatar]="false"></app-skeleton-rows>
               } @else if (databaseInfo) {
                 <div class="db-info-grid">
                   <div class="db-info-card">
@@ -796,12 +783,9 @@ import * as XLSX from 'xlsx';
               <div class="backup-history">
                 <h4><mat-icon>history</mat-icon> Recent Backups</h4>
                 @if (backupsLoading) {
-                  <mat-spinner diameter="30"></mat-spinner>
+                  <app-skeleton-rows [rows]="3" [avatar]="false"></app-skeleton-rows>
                 } @else if (backupHistory.length === 0) {
-                  <div class="no-backups">
-                    <mat-icon>cloud_off</mat-icon>
-                    <p>No backups found</p>
-                  </div>
+                  <app-empty-state compact icon="cloud_off" title="No backups yet" message="Create a backup and it will be listed here."></app-empty-state>
                 } @else {
                   <div class="backup-list">
                     @for (backup of backupHistory; track backup.filePath) {
@@ -934,14 +918,10 @@ import * as XLSX from 'xlsx';
               </div>
             </div>
           </div>
-        </mat-tab>
+        }
 
         <!-- Data Import Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>upload_file</mat-icon>
-            <span>Data Import</span>
-          </ng-template>
+        @case ('data-import') {
           
           <div class="tab-content">
             <div class="import-section">
@@ -1114,7 +1094,7 @@ import * as XLSX from 'xlsx';
                   </div>
                   
                   <div class="preview-table-container">
-                    <table class="preview-table">
+                    <table class="preview-table app-table">
                       <thead>
                         <tr>
                           <th>#</th>
@@ -1237,14 +1217,10 @@ import * as XLSX from 'xlsx';
               </div>
             </div>
           </div>
-        </mat-tab>
+        }
 
         <!-- Email Accounts Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>email</mat-icon>
-            <span>Email Accounts</span>
-          </ng-template>
+        @case ('email-accounts') {
 
           <div class="tab-content">
             <div class="tab-toolbar">
@@ -1259,16 +1235,9 @@ import * as XLSX from 'xlsx';
             </div>
 
             @if (emailAccountsLoading) {
-              <div class="loading-container">
-                <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
-                <p>Loading email accounts...</p>
-              </div>
+              <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
             } @else if (filteredEmailAccounts.length === 0) {
-              <div class="empty-state">
-                <mat-icon>email</mat-icon>
-                <h3>No email accounts found</h3>
-                <p>Add email accounts or adjust your search</p>
-              </div>
+              <app-empty-state icon="email" title="No email accounts found" message="Add email accounts or adjust your search"></app-empty-state>
             } @else {
               <div class="email-accounts-summary">
                 <span class="summary-badge"><mat-icon>email</mat-icon> {{ filteredEmailAccounts.length }} accounts</span>
@@ -1332,13 +1301,9 @@ import * as XLSX from 'xlsx';
               </mat-paginator>
             }
           </div>
-        </mat-tab>
+        }
         <!-- Asset Management Tab -->
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon>inventory_2</mat-icon>
-            <span>Asset Management</span>
-          </ng-template>
+        @case ('assets') {
           <div class="tab-content">
             <div class="tab-toolbar">
               <mat-form-field appearance="outline" class="search-field">
@@ -1358,7 +1323,7 @@ import * as XLSX from 'xlsx';
               </button>
             </div>
             @if (assetsLoading) {
-              <div class="loading-state"><mat-spinner diameter="40"></mat-spinner></div>
+              <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
             } @else {
               <table mat-table [dataSource]="paginatedMgmtAssets" class="users-table">
                 <ng-container matColumnDef="assetCode">
@@ -1402,13 +1367,15 @@ import * as XLSX from 'xlsx';
                 <tr mat-row *matRowDef="let row; columns: assetMgmtColumns;"></tr>
               </table>
               @if (filteredMgmtAssets.length === 0) {
-                <div class="empty-state"><mat-icon>inventory_2</mat-icon><h3>No assets found</h3></div>
+                <app-empty-state icon="inventory_2" title="No assets found" message="Add an asset to see it listed here."></app-empty-state>
               }
               <mat-paginator [length]="filteredMgmtAssets.length" [pageSize]="assetsMgmtPageSize" [pageSizeOptions]="[10,25,50]" (page)="onAssetsMgmtPageChange($event)"></mat-paginator>
             }
           </div>
-        </mat-tab>
-      </mat-tab-group>
+        }
+          }
+        </main>
+      </div>
     </div>
     @if (showAnnouncementDialog) {
       <div class="dialog-overlay" (click)="closeAnnouncementDialog()">
@@ -1819,7 +1786,7 @@ import * as XLSX from 'xlsx';
               <mat-select [(ngModel)]="assetForm.assignedToUserId" (ngModelChange)="onAssetUserSelected($event)">
                 <mat-option value="">— Keep current / Unassigned —</mat-option>
                 @for (u of users; track u.userId) {
-                  <mat-option [value]="u.userId">{{u.name}} {{u.surname}} <span style="opacity:0.6;font-size:12px"> · {{u.departmentName||''}}</span></mat-option>
+                  <mat-option [value]="u.userId">{{u.name}} {{u.surname}} <span style="opacity:0.6;font-size:var(--text-xs)"> · {{u.departmentName||''}}</span></mat-option>
                 }
               </mat-select>
             </mat-form-field>
@@ -1868,9 +1835,8 @@ import * as XLSX from 'xlsx';
     }
 
     .settings-container {
+      /* Full width: tables and grids in the sections use the whole screen. */
       padding: var(--space-5) var(--space-6) var(--space-8);
-      max-width: 1400px;
-      margin: 0 auto;
       background: transparent;
     }
 
@@ -1878,25 +1844,145 @@ import * as XLSX from 'xlsx';
       margin-bottom: var(--space-5);
     }
 
-    .settings-tabs {
-      background: var(--color-surface);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    /* Sections: a sticky column of grouped links beside one panel. */
+    .st-layout {
+      display: grid;
+      grid-template-columns: 232px minmax(0, 1fr);
+      gap: var(--space-5);
+      align-items: start;
     }
 
-    ::ng-deep .mat-mdc-tab-labels {
-      background: var(--color-surface-2);
-      border-radius: 12px 12px 0 0;
+    .st-nav {
+      position: sticky;
+      top: calc(var(--shell-topbar-height) + var(--space-4));
+      max-height: calc(100vh - var(--shell-topbar-height) - var(--space-6));
+      overflow-y: auto;
+      display: grid;
+      gap: var(--space-3);
     }
 
-    ::ng-deep .mat-mdc-tab {
-      min-width: 160px;
-    }
-
-    ::ng-deep .mat-mdc-tab .mdc-tab__text-label {
+    .st-search {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--space-2);
+      height: 36px;
+      padding: 0 var(--space-3);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-control);
+      background: var(--color-surface);
+      color: var(--color-text-3);
+    }
+
+    .st-search:focus-within {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 2px var(--color-primary-soft);
+    }
+
+    .st-search mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+    .st-search input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--color-text);
+      font: inherit;
+      font-size: var(--text-sm);
+    }
+
+    .st-group { display: grid; gap: 1px; }
+    .st-group + .st-group { margin-top: var(--space-2); }
+
+    .st-group-label {
+      margin: 0 0 var(--space-1);
+      padding: 0 var(--space-3);
+      font-size: var(--text-xs);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-text-3);
+    }
+
+    .st-link {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      min-height: 34px;
+      padding: 0 var(--space-3);
+      border-radius: var(--radius-control);
+      color: var(--color-text-2);
+      font-size: var(--text-md);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .st-link:hover { background: var(--color-surface-2); color: var(--color-text); }
+    .st-link:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+    .st-link.active { background: var(--color-primary-soft); color: var(--color-primary); }
+    .st-link mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; }
+    .st-link-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .st-count {
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--color-danger);
+      color: var(--color-on-primary);
+      font-size: var(--text-xs);
+      font-weight: 700;
+      line-height: 20px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .st-none { margin: 0; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--color-text-3); }
+
+    /* The phone menu replaces the column below 900px. */
+    .st-picker { display: none; }
+
+    .st-panel {
+      min-width: 0;
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .st-panel-head {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--color-line);
+    }
+
+    .st-panel-head > mat-icon {
+      flex: none;
+      width: 36px;
+      height: 36px;
+      padding: 8px;
+      box-sizing: border-box;
+      font-size: 20px;
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
+
+    .st-panel-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
+    .st-panel-head p { margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-text-3); }
+
+    @media (max-width: 900px) {
+      .st-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+      .st-nav { display: none; }
+      .st-picker { display: block; width: 100%; }
+    }
+
+    @media (max-width: 600px) {
+      .settings-container { padding: var(--space-4) var(--space-4) var(--space-6); }
+      .st-panel-head { padding: var(--space-3) var(--space-4); }
+      .tab-content { padding: var(--space-4); }
     }
 
     /* Fix for mat-select dropdown appearing behind dialog */
@@ -1908,24 +1994,15 @@ import * as XLSX from 'xlsx';
       max-height: 300px !important;
     }
 
-    .tab-badge {
-      background: var(--color-danger);
-      color: white;
-      border-radius: 10px;
-      padding: 2px 8px;
-      font-size: 0.75rem;
-      margin-left: 4px;
-    }
-
     .tab-content {
-      padding: 24px;
+      padding: var(--space-5);
     }
 
     .tab-toolbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
+      margin-bottom: var(--space-4);
       flex-wrap: wrap;
       gap: 16px;
     }
@@ -1978,7 +2055,7 @@ import * as XLSX from 'xlsx';
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-on-dark);
       flex-shrink: 0;
     }
 
@@ -2006,7 +2083,7 @@ import * as XLSX from 'xlsx';
     }
 
     .announcement-meta mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -2038,7 +2115,7 @@ import * as XLSX from 'xlsx';
     }
 
     .announcement-footer mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -2112,7 +2189,7 @@ import * as XLSX from 'xlsx';
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-on-dark);
       flex-shrink: 0;
     }
 
@@ -2160,7 +2237,7 @@ import * as XLSX from 'xlsx';
     }
 
     .log-meta mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
     }
@@ -2192,11 +2269,11 @@ import * as XLSX from 'xlsx';
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .stat-icon mat-icon {
-      font-size: 24px;
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
     }
@@ -2270,7 +2347,7 @@ import * as XLSX from 'xlsx';
     }
 
     .log-error-message mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -2433,15 +2510,15 @@ import * as XLSX from 'xlsx';
     }
 
     .birthday-section {
-      background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%);
+      background: var(--color-cat-pink-soft);
     }
 
     .birthday-section h4 {
-      color: #c2185b;
+      color: var(--color-cat-pink);
     }
 
     .clockin-section {
-      background: linear-gradient(135deg, var(--color-warn-soft) 0%, var(--color-warn-soft) 100%);
+      background: var(--color-warn-soft);
     }
 
     .clockin-section h4 {
@@ -2458,7 +2535,7 @@ import * as XLSX from 'xlsx';
     }
 
     .companies-section {
-      background: linear-gradient(135deg, var(--color-ok-soft) 0%, var(--color-ok-soft) 100%);
+      background: var(--color-ok-soft);
     }
 
     .companies-section h4 {
@@ -2467,7 +2544,7 @@ import * as XLSX from 'xlsx';
 
     /* Module Access Section */
     .module-access-section {
-      background: linear-gradient(135deg, var(--color-warn-soft) 0%, var(--color-warn-soft) 100%);
+      background: var(--color-warn-soft);
     }
 
     .module-access-section h4 {
@@ -2503,7 +2580,7 @@ import * as XLSX from 'xlsx';
     }
 
     .select-all-btn mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -2534,11 +2611,11 @@ import * as XLSX from 'xlsx';
     .module-permission-card.selected {
       background: rgba(255,255,255,0.95);
       border-color: var(--color-warn);
-      box-shadow: 0 2px 8px rgba(230, 81, 0, 0.15);
+      box-shadow: var(--shadow-sm);
     }
 
     .module-permission-card .module-icon {
-      font-size: 24px;
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
       color: var(--color-warn);
@@ -2568,7 +2645,7 @@ import * as XLSX from 'xlsx';
 
     .module-permission-card .module-check {
       flex-shrink: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
       color: var(--color-text-3);
@@ -2588,7 +2665,7 @@ import * as XLSX from 'xlsx';
     }
 
     .permissions-section {
-      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
+      background: var(--color-primary-soft);
     }
 
     .permissions-section h4 {
@@ -2633,32 +2710,6 @@ import * as XLSX from 'xlsx';
     }
 
     /* Common Styles */
-    .loading-state, .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--color-text-2);
-    }
-
-    .empty-state mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      color: var(--color-text-3);
-      margin-bottom: 16px;
-    }
-
-    .empty-state h3 {
-      margin: 0 0 8px 0;
-      color: var(--color-text);
-    }
-
-    .empty-state p {
-      margin: 0;
-    }
-
     .delete-action {
       color: var(--color-danger) !important;
     }
@@ -2671,7 +2722,7 @@ import * as XLSX from 'xlsx';
     .import-type-selector h4 {
       margin: 0 0 16px 0;
       color: var(--color-text);
-      font-size: 18px;
+      font-size: var(--text-xl);
     }
 
     .import-types-grid {
@@ -2695,12 +2746,12 @@ import * as XLSX from 'xlsx';
     .import-type-card:hover {
       border-color: var(--color-primary);
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-md);
     }
 
     .import-type-card.selected {
       border-color: var(--color-primary);
-      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
+      background: var(--color-primary-soft);
     }
 
     .import-type-card mat-icon {
@@ -2769,7 +2820,7 @@ import * as XLSX from 'xlsx';
     }
 
     .file-drop-zone span {
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-2);
     }
 
@@ -2797,7 +2848,7 @@ import * as XLSX from 'xlsx';
     }
 
     .file-info .file-size {
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-2);
     }
 
@@ -2929,17 +2980,17 @@ import * as XLSX from 'xlsx';
 
     .import-results.success {
       background: var(--color-ok-soft);
-      border: 1px solid #a5d6a7;
+      border: 1px solid var(--color-ok);
     }
 
     .import-results.warning {
       background: var(--color-warn-soft);
-      border: 1px solid #ffcc80;
+      border: 1px solid var(--color-warn);
     }
 
     .import-results.error {
       background: var(--color-danger-soft);
-      border: 1px solid #ef9a9a;
+      border: 1px solid var(--color-danger);
     }
 
     .import-results h4 {
@@ -3002,17 +3053,17 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 16px;
       padding: 16px 20px;
-      background: linear-gradient(135deg, var(--color-warn-soft) 0%, var(--color-warn-soft) 100%);
-      border: 2px solid #ffe082;
+      background: var(--color-warn-soft);
+      border: 2px solid var(--color-line);
       border-radius: 12px;
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .template-card:hover {
-      border-color: #ffc107;
+      border-color: var(--color-warn);
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+      box-shadow: var(--shadow-md);
     }
 
     .template-card > mat-icon:first-child {
@@ -3042,7 +3093,7 @@ import * as XLSX from 'xlsx';
     }
 
     .template-card .download-icon {
-      font-size: 24px;
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
       color: var(--color-warn);
@@ -3067,13 +3118,13 @@ import * as XLSX from 'xlsx';
       align-items: center;
       gap: 16px;
       padding: 20px;
-      background: linear-gradient(135deg, var(--color-surface-2) 0%, #e4e8ec 100%);
+      background: var(--color-surface-2);
       border-radius: 12px;
       border: 1px solid var(--color-line);
     }
 
     .db-info-card mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
       color: var(--color-primary);
@@ -3110,7 +3161,7 @@ import * as XLSX from 'xlsx';
     }
 
     .table-stats-section h4 mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
       color: var(--color-primary);
@@ -3157,9 +3208,9 @@ import * as XLSX from 'xlsx';
       display: flex;
       gap: 20px;
       padding: 24px;
-      background: linear-gradient(135deg, var(--color-ok-soft) 0%, var(--color-ok-soft) 100%);
+      background: var(--color-ok-soft);
       border-radius: 12px;
-      border: 1px solid #a5d6a7;
+      border: 1px solid var(--color-ok);
     }
 
     .backup-card .backup-icon {
@@ -3170,11 +3221,11 @@ import * as XLSX from 'xlsx';
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-sm);
     }
 
     .backup-card .backup-icon mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
       color: var(--color-ok);
@@ -3186,12 +3237,12 @@ import * as XLSX from 'xlsx';
 
     .backup-card h4 {
       margin: 0 0 8px 0;
-      color: #1b5e20;
+      color: var(--color-ok);
     }
 
     .backup-card p {
       margin: 0 0 16px 0;
-      color: #33691e;
+      color: var(--color-text-2);
       font-size: 0.9rem;
     }
 
@@ -3208,26 +3259,9 @@ import * as XLSX from 'xlsx';
     }
 
     .backup-history h4 mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
-    }
-
-    .no-backups {
-      text-align: center;
-      padding: 40px;
-      color: var(--color-text-3);
-    }
-
-    .no-backups mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-      opacity: 0.5;
-    }
-
-    .no-backups p {
-      margin: 12px 0 0 0;
     }
 
     .backup-list {
@@ -3325,7 +3359,7 @@ import * as XLSX from 'xlsx';
       padding: 16px;
       background: var(--color-warn-soft);
       border-radius: 8px;
-      border: 1px solid #ffcc80;
+      border: 1px solid var(--color-warn);
       margin-bottom: 20px;
     }
 
@@ -3438,18 +3472,6 @@ import * as XLSX from 'xlsx';
       font-size: 0.9rem;
     }
 
-    .loading-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 40px;
-      color: var(--color-text-2);
-    }
-
-    .loading-state p {
-      margin: 16px 0 0 0;
-    }
-
     /* Email Accounts Tab */
     .email-accounts-summary {
       display: flex;
@@ -3461,16 +3483,16 @@ import * as XLSX from 'xlsx';
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(255,255,255,0.15);
+      background: var(--color-primary-soft);
       padding: 6px 14px;
       border-radius: 20px;
-      color: #fff;
+      color: var(--color-primary);
       font-size: 0.85rem;
       font-weight: 500;
     }
 
     .summary-badge mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -3501,7 +3523,7 @@ import * as XLSX from 'xlsx';
 
     .email-icon {
       color: var(--color-primary);
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -3532,7 +3554,7 @@ import * as XLSX from 'xlsx';
     }
 
     .toggle-pw-btn mat-icon, .copy-btn mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -3550,7 +3572,7 @@ import * as XLSX from 'xlsx';
 
     .gallery-dropzone:hover {
       border-color: var(--color-primary);
-      background: #f8faff;
+      background: var(--color-surface-2);
     }
 
     .gallery-dropzone.dragover {
@@ -3571,7 +3593,7 @@ import * as XLSX from 'xlsx';
     }
 
     .gallery-dropzone .dropzone-hint {
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-3);
     }
 
@@ -3625,7 +3647,57 @@ import * as XLSX from 'xlsx';
     }
   `]
 })
-export class SettingsComponent implements OnInit {
+export class SettingsComponent implements OnInit, OnDestroy {
+  // ---------- Sections, each at /settings/<slug> ----------
+  // Grouped in a side column (a menu on phones) so any section is one click away.
+
+  readonly section = signal<SettingsSlug>(SETTINGS_SECTIONS[0].slug);
+  readonly currentSection = computed(() => settingsSection(this.section()));
+  readonly allGroups = groupSections(SETTINGS_SECTIONS);
+  /** What's typed in the side column's search box. */
+  readonly navFilter = signal('');
+  readonly navGroups = computed(() => {
+    const words = this.navFilter().trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return this.allGroups;
+    const matches = SETTINGS_SECTIONS.filter(s => {
+      const text = `${s.label} ${s.hint} ${s.group}`.toLowerCase();
+      return words.every(w => text.includes(w));
+    });
+    return groupSections(matches);
+  });
+
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly subscriptions = new Subscription();
+
+  /** A number after a section's name, as the Announcements tab had. Zero shows nothing. */
+  sectionCount(slug: SettingsSlug): number {
+    return slug === 'announcements' ? this.activeAnnouncementsCount : 0;
+  }
+
+  openSection(slug: SettingsSlug): void {
+    this.router.navigate(['/settings', slug]);
+  }
+
+  /** Enter in the search box opens the first section that matches. */
+  openFirstMatch(): void {
+    const first = this.navGroups()[0]?.sections[0];
+    if (!first) return;
+    this.openSection(first.slug);
+    this.navFilter.set('');
+  }
+
+  /** Reads the section from the address. Runs after every navigation. */
+  private applyUrl(): void {
+    const section = settingsSection(this.route.snapshot.firstChild?.paramMap.get('section'));
+    if (!section) {
+      // An old or mistyped address: open the first section rather than an empty page.
+      this.router.navigate(['/settings', SETTINGS_SECTIONS[0].slug], { replaceUrl: true });
+      return;
+    }
+    this.section.set(section.slug);
+  }
+
   // Announcements
   announcements: Announcement[] = [];
   paginatedAnnouncements: Announcement[] = [];
@@ -3837,7 +3909,7 @@ export class SettingsComponent implements OnInit {
     private authService: AuthService,
     public userService: UserManagementService,
     private apiService: ApiService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private dialog: MatDialog,
     private readonly confirmDialog: ConfirmService
   ) {
@@ -3848,6 +3920,10 @@ export class SettingsComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.applyUrl();
+    this.subscriptions.add(this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => this.applyUrl()));
     this.loadAnnouncements();
     this.loadLogs();
     this.loadUsers();
@@ -3881,7 +3957,7 @@ export class SettingsComponent implements OnInit {
       },
       error: () => {
         this.galleryLoading = false;
-        this.snackBar.open('Failed to load gallery images', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load gallery images');
       }
     });
   }
@@ -3916,7 +3992,7 @@ export class SettingsComponent implements OnInit {
     const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
     const images = files.filter(f => f.type.startsWith('image/'));
     if (images.length === 0) {
-      this.snackBar.open('Only image files are allowed', 'Close', { duration: 3000 });
+      this.toast.warn('Only image files are allowed');
       return;
     }
     this.uploadGalleryFiles(images);
@@ -3927,13 +4003,13 @@ export class SettingsComponent implements OnInit {
 
     const available = this.galleryMax - this.galleryImages.length;
     if (available <= 0) {
-      this.snackBar.open(`Maximum of ${this.galleryMax} images reached`, 'Close', { duration: 3000 });
+      this.toast.warn(`Maximum of ${this.galleryMax} images reached`);
       return;
     }
 
     let queue = files;
     if (files.length > available) {
-      this.snackBar.open(`Only ${available} more image(s) can be added; extra files skipped`, 'Close', { duration: 4000 });
+      this.toast.warn(`Only ${available} more image(s) can be added; extra files skipped`);
       queue = files.slice(0, available);
     }
 
@@ -3944,7 +4020,7 @@ export class SettingsComponent implements OnInit {
     const uploadNext = (index: number) => {
       if (index >= queue.length) {
         this.galleryUploading = false;
-        this.snackBar.open(`Uploaded ${this.galleryUploadDone} image(s)`, 'Close', { duration: 2500 });
+        this.toast.done(`Uploaded ${this.galleryUploadDone} image(s)`);
         return;
       }
       this.apiService.uploadDashboardImage(queue[index]).subscribe({
@@ -3955,7 +4031,7 @@ export class SettingsComponent implements OnInit {
         },
         error: (err) => {
           const msg = err?.error?.message ?? `Failed to upload ${queue[index].name}`;
-          this.snackBar.open(msg, 'Close', { duration: 4000 });
+          this.toast.error(msg);
           uploadNext(index + 1);
         }
       });
@@ -3968,10 +4044,10 @@ export class SettingsComponent implements OnInit {
     this.apiService.deleteDashboardImage(img.id).subscribe({
       next: () => {
         this.galleryImages = this.galleryImages.filter(i => i.id !== img.id);
-        this.snackBar.open('Image deleted', 'Close', { duration: 2000 });
+        this.toast.done('Image deleted');
       },
       error: () => {
-        this.snackBar.open('Failed to delete image', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delete image');
       }
     });
   }
@@ -3985,12 +4061,12 @@ export class SettingsComponent implements OnInit {
         next: () => {
           this.galleryImages = this.galleryImages.filter(i => i.id !== img.id);
           if (--remaining === 0) {
-            this.snackBar.open('All images deleted', 'Close', { duration: 2500 });
+            this.toast.done('All images deleted');
           }
         },
         error: () => {
           if (--remaining === 0) {
-            this.snackBar.open('Some images could not be deleted', 'Close', { duration: 3000 });
+            this.toast.warn('Some images could not be deleted');
           }
         }
       });
@@ -4003,12 +4079,12 @@ export class SettingsComponent implements OnInit {
       next: (res) => {
         this.galleryOptimizing = false;
         const saved = res?.savedKb ?? 0;
-        this.snackBar.open(`Optimized ${res?.processed ?? 0} image(s), saved ${saved} KB`, 'Close', { duration: 4000 });
+        this.toast.done(`Optimized ${res?.processed ?? 0} image(s), saved ${saved} KB`);
         this.loadDashboardImages();
       },
       error: () => {
         this.galleryOptimizing = false;
-        this.snackBar.open('Failed to optimize images', 'Close', { duration: 3000 });
+        this.toast.error('Failed to optimize images');
       }
     });
   }
@@ -4089,7 +4165,7 @@ export class SettingsComponent implements OnInit {
 
       if (this.editingAnnouncement) {
         this.announcementService.updateAnnouncement(this.editingAnnouncement.id, formValue).subscribe(() => {
-          this.snackBar.open('Announcement updated successfully', 'Close', { duration: 3000 });
+          this.toast.done('Announcement updated successfully');
           this.closeAnnouncementDialog();
           this.loadAnnouncements();
           this.logAction('Announcement Updated', 'announcement', `Updated announcement: "${formValue.title}"`);
@@ -4102,7 +4178,7 @@ export class SettingsComponent implements OnInit {
           isActive: true
         };
         this.announcementService.createAnnouncement(newAnnouncement).subscribe(() => {
-          this.snackBar.open('Announcement created successfully', 'Close', { duration: 3000 });
+          this.toast.done('Announcement created successfully');
           this.closeAnnouncementDialog();
           this.loadAnnouncements();
           this.logAction('Announcement Created', 'announcement', `Created announcement: "${formValue.title}"`);
@@ -4113,7 +4189,7 @@ export class SettingsComponent implements OnInit {
 
   toggleAnnouncementStatus(announcement: Announcement): void {
     this.announcementService.toggleAnnouncementStatus(announcement.id).subscribe(() => {
-      this.snackBar.open(`Announcement ${announcement.isActive ? 'deactivated' : 'activated'}`, 'Close', { duration: 3000 });
+      this.toast.done(`Announcement ${announcement.isActive ? 'deactivated' : 'activated'}`);
       this.loadAnnouncements();
       this.logAction('Announcement Status Changed', 'announcement', 
         `${announcement.isActive ? 'Deactivated' : 'Activated'} announcement: "${announcement.title}"`);
@@ -4127,7 +4203,7 @@ export class SettingsComponent implements OnInit {
       danger: true
     })) {
       this.announcementService.deleteAnnouncement(announcement.id).subscribe(() => {
-        this.snackBar.open('Announcement deleted', 'Close', { duration: 3000 });
+        this.toast.done('Announcement deleted');
         this.loadAnnouncements();
         this.logAction('Announcement Deleted', 'announcement', `Deleted announcement: "${announcement.title}"`);
       });
@@ -4176,7 +4252,7 @@ export class SettingsComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error loading users:', err);
-        this.snackBar.open('Failed to load users', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load users');
         this.usersLoading = false;
       }
     });
@@ -4236,7 +4312,7 @@ export class SettingsComponent implements OnInit {
 
   saveClockInEmployee(): void {
     if (!this.clockInForm.name?.trim() && !this.clockInForm.lastName?.trim()) {
-      this.snackBar.open('Please enter a name', 'Close', { duration: 3000 });
+      this.toast.warn('Please enter a name');
       return;
     }
     this.clockInSaving = true;
@@ -4247,16 +4323,16 @@ export class SettingsComponent implements OnInit {
     };
     const fail = (err: any) => {
       this.clockInSaving = false;
-      this.snackBar.open(err?.error?.message || 'Failed to save employee', 'Close', { duration: 4000 });
+      this.toast.error(err?.error?.message || 'Failed to save employee');
     };
     if (this.editingClockInEmpId) {
       this.userService.updateClockInEmployee(this.editingClockInEmpId, this.clockInForm).subscribe({
-        next: () => { this.snackBar.open('Employee updated', 'Close', { duration: 2500 }); done(); },
+        next: () => { this.toast.done('Employee updated'); done(); },
         error: fail
       });
     } else {
       this.userService.createClockInEmployee(this.clockInForm).subscribe({
-        next: () => { this.snackBar.open('Employee added', 'Close', { duration: 2500 }); done(); },
+        next: () => { this.toast.done('Employee added'); done(); },
         error: fail
       });
     }
@@ -4270,10 +4346,10 @@ export class SettingsComponent implements OnInit {
     }))) return;
     this.userService.deleteClockInEmployee(emp.empId).subscribe({
       next: (res: any) => {
-        this.snackBar.open(res?.message || 'Employee deleted', 'Close', { duration: 3000 });
+        this.toast.done(res?.message || 'Employee deleted');
         this.userService.getClockInEmployees().subscribe(employees => this.clockInEmployees = employees);
       },
-      error: (err) => this.snackBar.open(err?.error?.message || 'Failed to delete employee', 'Close', { duration: 4000 })
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to delete employee')
     });
   }
 
@@ -4431,14 +4507,14 @@ export class SettingsComponent implements OnInit {
         
         this.userService.updateUser(this.editingUser.userId, updateData).subscribe({
           next: () => {
-            this.snackBar.open('User updated successfully', 'Close', { duration: 3000 });
+            this.toast.done('User updated successfully');
             this.closeUserDialog();
             this.loadUsers();
             this.logAction('User Updated', 'user', `Updated user: ${formValue.email}`);
           },
           error: (err) => {
             console.error('Error updating user:', err);
-            this.snackBar.open(err.error?.message || 'Failed to update user', 'Close', { duration: 3000 });
+            this.toast.error(err.error?.message || 'Failed to update user');
             this.savingUser = false;
           }
         });
@@ -4461,14 +4537,14 @@ export class SettingsComponent implements OnInit {
 
         this.userService.createUser(createData).subscribe({
           next: () => {
-            this.snackBar.open('User created successfully', 'Close', { duration: 3000 });
+            this.toast.done('User created successfully');
             this.closeUserDialog();
             this.loadUsers();
             this.logAction('User Created', 'user', `Created user: ${formValue.email}`);
           },
           error: (err) => {
             console.error('Error creating user:', err);
-            this.snackBar.open(err.error?.message || 'Failed to create user', 'Close', { duration: 3000 });
+            this.toast.error(err.error?.message || 'Failed to create user');
             this.savingUser = false;
           }
         });
@@ -4479,13 +4555,13 @@ export class SettingsComponent implements OnInit {
   toggleUserStatus(user: User): void {
     this.userService.toggleUserStatus(user.userId).subscribe({
       next: (response: any) => {
-        this.snackBar.open(`User ${response.isActive ? 'activated' : 'deactivated'}`, 'Close', { duration: 3000 });
+        this.toast.done(`User ${response.isActive ? 'activated' : 'deactivated'}`);
         this.loadUsers();
         this.logAction('User Status Changed', 'user', `${response.isActive ? 'Activated' : 'Deactivated'} user: ${user.email}`);
       },
       error: (err) => {
         console.error('Error toggling user status:', err);
-        this.snackBar.open('Failed to update user status', 'Close', { duration: 3000 });
+        this.toast.error('Failed to update user status');
       }
     });
   }
@@ -4510,13 +4586,13 @@ export class SettingsComponent implements OnInit {
     this.userService.deleteUser(user.userId, permanent).subscribe({
       next: (res: any) => {
         const msg = res?.message || 'User deleted successfully';
-        this.snackBar.open(msg, 'Close', { duration: res?.mode === 'deactivated' ? 6000 : 3000 });
+        if (res?.mode === 'deactivated') { this.toast.info(msg); } else { this.toast.done(msg); }
         this.loadUsers();
         this.logAction('User Deleted', 'user', `Deleted user: ${user.email}`);
       },
       error: (err) => {
         console.error('Error deleting user:', err);
-        this.snackBar.open(err.error?.message || 'Failed to delete user', 'Close', { duration: 4000 });
+        this.toast.error(err.error?.message || 'Failed to delete user');
       }
     });
   }
@@ -4541,19 +4617,19 @@ export class SettingsComponent implements OnInit {
       const { newPassword, confirmPassword } = this.resetPasswordForm.value;
       
       if (newPassword !== confirmPassword) {
-        this.snackBar.open('Passwords do not match', 'Close', { duration: 3000 });
+        this.toast.warn('Passwords do not match');
         return;
       }
 
       this.userService.resetPassword(this.resetPasswordUser.userId, newPassword).subscribe({
         next: () => {
-          this.snackBar.open('Password reset successfully', 'Close', { duration: 3000 });
+          this.toast.done('Password reset successfully');
           this.closeResetPasswordDialog();
           this.logAction('Password Reset', 'security', `Reset password for user: ${this.resetPasswordUser?.email}`);
         },
         error: (err) => {
           console.error('Error resetting password:', err);
-          this.snackBar.open('Failed to reset password', 'Close', { duration: 3000 });
+          this.toast.error('Failed to reset password');
         }
       });
     }
@@ -4597,7 +4673,7 @@ export class SettingsComponent implements OnInit {
       error: (err) => {
         console.error('Error loading logs:', err);
         this.logsLoading = false;
-        this.snackBar.open('Failed to load logs', 'Close', { duration: 3000 });
+        this.toast.error('Failed to load logs');
       }
     });
 
@@ -4619,7 +4695,7 @@ export class SettingsComponent implements OnInit {
 
   refreshLogs(): void {
     this.loadLogs();
-    this.snackBar.open('Logs refreshed', 'Close', { duration: 2000 });
+    this.toast.done('Logs refreshed');
   }
 
   filterLogs(): void {
@@ -4640,7 +4716,7 @@ export class SettingsComponent implements OnInit {
   }
 
   exportLogs(): void {
-    this.snackBar.open('Exporting logs...', '', { duration: 2000 });
+    this.toast.info('Exporting logs...');
     
     // Build filter based on current settings
     let filter: any = {};
@@ -4693,11 +4769,11 @@ export class SettingsComponent implements OnInit {
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
-        this.snackBar.open('Logs exported successfully', 'Close', { duration: 3000 });
+        this.toast.done('Logs exported successfully');
       },
       error: (err) => {
         console.error('Error exporting logs:', err);
-        this.snackBar.open('Failed to export logs', 'Close', { duration: 3000 });
+        this.toast.error('Failed to export logs');
       }
     });
   }
@@ -4712,7 +4788,7 @@ export class SettingsComponent implements OnInit {
 
   // Settings Methods
   saveSettings(): void {
-    this.snackBar.open('Settings saved', 'Close', { duration: 2000 });
+    this.toast.done('Settings saved');
     this.logAction('Settings Updated', 'settings', 'System settings were updated');
   }
 
@@ -4783,7 +4859,7 @@ export class SettingsComponent implements OnInit {
     const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     
     if (!validExtensions.includes(fileExtension)) {
-      this.snackBar.open('Invalid file type. Please upload an Excel or CSV file.', 'Close', { duration: 3000 });
+      this.toast.warn('Invalid file type. Please upload an Excel or CSV file.');
       return;
     }
     
@@ -4817,7 +4893,7 @@ export class SettingsComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe((result: SalesImportDialogResult) => {
       if (result?.success && result?.committed) {
-        this.snackBar.open(result.message || 'Sales data imported successfully!', 'Close', { duration: 5000 });
+        this.toast.done(result.message || 'Sales data imported successfully');
         this.logAction('Sales Import', 'system', `Imported sales report: ${file.name}`);
         this.resetImport();
       }
@@ -4836,7 +4912,7 @@ export class SettingsComponent implements OnInit {
         
         this.loadSheetData(workbook);
       } catch (error) {
-        this.snackBar.open('Error parsing Excel file. Please check the file format.', 'Close', { duration: 3000 });
+        this.toast.error('Error parsing Excel file. Please check the file format.');
         console.error('Excel parse error:', error);
       }
     };
@@ -4898,7 +4974,7 @@ export class SettingsComponent implements OnInit {
         this.excelSheets = [];
         this.selectedSheet = '';
       } catch (error) {
-        this.snackBar.open('Error parsing CSV file. Please check the file format.', 'Close', { duration: 3000 });
+        this.toast.error('Error parsing CSV file. Please check the file format.');
         console.error('CSV parse error:', error);
       }
     };
@@ -4968,7 +5044,7 @@ export class SettingsComponent implements OnInit {
 
   async startImport(): Promise<void> {
     if (!this.canImport()) {
-      this.snackBar.open('Please complete all required mappings before importing.', 'Close', { duration: 3000 });
+      this.toast.warn('Please complete all required mappings before importing.');
       return;
     }
     
@@ -5001,7 +5077,7 @@ export class SettingsComponent implements OnInit {
       };
       
       if (result.success) {
-        this.snackBar.open(`Import complete! ${result.imported} records imported.`, 'Close', { duration: 5000 });
+        this.toast.done(`Import complete. ${result.imported} records imported.`);
         this.logAction(`Data Import - ${this.selectedImportType}`, 'system', 
           `Imported ${result.imported} ${this.selectedImportType} from ${this.importFile?.name}`);
       }
@@ -5012,7 +5088,7 @@ export class SettingsComponent implements OnInit {
         message: 'Import failed',
         details: [error.message || 'An unexpected error occurred']
       };
-      this.snackBar.open('Import failed. Please check the error details.', 'Close', { duration: 5000 });
+      this.toast.error('Import failed. Please check the error details.');
     } finally {
       this.isImporting = false;
     }
@@ -5200,7 +5276,7 @@ export class SettingsComponent implements OnInit {
     XLSX.utils.book_append_sheet(wb, ws, 'Template');
     
     XLSX.writeFile(wb, `${type}_import_template.xlsx`);
-    this.snackBar.open(`${type} template downloaded`, 'Close', { duration: 2000 });
+    this.toast.done(`${type} template downloaded`);
   }
 
   formatFileSize(bytes: number): string {
@@ -5222,7 +5298,7 @@ export class SettingsComponent implements OnInit {
       error: (err) => {
         console.error('Error loading database info:', err);
         this.dbInfoLoading = false;
-        this.snackBar.open('Error loading database information', 'Close', { duration: 3000 });
+        this.toast.error('Error loading database information');
       }
     });
   }
@@ -5257,13 +5333,13 @@ export class SettingsComponent implements OnInit {
     this.http.post<any>('/api/database/backup', {}).subscribe({
       next: (result) => {
         this.backupInProgress = false;
-        this.snackBar.open('Backup created successfully!', 'Close', { duration: 3000 });
+        this.toast.done('Backup created successfully');
         this.loadBackupHistory();
       },
       error: (err) => {
         console.error('Error creating backup:', err);
         this.backupInProgress = false;
-        this.snackBar.open('Error creating backup: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
+        this.toast.error('Error creating backup: ' + (err.error?.message || err.message));
       }
     });
   }
@@ -5279,12 +5355,12 @@ export class SettingsComponent implements OnInit {
 
     this.http.post<any>('/api/database/restore', { backupPath: backup.filePath }).subscribe({
       next: (result) => {
-        this.snackBar.open('Database restored successfully!', 'Close', { duration: 3000 });
+        this.toast.done('Database restored successfully');
         this.loadDatabaseInfo();
       },
       error: (err) => {
         console.error('Error restoring backup:', err);
-        this.snackBar.open('Error restoring backup: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
+        this.toast.error('Error restoring backup: ' + (err.error?.message || err.message));
       }
     });
   }
@@ -5308,13 +5384,13 @@ export class SettingsComponent implements OnInit {
             }
           }
           this.downloadFile(blob, filename);
-          this.snackBar.open('Export completed!', 'Close', { duration: 3000 });
+          this.toast.done('Export completed');
         }
       },
       error: (err) => {
         console.error('Error exporting data:', err);
         this.exportInProgress = false;
-        this.snackBar.open('Error exporting data', 'Close', { duration: 3000 });
+        this.toast.error('Error exporting data');
       }
     });
   }
@@ -5340,13 +5416,13 @@ export class SettingsComponent implements OnInit {
             }
           }
           this.downloadFile(blob, filename);
-          this.snackBar.open('Export completed!', 'Close', { duration: 3000 });
+          this.toast.done('Export completed');
         }
       },
       error: (err) => {
         console.error('Error exporting data:', err);
         this.exportInProgress = false;
-        this.snackBar.open('Error exporting data', 'Close', { duration: 3000 });
+        this.toast.error('Error exporting data');
       }
     });
   }
@@ -5383,7 +5459,7 @@ export class SettingsComponent implements OnInit {
       if (file.name.endsWith('.json')) {
         this.importDbFile = file;
       } else {
-        this.snackBar.open('Please select a JSON file', 'Close', { duration: 3000 });
+        this.toast.warn('Please select a JSON file');
       }
     }
   }
@@ -5395,7 +5471,7 @@ export class SettingsComponent implements OnInit {
       if (file.name.endsWith('.json')) {
         this.importDbFile = file;
       } else {
-        this.snackBar.open('Please select a JSON file', 'Close', { duration: 3000 });
+        this.toast.warn('Please select a JSON file');
       }
     }
   }
@@ -5458,18 +5534,18 @@ export class SettingsComponent implements OnInit {
               }
             }
             
-            this.snackBar.open('Import completed!', 'Close', { duration: 3000 });
+            this.toast.done('Import completed');
             this.loadDatabaseInfo();
           },
           error: (err) => {
             console.error('Error importing data:', err);
             this.dbImportInProgress = false;
-            this.snackBar.open('Error importing data: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
+            this.toast.error('Error importing data: ' + (err.error?.message || err.message));
           }
         });
       } catch (parseError) {
         this.dbImportInProgress = false;
-        this.snackBar.open('Error parsing JSON file', 'Close', { duration: 3000 });
+        this.toast.error('Error parsing JSON file');
       }
     };
     
@@ -5573,26 +5649,26 @@ export class SettingsComponent implements OnInit {
     if (this.editingEmailAccount) {
       this.http.put(`${this.apiUrl}/emailaccounts/${this.editingEmailAccount.emailAccountId}`, data).subscribe({
         next: () => {
-          this.snackBar.open('Email account updated', 'Close', { duration: 3000 });
+          this.toast.done('Email account updated');
           this.closeEmailAccountDialog();
           this.loadEmailAccounts();
           this.savingEmailAccount = false;
         },
         error: (err) => {
-          this.snackBar.open(err.error || 'Failed to update', 'Close', { duration: 3000 });
+          this.toast.error(err.error || 'Failed to update');
           this.savingEmailAccount = false;
         }
       });
     } else {
       this.http.post(`${this.apiUrl}/emailaccounts`, data).subscribe({
         next: () => {
-          this.snackBar.open('Email account added', 'Close', { duration: 3000 });
+          this.toast.done('Email account added');
           this.closeEmailAccountDialog();
           this.loadEmailAccounts();
           this.savingEmailAccount = false;
         },
         error: (err) => {
-          this.snackBar.open(err.error || 'Failed to add', 'Close', { duration: 3000 });
+          this.toast.error(err.error || 'Failed to add');
           this.savingEmailAccount = false;
         }
       });
@@ -5609,18 +5685,18 @@ export class SettingsComponent implements OnInit {
 
     this.http.delete(`${this.apiUrl}/emailaccounts/${acct.emailAccountId}`).subscribe({
       next: () => {
-        this.snackBar.open('Email account deleted', 'Close', { duration: 3000 });
+        this.toast.done('Email account deleted');
         this.loadEmailAccounts();
       },
       error: () => {
-        this.snackBar.open('Failed to delete', 'Close', { duration: 3000 });
+        this.toast.error('Failed to delete');
       }
     });
   }
 
   copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).then(() => {
-      this.snackBar.open('Copied to clipboard', 'Close', { duration: 2000 });
+      this.toast.done('Copied to clipboard');
     });
   }
 
@@ -5721,13 +5797,13 @@ export class SettingsComponent implements OnInit {
     };
     if (this.editingAsset) {
       this.http.put(`${this.apiUrl}/asset-register/items/${this.editingAsset.itemId}`, payload).subscribe({
-        next: () => { this.snackBar.open('Asset updated', 'Close', { duration: 3000 }); this.closeAssetDialog(); this.loadMgmtAssets(); this.savingAsset = false; },
-        error: () => { this.snackBar.open('Failed to save', 'Close', { duration: 3000 }); this.savingAsset = false; }
+        next: () => { this.toast.done('Asset updated'); this.closeAssetDialog(); this.loadMgmtAssets(); this.savingAsset = false; },
+        error: () => { this.toast.error('Failed to save'); this.savingAsset = false; }
       });
     } else {
       this.http.post(`${this.apiUrl}/asset-register/items`, payload).subscribe({
-        next: () => { this.snackBar.open('Asset added', 'Close', { duration: 3000 }); this.closeAssetDialog(); this.loadMgmtAssets(); this.savingAsset = false; },
-        error: () => { this.snackBar.open('Failed to add asset', 'Close', { duration: 3000 }); this.savingAsset = false; }
+        next: () => { this.toast.done('Asset added'); this.closeAssetDialog(); this.loadMgmtAssets(); this.savingAsset = false; },
+        error: () => { this.toast.error('Failed to add asset'); this.savingAsset = false; }
       });
     }
   }
@@ -5741,8 +5817,12 @@ export class SettingsComponent implements OnInit {
     }))) return;
 
     this.http.delete(`${this.apiUrl}/asset-register/items/${a.itemId}`).subscribe({
-      next: () => { this.snackBar.open('Asset deactivated', 'Close', { duration: 3000 }); this.loadMgmtAssets(); },
-      error: () => this.snackBar.open('Failed to deactivate', 'Close', { duration: 3000 })
+      next: () => { this.toast.done('Asset deactivated'); this.loadMgmtAssets(); },
+      error: () => this.toast.error('Failed to deactivate')
     });
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
   }
 }

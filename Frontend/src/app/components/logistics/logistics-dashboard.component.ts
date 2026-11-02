@@ -48,6 +48,8 @@ import { ConfirmService } from '../../ui/confirm.service';
 import { ToastService } from '../../ui/toast.service';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { SubNavComponent } from '../../ui/sub-nav/sub-nav.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { formatDay, isFilterRecord, parseDay, queryText, recordFilters, toQuery } from '../../ui/sub-pages';
 import { LOGISTICS_SECTIONS, LogisticsSlug, logisticsSection } from './logistics-sections';
 import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord, DeliveryRequest, DeliveryRequestSummary, DeliveredWithoutPodRow } from './logistics.models';
@@ -83,6 +85,8 @@ import { UploadPODDialog, UploadPodDocumentDialog, LinkTripsheetDialog, EditPodD
     NavbarComponent,
     PageHeaderComponent,
     SubNavComponent,
+    EmptyStateComponent,
+    SkeletonRowsComponent,
     ControllerMonitoringComponent,
     OpenMapComponent,
     LogisticsReportsComponent,

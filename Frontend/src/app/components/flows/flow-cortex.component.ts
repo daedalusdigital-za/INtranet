@@ -103,7 +103,8 @@ export class FlowCortexComponent implements OnInit {
   });
   personPath(e: { x1: number; y1: number; x2: number; y2: number }) { const my = (e.y1 + e.y2) / 2; return `M${e.x1},${e.y1} C${e.x1},${my} ${e.x2},${my} ${e.x2},${e.y2}`; }
 
-  private live = computed(() => this.flows().filter(f => !f.isTemplate));
+  /** Processes that count: live (not a template) and enabled. A disabled process is not coverage. */
+  private live = computed(() => this.flows().filter(f => !f.isTemplate && f.isEnabled !== false));
   private norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
 
   // ── the knowledge graph, from the server ──────────────────────────────────────

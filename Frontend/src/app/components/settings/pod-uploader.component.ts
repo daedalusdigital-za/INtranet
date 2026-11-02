@@ -251,7 +251,7 @@ interface PodEntry {
   styles: [`
     .pu { padding: 8px 4px; }
     .pu__intro { display:flex; gap:12px; align-items:flex-start; margin-bottom:16px; }
-    .pu__intro > mat-icon { color:var(--color-primary); font-size:32px; width:32px; height:32px; }
+    .pu__intro > mat-icon { color:var(--color-primary); font-size:var(--text-4xl); width:32px; height:32px; }
     .pu__intro h3 { margin:0; font-size:var(--text-lg); color:var(--color-text); }
     .pu__intro p { margin:2px 0 0; font-size:var(--text-md); color:var(--color-text-3); max-width:640px; }
 
@@ -270,7 +270,7 @@ interface PodEntry {
     .pu__spacer { flex:1; }
     .pu__autoscan { display:inline-flex; align-items:center; gap:5px; font-size:var(--text-sm); color:var(--color-primary); font-weight:600; cursor:pointer; user-select:none; padding:4px 8px; background:var(--color-primary-soft); border-radius:20px; }
     .pu__autoscan input { accent-color:var(--color-primary); cursor:pointer; }
-    .pu__autoscan mat-icon { font-size:16px; width:16px; height:16px; }
+    .pu__autoscan mat-icon { font-size:var(--text-lg); width:16px; height:16px; }
     .pu__btn {
       display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border:1px solid var(--color-line);
       border-radius:var(--radius-control); background:var(--color-surface); color:var(--color-text-2); font-weight:600; font-size:var(--text-sm); cursor:pointer;
@@ -281,7 +281,7 @@ interface PodEntry {
     .pu__btn--primary { background:var(--color-primary); border-color:transparent; color:var(--color-on-primary); }
     .pu__btn--primary:hover { background:var(--color-primary-hover); }
     .pu__btn[disabled] { opacity:0.5; cursor:not-allowed; }
-    .pu__btn mat-icon { font-size:18px; width:18px; height:18px; }
+    .pu__btn mat-icon { font-size:var(--text-xl); width:18px; height:18px; }
 
     .pu__list { display:flex; flex-direction:column; gap:10px; }
     .pu-row {
@@ -310,7 +310,7 @@ interface PodEntry {
       color:var(--color-primary); display:inline-flex; align-items:center; justify-content:center; padding:4px;
     }
     .pu-row__rotate button:hover { background:var(--color-primary-soft); }
-    .pu-row__rotate mat-icon { font-size:18px; width:18px; height:18px; }
+    .pu-row__rotate mat-icon { font-size:var(--text-xl); width:18px; height:18px; }
     .pu-row__body { flex:1; min-width:0; }
     .pu-row__name { font-weight:700; color:var(--color-text); font-size:var(--text-md); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .pu-row__meta { font-size:var(--text-xs); color:var(--color-text-3); margin-bottom:6px; display:flex; align-items:center; gap:8px; }
@@ -319,7 +319,7 @@ interface PodEntry {
       border-radius:7px; padding:2px 7px; font-size:var(--text-xs); font-weight:600; color:var(--color-primary); cursor:pointer;
     }
     .pu-row__view:hover { background:var(--color-primary-soft); }
-    .pu-row__view mat-icon { font-size:14px; width:14px; height:14px; }
+    .pu-row__view mat-icon { font-size:var(--text-md); width:14px; height:14px; }
     .pu-row__label { display:block; font-size:var(--text-xs); text-transform:uppercase; letter-spacing:0.4px; color:var(--color-text-3); font-weight:700; margin-bottom:3px; }
     .pu-row__input, .pu-row__notes {
       width:100%; padding:8px 11px; border:1px solid var(--color-line-strong); border-radius:var(--radius-control); background:var(--color-surface); color:var(--color-text); font-size:var(--text-md); margin-bottom:6px;
@@ -343,7 +343,7 @@ interface PodEntry {
     .pu-row__date:focus { outline:none; border-color:var(--color-primary); box-shadow:0 0 0 3px var(--color-primary-soft); }
     .pu-row__datehint { font-size:var(--text-xs); color:var(--color-text-3); }
     .pu-row__datehint--auto { display:inline-flex; align-items:center; gap:3px; color:var(--color-primary); font-weight:600; background:var(--color-primary-soft); padding:2px 7px; border-radius:20px; }
-    .pu-row__datehint--auto mat-icon { font-size:14px; width:14px; height:14px; }
+    .pu-row__datehint--auto mat-icon { font-size:var(--text-md); width:14px; height:14px; }
     .pu-row__scanning { margin:2px 0 8px; }
     .pu-row__scanbar { position:relative; height:6px; border-radius:6px; background:var(--color-primary-soft); overflow:hidden; }
     .pu-row__scanfill {
@@ -354,7 +354,7 @@ interface PodEntry {
       0% { left:-40%; } 100% { left:100%; }
     }
     .pu-row__scanlabel { display:flex; align-items:center; gap:6px; font-size:var(--text-xs); color:var(--color-primary); margin-top:5px; }
-    .pu-row__scanlabel mat-icon { font-size:16px; width:16px; height:16px; }
+    .pu-row__scanlabel mat-icon { font-size:var(--text-lg); width:16px; height:16px; }
     .pu__date { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; padding:10px 12px; background:var(--color-canvas); border:1px solid var(--color-line); border-radius:var(--radius-md); }
     .pu__date > mat-icon { color:var(--color-primary); }
     .pu__date label { font-size:var(--text-md); font-weight:600; color:var(--color-text-2); }
@@ -362,10 +362,10 @@ interface PodEntry {
     .pu__date input[type=date]:focus { outline:none; border-color:var(--color-primary); box-shadow:0 0 0 3px var(--color-primary-soft); }
     .pu__date-hint { font-size:var(--text-xs); color:var(--color-text-3); }
     .pu-row__dup { display:flex; align-items:center; gap:5px; font-size:var(--text-xs); font-weight:600; color:var(--color-warn); background:var(--color-warn-soft); border-radius:var(--radius-sm); padding:4px 8px; margin:4px 0; }
-    .pu-row__dup mat-icon { font-size:16px; width:16px; height:16px; }
+    .pu-row__dup mat-icon { font-size:var(--text-lg); width:16px; height:16px; }
     .pu-row__msg { display:flex; align-items:center; gap:5px; font-size:var(--text-xs); color:var(--color-text-2); margin-top:2px; }
     .pu-row__msg.ok { color:var(--color-ok); } .pu-row__msg.err { color:var(--color-danger); }
-    .pu-row__msg mat-icon { font-size:16px; width:16px; height:16px; }
+    .pu-row__msg mat-icon { font-size:var(--text-lg); width:16px; height:16px; }
     .pu-row__chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
     .pu-chip { font-size:var(--text-xs); font-weight:700; padding:2px 8px; border-radius:999px; font-family:var(--font-mono); }
     .pu-chip--ok { background:var(--color-ok-soft); color:var(--color-ok); }
@@ -396,7 +396,7 @@ interface PodEntry {
       color:var(--color-text-2); display:inline-flex; align-items:center; justify-content:center; padding:5px;
     }
     .pu-lb__iconbtn:hover { background:var(--color-surface-2); color:var(--color-primary); }
-    .pu-lb__iconbtn mat-icon { font-size:18px; width:18px; height:18px; }
+    .pu-lb__iconbtn mat-icon { font-size:var(--text-xl); width:18px; height:18px; }
     .pu-lb__stage { flex:1; min-height:0; background:var(--color-surface-3); display:flex; align-items:center; justify-content:center; overflow:auto; }
     .pu-lb__stage img { max-width:100%; max-height:100%; object-fit:contain; transition:transform .2s ease; }
     .pu-lb__stage iframe { width:100%; height:100%; border:0; background:var(--color-surface); }

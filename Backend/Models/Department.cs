@@ -18,6 +18,11 @@ namespace ProjectTracker.API.Models
 
         public DateTime? UpdatedAt { get; set; }
 
+        /// <summary>False once merged into another department or retired. Kept so history and old links still resolve.</summary>
+        public bool IsActive { get; set; } = true;
+        /// <summary>Set when this record was merged: the surviving department.</summary>
+        public int? MergedIntoDepartmentId { get; set; }
+
         public ICollection<Board> Boards { get; set; } = new List<Board>();
         public ICollection<User> Users { get; set; } = new List<User>();
     }

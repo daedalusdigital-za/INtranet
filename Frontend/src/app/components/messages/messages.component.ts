@@ -16,7 +16,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { Subscription, interval } from 'rxjs';
 import { MessageService, Conversation, Message, User, SendMessageRequest, MessageAttachment } from '../../services/message.service';
@@ -24,6 +23,9 @@ import { WellyActivityService } from '../../services/welly-activity.service';
 import { UserSearchPopupComponent } from '../user-search-popup/user-search-popup.component';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { ToastService } from '../../ui/toast.service';
 import { environment } from '../../../environments/environment';
 import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 import { SecureSrcDirective } from '../../directives/secure-src.directive';
@@ -47,11 +49,12 @@ import { ConfirmService } from '../../ui/confirm.service';
     MatDividerModule,
     MatProgressSpinnerModule,
     MatDialogModule,
-    MatSnackBarModule,
     MatCheckboxModule,
     UserSearchPopupComponent,
     NavbarComponent,
     PageHeaderComponent,
+    EmptyStateComponent,
+    SkeletonRowsComponent,
     PickerComponent,
     SecureSrcDirective
   ],
@@ -111,19 +114,19 @@ import { ConfirmService } from '../../ui/confirm.service';
               </div>
             </div>
 
-            <div *ngIf="filteredConversations.length === 0" class="empty-state">
-              <div class="empty-icon">
-                <mat-icon>chat_bubble_outline</mat-icon>
-              </div>
-              <p>No conversations found</p>
-              <button mat-flat-button class="start-chat-btn" (click)="showNewConversation = true">
-                <mat-icon>add</mat-icon> Start New Chat
+            <app-empty-state *ngIf="filteredConversations.length === 0"
+                             icon="chat_bubble_outline"
+                             title="No conversations found"
+                             [message]="searchQuery ? 'No conversation matches your search.' : 'Start a chat with a colleague and it will show up here.'"
+                             [compact]="true">
+              <button mat-flat-button color="primary" (click)="showNewConversation = true">
+                <mat-icon>add</mat-icon> Start new chat
               </button>
-            </div>
+            </app-empty-state>
           </div>
 
           <div *ngIf="loading" class="loading-spinner">
-            <mat-spinner diameter="40"></mat-spinner>
+            <app-skeleton-rows [rows]="6"></app-skeleton-rows>
           </div>
 
           <!-- Bulk Actions -->
@@ -142,15 +145,14 @@ import { ConfirmService } from '../../ui/confirm.service';
         <!-- Main Chat Area -->
         <div class="chat-area">
           <div *ngIf="!selectedConversation" class="no-conversation-selected">
-            <div class="welcome-illustration">
-              <mat-icon>forum</mat-icon>
-            </div>
-            <h3>Select a conversation</h3>
-            <p>Choose a conversation from the sidebar or start a new one</p>
-            <button mat-flat-button class="primary-btn" (click)="showNewConversation = true">
-              <mat-icon>add</mat-icon>
-              Start New Conversation
-            </button>
+            <app-empty-state icon="forum"
+                             title="Select a conversation"
+                             message="Choose a conversation from the sidebar or start a new one.">
+              <button mat-flat-button color="primary" (click)="showNewConversation = true">
+                <mat-icon>add</mat-icon>
+                Start new conversation
+              </button>
+            </app-empty-state>
           </div>
 
           <div *ngIf="selectedConversation" class="chat-content">
@@ -192,7 +194,7 @@ import { ConfirmService } from '../../ui/confirm.service';
             <!-- Messages Area -->
             <div class="messages-area" #messagesContainer>
               <div *ngIf="loadingMessages" class="loading-messages">
-                <mat-spinner diameter="30"></mat-spinner>
+                <app-skeleton-rows [rows]="3" [avatar]="false"></app-skeleton-rows>
               </div>
 
               <div *ngFor="let message of messages" 
@@ -265,10 +267,7 @@ import { ConfirmService } from '../../ui/confirm.service';
               </div>
 
               <div *ngIf="messages.length === 0 && !loadingMessages" class="no-messages">
-                <div class="no-messages-icon">
-                  <mat-icon>chat</mat-icon>
-                </div>
-                <p>No messages yet. Start the conversation!</p>
+                <app-empty-state icon="chat" title="No messages yet" message="Say hello to start the conversation."></app-empty-state>
               </div>
             </div>
 
@@ -479,7 +478,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       background: var(--color-surface);
       display: flex;
       flex-direction: column;
-      border-right: 1px solid #e8f4fc;
+      border-right: 1px solid var(--color-line);
     }
 
     .sidebar-header {
@@ -487,21 +486,21 @@ import { ConfirmService } from '../../ui/confirm.service';
       justify-content: space-between;
       align-items: center;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #f8fbff 0%, #eef6fc 100%);
-      border-bottom: 1px solid #e8f4fc;
+      background: var(--color-surface-2);
+      border-bottom: 1px solid var(--color-line);
 
       h2 {
         margin: 0;
-        font-size: 18px;
+        font-size: var(--text-xl);
         font-weight: 600;
-        color: #1a5fb4;
+        color: var(--color-text);
       }
     }
 
     .new-chat-btn {
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-      color: white;
-      box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      box-shadow: var(--shadow-sm);
     }
 
     .search-box {
@@ -509,7 +508,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       display: flex;
       align-items: center;
       gap: 12px;
-      background: #f8fbff;
+      background: var(--color-surface-2);
 
       .search-icon {
         color: var(--color-text-3);
@@ -519,16 +518,17 @@ import { ConfirmService } from '../../ui/confirm.service';
         flex: 1;
         border: none;
         background: var(--color-surface);
+        color: var(--color-text);
         padding: 12px 16px;
         border-radius: 12px;
-        font-size: 14px;
-        border: 1px solid #e8f4fc;
+        font-size: var(--text-md);
+        border: 1px solid var(--color-line);
         transition: all 0.3s ease;
 
         &:focus {
           outline: none;
           border-color: var(--color-primary);
-          box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.1);
+          box-shadow: 0 0 0 3px var(--color-primary-soft);
         }
       }
     }
@@ -547,20 +547,20 @@ import { ConfirmService } from '../../ui/confirm.service';
       transition: all 0.2s ease;
 
       &:hover {
-        background: #f8fbff;
+        background: var(--color-surface-2);
       }
 
       &.active {
-        background: linear-gradient(90deg, rgba(30, 144, 255, 0.1) 0%, rgba(30, 144, 255, 0.05) 100%);
+        background: var(--color-primary-soft);
         border-left: 4px solid var(--color-primary);
       }
 
       &.unread {
-        background: rgba(30, 144, 255, 0.05);
+        background: var(--color-surface-2);
 
         .name {
           font-weight: 600;
-          color: #1a5fb4;
+          color: var(--color-primary);
         }
       }
 
@@ -568,7 +568,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         width: 48px;
         height: 48px;
         border-radius: 50%;
-        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
+        background: var(--color-primary);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -584,8 +584,8 @@ import { ConfirmService } from '../../ui/confirm.service';
         }
 
         mat-icon {
-          color: white;
-          font-size: 22px;
+          color: var(--color-on-primary);
+          font-size: var(--text-2xl);
         }
 
         &.online::after {
@@ -620,14 +620,14 @@ import { ConfirmService } from '../../ui/confirm.service';
           }
 
           .time {
-            font-size: 11px;
+            font-size: var(--text-xs);
             color: var(--color-text-3);
             white-space: nowrap;
           }
         }
 
         .last-message {
-          font-size: 13px;
+          font-size: var(--text-sm);
           color: var(--color-text-3);
           white-space: nowrap;
           overflow: hidden;
@@ -641,9 +641,9 @@ import { ConfirmService } from '../../ui/confirm.service';
         gap: 8px;
 
         .unread-badge {
-          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-          color: white;
-          font-size: 11px;
+          background: var(--color-primary);
+          color: var(--color-on-primary);
+          font-size: var(--text-xs);
           padding: 3px 8px;
           border-radius: 12px;
           min-width: 20px;
@@ -655,11 +655,11 @@ import { ConfirmService } from '../../ui/confirm.service';
 
     .sidebar-footer {
       padding: 12px 16px;
-      border-top: 1px solid #e8f4fc;
+      border-top: 1px solid var(--color-line);
       display: flex;
       justify-content: space-between;
       gap: 8px;
-      background: #f8fbff;
+      background: var(--color-surface-2);
 
       .select-btn {
         color: var(--color-text-3);
@@ -670,50 +670,9 @@ import { ConfirmService } from '../../ui/confirm.service';
       }
     }
 
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--color-text-3);
-
-      .empty-icon {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--color-primary-soft) 0%, #d1e8f5 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 20px;
-
-        mat-icon {
-          font-size: 36px;
-          width: 36px;
-          height: 36px;
-          color: var(--color-primary);
-        }
-      }
-
-      p {
-        margin: 0 0 20px;
-        font-size: 14px;
-      }
-
-      .start-chat-btn {
-        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-        color: white;
-        border-radius: 12px;
-        padding: 0 24px;
-        height: 44px;
-      }
-    }
-
     .loading-spinner {
-      display: flex;
-      justify-content: center;
-      padding: 40px;
+      flex: 1;
+      overflow: hidden;
     }
 
     /* Chat Area */
@@ -721,57 +680,15 @@ import { ConfirmService } from '../../ui/confirm.service';
       flex: 1;
       display: flex;
       flex-direction: column;
-      background: linear-gradient(180deg, #f8fbff 0%, var(--color-surface) 100%);
+      background: var(--color-surface);
     }
 
     .no-conversation-selected {
       flex: 1;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: var(--color-text-3);
       padding: 40px;
-
-      .welcome-illustration {
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--color-primary-soft) 0%, #d1e8f5 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 24px;
-
-        mat-icon {
-          font-size: 56px;
-          width: 56px;
-          height: 56px;
-          color: var(--color-primary);
-        }
-      }
-
-      h3 {
-        margin: 0 0 8px;
-        font-weight: 600;
-        color: var(--color-text);
-        font-size: 20px;
-      }
-
-      p {
-        margin: 0 0 24px;
-        font-size: 14px;
-      }
-
-      .primary-btn {
-        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-        color: white;
-        border-radius: 12px;
-        padding: 0 28px;
-        height: 48px;
-        font-weight: 500;
-        box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
-      }
     }
 
     .chat-content {
@@ -787,8 +704,8 @@ import { ConfirmService } from '../../ui/confirm.service';
       align-items: center;
       padding: 16px 24px;
       background: var(--color-surface);
-      border-bottom: 1px solid #e8f4fc;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+      border-bottom: 1px solid var(--color-line);
+      box-shadow: var(--shadow-sm);
 
       .chat-info {
         display: flex;
@@ -798,7 +715,7 @@ import { ConfirmService } from '../../ui/confirm.service';
           width: 48px;
           height: 48px;
           border-radius: 50%;
-          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
+          background: var(--color-primary);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -813,7 +730,7 @@ import { ConfirmService } from '../../ui/confirm.service';
           }
 
           mat-icon {
-            color: white;
+            color: var(--color-on-primary);
           }
 
           &.online::after {
@@ -832,13 +749,13 @@ import { ConfirmService } from '../../ui/confirm.service';
         .details {
           h3 {
             margin: 0;
-            font-size: 16px;
+            font-size: var(--text-lg);
             font-weight: 600;
             color: var(--color-text);
           }
 
           .participants {
-            font-size: 13px;
+            font-size: var(--text-sm);
             color: var(--color-text-3);
           }
         }
@@ -854,7 +771,7 @@ import { ConfirmService } from '../../ui/confirm.service';
 
           &:hover {
             color: var(--color-primary);
-            background: rgba(30, 144, 255, 0.1);
+            background: var(--color-primary-soft);
           }
         }
       }
@@ -868,12 +785,10 @@ import { ConfirmService } from '../../ui/confirm.service';
       display: flex;
       flex-direction: column;
       gap: 16px;
-      background: linear-gradient(180deg, #f8fbff 0%, var(--color-surface) 50%, #f8fbff 100%);
+      background: var(--color-canvas);
     }
 
     .loading-messages {
-      display: flex;
-      justify-content: center;
       padding: 20px;
     }
 
@@ -888,13 +803,14 @@ import { ConfirmService } from '../../ui/confirm.service';
         flex-direction: row-reverse;
 
         .message-bubble {
-          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-          color: white;
+          background: var(--color-primary);
+          color: var(--color-on-primary);
           border-radius: 20px 20px 6px 20px;
-          box-shadow: 0 4px 15px rgba(30, 144, 255, 0.25);
+          box-shadow: var(--shadow-sm);
 
           .message-meta {
-            color: rgba(255, 255, 255, 0.75);
+            color: var(--color-on-primary);
+            opacity: 0.8;
           }
         }
 
@@ -910,17 +826,17 @@ import { ConfirmService } from '../../ui/confirm.service';
           background: var(--color-surface);
           color: var(--color-text);
           border-radius: 20px 20px 20px 6px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-          border: 1px solid #e8f4fc;
+          box-shadow: var(--shadow-sm);
+          border: 1px solid var(--color-line);
         }
       }
 
       &.deleted {
         .message-bubble {
-          background: var(--color-surface-2) !important;
-          color: var(--color-text-3) !important;
+          background: var(--color-surface-2);
+          color: var(--color-text-3);
           font-style: italic;
-          box-shadow: none !important;
+          box-shadow: none;
         }
       }
 
@@ -928,7 +844,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         width: 34px;
         height: 34px;
         border-radius: 50%;
-        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
+        background: var(--color-primary);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -942,10 +858,10 @@ import { ConfirmService } from '../../ui/confirm.service';
         }
 
         mat-icon {
-          font-size: 18px;
+          font-size: var(--text-xl);
           width: 18px;
           height: 18px;
-          color: white;
+          color: var(--color-on-primary);
         }
       }
 
@@ -955,7 +871,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         gap: 6px;
 
         .message-sender {
-          font-size: 12px;
+          font-size: var(--text-xs);
           font-weight: 600;
           color: var(--color-primary);
           margin-bottom: 4px;
@@ -977,11 +893,11 @@ import { ConfirmService } from '../../ui/confirm.service';
             justify-content: flex-end;
             gap: 4px;
             margin-top: 6px;
-            font-size: 11px;
+            font-size: var(--text-xs);
             color: var(--color-text-3);
 
             .edited-icon, .read-icon {
-              font-size: 14px;
+              font-size: var(--text-md);
               width: 14px;
               height: 14px;
             }
@@ -1006,35 +922,10 @@ import { ConfirmService } from '../../ui/confirm.service';
 
     .no-messages {
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       flex: 1;
-      color: var(--color-text-3);
       padding: 40px;
-
-      .no-messages-icon {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--color-primary-soft) 0%, #d1e8f5 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 16px;
-
-        mat-icon {
-          font-size: 36px;
-          width: 36px;
-          height: 36px;
-          color: var(--color-primary);
-        }
-      }
-
-      p {
-        margin: 0;
-        font-size: 14px;
-      }
     }
 
     /* Reply Preview */
@@ -1043,7 +934,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       align-items: center;
       justify-content: space-between;
       padding: 12px 20px;
-      background: linear-gradient(90deg, rgba(30, 144, 255, 0.1) 0%, rgba(30, 144, 255, 0.05) 100%);
+      background: var(--color-primary-soft);
       border-left: 4px solid var(--color-primary);
       margin: 0 20px;
       border-radius: 0 8px 8px 0;
@@ -1062,13 +953,13 @@ import { ConfirmService } from '../../ui/confirm.service';
           flex-direction: column;
 
           .reply-sender {
-            font-size: 12px;
+            font-size: var(--text-xs);
             font-weight: 600;
             color: var(--color-primary);
           }
 
           .reply-message {
-            font-size: 13px;
+            font-size: var(--text-sm);
             color: var(--color-text-3);
             max-width: 300px;
             white-space: nowrap;
@@ -1086,7 +977,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       gap: 12px;
       padding: 16px 24px;
       background: var(--color-surface);
-      border-top: 1px solid #e8f4fc;
+      border-top: 1px solid var(--color-line);
       position: relative;
 
       .input-action {
@@ -1095,7 +986,7 @@ import { ConfirmService } from '../../ui/confirm.service';
 
         &:hover, &.active {
           color: var(--color-primary);
-          background: rgba(30, 144, 255, 0.1);
+          background: var(--color-primary-soft);
         }
       }
 
@@ -1105,17 +996,18 @@ import { ConfirmService } from '../../ui/confirm.service';
         input {
           width: 100%;
           padding: 14px 20px;
-          border: 1px solid #e8f4fc;
+          border: 1px solid var(--color-line);
           border-radius: 24px;
-          font-size: 14px;
-          background: #f8fbff;
+          font-size: var(--text-md);
+          background: var(--color-surface-2);
+          color: var(--color-text);
           transition: all 0.3s ease;
 
           &:focus {
             outline: none;
             border-color: var(--color-primary);
             background: var(--color-surface);
-            box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.1);
+            box-shadow: 0 0 0 3px var(--color-primary-soft);
           }
         }
       }
@@ -1123,8 +1015,9 @@ import { ConfirmService } from '../../ui/confirm.service';
       .send-btn {
         width: 48px;
         height: 48px;
-        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-        box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
+        background: var(--color-primary);
+        color: var(--color-on-primary);
+        box-shadow: var(--shadow-sm);
 
         &:disabled {
           background: var(--color-line);
@@ -1139,7 +1032,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       bottom: 80px;
       left: 24px;
       z-index: 1000;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-lg);
       border-radius: 12px;
       overflow: hidden;
       background: var(--color-surface);
@@ -1180,8 +1073,9 @@ import { ConfirmService } from '../../ui/confirm.service';
         transition: opacity 0.2s;
 
         button {
-          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          background: var(--color-primary);
+          color: var(--color-on-primary);
+          box-shadow: var(--shadow-md);
           width: 36px;
           height: 36px;
         }
@@ -1197,20 +1091,20 @@ import { ConfirmService } from '../../ui/confirm.service';
       align-items: center;
       gap: 12px;
       padding: 12px;
-      background: rgba(30, 144, 255, 0.05);
+      background: var(--color-surface-2);
       border-radius: 12px;
       cursor: pointer;
       transition: background 0.2s;
-      border: 1px solid rgba(30, 144, 255, 0.1);
+      border: 1px solid var(--color-line);
 
       &:hover {
-        background: rgba(30, 144, 255, 0.1);
+        background: var(--color-primary-soft);
       }
 
       .file-icon {
-        font-size: 28px;
-        width: 28px;
-        height: 28px;
+        font-size: var(--text-3xl);
+        width: 24px;
+        height: 24px;
         color: var(--color-primary);
       }
 
@@ -1221,7 +1115,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         flex: 1;
 
         .file-name {
-          font-size: 13px;
+          font-size: var(--text-sm);
           font-weight: 500;
           white-space: nowrap;
           overflow: hidden;
@@ -1229,7 +1123,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         }
 
         .file-size {
-          font-size: 11px;
+          font-size: var(--text-xs);
           color: var(--color-text-3);
         }
       }
@@ -1237,21 +1131,13 @@ import { ConfirmService } from '../../ui/confirm.service';
       .download-btn {
         width: 36px;
         height: 36px;
-        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
+        background: var(--color-primary);
+        color: var(--color-on-primary);
       }
     }
 
     .sent .attachment-file {
-      background: rgba(255, 255, 255, 0.15);
-      border-color: rgba(255, 255, 255, 0.2);
-
-      .file-icon {
-        color: rgba(255, 255, 255, 0.9);
-      }
-
-      .file-info .file-size {
-        color: rgba(255, 255, 255, 0.75);
-      }
+      color: var(--color-text);
     }
 
     /* Pending Attachments */
@@ -1260,8 +1146,8 @@ import { ConfirmService } from '../../ui/confirm.service';
       flex-wrap: wrap;
       gap: 8px;
       padding: 12px 20px;
-      background: #f8fbff;
-      border-top: 1px solid #e8f4fc;
+      background: var(--color-surface-2);
+      border-top: 1px solid var(--color-line);
     }
 
     .pending-file {
@@ -1271,17 +1157,17 @@ import { ConfirmService } from '../../ui/confirm.service';
       padding: 8px 12px;
       background: var(--color-surface);
       border-radius: 20px;
-      border: 1px solid #e8f4fc;
+      border: 1px solid var(--color-line);
 
       mat-icon {
-        font-size: 18px;
+        font-size: var(--text-xl);
         width: 18px;
         height: 18px;
         color: var(--color-primary);
       }
 
       .file-name {
-        font-size: 13px;
+        font-size: var(--text-sm);
         max-width: 150px;
         white-space: nowrap;
         overflow: hidden;
@@ -1289,7 +1175,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       }
 
       .file-size {
-        font-size: 11px;
+        font-size: var(--text-xs);
         color: var(--color-text-3);
       }
     }
@@ -1301,7 +1187,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.9);
+      background: var(--color-scrim);
       z-index: 1000;
       display: flex;
       align-items: center;
@@ -1323,13 +1209,13 @@ import { ConfirmService } from '../../ui/confirm.service';
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
+      background: var(--color-primary);
 
       h3 {
         margin: 0;
-        font-size: 16px;
+        font-size: var(--text-lg);
         font-weight: 500;
-        color: white;
+        color: var(--color-on-primary);
         max-width: 400px;
         white-space: nowrap;
         overflow: hidden;
@@ -1341,7 +1227,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         gap: 4px;
 
         button {
-          color: white;
+          color: var(--color-on-primary);
         }
       }
     }
@@ -1352,7 +1238,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--color-text);
+      background: var(--color-surface-2);
       min-width: 400px;
       min-height: 300px;
 
@@ -1371,7 +1257,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       .no-preview {
         text-align: center;
         padding: 40px;
-        color: white;
+        color: var(--color-text);
 
         mat-icon {
           font-size: 72px;
@@ -1392,7 +1278,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         }
 
         .file-size {
-          font-size: 13px;
+          font-size: var(--text-sm);
           margin-bottom: 24px;
         }
       }
@@ -1438,14 +1324,11 @@ import { ConfirmService } from '../../ui/confirm.service';
 
     /* Welly Message Assistant Styles */
     .welly-msg-btn .welly-sparkle-icon {
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--color-primary);
     }
 
     .welly-msg-btn:hover {
-      background: rgba(37, 99, 235, 0.1);
+      background: var(--color-primary-soft);
     }
 
     .welly-panel-overlay {
@@ -1454,7 +1337,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--color-scrim);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1469,7 +1352,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       max-height: 80vh;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--shadow-lg);
       overflow: hidden;
     }
 
@@ -1478,8 +1361,8 @@ import { ConfirmService } from '../../ui/confirm.service';
       align-items: center;
       justify-content: space-between;
       padding: 16px 20px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
     }
 
     .welly-panel-title {
@@ -1490,16 +1373,16 @@ import { ConfirmService } from '../../ui/confirm.service';
 
     .welly-panel-title h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: var(--text-lg);
       font-weight: 600;
     }
 
     .welly-sparkle {
-      color: #ffd700;
+      color: var(--color-on-primary);
     }
 
     .welly-panel-header button {
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .welly-panel-body {
@@ -1518,7 +1401,7 @@ import { ConfirmService } from '../../ui/confirm.service';
 
     .welly-loading p {
       color: var(--color-text-2);
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .welly-result-text {
@@ -1526,7 +1409,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       border: 1px solid var(--color-line);
       border-radius: 10px;
       padding: 16px;
-      font-size: 14px;
+      font-size: var(--text-md);
       line-height: 1.6;
       white-space: pre-wrap;
       max-height: 40vh;
@@ -1548,7 +1431,7 @@ import { ConfirmService } from '../../ui/confirm.service';
     .welly-draft-form p, .welly-translate-form p {
       margin: 0;
       color: var(--color-text-2);
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .welly-draft-form textarea {
@@ -1556,8 +1439,10 @@ import { ConfirmService } from '../../ui/confirm.service';
       border: 1px solid var(--color-line);
       border-radius: 8px;
       padding: 12px;
-      font-size: 14px;
+      font-size: var(--text-md);
       font-family: inherit;
+      background: var(--color-surface);
+      color: var(--color-text);
       resize: vertical;
       outline: none;
     }
@@ -1613,7 +1498,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
 
   constructor(
     private messageService: MessageService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private router: Router,
     private sanitizer: DomSanitizer,
     private http: HttpClient,
@@ -1632,7 +1517,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       this.messageService.startConnection(this.currentUserId).then(() => {
       }).catch(err => {
         console.error('Failed to connect to messaging hub:', err);
-        this.snackBar.open('Unable to connect to real-time messaging', 'Close', { duration: 3000 });
+        this.toast.error('Unable to connect to real-time messaging. New messages may be delayed.');
       });
       
       // Subscribe to real-time events
@@ -1642,7 +1527,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       this.loadConversations();
     } else {
       console.error('No user found in localStorage');
-      this.snackBar.open('Please log in to view messages', 'Close', { duration: 3000 });
+      this.toast.warn('Please log in to view messages.');
       this.router.navigate(['/login']);
       return;
     }
@@ -1801,7 +1686,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       error: (err) => {
         console.error('Error loading conversations:', err);
         this.loading = false;
-        this.snackBar.open('Failed to load conversations', 'Close', { duration: 3000 });
+        this.toast.error('Conversations could not be loaded. Try again.');
       }
     });
   }
@@ -1895,7 +1780,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Error sending message:', err);
-        this.snackBar.open('Failed to send message', 'Close', { duration: 3000 });
+        this.toast.error('The message could not be sent. Try again.');
       }
     });
   }
@@ -1916,10 +1801,10 @@ export class MessagesComponent implements OnInit, OnDestroy {
       next: () => {
         message.isDeleted = true;
         message.content = 'This message was deleted';
-        this.snackBar.open('Message deleted', 'Close', { duration: 2000 });
+        this.toast.done('Message deleted.');
       },
       error: () => {
-        this.snackBar.open('Failed to delete message', 'Close', { duration: 3000 });
+        this.toast.error('The message could not be deleted. Try again.');
       }
     });
   }
@@ -1964,7 +1849,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
           if (completed + failed === selectedIds.length) {
             this.selectedForDelete = {};
             this.selectMode = false;
-            this.snackBar.open(`${completed} conversation(s) deleted`, 'Close', { duration: 2000 });
+            this.toast.done(`${completed} conversation(s) deleted.`);
           }
         },
         error: () => {
@@ -1972,7 +1857,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
           if (completed + failed === selectedIds.length) {
             this.selectedForDelete = {};
             this.selectMode = false;
-            this.snackBar.open(`${completed} deleted, ${failed} failed`, 'Close', { duration: 3000 });
+            this.toast.warn(`${completed} deleted, ${failed} failed.`);
           }
         }
       });
@@ -1995,10 +1880,10 @@ export class MessagesComponent implements OnInit, OnDestroy {
           this.selectedConversation = null;
           this.messages = [];
         }
-        this.snackBar.open('Conversation deleted', 'Close', { duration: 2000 });
+        this.toast.done('Conversation deleted.');
       },
       error: () => {
-        this.snackBar.open('Failed to delete conversation', 'Close', { duration: 3000 });
+        this.toast.error('The conversation could not be deleted. Try again.');
       }
     });
   }
@@ -2017,7 +1902,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Error starting conversation:', err);
-        this.snackBar.open('Failed to start conversation', 'Close', { duration: 3000 });
+        this.toast.error('The conversation could not be started. Try again.');
       }
     });
   }
@@ -2118,7 +2003,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       
       for (const file of files) {
         if (file.size > maxSize) {
-          this.snackBar.open('File "' + file.name + '" is too large. Maximum size is 10MB.', 'Close', { duration: 3000 });
+          this.toast.warn('File "' + file.name + '" is too large. Maximum size is 10MB.');
           continue;
         }
         this.pendingAttachments.push(file);
@@ -2212,7 +2097,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
 
   downloadAttachment(attachment: MessageAttachment): void {
     this.messageService.downloadAttachment(attachment).catch(() => {
-      this.snackBar.open('Could not download ' + attachment.fileName, 'Close', { duration: 3000 });
+      this.toast.error('Could not download ' + attachment.fileName + '.');
     });
   }
 
@@ -2244,7 +2129,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
             }
           } catch (err) {
             console.error('Error uploading attachment:', err);
-            this.snackBar.open('Failed to upload ' + file.name, 'Close', { duration: 3000 });
+            this.toast.error('Failed to upload ' + file.name + '.');
           }
         }
         if (this.selectedConversation) {
@@ -2259,7 +2144,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
       
     } catch (err) {
       console.error('Error sending message:', err);
-      this.snackBar.open('Failed to send message', 'Close', { duration: 3000 });
+      this.toast.error('The message could not be sent. Try again.');
     }
   }
 
@@ -2308,7 +2193,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
-        this.snackBar.open('Welly could not draft message. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not draft the message. Please try again.');
         this.wellyLoading = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
@@ -2339,7 +2224,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
-        this.snackBar.open('Welly could not translate. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not translate the message. Please try again.');
         this.wellyLoading = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
@@ -2369,7 +2254,7 @@ export class MessagesComponent implements OnInit, OnDestroy {
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: () => {
-        this.snackBar.open('Welly could not summarize. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not summarize the conversation. Please try again.');
         this.wellyLoading = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
@@ -2379,13 +2264,13 @@ export class MessagesComponent implements OnInit, OnDestroy {
   useWellyDraft(): void {
     this.newMessage = this.wellyResult;
     this.showWellyPanel = false;
-    this.snackBar.open('Message inserted ✓', 'Close', { duration: 2000 });
+    this.toast.done('Message inserted.');
     setTimeout(() => this.messageInput?.nativeElement?.focus(), 100);
   }
 
   copyWellyResult(): void {
     navigator.clipboard.writeText(this.wellyResult).then(() => {
-      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
+      this.toast.done('Copied to clipboard.');
     });
   }
 }

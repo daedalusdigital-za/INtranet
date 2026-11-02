@@ -198,7 +198,7 @@ interface PageResult {
     .cl-wrap { display: flex; flex-direction: column; gap: 16px; }
     .cl-card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 12px; padding: 16px 18px; }
     .cl-key-head { display: flex; gap: 12px; align-items: flex-start; }
-    .cl-key-head > mat-icon { color: var(--color-primary); font-size: 28px; width: 28px; height: 28px; }
+    .cl-key-head > mat-icon { color: var(--color-primary); font-size: var(--text-3xl); width: 24px; height: 24px; }
     .cl-key-head h3 { margin: 0; font-size: var(--text-lg); font-weight: 700; color: var(--color-text); }
     .cl-key-head p { margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-text-3); }
     .cl-key-src { margin-left: auto; font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: 999px; background: var(--color-surface-2); color: var(--color-text-2); white-space: nowrap; }
@@ -414,7 +414,7 @@ export class ClientLocationsComponent implements OnInit {
     </mat-dialog-actions>
   `,
   styles: [`
-    .vd { display: flex; flex-direction: column; gap: 4px; padding-top: 6px !important; }
+    .vd.mat-mdc-dialog-content { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; }
     .vd-cust { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
     .vd-cust b { font-size: var(--text-lg); } .vd-cust span { font-size: var(--text-sm); color: var(--color-text-3); }
     .vd-cust .vd-badge { display: inline-block; margin-top: 4px; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); font-weight: 600; padding: 2px 10px; border-radius: 999px; width: fit-content; }
@@ -422,11 +422,11 @@ export class ClientLocationsComponent implements OnInit {
     .vd-lbl { font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); font-weight: 600; margin-bottom: 4px; }
     .vd-saved-item { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 8px; padding: 6px 10px; cursor: pointer; text-align: left; font-family: inherit; font-size: var(--text-sm); color: var(--color-text); }
     .vd-saved-item:hover { background: var(--color-primary-soft); } .vd-saved-item.cur { border-color: var(--color-cat-purple); background: var(--color-cat-purple-soft); }
-    .vd-saved-item mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-text-3); } .vd-saved-item.cur mat-icon { color: var(--color-cat-purple); }
+    .vd-saved-item mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-text-3); } .vd-saved-item.cur mat-icon { color: var(--color-cat-purple); }
     .vd-saved-item .m { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; }
     .full { width: 100%; }
     .vd-sug { display: flex; gap: 8px; align-items: center; line-height: 1.2; padding: 2px 0; }
-    .vd-sug mat-icon { color: var(--color-cat-purple); font-size: 18px; width: 18px; height: 18px; }
+    .vd-sug mat-icon { color: var(--color-cat-purple); font-size: var(--text-xl); width: 18px; height: 18px; }
     .vd-sug b { display: block; font-size: var(--text-sm); } .vd-sug small { font-size: var(--text-xs); color: var(--color-text-3); }
     .vd-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .vd-row mat-form-field { flex: 1; min-width: 150px; } .vd-row .short { flex: 0 0 130px; min-width: 130px; }
@@ -435,7 +435,7 @@ export class ClientLocationsComponent implements OnInit {
     .vd-geo-res.ok { background: var(--color-ok-soft); color: var(--color-ok); } .vd-geo-res.warn { background: var(--color-warn-soft); color: var(--color-warn); } .vd-geo-res.bad { background: var(--color-danger-soft); color: var(--color-danger); }
     .vd-geo-res .s { font-size: var(--text-xs); opacity: .85; margin-top: 2px; }
     .vd-note { display: flex; gap: 8px; align-items: center; font-size: var(--text-sm); color: var(--color-text-3); margin: 0; }
-    .vd-note mat-icon { color: var(--color-primary); font-size: 18px; width: 18px; height: 18px; }
+    .vd-note mat-icon { color: var(--color-primary); font-size: var(--text-xl); width: 18px; height: 18px; }
   `]
 })
 export class VerifyClientLocationDialog implements OnInit {

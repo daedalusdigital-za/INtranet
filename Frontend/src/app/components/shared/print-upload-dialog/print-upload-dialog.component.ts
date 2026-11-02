@@ -4,10 +4,10 @@ import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/materia
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
+import { ToastService } from '../../../ui/toast.service';
 
 @Component({
   selector: 'app-print-upload-dialog',
@@ -17,12 +17,11 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
     MatDialogModule, 
     MatIconModule, 
     MatButtonModule, 
-    MatProgressBarModule,
-    MatSnackBarModule
+    MatProgressBarModule
   ],
   template: `
     <div class="print-upload-dialog">
-      <div class="dialog-header" [style.background]="data.printer.color">
+      <div class="dialog-header">
         <h2>{{ data.printer.name }}</h2>
         <button aria-label="Close" mat-icon-button (click)="close()">
           <mat-icon>close</mat-icon>
@@ -110,20 +109,22 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
       justify-content: center;
       align-items: center;
       padding: 16px 24px;
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       position: relative;
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.25rem;
+      font-size: var(--text-2xl);
       font-weight: 500;
       text-align: center;
     }
 
     .dialog-header button {
-      color: white;
+      color: var(--color-text-2);
       position: absolute;
       right: 16px;
       top: 50%;
@@ -140,12 +141,12 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
       gap: 12px;
       padding: 12px 16px;
       background: var(--color-surface-2);
-      border-radius: 8px;
+      border-radius: var(--radius-control);
       margin-bottom: 20px;
     }
 
     .printer-info mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
       color: var(--color-text-2);
@@ -162,9 +163,9 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
     }
 
     .printer-ip {
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
-      font-family: monospace;
+      font-family: var(--font-mono);
     }
 
     .printer-status {
@@ -174,12 +175,12 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
       margin-left: auto;
       padding: 4px 10px;
       border-radius: 12px;
-      font-size: 0.8rem;
+      font-size: var(--text-xs);
       font-weight: 500;
     }
 
     .printer-status mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -221,7 +222,7 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
 
     .upload-zone:hover {
       border-color: var(--color-primary);
-      background: #f0f8ff;
+      background: var(--color-primary-soft);
     }
 
     .upload-zone.drag-over {
@@ -246,25 +247,25 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
     }
 
     .upload-text {
-      font-size: 1.1rem;
+      font-size: var(--text-lg);
       color: var(--color-text);
       margin: 0 0 4px 0;
     }
 
     .upload-hint {
-      font-size: 0.9rem;
+      font-size: var(--text-md);
       color: var(--color-text-2);
       margin: 0 0 8px 0;
     }
 
     .upload-formats {
-      font-size: 0.8rem;
+      font-size: var(--text-xs);
       color: var(--color-text-3);
       margin: 0;
     }
 
     .file-name {
-      font-size: 1rem;
+      font-size: var(--text-lg);
       font-weight: 600;
       color: var(--color-text);
       margin: 0 0 4px 0;
@@ -272,7 +273,7 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
     }
 
     .file-size {
-      font-size: 0.85rem;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
       margin: 0;
     }
@@ -281,7 +282,7 @@ import { Printer } from '../quick-print-dialog/quick-print-dialog.component';
       text-align: center;
       color: var(--color-primary);
       margin: 12px 0 0 0;
-      font-size: 0.9rem;
+      font-size: var(--text-md);
     }
 
     .dialog-actions {
@@ -308,7 +309,7 @@ export class PrintUploadDialogComponent {
   constructor(
     private dialogRef: MatDialogRef<PrintUploadDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { printer: Printer },
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private http: HttpClient
   ) {
     // Check printer status on open
@@ -400,20 +401,13 @@ export class PrintUploadDialogComponent {
     ).subscribe({
       next: (response) => {
         this.isUploading = false;
-        this.snackBar.open(
-          response.message || `Document sent to ${this.data.printer.name}`,
-          'Close',
-          { duration: 5000, panelClass: ['success-snackbar'] }
-        );
+        this.toast.done(response.message || `Document sent to ${this.data.printer.name}`);
         this.dialogRef.close({ success: true, printer: this.data.printer });
       },
       error: (err) => {
         this.isUploading = false;
         const errorMessage = err.error?.error || err.error?.message || 'Failed to send document to printer';
-        this.snackBar.open(errorMessage, 'Close', { 
-          duration: 7000, 
-          panelClass: ['error-snackbar'] 
-        });
+        this.toast.error(errorMessage);
       }
     });
   }

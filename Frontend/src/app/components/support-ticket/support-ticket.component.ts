@@ -10,7 +10,6 @@ import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angu
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -21,6 +20,8 @@ import { AuthService } from '../../services/auth.service';
 import { SupportTicketService, SupportTicket, TicketStatistics } from '../../services/support-ticket.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 
 @Component({
@@ -38,7 +39,6 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
     MatSelectModule,
     MatFormFieldModule,
     MatInputModule,
-    MatSnackBarModule,
     MatProgressSpinnerModule,
     MatProgressBarModule,
     MatTooltipModule,
@@ -46,7 +46,8 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
     MatMenuModule,
     FormsModule,
     NavbarComponent,
-    PageHeaderComponent
+    PageHeaderComponent,
+    EmptyStateComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -171,14 +172,12 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
         @if (activeFilter !== 'closed') {
           <div class="tickets-grid">
             @if (filteredOpenTickets.length === 0) {
-              <div class="empty-state">
-                <div class="empty-icon"><mat-icon>inbox</mat-icon></div>
-                <h3>No Open Tickets</h3>
-                <p>All caught up! Create a new ticket if you need help.</p>
-                <button mat-stroked-button class="empty-action" (click)="openCreateTicketDialog()">
-                  <mat-icon>add</mat-icon> Create Ticket
+              <app-empty-state icon="inbox" title="No open tickets"
+                               message="All caught up. Create a new ticket if you need help.">
+                <button mat-stroked-button (click)="openCreateTicketDialog()">
+                  <mat-icon>add</mat-icon> Create ticket
                 </button>
-              </div>
+              </app-empty-state>
             }
             @for (ticket of filteredOpenTickets; track ticket.ticketId) {
               <div class="ticket-card" [class]="'border-' + ticket.priority.toLowerCase()">
@@ -221,11 +220,8 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
         @if (activeFilter === 'closed') {
           <div class="tickets-grid">
             @if (filteredClosedTickets.length === 0) {
-              <div class="empty-state">
-                <div class="empty-icon"><mat-icon>check_circle</mat-icon></div>
-                <h3>No Closed Tickets</h3>
-                <p>Resolved tickets will appear here.</p>
-              </div>
+              <app-empty-state icon="check_circle" title="No closed tickets"
+                               message="Resolved tickets will appear here." />
             }
             @for (ticket of filteredClosedTickets; track ticket.ticketId) {
               <div class="ticket-card closed-card">
@@ -755,50 +751,12 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
     .action-btn.reopen { --mdc-icon-button-icon-color: var(--color-warn); --mat-icon-button-state-layer-color: var(--color-warn); }
     .action-btn.delete { --mdc-icon-button-icon-color: var(--color-danger); --mat-icon-button-state-layer-color: var(--color-danger); }
 
-    /* === Empty state === */
-    .empty-state {
+    .tickets-grid app-empty-state {
       grid-column: 1 / -1;
-      padding: var(--space-8) var(--space-4);
-      text-align: center;
+      display: block;
       background: var(--color-surface);
       border: 1px solid var(--color-line);
       border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-sm);
-    }
-
-    .empty-icon {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 64px;
-      height: 64px;
-      margin: 0 auto var(--space-4);
-      border-radius: 50%;
-      background: var(--color-surface-2);
-      color: var(--color-text-3);
-    }
-
-    .empty-icon mat-icon {
-      width: 32px;
-      height: 32px;
-      font-size: var(--text-4xl);
-    }
-
-    .empty-state h3 {
-      margin: 0 0 var(--space-2);
-      font-size: var(--text-xl);
-      font-weight: 600;
-      color: var(--color-text);
-    }
-
-    .empty-state p {
-      margin: 0 0 var(--space-5);
-      font-size: var(--text-md);
-      color: var(--color-text-2);
-    }
-
-    .empty-state p:last-child {
-      margin-bottom: 0;
     }
 
     /* === Responsive === */
@@ -852,7 +810,7 @@ export class SupportTicketComponent implements OnInit {
     private router: Router,
     private dialog: MatDialog,
     private ticketService: SupportTicketService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private readonly confirmDialog: ConfirmService
   ) {
     this.currentUser = this.authService.currentUserValue;
@@ -875,7 +833,7 @@ export class SupportTicketComponent implements OnInit {
       error: (error) => {
         console.error('Error loading open tickets:', error);
         this.stopLoadingProgress();
-        this.snackBar.open('Failed to load tickets', 'Close', { duration: 3000 });
+        this.toast.error('Could not load tickets. Please try again.');
         this.loading = false;
       }
     });
@@ -1046,11 +1004,11 @@ export class SupportTicketComponent implements OnInit {
             this.openTickets.unshift(newTicket);
             this.filterTickets();
             this.totalTickets++;
-            this.snackBar.open('✅ Ticket created successfully!', 'Close', { duration: 3000 });
+            this.toast.done('Ticket created.');
           },
           error: (error) => {
             console.error('Error creating ticket:', error);
-            this.snackBar.open('Failed to create ticket', 'Close', { duration: 3000 });
+            this.toast.error('Could not create the ticket. Please try again.');
           }
         });
       }
@@ -1073,11 +1031,11 @@ export class SupportTicketComponent implements OnInit {
           isInternal: false
         }).subscribe({
           next: () => {
-            this.snackBar.open('💬 Comment added', 'Close', { duration: 3000 });
+            this.toast.done('Comment added.');
           },
           error: (error) => {
             console.error('Error adding comment:', error);
-            this.snackBar.open('Failed to add comment', 'Close', { duration: 3000 });
+            this.toast.error('Could not add the comment. Please try again.');
           }
         });
       }
@@ -1093,11 +1051,11 @@ export class SupportTicketComponent implements OnInit {
         this.closedTickets.unshift(ticket);
         this.filterTickets();
         this.loadStatistics();
-        this.snackBar.open('✅ Ticket closed', 'Close', { duration: 3000 });
+        this.toast.done('Ticket closed.');
       },
       error: (error) => {
         console.error('Error closing ticket:', error);
-        this.snackBar.open('Failed to close ticket', 'Close', { duration: 3000 });
+        this.toast.error('Could not close the ticket. Please try again.');
       }
     });
   }
@@ -1111,11 +1069,11 @@ export class SupportTicketComponent implements OnInit {
         this.openTickets.unshift(ticket);
         this.filterTickets();
         this.loadStatistics();
-        this.snackBar.open('🔄 Ticket reopened', 'Close', { duration: 3000 });
+        this.toast.done('Ticket reopened.');
       },
       error: (error) => {
         console.error('Error reopening ticket:', error);
-        this.snackBar.open('Failed to reopen ticket', 'Close', { duration: 3000 });
+        this.toast.error('Could not reopen the ticket. Please try again.');
       }
     });
   }
@@ -1133,11 +1091,11 @@ export class SupportTicketComponent implements OnInit {
         this.closedTickets = this.closedTickets.filter(t => t.ticketId !== ticket.ticketId);
         this.filterTickets();
         this.totalTickets--;
-        this.snackBar.open('🗑️ Ticket deleted', 'Close', { duration: 3000 });
+        this.toast.done('Ticket deleted.');
       },
       error: (error) => {
         console.error('Error deleting ticket:', error);
-        this.snackBar.open('Failed to delete ticket', 'Close', { duration: 3000 });
+        this.toast.error('Could not delete the ticket. Please try again.');
       }
     });
   }
@@ -1198,10 +1156,10 @@ export class SupportTicketComponent implements OnInit {
             <mat-form-field appearance="outline" class="half-width">
               <mat-label>Priority</mat-label>
               <mat-select formControlName="priority">
-                <mat-option value="Low">🟢 Low</mat-option>
-                <mat-option value="Medium">🟡 Medium</mat-option>
-                <mat-option value="High">🟠 High</mat-option>
-                <mat-option value="Critical">🔴 Critical</mat-option>
+                <mat-option value="Low">Low</mat-option>
+                <mat-option value="Medium">Medium</mat-option>
+                <mat-option value="High">High</mat-option>
+                <mat-option value="Critical">Critical</mat-option>
               </mat-select>
             </mat-form-field>
           </div>
@@ -1216,8 +1174,8 @@ export class SupportTicketComponent implements OnInit {
         </form>
       </mat-dialog-content>
       <mat-dialog-actions align="end">
-        <button mat-button class="cancel-btn" (click)="onCancel()">Cancel</button>
-        <button mat-flat-button class="submit-btn" (click)="onSubmit()" [disabled]="!ticketForm.valid">
+        <button mat-button (click)="onCancel()">Cancel</button>
+        <button mat-flat-button color="primary" (click)="onSubmit()" [disabled]="!ticketForm.valid">
           <mat-icon>send</mat-icon>
           Submit Ticket
         </button>
@@ -1225,45 +1183,41 @@ export class SupportTicketComponent implements OnInit {
     </div>
   `,
   styles: [`
-    .dialog-wrapper { padding: 0; background: var(--color-text); border-radius: 16px; }
+    .dialog-wrapper { padding: 0; background: var(--color-surface); }
 
     .dialog-header {
       display: flex;
       align-items: center;
       gap: 14px;
       padding: 24px 24px 8px;
-      background: var(--color-text);
-      border-radius: 16px 16px 0 0;
     }
 
     .dialog-icon {
       width: 44px;
       height: 44px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, var(--color-primary), #8b5cf6);
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
     }
 
     .dialog-icon mat-icon {
-      font-size: 24px;
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
-      color: white;
+      color: var(--color-primary);
     }
 
     h2 {
       margin: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       font-weight: 700;
-      color: var(--color-surface-2);
+      color: var(--color-text);
     }
 
     mat-dialog-content {
-      padding: 16px 24px !important;
-      background: var(--color-text);
+      padding: 16px 24px;
     }
 
     .full-width { width: 100%; }
@@ -1275,73 +1229,14 @@ export class SupportTicketComponent implements OnInit {
 
     .half-width { flex: 1; }
 
-    :host ::ng-deep .mat-mdc-text-field-wrapper {
-      background: rgba(255,255,255,0.04) !important;
-    }
-
-    :host ::ng-deep .mdc-notched-outline__leading,
-    :host ::ng-deep .mdc-notched-outline__notch,
-    :host ::ng-deep .mdc-notched-outline__trailing {
-      border-color: rgba(255,255,255,0.1) !important;
-    }
-
-    :host ::ng-deep .mat-mdc-form-field-label,
-    :host ::ng-deep .mdc-floating-label {
-      color: rgba(255,255,255,0.5) !important;
-    }
-
-    :host ::ng-deep input, :host ::ng-deep textarea {
-      color: var(--color-surface-2) !important;
-    }
-
-    :host ::ng-deep .mat-mdc-select-value-text {
-      color: var(--color-surface-2) !important;
-    }
-
-    :host ::ng-deep .mat-mdc-form-field-icon-prefix mat-icon {
-      color: rgba(255,255,255,0.4) !important;
-    }
-
     mat-dialog-actions {
-      padding: 12px 24px 20px !important;
-      margin: 0 !important;
+      padding: 12px 24px 20px;
       gap: 8px;
-      background: var(--color-text);
-      border-radius: 0 0 16px 16px;
     }
 
-    :host ::ng-deep .mat-mdc-dialog-surface {
-      background: var(--color-text) !important;
-      border-radius: 16px !important;
-      border: 1px solid rgba(255,255,255,0.08) !important;
-    }
-
-    .cancel-btn {
-      color: rgba(255,255,255,0.5) !important;
-      font-weight: 500 !important;
-    }
-
-    .cancel-btn:hover {
-      background: rgba(255,255,255,0.05) !important;
-    }
-
-    .submit-btn {
-      background: linear-gradient(135deg, var(--color-primary), #8b5cf6) !important;
-      color: white !important;
-      padding: 0 24px !important;
-      height: 40px;
-      border-radius: 10px !important;
-      font-weight: 600 !important;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
-    }
-
-    .submit-btn:hover {
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45) !important;
-    }
-
-    .submit-btn mat-icon {
+    mat-dialog-actions mat-icon {
       margin-right: 6px;
-      font-size: 18px;
+      font-size: var(--text-xl);
     }
   `]
 })
@@ -1420,8 +1315,8 @@ export class CreateTicketDialogComponent {
         </form>
       </mat-dialog-content>
       <mat-dialog-actions align="end">
-        <button mat-button class="cancel-btn" (click)="dialogRef.close()">Cancel</button>
-        <button mat-flat-button class="submit-btn" (click)="onSubmit()" [disabled]="!commentForm.valid">
+        <button mat-button (click)="dialogRef.close()">Cancel</button>
+        <button mat-flat-button color="primary" (click)="onSubmit()" [disabled]="!commentForm.valid">
           <mat-icon>send</mat-icon>
           Post Comment
         </button>
@@ -1429,40 +1324,37 @@ export class CreateTicketDialogComponent {
     </div>
   `,
   styles: [`
-    .dialog-wrapper { padding: 0; background: var(--color-text); border-radius: 16px; }
+    .dialog-wrapper { padding: 0; background: var(--color-surface); }
 
     .dialog-header {
       display: flex;
       align-items: center;
       gap: 14px;
       padding: 24px 24px 8px;
-      background: var(--color-text);
-      border-radius: 16px 16px 0 0;
     }
 
     .dialog-icon {
       width: 44px;
       height: 44px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, var(--color-primary), #60a5fa);
+      border-radius: var(--radius-md);
+      background: var(--color-primary-soft);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
     }
 
     .dialog-icon mat-icon {
-      font-size: 24px;
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
-      color: white;
+      color: var(--color-primary);
     }
 
-    h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--color-surface-2); }
-    .dialog-sub { margin: 2px 0 0; font-size: 13px; color: rgba(255,255,255,0.35); }
+    h2 { margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
+    .dialog-sub { margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-text-3); }
 
-    mat-dialog-content { padding: 16px 24px !important; background: var(--color-text); }
+    mat-dialog-content { padding: 16px 24px; }
 
     .comments-list {
       margin-bottom: 16px;
@@ -1474,9 +1366,9 @@ export class CreateTicketDialogComponent {
     }
 
     .comment-item {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 10px;
+      background: var(--color-surface-2);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 10px 14px;
     }
 
@@ -1484,65 +1376,21 @@ export class CreateTicketDialogComponent {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
-      color: #c7d2fe;
+      font-size: var(--text-sm);
+      color: var(--color-text);
       margin-bottom: 4px;
     }
 
-    .comment-author mat-icon { font-size: 16px; width: 16px; height: 16px; color: rgba(255,255,255,0.3); }
-    .comment-date { font-size: 11px; color: rgba(255,255,255,0.3); margin-left: auto; }
-    .comment-content { margin: 0; font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.5; }
-
-    :host ::ng-deep .mat-mdc-text-field-wrapper {
-      background: rgba(255,255,255,0.04) !important;
-    }
-
-    :host ::ng-deep .mdc-notched-outline__leading,
-    :host ::ng-deep .mdc-notched-outline__notch,
-    :host ::ng-deep .mdc-notched-outline__trailing {
-      border-color: rgba(255,255,255,0.1) !important;
-    }
-
-    :host ::ng-deep .mat-mdc-form-field-label,
-    :host ::ng-deep .mdc-floating-label {
-      color: rgba(255,255,255,0.5) !important;
-    }
-
-    :host ::ng-deep textarea {
-      color: var(--color-surface-2) !important;
-    }
+    .comment-author mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-text-3); }
+    .comment-date { font-size: var(--text-xs); color: var(--color-text-3); margin-left: auto; }
+    .comment-content { margin: 0; font-size: var(--text-sm); color: var(--color-text-2); line-height: 1.5; }
 
     mat-dialog-actions {
-      padding: 12px 24px 20px !important;
-      margin: 0 !important;
+      padding: 12px 24px 20px;
       gap: 8px;
-      background: var(--color-text);
-      border-radius: 0 0 16px 16px;
     }
 
-    :host ::ng-deep .mat-mdc-dialog-surface {
-      background: var(--color-text) !important;
-      border-radius: 16px !important;
-      border: 1px solid rgba(255,255,255,0.08) !important;
-    }
-
-    .cancel-btn { color: rgba(255,255,255,0.5) !important; }
-    .cancel-btn:hover { background: rgba(255,255,255,0.05) !important; }
-    .submit-btn {
-      background: linear-gradient(135deg, var(--color-primary), #60a5fa) !important;
-      color: white !important;
-      padding: 0 24px !important;
-      height: 40px;
-      border-radius: 10px !important;
-      font-weight: 600 !important;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
-    }
-
-    .submit-btn:hover {
-      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45) !important;
-    }
-
-    .submit-btn mat-icon { margin-right: 6px; font-size: 18px; }
+    mat-dialog-actions mat-icon { margin-right: 6px; font-size: var(--text-xl); }
   `]
 })
 export class AddCommentDialogComponent {

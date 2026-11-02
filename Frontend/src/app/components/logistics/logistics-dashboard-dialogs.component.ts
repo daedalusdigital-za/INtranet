@@ -2600,11 +2600,11 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
         <tr><td style="padding:4px 8px; font-weight:bold;">Straight-line Distance</td><td style="padding:4px 8px;">${d.distanceKm ?? '—'} km</td></tr>
         ${d.roadDistance ? `<tr><td style="padding:4px 8px; font-weight:bold;">Road Distance</td><td style="padding:4px 8px;">${d.roadDistance} (${d.roadDuration})</td></tr>` : ''}
         <tr><td style="padding:4px 8px; font-weight:bold;">Depot Address</td><td style="padding:4px 8px;">${[d.address, d.city, d.province].filter(Boolean).join(', ') || '—'}</td></tr>
-      </table>` : '<p style="font-size:13px; color:var(--color-text-2);">Tip: click <b>Nearest TFN</b> first to include the vehicle, depot and route on the printout.</p>';
+      </table>` : '<p style="font-size:13px; color:#666;">Tip: click <b>Nearest TFN</b> first to include the vehicle, depot and route on the printout.</p>';
 
     const mapBlock = mapImgDataUrl
-      ? `<img src="${mapImgDataUrl}" style="width:100%; max-width:800px; border:1px solid var(--color-line-strong); border-radius:8px;" alt="Route map" />
-         <div style="font-size:11px; color:var(--color-text-3); margin-top:6px;">Blue = Vehicle &nbsp;•&nbsp; Orange = TFN Depot &nbsp;•&nbsp; Route follows roads</div>`
+      ? `<img src="${mapImgDataUrl}" style="width:100%; max-width:800px; border:1px solid #ccc; border-radius:8px;" alt="Route map" />
+         <div style="font-size:11px; color:#888; margin-top:6px;">Blue = Vehicle &nbsp;•&nbsp; Orange = TFN Depot &nbsp;•&nbsp; Route follows roads</div>`
       : '<p style="color:#b00; font-size:13px;">Could not capture the map. Make sure the map is fully loaded and try again.</p>';
 
     const printWindow = window.open('', '_blank', 'width=960,height=820');
@@ -2618,9 +2618,9 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
         <head>
           <title>Fleet Route - ${now.toLocaleString()}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color:var(--color-text); }
+            body { font-family: Arial, sans-serif; margin: 24px; color:#111; }
             h1 { font-size: 20px; margin: 0 0 4px 0; color:#e65100; }
-            .meta { font-size: 12px; color:var(--color-text-2); margin-bottom: 16px; }
+            .meta { font-size: 12px; color:#666; margin-bottom: 16px; }
           </style>
         </head>
         <body>
@@ -2995,8 +2995,8 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       margin: -24px -24px 0 -24px;
     }
 
@@ -3009,7 +3009,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       font-weight: 500;
     }
 
-    .dialog-header button { color: white; }
+    .dialog-header button { color: var(--color-on-primary); }
 
     .loading-container {
       display: flex;
@@ -3116,7 +3116,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
 
     .stop-number {
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
       padding: 2px 10px;
       border-radius: 12px;
       font-size: var(--text-xs);
@@ -3359,7 +3359,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
     .estimate-item.total mat-icon,
     .estimate-item.total .estimate-value,
     .estimate-item.total .estimate-label {
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .estimate-details {
@@ -3821,25 +3821,25 @@ interface RouteEstimate {
   ],
   template: `
     <h2 mat-dialog-title style="display: flex; align-items: center; gap: 8px;">
-      <mat-icon style="color:#1a237e;">receipt_long</mat-icon>
+      <mat-icon style="color:var(--color-primary);">receipt_long</mat-icon>
       {{ data.pod.podNumber || ('POD' + data.pod.id) }} — Invoices
     </h2>
     <mat-dialog-content style="min-width: 380px;">
       @if (invoices.length > 0) {
-        <div style="color:var(--color-text-2); font-size:13px; margin-bottom:8px;">
+        <div style="color:var(--color-text-2); font-size:var(--text-sm); margin-bottom:8px;">
           {{ invoices.length }} invoice{{ invoices.length === 1 ? '' : 's' }} linked to this POD
         </div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           @for (inv of invoices; track inv) {
             <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--color-surface-2); border-radius:8px;">
-              <mat-icon style="color:#3f51b5; font-size:20px; width:20px; height:20px;">receipt</mat-icon>
+              <mat-icon style="color:var(--color-primary); font-size:var(--text-2xl); width:20px; height:20px;">receipt</mat-icon>
               <span style="font-family:monospace; font-weight:600;">{{ inv }}</span>
             </div>
           }
         </div>
       } @else {
         <div style="color:var(--color-text-3); padding:16px 0; text-align:center;">
-          <mat-icon style="font-size:32px; width:32px; height:32px; opacity:.4;">receipt</mat-icon>
+          <mat-icon style="font-size:var(--text-4xl); width:32px; height:32px; opacity:.4;">receipt</mat-icon>
           <div>No invoice numbers recorded on this POD.</div>
         </div>
       }
@@ -3849,8 +3849,8 @@ interface RouteEstimate {
         <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--color-ok-soft); border-radius:8px;">
           <mat-icon style="color:var(--color-ok);">local_shipping</mat-icon>
           <div>
-            <div style="font-size:12px; color:var(--color-text-2);">Linked Tripsheet</div>
-            <div style="font-weight:600; color:#1b5e20;">{{ data.pod.loadNumber || ('Load #' + data.pod.loadId) }}</div>
+            <div style="font-size:var(--text-xs); color:var(--color-text-2);">Linked Tripsheet</div>
+            <div style="font-weight:600; color:var(--color-ok);">{{ data.pod.loadNumber || ('Load #' + data.pod.loadId) }}</div>
           </div>
         </div>
       }
@@ -3885,7 +3885,8 @@ export class LogisticsPodInvoicesDialog {
     MatIconModule,
     MatChipsModule,
     MatProgressSpinnerModule,
-    MatDividerModule
+    MatDividerModule,
+    SkeletonRowsComponent
   ],
   template: `
     <div class="tripsheet-preview-dialog landscape">
@@ -3909,8 +3910,7 @@ export class LogisticsPodInvoicesDialog {
 
       @if (loading) {
         <div class="loading-content">
-          <mat-spinner diameter="40"></mat-spinner>
-          <p>Loading trip sheet...</p>
+          <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
         </div>
       } @else if (tripSheet) {
         <div class="tripsheet-content">
@@ -4095,7 +4095,7 @@ export class LogisticsPodInvoicesDialog {
       align-items: center;
       padding: 10px 20px;
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
       flex-shrink: 0;
     }
     .dialog-header h2 {
@@ -4110,7 +4110,7 @@ export class LogisticsPodInvoicesDialog {
       gap: 4px;
     }
     .header-actions button {
-      color: white;
+      color: var(--color-on-primary);
     }
     
     .loading-content, .error-content {
@@ -4118,7 +4118,7 @@ export class LogisticsPodInvoicesDialog {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 60px;
+      padding: 24px;
       color: var(--color-text-2);
       flex: 1;
     }
@@ -4140,7 +4140,7 @@ export class LogisticsPodInvoicesDialog {
     
     /* Header Section */
     .ts-header-section {
-      border: 2px solid #333;
+      border: 2px solid var(--color-text-2);
       padding: 12px 16px;
       margin-bottom: 16px;
     }
@@ -4192,7 +4192,7 @@ export class LogisticsPodInvoicesDialog {
     .ts-table-container {
       flex: 1;
       overflow-x: auto;
-      border: 2px solid #333;
+      border: 2px solid var(--color-text-2);
     }
     .ts-table {
       width: 100%;
@@ -4201,7 +4201,7 @@ export class LogisticsPodInvoicesDialog {
     }
     .ts-table thead {
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
     }
     .ts-table th {
       padding: 8px 6px;
@@ -4210,7 +4210,7 @@ export class LogisticsPodInvoicesDialog {
       font-size: var(--text-xs);
       text-transform: uppercase;
       white-space: nowrap;
-      border-right: 1px solid rgba(255,255,255,0.3);
+      border-right: 1px solid color-mix(in srgb, var(--color-on-primary) 30%, transparent);
     }
     .ts-table th:last-child {
       border-right: none;
@@ -4264,7 +4264,7 @@ export class LogisticsPodInvoicesDialog {
     }
     .totals-row td {
       padding: 10px 6px;
-      border-top: 2px solid #333;
+      border-top: 2px solid var(--color-text-2);
     }
     .totals-label {
       text-align: right;
@@ -4278,7 +4278,7 @@ export class LogisticsPodInvoicesDialog {
     
     /* Footer Section */
     .ts-footer-section {
-      border: 2px solid #333;
+      border: 2px solid var(--color-text-2);
       border-top: none;
       padding: 12px 16px;
     }
@@ -4304,7 +4304,7 @@ export class LogisticsPodInvoicesDialog {
     .odo-box {
       width: 80px;
       height: 24px;
-      border: 1px solid #333;
+      border: 1px solid var(--color-text-2);
       background: var(--color-canvas);
     }
     .fuel-section {
@@ -4337,7 +4337,7 @@ export class LogisticsPodInvoicesDialog {
       text-align: center;
     }
     .signature-line {
-      border-bottom: 1px solid #333;
+      border-bottom: 1px solid var(--color-text-2);
       height: 40px;
       margin-bottom: 4px;
     }
@@ -4499,7 +4499,7 @@ export class TripSheetPreviewDialog implements OnInit {
     .dialog-header {
       display: flex; align-items: center; gap: 12px;
       padding: 16px 24px; margin: -24px -24px 0 -24px;
-      background: var(--color-primary); color: white; border-radius: 4px 4px 0 0;
+      background: var(--color-primary); color: var(--color-on-primary); border-radius: 4px 4px 0 0;
     }
     .dialog-header h2 { margin: 0; font-size: var(--text-xl); }
     .dialog-content { padding-top: 20px; }
@@ -4617,11 +4617,11 @@ export class MaintenanceExportScopeDialog {
     }
     .dialog-header.success {
       background: var(--color-ok);
-      color: white;
+      color: var(--color-on-primary);
     }
     .dialog-header.error {
       background: var(--color-danger);
-      color: white;
+      color: var(--color-on-primary);
     }
     .dialog-header mat-icon {
       font-size: var(--text-4xl);
@@ -4726,7 +4726,9 @@ export class SyncResultDialogComponent {
     MatProgressSpinnerModule,
     MatExpansionModule,
     MatBadgeModule,
-    MatTooltipModule
+    MatTooltipModule,
+    EmptyStateComponent,
+    SkeletonRowsComponent
   ],
   template: `
     <h2 mat-dialog-title>
@@ -4735,16 +4737,10 @@ export class SyncResultDialogComponent {
     
     <mat-dialog-content>
       @if (loading) {
-        <div class="loading-state">
-          <mat-spinner diameter="50"></mat-spinner>
-          <p>Analyzing pending invoices and optimizing routes...</p>
-        </div>
+        <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
       } @else if (suggestedTrips.length === 0) {
-        <div class="empty-state">
-          <mat-icon>info</mat-icon>
-          <h3>No Suggestions Available</h3>
-          <p>There are no pending invoices to create trips from.</p>
-        </div>
+        <app-empty-state icon="lightbulb" title="No suggestions available"
+                         message="There are no pending invoices to create trips from."></app-empty-state>
       } @else {
         <div class="suggestions-summary">
           <mat-icon>analytics</mat-icon>
@@ -4878,29 +4874,13 @@ export class SyncResultDialogComponent {
       max-height: 70vh;
       padding: 0 24px;
     }
-    .loading-state, .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      text-align: center;
-      color: var(--color-text-2);
-    }
-    .loading-state mat-icon, .empty-state mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      color: var(--color-primary);
-    }
     .suggestions-summary {
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 16px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       border-radius: 8px;
       margin-bottom: 24px;
     }
@@ -4939,15 +4919,15 @@ export class SyncResultDialogComponent {
     }
     mat-chip.priority-urgent {
       background: var(--color-danger) !important;
-      color: white !important;
+      color: var(--color-on-primary) !important;
     }
     mat-chip.priority-high {
       background: var(--color-warn) !important;
-      color: white !important;
+      color: var(--color-on-primary) !important;
     }
     mat-chip.priority-normal {
       background: var(--color-ok) !important;
-      color: white !important;
+      color: var(--color-on-primary) !important;
     }
     .trip-stats {
       display: grid;
@@ -5159,7 +5139,8 @@ export class SuggestedTripsDialog implements OnInit {
     MatTableModule,
     MatInputModule,
     MatFormFieldModule,
-    FormsModule
+    FormsModule,
+    EmptyStateComponent
   ],
   template: `
     <div class="tfn-orders-dialog">
@@ -5310,11 +5291,12 @@ export class SuggestedTripsDialog implements OnInit {
             </div>
           } @empty {
             <div class="no-orders">
-              <div class="empty-illustration">
-                <mat-icon>local_gas_station</mat-icon>
-              </div>
-              <h3>No orders found</h3>
-              <p>Try adjusting your search or filter criteria</p>
+              <app-empty-state icon="local_gas_station" title="No orders found"
+                               message="Nothing matches that search or filter. Try a different order number, vehicle or card.">
+                @if (searchTerm || activeFilter !== 'all') {
+                  <button mat-stroked-button (click)="searchTerm = ''; setFilter('all')">Show all orders</button>
+                }
+              </app-empty-state>
             </div>
           }
         </div>
@@ -5334,30 +5316,20 @@ export class SuggestedTripsDialog implements OnInit {
     /* ── Header ─────────────────────────────────────────────── */
     .dialog-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 24px 32px;
-      background: linear-gradient(135deg, var(--color-text) 0%, #16213e 50%, #0f3460 100%);
-      color: white; margin: -24px -24px 0 -24px; position: relative; overflow: hidden;
+      padding: 20px 32px;
+      background: var(--color-surface); color: var(--color-text);
+      border-bottom: 1px solid var(--color-line); margin: -24px -24px 0 -24px;
     }
-    .dialog-header::before {
-      content: ''; position: absolute; top: -50%; right: -10%; width: 300px; height: 300px;
-      background: radial-gradient(circle, rgba(245,87,108,0.15) 0%, transparent 70%);
-      border-radius: 50%;
-    }
-    .dialog-header::after {
-      content: ''; position: absolute; bottom: -60%; left: 20%; width: 200px; height: 200px;
-      background: radial-gradient(circle, rgba(240,147,251,0.1) 0%, transparent 70%);
-      border-radius: 50%;
-    }
-    .header-left { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
     .header-icon-wrap {
-      width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #f5576c, #60a5fa); box-shadow: 0 4px 15px rgba(245,87,108,0.4);
+      width: 48px; height: 48px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;
+      background: var(--color-primary-soft); color: var(--color-primary);
     }
-    .header-icon-wrap mat-icon { font-size: 26px; width: 26px; height: 26px; }
+    .header-icon-wrap mat-icon { font-size: var(--text-3xl); width: 24px; height: 24px; }
     .header-text h2 { margin: 0; font-size: var(--text-2xl); font-weight: 600; letter-spacing: -0.3px; }
-    .header-sub { font-size: var(--text-sm); opacity: 0.7; }
-    .close-btn { color: rgba(255,255,255,0.7); position: relative; z-index: 1; }
-    .close-btn:hover { color: white; }
+    .header-sub { font-size: var(--text-sm); color: var(--color-text-2); }
+    .close-btn { color: var(--color-text-3); }
+    .close-btn:hover { color: var(--color-text); }
 
     /* ── Summary Strip ──────────────────────────────────────── */
     .summary-strip {
@@ -5378,7 +5350,7 @@ export class SuggestedTripsDialog implements OnInit {
     .summary-icon.complete { background: var(--color-ok-soft); color: var(--color-ok); }
     .summary-icon.active { background: var(--color-primary-soft); color: var(--color-primary-hover); }
     .summary-icon.pending { background: var(--color-warn-soft); color: var(--color-warn); }
-    .summary-icon.fuel-icon { background: linear-gradient(135deg, #e0f7fa, var(--color-primary-soft)); color: #00838f; }
+    .summary-icon.fuel-icon { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); }
     .summary-info { display: flex; flex-direction: column; }
     .summary-value { font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
     .summary-label { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -5393,7 +5365,7 @@ export class SuggestedTripsDialog implements OnInit {
       background: var(--color-surface-2); border: 2px solid transparent; border-radius: 12px;
       padding: 0 14px; height: 44px; transition: all 0.2s;
     }
-    .search-wrap:focus-within { border-color: #f5576c; background: var(--color-surface); box-shadow: 0 0 0 4px rgba(245,87,108,0.1); }
+    .search-wrap:focus-within { border-color: var(--color-focus); background: var(--color-surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 30%, transparent); }
     .search-icon { color: var(--color-text-3); font-size: var(--text-2xl); width: 20px; height: 20px; }
     .search-input {
       flex: 1; border: none; outline: none; background: transparent; font-size: var(--text-md); color: var(--color-text);
@@ -5410,9 +5382,9 @@ export class SuggestedTripsDialog implements OnInit {
       border: 1.5px solid var(--color-line); background: var(--color-surface); cursor: pointer; font-size: var(--text-sm);
       color: var(--color-text-2); transition: all 0.2s; font-weight: 500;
     }
-    .chip:hover { border-color: color-mix(in srgb, var(--color-danger) 35%, transparent); color: var(--color-danger); }
-    .chip.active { background: linear-gradient(135deg, #f5576c, #60a5fa); color: white; border-color: transparent; box-shadow: 0 2px 8px rgba(245,87,108,0.3); }
-    .chip.active .chip-count { background: rgba(255,255,255,0.25); color: white; }
+    .chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .chip.active { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }
+    .chip.active .chip-count { background: color-mix(in srgb, var(--color-on-primary) 25%, transparent); color: var(--color-on-primary); }
     .chip-count {
       font-size: var(--text-xs); background: var(--color-surface-2); padding: 1px 7px; border-radius: 10px;
       font-weight: 600; color: var(--color-text-3);
@@ -5436,19 +5408,19 @@ export class SuggestedTripsDialog implements OnInit {
     }
     .order-card::before {
       content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-      background: linear-gradient(90deg, #f5576c, #60a5fa); opacity: 0; transition: opacity 0.25s;
+      background: var(--color-primary); opacity: 0; transition: opacity 0.25s;
     }
     .order-card:hover {
-      transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,0.08);
-      border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+      transform: translateY(-3px); box-shadow: var(--shadow-md);
+      border-color: var(--color-primary);
     }
     .order-card:hover::before { opacity: 1; }
-    .card-complete::before { background: linear-gradient(90deg, var(--color-ok), var(--color-ok)); }
-    .card-active::before { background: linear-gradient(90deg, var(--color-primary-hover), #42a5f5); }
+    .card-complete::before { background: var(--color-ok); }
+    .card-active::before { background: var(--color-primary); }
 
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
     .card-order-id { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: var(--text-md); color: var(--color-text); }
-    .card-order-id mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-danger); }
+    .card-order-id mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; color: var(--color-primary); }
     .status-badge {
       display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px;
       font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.3px;
@@ -5484,7 +5456,7 @@ export class SuggestedTripsDialog implements OnInit {
     .gauge-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .fuel-type-badge {
       padding: 3px 10px; border-radius: 6px; font-size: var(--text-xs); font-weight: 600;
-      background: linear-gradient(135deg, var(--color-warn-soft), var(--color-warn-soft)); color: #f57f17; letter-spacing: 0.3px;
+      background: var(--color-warn-soft); color: var(--color-warn); letter-spacing: 0.3px;
     }
     .fuel-amount { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 500; }
     .fuel-gauge-bar {
@@ -5494,9 +5466,9 @@ export class SuggestedTripsDialog implements OnInit {
       height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
       min-width: 2px;
     }
-    .gauge-fill.low { background: linear-gradient(90deg, var(--color-ok-soft), var(--color-ok)); }
-    .gauge-fill.mid { background: linear-gradient(90deg, var(--color-warn-soft), var(--color-warn)); }
-    .gauge-fill.high { background: linear-gradient(90deg, var(--color-danger-soft), #ef5350); }
+    .gauge-fill.low { background: var(--color-ok); }
+    .gauge-fill.mid { background: var(--color-warn); }
+    .gauge-fill.high { background: var(--color-danger); }
     .gauge-labels { display: flex; justify-content: space-between; margin-top: 4px; }
     .used-label, .remaining-label { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 500; }
     .remaining-label { color: var(--color-ok); }
@@ -5504,23 +5476,15 @@ export class SuggestedTripsDialog implements OnInit {
     /* Card Footer */
     .card-footer {
       display: flex; justify-content: space-between; align-items: center;
-      padding-top: 12px; border-top: 1px solid var(--color-surface-2);
+      padding-top: 12px; border-top: 1px solid var(--color-line);
     }
     .date-info { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--color-text-3); }
     .date-info mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
     .card-arrow { color: var(--color-text-3); font-size: var(--text-xl); width: 18px; height: 18px; transition: all 0.2s; }
-    .order-card:hover .card-arrow { color: var(--color-danger); transform: translateX(3px); }
+    .order-card:hover .card-arrow { color: var(--color-primary); transform: translateX(3px); }
 
     /* ── Empty State ────────────────────────────────────────── */
-    .no-orders { grid-column: 1 / -1; text-align: center; padding: 60px 20px; }
-    .empty-illustration {
-      width: 80px; height: 80px; margin: 0 auto 16px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-surface-2), #eef0f5); display: flex;
-      align-items: center; justify-content: center;
-    }
-    .empty-illustration mat-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-text-3); }
-    .no-orders h3 { margin: 0 0 8px; color: var(--color-text); font-size: var(--text-xl); }
-    .no-orders p { margin: 0; color: var(--color-text-3); font-size: var(--text-md); }
+    .no-orders { grid-column: 1 / -1; }
 
     /* ── Dialog Footer ──────────────────────────────────────── */
     mat-dialog-actions { padding: 14px 28px; border-top: 1px solid var(--color-line); }
@@ -5830,8 +5794,8 @@ export class TfnOrdersListDialog {
       justify-content: space-between;
       align-items: center;
       padding: 20px 32px;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       margin: -24px -24px 0 -24px;
     }
     .dialog-header h2 {
@@ -5843,7 +5807,7 @@ export class TfnOrdersListDialog {
       font-weight: 500;
     }
     .dialog-header button {
-      color: white;
+      color: var(--color-on-primary);
     }
     .dialog-content {
       padding: 28px 8px;
@@ -5946,11 +5910,11 @@ export class TfnOrdersListDialog {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-on-primary);
     }
-    .stat-circle.allocated { background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover)); }
-    .stat-circle.used { background: linear-gradient(135deg, #60a5fa, #f5576c); }
-    .stat-circle.remaining { background: linear-gradient(135deg, #11998e, #38ef7d); }
+    .stat-circle.allocated { background: var(--color-primary); }
+    .stat-circle.used { background: var(--color-cat-purple); }
+    .stat-circle.remaining { background: var(--color-ok); }
     .stat-circle .value {
       font-size: var(--text-2xl);
       font-weight: 600;
@@ -6068,7 +6032,7 @@ export class TfnOrderDetailsDialog {
             margin: 0 0 8px 0;
           }
           .print-header p {
-            color: var(--color-text-2);
+            color: #666;
             margin: 0;
           }
           .order-info {
@@ -6076,49 +6040,49 @@ export class TfnOrderDetailsDialog {
             justify-content: space-between;
             margin-bottom: 20px;
             padding: 15px;
-            background: var(--color-surface-2);
+            background: #f5f5f5;
             border-radius: 8px;
           }
           .order-number {
             font-size: 24px;
             font-weight: bold;
-            color: var(--color-text);
+            color: #333;
           }
           .order-status {
             padding: 8px 16px;
             border-radius: 20px;
-            background: var(--color-ok-soft);
+            background: #e8f5e9;
             color: #2e7d32;
             font-weight: 500;
           }
           .section {
             margin: 20px 0;
             padding: 15px;
-            border: 1px solid var(--color-line);
+            border: 1px solid #e0e0e0;
             border-radius: 8px;
           }
           .section h3 {
             margin: 0 0 15px 0;
             color: #2563eb;
             font-size: 16px;
-            border-bottom: 1px solid var(--color-line);
+            border-bottom: 1px solid #e0e0e0;
             padding-bottom: 8px;
           }
           .info-row {
             display: flex;
             justify-content: space-between;
             padding: 8px 0;
-            border-bottom: 1px dashed var(--color-line);
+            border-bottom: 1px dashed #eee;
           }
           .info-row:last-child {
             border-bottom: none;
           }
           .info-label {
-            color: var(--color-text-2);
+            color: #666;
           }
           .info-value {
             font-weight: 500;
-            color: var(--color-text);
+            color: #333;
           }
           .fuel-summary {
             display: flex;
@@ -6128,7 +6092,7 @@ export class TfnOrderDetailsDialog {
           }
           .fuel-item {
             padding: 15px 25px;
-            background: var(--color-surface-2);
+            background: #f5f5f5;
             border-radius: 8px;
           }
           .fuel-item .value {
@@ -6138,15 +6102,15 @@ export class TfnOrderDetailsDialog {
           }
           .fuel-item .label {
             font-size: 12px;
-            color: var(--color-text-2);
+            color: #666;
             text-transform: uppercase;
           }
           .print-footer {
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 1px solid var(--color-line);
+            border-top: 1px solid #e0e0e0;
             text-align: center;
-            color: var(--color-text-3);
+            color: #999;
             font-size: 12px;
           }
         </style>
@@ -6261,7 +6225,8 @@ export class TfnOrderDetailsDialog {
     MatSelectModule,
     MatChipsModule,
     MatTooltipModule,
-    FormsModule
+    FormsModule,
+    EmptyStateComponent
   ],
   template: `
     <div class="requests-dialog">
@@ -6438,11 +6403,12 @@ export class TfnOrderDetailsDialog {
               </div>
             </div>
           } @empty {
-            <div class="no-data">
-              <mat-icon>move_to_inbox</mat-icon>
-              <p>No delivery requests found</p>
-              <span class="hint">Requests will appear here when departments submit delivery requests</span>
-            </div>
+            <app-empty-state icon="move_to_inbox" title="No delivery requests found"
+                             message="Requests appear here when departments submit them, or the filters above are hiding them.">
+              @if (searchTerm || statusFilter !== 'all' || departmentFilter !== 'all' || priorityFilter !== 'all') {
+                <button mat-stroked-button (click)="searchTerm = ''; statusFilter = 'all'; departmentFilter = 'all'; priorityFilter = 'all'; filterRequests()">Clear the filters</button>
+              }
+            </app-empty-state>
           }
         </div>
       </div>
@@ -6460,8 +6426,8 @@ export class TfnOrderDetailsDialog {
       justify-content: space-between;
       align-items: center;
       padding: 20px 32px;
-      background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       margin: -24px -24px 0 -24px;
     }
     .dialog-header h2 {
@@ -6471,7 +6437,7 @@ export class TfnOrderDetailsDialog {
       gap: 12px;
       font-size: var(--text-2xl);
     }
-    .dialog-header button { color: white; }
+    .dialog-header button { color: var(--color-on-primary); }
     .dialog-content {
       padding: 24px;
       max-height: 65vh;
@@ -6524,7 +6490,7 @@ export class TfnOrderDetailsDialog {
     }
     .request-card:hover {
       background: var(--color-surface-2);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: var(--shadow-sm);
     }
     .request-card.urgent { border-left-width: 6px; }
     .request-card.status-pending { border-left-color: var(--color-warn); }
@@ -6636,18 +6602,6 @@ export class TfnOrderDetailsDialog {
     .status-in-transit { background: var(--color-primary-soft); color: var(--color-primary-hover); }
     .status-delivered { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
     .status-cancelled { background: var(--color-surface-2); color: var(--color-text-3); }
-    .no-data {
-      text-align: center;
-      padding: 60px;
-      color: var(--color-text-3);
-    }
-    .no-data mat-icon {
-      font-size: 56px;
-      width: 56px;
-      height: 56px;
-      margin-bottom: 16px;
-    }
-    .no-data .hint { font-size: var(--text-sm); color: var(--color-text-3); }
     mat-dialog-actions {
       padding: 16px 32px;
       border-top: 1px solid var(--color-line);
@@ -6669,7 +6623,7 @@ export class IncomingRequestsDialog {
   departments: string[] = [];
 
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private readonly toast = inject(ToastService);
   private readonly confirmDialog = inject(ConfirmService);
 
   constructor(
@@ -6733,11 +6687,11 @@ export class IncomingRequestsDialog {
       handledBy: 'Logistics'
     }).subscribe({
       next: () => {
-        this.snackBar.open(`Request ${req.referenceNumber} updated to ${newStatus}`, 'Close', { duration: 3000 });
+        this.toast.done(`Request ${req.referenceNumber} updated to ${newStatus}`);
         this.refreshList();
       },
       error: (err) => {
-        this.snackBar.open('Failed to update: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+        this.toast.error('Failed to update: ' + (err.error?.error || err.message));
       }
     });
   }
@@ -6804,7 +6758,9 @@ interface CustomerAddressIssue {
     MatTabsModule,
     MatBadgeModule,
     MatSlideToggleModule,
-    FormsModule
+    FormsModule,
+    EmptyStateComponent,
+    SkeletonRowsComponent
   ],
   template: `
     <div class="address-issues-dialog">
@@ -6869,7 +6825,7 @@ interface CustomerAddressIssue {
               <mat-spinner diameter="16"></mat-spinner>
               <span>Welly is analyzing...</span>
             } @else {
-              <span>🤖</span>
+              <mat-icon>smart_toy</mat-icon>
               <span>Ask Welly to Fix All</span>
             }
           </button>
@@ -6879,7 +6835,7 @@ interface CustomerAddressIssue {
         @if (showWellyReview) {
           <div class="welly-review-panel">
             <div class="welly-review-header">
-              <div class="welly-avatar">🤖</div>
+              <div class="welly-avatar"><mat-icon>smart_toy</mat-icon></div>
               <div>
                 <h3>Welly's Suggested Fixes</h3>
                 <p>Review each suggestion below. Toggle off any you don't want to apply.</p>
@@ -6924,7 +6880,7 @@ interface CustomerAddressIssue {
                           <span class="welly-chip postal">{{ fix.suggestedPostalCode }}</span>
                         }
                         @if (fix.suggestedLatitude && fix.suggestedLongitude) {
-                          <span class="welly-chip gps">📍 GPS</span>
+                          <span class="welly-chip gps"><mat-icon>pin_drop</mat-icon> GPS</span>
                         }
                       </div>
                     } @else {
@@ -7050,20 +7006,14 @@ interface CustomerAddressIssue {
               </div>
             </div>
           } @empty {
-            <div class="empty-state">
-              <mat-icon>check_circle</mat-icon>
-              <h3>No Issues in This Category</h3>
-              <p>All customers have this information filled in.</p>
-            </div>
+            <app-empty-state icon="check_circle" title="No issues in this category"
+                             message="All customers have this information filled in."></app-empty-state>
           }
         </div>
       </div>
 
       <ng-template #loadingTpl>
-        <div class="loading-state">
-          <mat-spinner diameter="40"></mat-spinner>
-          <p>Loading customers with address issues...</p>
-        </div>
+        <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
       </ng-template>
 
       <mat-dialog-actions align="end">
@@ -7088,8 +7038,8 @@ interface CustomerAddressIssue {
       justify-content: space-between;
       padding: 16px 24px;
       border-bottom: 1px solid var(--color-line);
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
     }
     .dialog-header h2 {
       margin: 0;
@@ -7098,7 +7048,7 @@ interface CustomerAddressIssue {
       gap: 12px;
       font-size: var(--text-2xl);
     }
-    .close-btn { color: white; }
+    .close-btn { color: var(--color-on-primary); }
     .toolbar {
       display: flex;
       align-items: center;
@@ -7171,11 +7121,11 @@ interface CustomerAddressIssue {
       transition: all 0.2s;
     }
     .customer-card:hover {
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-sm);
     }
     .customer-card.editing {
       border-color: var(--color-primary);
-      box-shadow: 0 2px 12px rgba(37, 99, 235, 0.2);
+      box-shadow: var(--shadow-md);
     }
     .customer-header {
       display: flex;
@@ -7271,23 +7221,6 @@ interface CustomerAddressIssue {
       gap: 8px;
       margin-top: 12px;
     }
-    .loading-state, .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 48px;
-      color: var(--color-text-2);
-    }
-    .empty-state mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      color: var(--color-ok);
-      margin-bottom: 16px;
-    }
-    .empty-state h3 { margin: 0 0 8px; }
-    .empty-state p { margin: 0; color: var(--color-text-3); }
     mat-dialog-actions {
       padding: 12px 24px;
       border-top: 1px solid var(--color-line);
@@ -7305,22 +7238,23 @@ interface CustomerAddressIssue {
       padding: 8px 20px;
       border: none;
       border-radius: 24px;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       font-weight: 600;
       font-size: var(--text-sm);
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+      box-shadow: var(--shadow-sm);
     }
     .welly-fix-btn:hover:not(:disabled) {
       transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
+      box-shadow: var(--shadow-md);
     }
     .welly-fix-btn:disabled {
       opacity: 0.7;
       cursor: not-allowed;
     }
+    .welly-fix-btn mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
     .welly-review-panel {
       background: var(--color-surface-2);
       border: 2px solid var(--color-primary);
@@ -7337,8 +7271,13 @@ interface CustomerAddressIssue {
       border-bottom: 1px solid color-mix(in srgb, var(--color-cat-purple) 35%, transparent);
     }
     .welly-avatar {
-      font-size: var(--text-4xl);
       line-height: 1;
+      color: var(--color-cat-purple);
+    }
+    .welly-avatar mat-icon {
+      font-size: var(--text-4xl);
+      width: 32px;
+      height: 32px;
     }
     .welly-review-header h3 {
       margin: 0 0 4px;
@@ -7433,11 +7372,13 @@ interface CustomerAddressIssue {
     .welly-chip {
       display: inline-flex;
       align-items: center;
+      gap: 2px;
       padding: 2px 10px;
       border-radius: 12px;
       font-size: var(--text-xs);
       font-weight: 600;
     }
+    .welly-chip mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
     .welly-chip.province {
       background: var(--color-primary-soft);
       color: var(--color-primary-hover);
@@ -7500,7 +7441,7 @@ export class AddressIssuesDialog {
   showWellyReview = false;
 
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private readonly toast = inject(ToastService);
   private wellyActivity = inject(WellyActivityService);
   private wellyActivityId: number | null = null;
 
@@ -7534,16 +7475,13 @@ export class AddressIssuesDialog {
         this.showWellyReview = true;
 
         const fixable = this.wellyFixes.filter(f => f.success).length;
-        this.snackBar.open(
-          `Welly found fixes for ${fixable} of ${this.wellyFixes.length} customers`,
-          'Close', { duration: 4000 }
-        );
+        this.toast.info(`Welly found fixes for ${fixable} of ${this.wellyFixes.length} customers`);
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       },
       error: (err) => {
         this.wellyLoading = false;
         console.error('Welly fix error:', err);
-        this.snackBar.open('Welly could not analyze customers. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not analyze customers. Please try again.');
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
       }
     });
@@ -7552,7 +7490,7 @@ export class AddressIssuesDialog {
   applyWellyFixes(): void {
     const approved = this.wellyFixes.filter(f => f.approved && f.success);
     if (approved.length === 0) {
-      this.snackBar.open('No fixes approved to apply', 'Close', { duration: 2000 });
+      this.toast.warn('No fixes approved to apply');
       return;
     }
 
@@ -7572,16 +7510,13 @@ export class AddressIssuesDialog {
         this.wellyApplying = false;
         this.showWellyReview = false;
         this.wellyFixes = [];
-        this.snackBar.open(
-          `✅ Welly updated ${result.applied} customer locations` + (result.failed > 0 ? ` (${result.failed} failed)` : ''),
-          'Close', { duration: 4000 }
-        );
+        this.toast.done(`Welly updated ${result.applied} customer locations` + (result.failed > 0 ? ` (${result.failed} failed)` : ''));
         // Reload the customers list to reflect changes
         this.loadCustomers();
       },
       error: () => {
         this.wellyApplying = false;
-        this.snackBar.open('Failed to apply fixes. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Failed to apply fixes. Please try again.');
       }
     });
   }
@@ -7619,7 +7554,7 @@ export class AddressIssuesDialog {
         this.customers = [];
         this.filteredCustomers = [];
         this.loading = false;
-        this.snackBar.open('Failed to load customers with address issues', 'Close', { duration: 5000 });
+        this.toast.error('Failed to load customers with address issues');
       }
     });
   }
@@ -7705,7 +7640,7 @@ export class AddressIssuesDialog {
 
     this.http.patch(`${this.data.apiUrl}/logistics/customers/${customer.id}/address`, payload).subscribe({
       next: () => {
-        this.snackBar.open(`Address updated for ${customer.name}`, 'Close', { duration: 3000 });
+        this.toast.done(`Address updated for ${customer.name}`);
         // Update local data
         Object.assign(customer, {
           deliveryAddress: this.editForm.deliveryAddress,
@@ -7725,7 +7660,7 @@ export class AddressIssuesDialog {
         this.applyFilter();
       },
       error: (err) => {
-        this.snackBar.open('Failed to update address: ' + (err.error?.error || err.message), 'Close', { duration: 5000 });
+        this.toast.error('Failed to update address: ' + (err.error?.error || err.message));
         this.saving = false;
       }
     });
@@ -7791,7 +7726,7 @@ export class AddressIssuesDialog {
             {{ loadingTrips ? 'Loading...' : 'Load Trip Sheets' }}
           </button>
 
-          <button mat-raised-button class="active-loads-btn" (click)="loadActiveLoads()" [disabled]="loadingTrips || loadingActiveLoads">
+          <button mat-raised-button color="primary" (click)="loadActiveLoads()" [disabled]="loadingTrips || loadingActiveLoads">
             @if (loadingActiveLoads) {
               <mat-spinner diameter="18" class="inline-spinner"></mat-spinner>
             } @else {
@@ -7905,8 +7840,8 @@ export class AddressIssuesDialog {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #11998e, #38ef7d);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       margin: -24px -24px 0 -24px;
       gap: 16px;
     }
@@ -7921,7 +7856,7 @@ export class AddressIssuesDialog {
     }
     .depot-count {
       padding: 8px 16px;
-      background: rgba(255,255,255,0.2);
+      background: color-mix(in srgb, var(--color-on-primary) 20%, transparent);
       border-radius: 20px;
       font-size: var(--text-md);
     }
@@ -7929,7 +7864,7 @@ export class AddressIssuesDialog {
       font-weight: 600;
     }
     .dialog-header button {
-      color: white;
+      color: var(--color-on-primary);
     }
     .dialog-content {
       flex: 1;
@@ -7958,7 +7893,7 @@ export class AddressIssuesDialog {
       min-height: 400px;
       border-radius: 12px;
       overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-sm);
       position: relative;
     }
     .depot-map {
@@ -7976,7 +7911,7 @@ export class AddressIssuesDialog {
       z-index: 1000;
     }
     .zoom-controls button {
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: var(--shadow-md);
     }
     .depot-list {
       margin-top: 16px;
@@ -8050,35 +7985,12 @@ export class AddressIssuesDialog {
       display: inline-block;
       margin-right: 8px;
     }
-    .active-loads-btn {
-      background: linear-gradient(135deg, #11998e, #38ef7d) !important;
-      color: white !important;
-      font-weight: 500;
-    }
-    .active-loads-btn:hover:not([disabled]) {
-      background: linear-gradient(135deg, #0d7d74, #2ecc71) !important;
-      box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
-    }
-    .active-loads-btn:disabled {
-      background: var(--color-line) !important;
-      color: var(--color-text-3) !important;
-    }
-    .active-routes-bar {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 12px 16px;
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      border-radius: 8px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
     .trip-routes-bar {
       display: flex;
       align-items: center;
       gap: 16px;
       padding: 12px 16px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+      background: var(--color-primary);
       border-radius: 8px;
       margin-bottom: 16px;
       flex-wrap: wrap;
@@ -8087,7 +7999,7 @@ export class AddressIssuesDialog {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: white;
+      color: var(--color-on-primary);
       font-weight: 500;
       font-size: var(--text-sm);
     }
@@ -8102,14 +8014,14 @@ export class AddressIssuesDialog {
       flex-wrap: wrap;
     }
     .route-chips mat-chip {
-      color: white !important;
+      color: var(--color-on-primary) !important;
       font-size: var(--text-xs);
       cursor: pointer;
       border: 2px solid transparent;
     }
     .route-chips mat-chip.selected {
       border-color: var(--color-surface);
-      box-shadow: 0 0 8px rgba(255,255,255,0.5);
+      box-shadow: var(--shadow-md);
     }
     .nearest-depots {
       display: flex;
@@ -8119,20 +8031,20 @@ export class AddressIssuesDialog {
       margin-left: auto;
     }
     .nearest-label {
-      color: rgba(255,255,255,0.8);
+      color: color-mix(in srgb, var(--color-on-primary) 80%, transparent);
       font-size: var(--text-xs);
     }
     .nearest-item {
-      background: rgba(255,255,255,0.2);
+      background: color-mix(in srgb, var(--color-on-primary) 20%, transparent);
       padding: 4px 10px;
       border-radius: 12px;
       font-size: var(--text-xs);
-      color: white;
+      color: var(--color-on-primary);
       cursor: pointer;
       transition: background 0.2s;
     }
     .nearest-item:hover {
-      background: rgba(255,255,255,0.3);
+      background: color-mix(in srgb, var(--color-on-primary) 30%, transparent);
     }
     .route-info-panel {
       position: absolute;
@@ -8141,7 +8053,7 @@ export class AddressIssuesDialog {
       background: var(--color-surface);
       padding: 16px;
       border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-lg);
       min-width: 200px;
       z-index: 1000;
     }
@@ -9066,7 +8978,9 @@ export class AddDeliveryNoteDialog {
     ScrollingModule,
     CdkDrag,
     CdkDropList,
-    CdkDragHandle
+    CdkDragHandle,
+    EmptyStateComponent,
+    SkeletonRowsComponent
   ],
   template: `
     <div class="create-tripsheet-dialog">
@@ -9119,10 +9033,7 @@ export class AddDeliveryNoteDialog {
                   </div>
                 </div>
                 @if (loadingProvinces) {
-                  <div class="loading-provinces">
-                    <mat-spinner diameter="24"></mat-spinner>
-                    <span>Loading province data...</span>
-                  </div>
+                  <app-skeleton-rows [rows]="2" [avatar]="false"></app-skeleton-rows>
                 }
                 <cdk-virtual-scroll-viewport itemSize="72" class="invoice-list">
                   @if (totalFilteredCount > 200) {
@@ -9169,10 +9080,13 @@ export class AddDeliveryNoteDialog {
                     </div>
                   }
                   @if (totalFilteredCount === 0) {
-                    <div class="empty-list">
-                      <mat-icon>inventory_2</mat-icon>
-                      <p>No pending invoices found{{ selectedProvince !== 'all' ? ' in ' + getProvinceName(selectedProvince) : '' }}</p>
-                    </div>
+                    <app-empty-state icon="inventory_2" [compact]="true"
+                                     [title]="'No pending invoices found' + (selectedProvince !== 'all' ? ' in ' + getProvinceName(selectedProvince) : '')"
+                                     message="Invoices show up here once they are imported and are not yet on a trip sheet.">
+                      @if (selectedProvince !== 'all') {
+                        <button mat-stroked-button (click)="selectedProvince = 'all'; onProvinceChange()">Show all provinces</button>
+                      }
+                    </app-empty-state>
                   }
                 </cdk-virtual-scroll-viewport>
               </div>
@@ -9236,10 +9150,8 @@ export class AddDeliveryNoteDialog {
                     </div>
                   }
                   @if (selectedStops.length === 0) {
-                    <div class="empty-stops">
-                      <mat-icon>add_location</mat-icon>
-                      <p>Select invoices from the left to add stops</p>
-                    </div>
+                    <app-empty-state icon="add_location" title="No stops yet" [compact]="true"
+                                     message="Select invoices from the left to add stops."></app-empty-state>
                   }
                 </div>
               </div>
@@ -9264,10 +9176,7 @@ export class AddDeliveryNoteDialog {
                     <h3><mat-icon>route</mat-icon> Route Configuration</h3>
                     
                     @if (!data.warehouses.length && !data.drivers.length && !data.vehicles.length) {
-                      <div class="config-loading">
-                        <mat-spinner diameter="20"></mat-spinner>
-                        <span>Loading configuration data...</span>
-                      </div>
+                      <app-skeleton-rows [rows]="2" [avatar]="false"></app-skeleton-rows>
                     }
 
                     <div class="config-grid-compact">
@@ -9499,7 +9408,7 @@ export class AddDeliveryNoteDialog {
                       </button>
                     </div>
                     <div class="matrix-scroll">
-                      <table class="distance-matrix">
+                      <table class="app-table distance-matrix">
                         <thead>
                           <tr>
                             <th class="label-cell"></th>
@@ -9705,14 +9614,14 @@ export class AddDeliveryNoteDialog {
 
                 <div class="stops-summary">
                   <h4><mat-icon>pin_drop</mat-icon> Delivery Stops</h4>
-                  <table class="stops-table">
+                  <table class="app-table">
                     <thead>
                       <tr>
                         <th>#</th>
                         <th>Customer</th>
                         <th>Invoice</th>
                         <th>Product</th>
-                        <th>Amount</th>
+                        <th class="num">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -9720,9 +9629,9 @@ export class AddDeliveryNoteDialog {
                         <tr>
                           <td>{{ i + 1 }}</td>
                           <td>{{ stop.customerName }}</td>
-                          <td>{{ stop.transactionNumber }}</td>
+                          <td class="ref">{{ stop.transactionNumber }}</td>
                           <td>{{ stop.productDescription | slice:0:25 }}...</td>
-                          <td>R {{ stop.salesAmount | number:'1.2-2' }}</td>
+                          <td class="num">R {{ stop.salesAmount | number:'1.2-2' }}</td>
                         </tr>
                       }
                     </tbody>
@@ -9805,8 +9714,8 @@ export class AddDeliveryNoteDialog {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       margin: -24px -24px 0 -24px;
       gap: 16px;
     }
@@ -9826,30 +9735,11 @@ export class AddDeliveryNoteDialog {
       margin-right: 16px;
     }
     .header-info mat-chip {
-      background: rgba(255,255,255,0.2) !important;
-      color: white !important;
-    }
-    .header-info .draft-badge {
-      background: var(--color-primary) !important;
-      color: white !important;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .header-info .draft-badge mat-icon {
-      font-size: var(--text-lg);
-      width: 16px;
-      height: 16px;
-    }
-    .header-info .saving-badge {
-      background: var(--color-primary) !important;
-      color: white !important;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      background: color-mix(in srgb, var(--color-on-primary) 20%, transparent) !important;
+      color: var(--color-on-primary) !important;
     }
     .dialog-header button {
-      color: white;
+      color: var(--color-on-primary);
     }
     .dialog-content {
       flex: 1;
@@ -10046,15 +9936,6 @@ export class AddDeliveryNoteDialog {
     .province-filter {
       min-width: 180px;
     }
-    .loading-provinces {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px;
-      background: var(--color-primary-soft);
-      color: var(--color-primary-hover);
-      font-size: var(--text-sm);
-    }
     .city {
       font-size: var(--text-xs);
       color: var(--color-text-3);
@@ -10101,7 +9982,7 @@ export class AddDeliveryNoteDialog {
       height: 28px;
       border-radius: 50%;
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -10155,7 +10036,7 @@ export class AddDeliveryNoteDialog {
       margin-left: 4px;
     }
     .add-btn .add-icon {
-      opacity: 1 !important;
+      opacity: 1;
       color: var(--color-primary);
     }
     .invoice-item .quantity {
@@ -10175,7 +10056,7 @@ export class AddDeliveryNoteDialog {
       padding: 2px 8px;
       border-radius: 12px;
       background: var(--color-warn);
-      color: white;
+      color: var(--color-on-primary);
       font-weight: 600;
       margin-top: 4px;
     }
@@ -10196,7 +10077,7 @@ export class AddDeliveryNoteDialog {
       padding: 2px 8px;
       border-radius: 12px;
       background: var(--color-ok);
-      color: white;
+      color: var(--color-on-primary);
       font-weight: 600;
       margin-top: 4px;
     }
@@ -10220,17 +10101,6 @@ export class AddDeliveryNoteDialog {
       font-size: var(--text-xs);
       color: var(--color-text-3);
     }
-    .empty-list, .empty-stops {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--color-text-3);
-    }
-    .empty-list mat-icon, .empty-stops mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-      margin-bottom: 12px;
-    }
     .step-actions {
       display: flex;
       justify-content: space-between;
@@ -10251,16 +10121,6 @@ export class AddDeliveryNoteDialog {
       gap: 8px;
       margin: 0 0 16px 0;
       color: var(--color-primary);
-    }
-    .config-loading {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px;
-      background: var(--color-warn-soft);
-      border-radius: 8px;
-      margin-bottom: 16px;
-      color: var(--color-warn);
     }
     .config-grid {
       display: grid;
@@ -10362,7 +10222,7 @@ export class AddDeliveryNoteDialog {
       height: 14px;
       border-radius: 50%;
       border: 2px solid var(--color-surface);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      box-shadow: var(--shadow-sm);
     }
     .legend-item .marker.warehouse {
       background: var(--color-ok);
@@ -10483,12 +10343,12 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       gap: 8px;
       background: var(--color-primary);
-      color: #fff;
+      color: var(--color-on-primary);
       padding: 10px 16px;
       border-radius: 10px;
       font-weight: 600;
       font-size: var(--text-sm);
-      box-shadow: 0 12px 28px rgba(25,118,210,.35);
+      box-shadow: var(--shadow-lg);
     }
     .stop-drag-preview mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; }
     .stop-item.cdk-drag-placeholder { opacity: .35; }
@@ -10534,14 +10394,14 @@ export class AddDeliveryNoteDialog {
     }
     .address-verified-banner mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; color: var(--color-cat-purple); }
     .saved-addr-option.is-verified .addr-label { color: var(--color-cat-purple); }
-    .addr-verified-ico { font-size: 15px; width: 15px; height: 15px; vertical-align: -2px; color: var(--color-cat-purple); margin-right: 2px; }
+    .addr-verified-ico { font-size: var(--text-md); width: 14px; height: 14px; vertical-align: -2px; color: var(--color-cat-purple); margin-right: 2px; }
     .addr-verified-tag { font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
     .stop-number {
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -10836,24 +10696,6 @@ export class AddDeliveryNoteDialog {
       gap: 8px;
       margin: 0 0 16px 0;
     }
-    .stops-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .stops-table th, .stops-table td {
-      padding: 10px 12px;
-      text-align: left;
-      border-bottom: 1px solid var(--color-line);
-    }
-    .stops-table th {
-      background: var(--color-line);
-      font-weight: 600;
-      font-size: var(--text-xs);
-      text-transform: uppercase;
-    }
-    .stops-table tr:hover {
-      background: var(--color-surface-2);
-    }
     .final-actions {
       justify-content: space-between;
     }
@@ -10862,7 +10704,7 @@ export class AddDeliveryNoteDialog {
       gap: 12px;
     }
     .cdk-drag-preview {
-      box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-lg);
     }
     .cdk-drag-placeholder {
       opacity: 0.3;
@@ -10928,7 +10770,7 @@ export class AddDeliveryNoteDialog {
       align-items: center;
       padding: 12px 16px;
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
     }
     .matrix-header h4 {
       margin: 0;
@@ -10938,7 +10780,7 @@ export class AddDeliveryNoteDialog {
       font-size: var(--text-md);
     }
     .matrix-header button {
-      color: white;
+      color: var(--color-on-primary);
     }
     .matrix-scroll {
       overflow-x: auto;
@@ -10946,22 +10788,11 @@ export class AddDeliveryNoteDialog {
       overflow-y: auto;
     }
     .distance-matrix {
-      width: 100%;
-      border-collapse: collapse;
       font-size: var(--text-xs);
     }
     .distance-matrix th, .distance-matrix td {
-      padding: 6px 8px;
       text-align: center;
-      border: 1px solid var(--color-line);
       min-width: 60px;
-    }
-    .distance-matrix thead th {
-      background: var(--color-surface-2);
-      font-weight: 600;
-      position: sticky;
-      top: 0;
-      z-index: 1;
     }
     .distance-matrix .label-cell {
       background: var(--color-surface-2);
@@ -11060,6 +10891,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   // Google Maps loader (API key is served by the backend, not hardcoded)
   private readonly mapsLoader = inject(GoogleMapsLoaderService);
   private readonly confirmDialog = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
 
   // Optimization state
   advancedOptimizing = false;
@@ -11192,7 +11024,6 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     },
     private dialogRef: MatDialogRef<CreateTripsheetDialog>,
     private injector: Injector,
-    private snackBar: MatSnackBar,
     private dialog: MatDialog
   ) {
     this.http = this.injector.get(HttpClient);
@@ -12010,7 +11841,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const before = this.groupedStops.filter(g => this.isBlankAddress(g.deliveryAddress)).length;
 
     if (!(this.data.customers && this.data.customers.length)) {
-      this.snackBar.open('Customer database is still loading — please try again in a moment.', 'Close', { duration: 3500 });
+      this.toast.warn('Customer database is still loading — please try again in a moment.');
       return;
     }
 
@@ -12021,13 +11852,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const matched = Math.max(0, before - after);
 
     if (matched > 0) {
-      this.snackBar.open(`Matched ${matched} address${matched === 1 ? '' : 'es'} from the customer database.`, 'Close', { duration: 3500 });
+      this.toast.done(`Matched ${matched} address${matched === 1 ? '' : 'es'} from the customer database.`);
       // Geocode the newly-filled stops that still need coordinates
       await this.geocodeAllStops();
     } else if (after > 0) {
-      this.snackBar.open(`${after} stop${after === 1 ? '' : 's'} could not be matched — no address on file. Please enter them manually.`, 'Close', { duration: 5000 });
+      this.toast.warn(`${after} stop${after === 1 ? '' : 's'} could not be matched — no address on file. Please enter them manually.`);
     } else {
-      this.snackBar.open('All stops already have a delivery address.', 'Close', { duration: 3000 });
+      this.toast.info('All stops already have a delivery address.');
     }
     this.updateRouteMap();
   }
@@ -12432,7 +12263,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           this.fuelEstimate = Math.round((this.totalDistance / 100) * this.avgFuelConsumption);
           this.fuelCost = Math.round(this.fuelEstimate * this.fuelPricePerLiter);
           
-          this.optimizationMessage = `✓ Route optimized: ${this.totalDistance}km, ${this.estimatedTime}, ~R${this.fuelCost} fuel`;
+          this.optimizationMessage = `Route optimized: ${this.totalDistance}km, ${this.estimatedTime}, ~R${this.fuelCost} fuel`;
           this.optimizationSuccess = true;
           
           // Update map
@@ -12504,7 +12335,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           );
           
           this.showDistanceMatrix = true;
-          this.optimizationMessage = `✓ Distance matrix calculated: ${locations.length}x${locations.length} (${locations.length * locations.length} routes)`;
+          this.optimizationMessage = `Distance matrix calculated: ${locations.length}x${locations.length} (${locations.length * locations.length} routes)`;
           this.optimizationSuccess = true;
         } else {
           this.optimizationMessage = 'Matrix calculation failed: ' + (result.error || 'Unknown error');
@@ -12950,9 +12781,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           group.addressApproximate = true;
           group.isCollapsed = false;
           group.selectedPlaceId = null;
-          this.snackBar.open(
-            `"${group.customerName}" — that address is too vague to place on the map. Please enter a full street address.`,
-            'OK', { duration: 5000 });
+          this.toast.warn(`"${group.customerName}" — that address is too vague to place on the map. Please enter a full street address.`);
         }
         this.geocodingStop = null;
       },
@@ -13052,7 +12881,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const groupsToMatch = this.groupedStops.filter(g => !g.latitude || !g.deliveryAddress);
     
     if (groupsToMatch.length === 0) {
-      this.snackBar.open('All stops already have addresses/coordinates', 'Close', { duration: 3000 });
+      this.toast.info('All stops already have addresses/coordinates');
       return;
     }
 
@@ -13062,7 +12891,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       const customerNames = groupsToMatch.map(g => g.customerName).filter(n => n);
       
       if (customerNames.length === 0) {
-        this.snackBar.open('No customer names to match', 'Close', { duration: 3000 });
+        this.toast.warn('No customer names to match');
         this.matchingAddresses = false;
         return;
       }
@@ -13074,7 +12903,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       ).toPromise();
 
       if (!results || results.length === 0) {
-        this.snackBar.open('No matches found by AI', 'Close', { duration: 3000 });
+        this.toast.warn('No matches found by AI');
         this.matchingAddresses = false;
         return;
       }
@@ -13126,10 +12955,10 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       // After matching, auto-geocode any stops that got addresses but no coordinates
       const needsGeocoding = this.groupedStops.filter(g => g.deliveryAddress && !g.latitude);
       if (needsGeocoding.length > 0) {
-        this.snackBar.open(`Matched ${matchCount} stops. Geocoding ${needsGeocoding.length} addresses...`, 'Close', { duration: 3000 });
+        this.toast.info(`Matched ${matchCount} stops. Geocoding ${needsGeocoding.length} addresses...`);
         await this.geocodeAllStops();
       } else {
-        this.snackBar.open(`AI matched ${matchCount} of ${groupsToMatch.length} stops (all have coordinates)`, 'Close', { duration: 4000 });
+        this.toast.done(`AI matched ${matchCount} of ${groupsToMatch.length} stops (all have coordinates)`);
       }
       
       // Update the map with new coordinates
@@ -13137,7 +12966,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       
     } catch (error) {
       console.error('Error in AI address matching:', error);
-      this.snackBar.open('Failed to match addresses with AI', 'Close', { duration: 3000 });
+      this.toast.error('Failed to match addresses with AI');
     }
 
     this.matchingAddresses = false;
@@ -13252,12 +13081,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       this.updateRouteMap();
     }
 
-    // Show snackbar notification
-    this.snackBar.open(
-      `✓ Applied saved address for ${group.customerName}`,
-      'OK',
-      { duration: 2000, panelClass: ['info-snackbar'] }
-    );
+    this.toast.info(`Applied saved address for ${group.customerName}`);
   }
 
   // Save the current address for a customer
@@ -13302,20 +13126,11 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         
         this.customerSavedAddresses.set(key, existing);
         
-        // Show success snackbar notification
-        this.snackBar.open(
-          `✓ Address saved for ${group.customerName}`,
-          'OK',
-          { duration: 3000, panelClass: ['success-snackbar'] }
-        );
+        this.toast.done(`Address saved for ${group.customerName}`);
       },
       error: (err) => {
         console.error('Failed to save address:', err);
-        this.snackBar.open(
-          `✗ Failed to save address: ${err.error?.message || 'Unknown error'}`,
-          'Dismiss',
-          { duration: 5000, panelClass: ['error-snackbar'] }
-        );
+        this.toast.error(`Failed to save address: ${err.error?.message || 'Unknown error'}`);
       }
     });
   }
@@ -13356,11 +13171,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         const savedCount = result.saved?.length || 0;
         const errorCount = result.errors?.length || 0;
         if (savedCount > 0) {
-          this.snackBar.open(
-            `✓ ${savedCount} address${savedCount > 1 ? 'es' : ''} saved for future use`,
-            'OK',
-            { duration: 4000, panelClass: ['success-snackbar'] }
-          );
+          this.toast.done(`${savedCount} address${savedCount > 1 ? 'es' : ''} saved for future use`);
         }
       },
       error: (err) => {
@@ -13600,7 +13411,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     // an invalid date, or unresolved delivery addresses.
     const blockReason = this.routeStepBlockReason();
     if (blockReason) {
-      this.snackBar.open(blockReason, 'Close', { duration: 5000 });
+      this.toast.warn(blockReason);
       return;
     }
 
@@ -13662,7 +13473,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         },
         error: (err) => {
           this.creating = false;
-          this.snackBar.open('Failed to create trip sheet: ' + (err.error?.error || err.error?.message || err.message || 'Unknown error'), 'Close', { duration: 5000 });
+          this.toast.error('Failed to create trip sheet: ' + (err.error?.error || err.error?.message || err.message || 'Unknown error'));
         }
       });
       return;
@@ -13758,7 +13569,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       },
       error: (err) => {
         console.error('Failed to ' + (isUpdate ? 'update' : 'create') + ' tripsheet:', err);
-        this.snackBar.open('Failed to ' + (isUpdate ? 'update' : 'create') + ' tripsheet: ' + (err.error?.message || err.message || 'Unknown error'), 'Close', { duration: 5000 });
+        this.toast.error('Failed to ' + (isUpdate ? 'update' : 'create') + ' tripsheet: ' + (err.error?.message || err.message || 'Unknown error'));
         this.creating = false;
       }
     });
@@ -13865,20 +13676,20 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
           next: (emailResult: any) => {
             this.creating = false;
             const sentTo = emailResult?.recipients?.join(', ') || recipientEmails.join(', ');
-            this.snackBar.open(`Tripsheet created and emailed to ${sentTo}`, 'Close', { duration: 5000 });
+            this.toast.done(`Tripsheet created and emailed to ${sentTo}`);
             this.dialogRef.close({ created: !isUpdate, updated: isUpdate, loadId: loadId, emailed: true });
           },
           error: (emailErr) => {
             console.error('Failed to email tripsheet:', emailErr);
             this.creating = false;
-            this.snackBar.open('Tripsheet created but email failed: ' + (emailErr.error?.error || emailErr.message), 'Close', { duration: 6000 });
+            this.toast.warn('Tripsheet created but email failed: ' + (emailErr.error?.error || emailErr.message));
             this.dialogRef.close({ created: !isUpdate, updated: isUpdate, loadId: loadId, emailed: false });
           }
         });
       },
       error: (err) => {
         console.error('Failed to ' + (isUpdate ? 'update' : 'create') + ' tripsheet:', err);
-        this.snackBar.open('Failed to create tripsheet: ' + (err.error?.message || err.message), 'Close', { duration: 5000 });
+        this.toast.error('Failed to create tripsheet: ' + (err.error?.message || err.message));
         this.creating = false;
       }
     });
@@ -13947,42 +13758,42 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
         <style>
           @page { size: landscape; margin: 8mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.3; padding: 10px; background: var(--color-surface); }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; line-height: 1.3; padding: 10px; background: white; }
           .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 3px solid #033142; margin-bottom: 10px; }
           .header-left { display: flex; align-items: center; gap: 12px; }
-          .logo { font-size: 21px; font-weight: bold; color: var(--color-brand); }
+          .logo { font-size: 21px; font-weight: bold; color: #033142; }
           .trip-badge { background: #033142; color: white; padding: 5px 15px; border-radius: 15px; font-size: 15px; font-weight: bold; }
-          .company { text-align: right; font-size: 14px; font-weight: bold; color: var(--color-text); }
-          .info-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%); border-radius: 5px; border: 1px solid var(--color-line); }
-          .info-item { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--color-surface); border-radius: 4px; border: 1px solid var(--color-line); font-size: 11px; }
-          .info-item strong { color: var(--color-text); }
-          .info-sub { color: var(--color-text-2); font-size: 10px; }
+          .company { text-align: right; font-size: 14px; font-weight: bold; color: #333; }
+          .info-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%); border-radius: 5px; border: 1px solid #ddd; }
+          .info-item { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: white; border-radius: 4px; border: 1px solid #e0e0e0; font-size: 11px; }
+          .info-item strong { color: #333; }
+          .info-sub { color: #666; font-size: 10px; }
           .route-map-section { margin: 8px 0; text-align: center; page-break-inside: avoid; }
-          .route-map-section h4 { font-size: 12px; color: var(--color-brand); margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+          .route-map-section h4 { font-size: 12px; color: #033142; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 5px; }
           .route-map-section img { max-width: 100%; height: auto; border: 2px solid #033142; border-radius: 5px; }
           table { width: 100%; border-collapse: collapse; font-size: 11px; }
           th { background: #033142; color: white; padding: 6px 4px; text-align: left; font-weight: 600; font-size: 11px; white-space: nowrap; }
           th.center, td.center { text-align: center; }
           th.right, td.right { text-align: right; }
-          td { padding: 5px 4px; border-bottom: 1px solid var(--color-line); vertical-align: middle; }
-          tr:nth-child(even) { background: var(--color-surface-2); }
+          td { padding: 5px 4px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
+          tr:nth-child(even) { background: #f9f9f9; }
           .stop-num { background: #033142; color: white; width: 21px; height: 21px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; }
-          .customer { font-weight: 600; color: var(--color-text); font-size: 11px; }
-          .address { color: var(--color-text-2); font-size: 10px; max-width: 150px; }
+          .customer { font-weight: 600; color: #333; font-size: 11px; }
+          .address { color: #666; font-size: 10px; max-width: 150px; }
           .product { font-size: 10px; }
           .checkbox { width: 17px; height: 17px; border: 2px solid #033142; border-radius: 2px; display: inline-block; }
           .totals td { background: #e0ecf0; font-weight: bold; border-top: 2px solid #033142; }
           .bottom-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px; }
-          .section-box { border: 1px solid var(--color-line); border-radius: 5px; padding: 8px; }
-          .section-box h4 { font-size: 12px; color: var(--color-brand); margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--color-line); }
+          .section-box { border: 1px solid #ddd; border-radius: 5px; padding: 8px; }
+          .section-box h4 { font-size: 12px; color: #033142; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0; }
           .km-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 6px; }
-          .km-field label { display: block; font-size: 10px; color: var(--color-text-2); margin-bottom: 2px; }
-          .input-box { border: 1px solid var(--color-line-strong); border-radius: 3px; height: 21px; background: var(--color-surface); }
+          .km-field label { display: block; font-size: 10px; color: #666; margin-bottom: 2px; }
+          .input-box { border: 1px solid #ccc; border-radius: 3px; height: 21px; background: white; }
           .sig-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
           .sig-box { text-align: center; }
           .sig-line { border-bottom: 1px solid #333; height: 28px; margin-bottom: 3px; }
-          .sig-label { font-size: 10px; color: var(--color-text-2); text-transform: uppercase; }
-          .footer { margin-top: 8px; text-align: center; font-size: 10px; color: var(--color-text-3); padding-top: 6px; border-top: 1px solid var(--color-line); }
+          .sig-label { font-size: 10px; color: #666; text-transform: uppercase; }
+          .footer { margin-top: 8px; text-align: center; font-size: 10px; color: #999; padding-top: 6px; border-top: 1px solid #eee; }
         </style>
       </head>
       <body>
@@ -14140,8 +13951,8 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       align-items: center;
       padding: 20px 24px;
       border-bottom: 1px solid var(--color-line);
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       margin: -24px -24px 0;
     }
     .dialog-header h2 {
@@ -14152,7 +13963,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       font-size: var(--text-2xl);
     }
     .dialog-header button {
-      color: white;
+      color: var(--color-on-primary);
     }
     .dialog-content {
       padding: 32px 8px;
@@ -14185,7 +13996,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       border-color: var(--color-primary);
       background: var(--color-surface-2);
       transform: translateY(-3px);
-      box-shadow: 0 6px 16px rgba(25, 118, 210, 0.2);
+      box-shadow: var(--shadow-md);
     }
     .type-icon {
       width: 72px;
@@ -14197,54 +14008,38 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       margin: 0 auto 20px;
     }
     .type-icon mat-icon {
-      font-size: 36px;
-      width: 36px;
-      height: 36px;
-      color: white;
+      font-size: var(--text-4xl);
+      width: 32px;
+      height: 32px;
     }
     .type-icon.import {
-      background: linear-gradient(135deg, var(--color-ok), var(--color-ok));
+      background: var(--color-cat-teal-soft);
+      color: var(--color-cat-teal);
     }
     .type-icon.automatic {
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
     .type-icon.manual {
-      background: linear-gradient(135deg, var(--color-warn), var(--color-warn));
+      background: var(--color-cat-amber-soft);
+      color: var(--color-cat-amber);
     }
     .type-icon.transfer {
-      background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+      background: var(--color-cat-purple-soft);
+      color: var(--color-cat-purple);
     }
     .type-icon.welly {
-      background: linear-gradient(135deg, #00bcd4, #0097a7);
+      background: var(--color-cat-pink-soft);
+      color: var(--color-cat-pink);
     }
     .type-icon.suggests {
-      background: linear-gradient(135deg, #ff6f00, var(--color-warn));
-    }
-    .suggests-card {
-      border-color: color-mix(in srgb, var(--color-warn) 35%, transparent);
-      background: linear-gradient(135deg, var(--color-warn-soft), var(--color-surface));
-    }
-    .suggests-card:hover {
-      border-color: var(--color-warn) !important;
-      background: linear-gradient(135deg, var(--color-warn-soft), var(--color-warn-soft)) !important;
-      box-shadow: 0 6px 16px rgba(255, 111, 0, 0.3) !important;
-    }
-    .suggests-badge {
-      background: linear-gradient(135deg, #ff6f00, var(--color-warn)) !important;
-    }
-    .welly-card {
-      border-color: color-mix(in srgb, var(--color-cat-teal) 35%, transparent);
-      background: linear-gradient(135deg, #e0f7fa, var(--color-surface));
-    }
-    .welly-card:hover {
-      border-color: var(--color-cat-teal) !important;
-      background: linear-gradient(135deg, var(--color-primary-soft), #e0f7fa) !important;
-      box-shadow: 0 6px 16px rgba(0, 188, 212, 0.3) !important;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
     .ai-badge {
       display: inline-block;
-      background: linear-gradient(135deg, #00bcd4, #0097a7);
-      color: white;
+      background: var(--color-cat-pink-soft);
+      color: var(--color-cat-pink);
       font-size: var(--text-xs);
       font-weight: 600;
       padding: 2px 10px;
@@ -14252,6 +14047,10 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       margin-top: 8px;
       letter-spacing: 0.5px;
       text-transform: uppercase;
+    }
+    .suggests-badge {
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
     .type-card h3 {
       margin: 0 0 8px;
@@ -14295,7 +14094,8 @@ export class TripsheetTypeDialog {
     MatDatepickerModule,
     MatNativeDateModule,
     MatDividerModule,
-    MatAutocompleteModule
+    MatAutocompleteModule,
+    EmptyStateComponent
   ],
   template: `
     <div class="manual-tripsheet-dialog">
@@ -14439,10 +14239,10 @@ export class TripsheetTypeDialog {
             }
 
             @if (lineItems.length === 0) {
-              <div class="empty-items">
-                <mat-icon>inventory_2</mat-icon>
-                <p>No items added yet. Click "Add Item" to add delivery items.</p>
-              </div>
+              <app-empty-state icon="inventory_2" title="No items added yet" [compact]="true"
+                               message="Add the delivery items for this trip sheet.">
+                <button mat-stroked-button color="primary" (click)="addLineItem()">Add item</button>
+              </app-empty-state>
             }
           </div>
         </div>
@@ -14498,8 +14298,8 @@ export class TripsheetTypeDialog {
       gap: 16px;
       padding: 16px 24px;
       border-bottom: 1px solid var(--color-line);
-      background: linear-gradient(135deg, var(--color-warn), var(--color-warn));
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       margin: -24px -24px 0;
     }
     .dialog-header h2 {
@@ -14515,7 +14315,7 @@ export class TripsheetTypeDialog {
       opacity: 0.9;
     }
     .dialog-header button {
-      color: white;
+      color: var(--color-on-primary);
     }
     .dialog-content {
       flex: 1;
@@ -14564,7 +14364,7 @@ export class TripsheetTypeDialog {
       width: 32px;
       height: 32px;
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -14581,17 +14381,6 @@ export class TripsheetTypeDialog {
     }
     .item-fields mat-form-field {
       width: 100%;
-    }
-    .empty-items {
-      text-align: center;
-      padding: 48px;
-      color: var(--color-text-3);
-    }
-    .empty-items mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-      margin-bottom: 16px;
     }
     .summary-section {
       display: flex;
@@ -14657,7 +14446,7 @@ export class ManualTripsheetDialog {
 
   constructor(
     private http: HttpClient,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     public dialogRef: MatDialogRef<ManualTripsheetDialog>,
     @Inject(MAT_DIALOG_DATA) public data: {
       drivers: any[],
@@ -14826,7 +14615,7 @@ export class ManualTripsheetDialog {
   createTripsheet(): void {
     const reason = this.validationReason();
     if (reason) {
-      this.snackBar.open(reason, 'Close', { duration: 5000 });
+      this.toast.warn(reason);
       return;
     }    
     this.creating = true;
@@ -14883,7 +14672,8 @@ export class ManualTripsheetDialog {
     MatDatepickerModule,
     MatNativeDateModule,
     MatDividerModule,
-    MatAutocompleteModule
+    MatAutocompleteModule,
+    EmptyStateComponent
   ],
   template: `
     <div class="transfer-dialog">
@@ -15057,10 +14847,10 @@ export class ManualTripsheetDialog {
             }
 
             @if (transferItems.length === 0) {
-              <div class="empty-items">
-                <mat-icon>inventory_2</mat-icon>
-                <p>No items added yet. Click "Add Item" to add stock items for transfer.</p>
-              </div>
+              <app-empty-state icon="inventory_2" title="No items added yet" [compact]="true"
+                               message="Add the stock items to move between the warehouses.">
+                <button mat-stroked-button color="primary" (click)="addTransferItem()">Add item</button>
+              </app-empty-state>
             }
           </div>
         </div>
@@ -15097,8 +14887,8 @@ export class ManualTripsheetDialog {
       gap: 16px;
       padding: 16px 24px;
       border-bottom: 1px solid var(--color-line);
-      background: linear-gradient(135deg, #9c27b0, #7b1fa2);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       margin: -24px -24px 0;
     }
     .dialog-header h2 {
@@ -15114,7 +14904,7 @@ export class ManualTripsheetDialog {
       opacity: 0.9;
     }
     .dialog-header button {
-      color: white;
+      color: var(--color-on-primary);
     }
     .dialog-content {
       flex: 1;
@@ -15146,16 +14936,17 @@ export class ManualTripsheetDialog {
       justify-content: center;
     }
     .point-icon mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-      color: white;
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
     .point-icon.from {
-      background: linear-gradient(135deg, var(--color-danger), var(--color-danger));
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
     }
     .point-icon.to {
-      background: linear-gradient(135deg, var(--color-ok), var(--color-ok));
+      background: var(--color-cat-teal-soft);
+      color: var(--color-cat-teal);
     }
     .route-arrow {
       display: flex;
@@ -15213,7 +15004,7 @@ export class ManualTripsheetDialog {
       width: 32px;
       height: 32px;
       background: var(--color-cat-purple);
-      color: white;
+      color: var(--color-on-primary);
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -15230,17 +15021,6 @@ export class ManualTripsheetDialog {
     }
     .item-fields mat-form-field {
       width: 100%;
-    }
-    .empty-items {
-      text-align: center;
-      padding: 48px;
-      color: var(--color-text-3);
-    }
-    .empty-items mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-      margin-bottom: 16px;
     }
     .full-width {
       width: 100%;
@@ -15613,14 +15393,14 @@ export class InternalTransferDialog {
           </div>
 
           <div class="preview-table-container">
-            <table class="preview-table">
+            <table class="app-table preview-table">
               <thead>
                 <tr>
                   <th class="status-col">Status</th>
                   <th>Invoice #</th>
                   <th>Customer</th>
                   <th>Address</th>
-                  <th>Amount</th>
+                  <th class="num">Amount</th>
                   <th class="actions-col">Match</th>
                 </tr>
               </thead>
@@ -15646,7 +15426,7 @@ export class InternalTransferDialog {
                         }
                       }
                     </td>
-                    <td class="invoice-cell">{{ row.data?.invoiceNumber || '-' }}</td>
+                    <td class="ref">{{ row.data?.invoiceNumber || '-' }}</td>
                     <td class="customer-cell">
                       {{ row.data?.customerName || '-' }}
                       @if (row.matchedCustomerId) {
@@ -15656,7 +15436,7 @@ export class InternalTransferDialog {
                     <td class="address-cell" [matTooltip]="row.data?.deliveryAddress || ''">
                       {{ (row.data?.deliveryAddress || '-') | slice:0:40 }}{{ (row.data?.deliveryAddress?.length || 0) > 40 ? '...' : '' }}
                     </td>
-                    <td class="amount-cell">
+                    <td class="num">
                       @if (row.data?.salesAmount) {
                         R {{ row.data.salesAmount.toFixed(2) }}
                       } @else {
@@ -15868,7 +15648,7 @@ export class InternalTransferDialog {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
+      background: var(--color-primary-soft);
       border: 1px solid var(--color-primary);
       border-radius: 8px;
       margin-bottom: 12px;
@@ -15918,23 +15698,6 @@ export class InternalTransferDialog {
       border-radius: 4px;
       margin-bottom: 16px;
     }
-    .preview-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: var(--text-sm);
-    }
-    .preview-table th, .preview-table td {
-      padding: 8px 12px;
-      text-align: left;
-      border-bottom: 1px solid var(--color-line);
-    }
-    .preview-table th {
-      background: var(--color-surface-2);
-      font-weight: 600;
-      position: sticky;
-      top: 0;
-      z-index: 1;
-    }
     .preview-table tr.error-row {
       background: var(--color-danger-soft);
     }
@@ -15961,10 +15724,6 @@ export class InternalTransferDialog {
     .status-icon.unmatched { color: var(--color-primary); }
     .status-icon.error { color: var(--color-danger); }
     
-    .invoice-cell {
-      font-family: monospace;
-      font-weight: 600;
-    }
     .customer-cell {
       max-width: 200px;
     }
@@ -15972,10 +15731,6 @@ export class InternalTransferDialog {
       max-width: 250px;
       font-size: var(--text-xs);
       color: var(--color-text-2);
-    }
-    .amount-cell {
-      font-family: monospace;
-      text-align: right;
     }
     .match-badge {
       display: inline-block;
@@ -16000,7 +15755,7 @@ export class InternalTransferDialog {
       font-weight: 600;
     }
     .message-row td {
-      padding: 4px 12px !important;
+      padding: 4px 12px;
       background: var(--color-canvas);
     }
     .validation-error, .validation-warning {
@@ -18141,6 +17896,56 @@ export class ViewLoadDetailsDialog {
               </div>
             }
 
+            <div class="stops-legend actual-panel">
+              <h3><mat-icon>route</mat-icon> Planned vs actual</h3>
+              @if (actualLoading) {
+                <div class="actual-row muted"><mat-spinner diameter="16"></mat-spinner> Loading CarTrack movements…</div>
+              } @else if (!actual || !actual.hasData) {
+                <div class="actual-row muted">{{ actual?.message || 'No CarTrack movement recorded for this load yet. The trail builds as the vehicle drives.' }}</div>
+              } @else {
+                <div class="actual-legend">
+                  <span><i class="swatch planned"></i> Planned route</span>
+                  <span><i class="swatch actual"></i> Actual (CarTrack)</span>
+                  <span><i class="swatch unplanned"></i> Unplanned stop</span>
+                </div>
+                <div class="actual-stats">
+                  <div><strong>{{ actual.summary.visitedStops }}/{{ actual.summary.plannedStops }}</strong><span>stops reached</span></div>
+                  <div><strong>{{ actual.summary.actualDistanceKm | number:'1.0-1' }} km</strong><span>driven{{ actual.summary.plannedDistanceKm ? ' · plan ' + (actual.summary.plannedDistanceKm | number:'1.0-0') + ' km' : '' }}</span></div>
+                  <div><strong>{{ actual.summary.unplannedStops?.length || 0 }}</strong><span>unplanned stops</span></div>
+                  <div><strong>{{ actual.summary.harshEvents }}</strong><span>harsh events</span></div>
+                </div>
+                @if (actual.summary.outOfOrder) {
+                  <div class="actual-flag warn"><mat-icon>swap_vert</mat-icon> Stops visited out of planned order ({{ actual.summary.actualSequence.join(' → ') }})</div>
+                }
+                @if (actual.summary.distanceVarianceKm != null && actual.summary.distanceVarianceKm > 10) {
+                  <div class="actual-flag warn"><mat-icon>add_road</mat-icon> {{ actual.summary.distanceVarianceKm | number:'1.0-0' }} km more than planned</div>
+                }
+                <div class="actual-stops">
+                  @for (s of actual.stops; track s.id) {
+                    <div class="actual-stop" [class.ok]="s.visited === true" [class.miss]="s.visited === false" [class.unknown]="s.visited == null">
+                      <mat-icon>{{ s.visited === true ? 'check_circle' : s.visited === false ? 'cancel' : 'help' }}</mat-icon>
+                      <div>
+                        <strong>{{ s.stopSequence }}. {{ s.name || 'Stop' }}</strong>
+                        <span>
+                          @if (s.visited === true) { Reached {{ s.closestAt | date:'HH:mm' }}{{ s.dwellMinutes ? ' · ' + s.dwellMinutes + ' min on site' : '' }} }
+                          @else { {{ s.reason }} }
+                        </span>
+                      </div>
+                    </div>
+                  }
+                </div>
+                @if (actual.summary.unplannedStops?.length) {
+                  <div class="actual-unplanned">
+                    <strong>Unplanned stops</strong>
+                    @for (u of actual.summary.unplannedStops; track $index) {
+                      <div>{{ u.at | slice:11:16 }} · {{ u.location || (u.lat | number:'1.4-4') + ', ' + (u.lng | number:'1.4-4') }}</div>
+                    }
+                  </div>
+                }
+                <div class="actual-row muted small">{{ actual.summary.segmentCount }} CarTrack trips · {{ actual.summary.breadcrumbCount }} GPS points · top speed {{ actual.summary.maxSpeed }} km/h · idle {{ actual.summary.idleMinutes }} min</div>
+              }
+            </div>
+
             <div class="stops-legend">
               <h3>Stops Details ({{ data.load.stops?.length || 0 }} stop{{ (data.load.stops?.length || 0) === 1 ? '' : 's' }})</h3>
               @if ((data.load.stops?.length || 0) === 1) {
@@ -18220,6 +18025,19 @@ export class ViewLoadDetailsDialog {
                   [path]="routePath"
                   [options]="polylineOptions">
                 </map-polyline>
+              }
+
+              <!-- Actual route driven (CarTrack breadcrumbs + trip segments) -->
+              @if (actualPath.length > 1) {
+                <map-polyline [path]="actualPath" [options]="actualPolylineOptions"></map-polyline>
+              }
+              @if (actualSnapped) {
+                @for (p of actualRawPath; track $index) {
+                  <map-marker [position]="p" [options]="actualFixOptions"></map-marker>
+                }
+              }
+              @for (u of unplannedMarkers; track $index) {
+                <map-marker [position]="u.position" [title]="u.title" [options]="unplannedMarkerOptions"></map-marker>
               }
 
               <!-- Live vehicle position marker -->
@@ -18306,8 +18124,8 @@ export class ViewLoadDetailsDialog {
       gap: 8px;
       margin: 0;
       padding: 16px 24px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
     }
 
     .route-info {
@@ -18386,7 +18204,7 @@ export class ViewLoadDetailsDialog {
       width: 32px;
       height: 32px;
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
       border-radius: 50%;
       font-weight: bold;
       flex-shrink: 0;
@@ -18462,7 +18280,7 @@ export class ViewLoadDetailsDialog {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: linear-gradient(135deg, var(--color-ok-soft) 0%, var(--color-ok-soft) 100%);
+      background: var(--color-ok-soft);
       border-radius: 8px;
       border-left: 4px solid var(--color-ok);
       flex-shrink: 0;
@@ -18495,6 +18313,36 @@ export class ViewLoadDetailsDialog {
       padding: 16px 24px;
       margin: 0;
     }
+
+    .actual-panel h3 { display: flex; align-items: center; gap: 6px; }
+    .actual-panel h3 mat-icon { color: #e65100; }
+    .actual-row { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); }
+    .actual-row.muted { color: var(--color-text-3); }
+    .actual-row.small { font-size: var(--text-xs); margin-top: 8px; }
+    .actual-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: var(--text-xs); color: var(--color-text-2); margin-bottom: 10px; }
+    .actual-legend span { display: inline-flex; align-items: center; gap: 4px; }
+    .swatch { display: inline-block; width: 18px; height: 4px; border-radius: 2px; }
+    .swatch.planned { background: #2563eb; }
+    .swatch.actual { background: #e65100; }
+    .swatch.unplanned { width: 10px; height: 10px; border-radius: 50%; background: #f9a825; border: 2px solid #fff; box-shadow: 0 0 0 1px #f9a825; }
+    .actual-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .actual-stats div { background: var(--color-canvas); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; }
+    .actual-stats strong { font-size: var(--text-lg); color: var(--color-text); }
+    .actual-stats span { font-size: var(--text-xs); color: var(--color-text-3); }
+    .actual-flag { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; }
+    .actual-flag.warn { background: var(--color-warn-soft); color: var(--color-warn); }
+    .actual-flag mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .actual-stops { display: flex; flex-direction: column; gap: 6px; }
+    .actual-stop { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 6px; background: var(--color-canvas); }
+    .actual-stop mat-icon { font-size: 20px; width: 20px; height: 20px; margin-top: 1px; }
+    .actual-stop.ok mat-icon { color: var(--color-ok); }
+    .actual-stop.miss mat-icon { color: var(--color-danger); }
+    .actual-stop.unknown mat-icon { color: var(--color-text-3); }
+    .actual-stop div { display: flex; flex-direction: column; min-width: 0; }
+    .actual-stop strong { font-size: var(--text-sm); color: var(--color-text); }
+    .actual-stop span { font-size: var(--text-xs); color: var(--color-text-3); }
+    .actual-unplanned { margin-top: 10px; font-size: var(--text-xs); color: var(--color-text-2); }
+    .actual-unplanned strong { display: block; color: #b26a00; margin-bottom: 4px; }
   `]
 })
 // NOTE: field initializers below call google.maps.* — open this dialog only after GoogleMapsLoaderService.load() resolves.
@@ -18560,6 +18408,33 @@ export class ViewRouteMapDialog implements OnInit {
   trackingInfo: any = null;
   private trackingTimer: any = null;
 
+  /** Actual route driven, from CarTrack (breadcrumbs + trip legs) */
+  actual: any = null;
+  actualLoading = false;
+  actualPath: google.maps.LatLngLiteral[] = [];
+  /** Raw GPS fixes before road-snapping (used for the small dots and as fallback) */
+  actualRawPath: google.maps.LatLngLiteral[] = [];
+  actualSnapped = false;
+  private actualSnapKey = '';
+  private actualDirections: google.maps.DirectionsService | null = null;
+  unplannedMarkers: Array<{ position: google.maps.LatLngLiteral; title: string }> = [];
+  actualPolylineOptions: google.maps.PolylineOptions = {
+    strokeColor: '#e65100',
+    strokeOpacity: 0.9,
+    strokeWeight: 4,
+    zIndex: 5
+  };
+  /** Small dots marking the raw CarTrack fixes along the road-snapped trail */
+  actualFixOptions: google.maps.MarkerOptions = {
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 2.5, fillColor: '#e65100', fillOpacity: 0.85, strokeColor: '#fff', strokeWeight: 1 },
+    clickable: false,
+    zIndex: 6
+  };
+  unplannedMarkerOptions: google.maps.MarkerOptions = {
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#f9a825', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
+    zIndex: 50
+  };
+
   constructor(
     public dialogRef: MatDialogRef<ViewRouteMapDialog>,
     @Inject(MAT_DIALOG_DATA) public data: { load: any; liveTracking?: any },
@@ -18577,11 +18452,96 @@ export class ViewRouteMapDialog implements OnInit {
       this.refreshVehiclePosition();
     }
     // Keep the vehicle position fresh every 30 seconds
-    this.trackingTimer = setInterval(() => this.refreshVehiclePosition(), 30000);
+    this.trackingTimer = setInterval(() => { this.refreshVehiclePosition(); this.loadActualRoute(true); }, 30000);
     this.dialogRef.afterClosed().subscribe(() => {
       if (this.trackingTimer) { clearInterval(this.trackingTimer); this.trackingTimer = null; }
     });
     this.initializeMap();
+    this.loadActualRoute();
+  }
+
+  private loadActualRoute(silent = false): void {
+    const loadId = this.data.load?.id || this.data.load?.loadId;
+    if (!loadId) return;
+    if (!silent) this.actualLoading = true;
+    this.http.get<any>(`${environment.apiUrl}/tracking/load/${loadId}/actual-route`).subscribe({
+      next: r => {
+        this.actual = r;
+        this.actualLoading = false;
+        // Merge GPS breadcrumbs and trip-leg start/end points into one time-ordered trail
+        const pts: Array<{ t: number; lat: number; lng: number }> = [];
+        for (const b of r?.breadcrumbs || []) pts.push({ t: Date.parse(b.t), lat: b.lat, lng: b.lng });
+        for (const s of r?.segments || []) {
+          if (s.startLat || s.startLng) pts.push({ t: Date.parse(s.start), lat: s.startLat, lng: s.startLng });
+          if (s.endLat || s.endLng) pts.push({ t: Date.parse(s.end), lat: s.endLat, lng: s.endLng });
+        }
+        pts.sort((a, b) => a.t - b.t);
+        const raw = pts.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng)).map(p => ({ lat: p.lat, lng: p.lng }));
+        this.actualRawPath = raw;
+        if (!this.actualSnapped || this.actualPath.length === 0) this.actualPath = raw;
+        this.snapActualToRoads(raw);
+        this.unplannedMarkers = (r?.summary?.unplannedStops || []).map((u: any) => ({
+          position: { lat: u.lat, lng: u.lng },
+          title: `Unplanned stop ${String(u.at || '').slice(11, 16)} — ${u.location || ''}`
+        }));
+      },
+      error: () => { this.actualLoading = false; if (!this.actual) this.actual = { hasData: false, message: 'Could not load CarTrack movements.' }; }
+    });
+  }
+
+  /**
+   * Turn the sparse GPS trail into a road-following line. The Directions API routes
+   * through the fixes as waypoints (max 25 per request, so long trails are chunked),
+   * which gives the real roads driven between CarTrack pings instead of straight lines.
+   * Falls back to the raw trail if routing fails.
+   */
+  private async snapActualToRoads(raw: google.maps.LatLngLiteral[]): Promise<void> {
+    if (raw.length < 2) { this.actualPath = raw; this.actualSnapped = false; return; }
+    // Drop near-duplicate fixes (< 40 m apart) so waypoints are meaningful
+    const pts: google.maps.LatLngLiteral[] = [raw[0]];
+    for (const p of raw.slice(1)) {
+      const last = pts[pts.length - 1];
+      if (this.haversineKm(last, p) >= 0.04) pts.push(p);
+    }
+    if (pts.length < 2) { this.actualPath = raw; this.actualSnapped = false; return; }
+    const key = pts.length + ':' + pts[pts.length - 1].lat.toFixed(5) + ',' + pts[pts.length - 1].lng.toFixed(5);
+    if (key === this.actualSnapKey && this.actualSnapped) return; // nothing new to snap
+    this.actualSnapKey = key;
+
+    try {
+      if (typeof google === 'undefined' || !google.maps?.DirectionsService) throw new Error('maps not ready');
+      this.actualDirections ??= new google.maps.DirectionsService();
+      const MAX_WP = 25;
+      const snapped: google.maps.LatLngLiteral[] = [];
+      // Each chunk: origin, up to 25 waypoints, destination (destination of one chunk = origin of the next)
+      for (let i = 0; i < pts.length - 1; i += MAX_WP + 1) {
+        const chunk = pts.slice(i, Math.min(pts.length, i + MAX_WP + 2));
+        if (chunk.length < 2) break;
+        const res = await this.actualDirections.route({
+          origin: chunk[0],
+          destination: chunk[chunk.length - 1],
+          waypoints: chunk.slice(1, -1).map(p => ({ location: p, stopover: false })),
+          travelMode: google.maps.TravelMode.DRIVING,
+          optimizeWaypoints: false
+        });
+        const route = res.routes?.[0];
+        if (!route) throw new Error('no route');
+        const path = route.overview_path?.length ? route.overview_path : route.legs.flatMap(l => l.steps.flatMap(s => s.path));
+        for (const ll of path) snapped.push({ lat: ll.lat(), lng: ll.lng() });
+      }
+      if (snapped.length > 1) { this.actualPath = snapped; this.actualSnapped = true; return; }
+      throw new Error('empty');
+    } catch {
+      this.actualPath = raw;
+      this.actualSnapped = false;
+    }
+  }
+
+  private haversineKm(a: google.maps.LatLngLiteral, b: google.maps.LatLngLiteral): number {
+    const R = 6371, toRad = (d: number) => d * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
   }
 
   private refreshVehiclePosition(): void {
@@ -19011,7 +18971,7 @@ export class ViewRouteMapDialog implements OnInit {
       align-items: center;
       padding: 20px 28px;
       background: linear-gradient(135deg, var(--color-text) 0%, var(--color-text) 50%, var(--color-text-2) 100%);
-      color: white;
+      color: var(--color-on-primary);
       position: relative;
       overflow: hidden;
     }
@@ -19037,7 +18997,7 @@ export class ViewRouteMapDialog implements OnInit {
     .header-icon {
       width: 52px;
       height: 52px;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
+      background: var(--color-primary);
       border-radius: 14px;
       display: flex;
       align-items: center;
@@ -19072,7 +19032,7 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .close-btn:hover {
-      color: white;
+      color: var(--color-on-primary);
       background: rgba(255,255,255,0.1);
     }
 
@@ -19081,7 +19041,7 @@ export class ViewRouteMapDialog implements OnInit {
       flex: 1;
       padding: 28px;
       overflow-y: auto;
-      background: linear-gradient(180deg, var(--color-surface-2) 0%, var(--color-line) 100%);
+      background: var(--color-surface-2);
     }
 
     /* Controls Bar */
@@ -19116,8 +19076,8 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .export-btn {
-      background: linear-gradient(135deg, var(--color-ok), var(--color-ok)) !important;
-      color: white !important;
+      background: var(--color-ok) !important;
+      color: var(--color-on-primary) !important;
       padding: 0 20px;
       height: 42px;
       border-radius: 10px !important;
@@ -19213,17 +19173,17 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .summary-card.daily .card-icon {
-      background: linear-gradient(135deg, var(--color-primary-soft), var(--color-primary-soft));
+      background: var(--color-primary-soft);
       color: var(--color-primary);
     }
 
     .summary-card.monthly .card-icon {
-      background: linear-gradient(135deg, var(--color-cat-purple-soft), var(--color-cat-purple-soft));
+      background: var(--color-cat-purple-soft);
       color: var(--color-cat-purple);
     }
 
     .summary-card.vehicles .card-icon {
-      background: linear-gradient(135deg, var(--color-ok-soft), var(--color-ok-soft));
+      background: var(--color-ok-soft);
       color: var(--color-ok);
     }
 
@@ -19298,7 +19258,7 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .province-card {
-      background: linear-gradient(135deg, var(--color-canvas), var(--color-surface-2));
+      background: var(--color-canvas);
       padding: 18px 20px;
       border-radius: 14px;
       display: flex;
@@ -19310,18 +19270,18 @@ export class ViewRouteMapDialog implements OnInit {
 
     .province-card:hover {
       border-color: var(--color-primary);
-      background: linear-gradient(135deg, var(--color-primary-soft), var(--color-primary-soft));
+      background: var(--color-primary-soft);
     }
 
     .province-icon {
       width: 40px;
       height: 40px;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
+      background: var(--color-primary);
       border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .province-icon mat-icon {
@@ -19403,7 +19363,7 @@ export class ViewRouteMapDialog implements OnInit {
     }
 
     .province-badge {
-      background: linear-gradient(135deg, var(--color-primary-soft), var(--color-primary-soft));
+      background: var(--color-primary-soft);
       color: var(--color-primary-hover);
       padding: 4px 10px;
       border-radius: 6px;
@@ -19728,7 +19688,7 @@ export class LogisticsReportsDialog implements OnInit {
       align-items: center;
       padding: 20px 32px;
       background: linear-gradient(135deg, #ff416c, #ff4b2b);
-      color: white;
+      color: var(--color-on-primary);
       margin: -24px -24px 0 -24px;
     }
     
@@ -19740,7 +19700,7 @@ export class LogisticsReportsDialog implements OnInit {
       font-size: var(--text-2xl);
     }
     
-    .dialog-header button { color: white; }
+    .dialog-header button { color: var(--color-on-primary); }
     
     .live-badge {
       display: inline-flex;
@@ -19805,7 +19765,7 @@ export class LogisticsReportsDialog implements OnInit {
     
     mat-chip-option.selected {
       background: var(--color-danger) !important;
-      color: white !important;
+      color: var(--color-on-primary) !important;
     }
     
     mat-chip-option mat-icon {
@@ -19842,7 +19802,7 @@ export class LogisticsReportsDialog implements OnInit {
       align-items: center;
       padding: 12px 16px;
       background: #2a2a2a;
-      color: white;
+      color: var(--color-on-primary);
     }
     
     .camera-name {
@@ -21268,7 +21228,7 @@ export class VehicleStatusDialog {
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 24px;
       background: linear-gradient(135deg, #00bcd4, #0097a7);
-      color: white; margin: -24px -24px 0;
+      color: var(--color-on-primary); margin: -24px -24px 0;
     }
     .header-left { display: flex; align-items: center; gap: 14px; }
     .welly-avatar {
@@ -21279,7 +21239,7 @@ export class VehicleStatusDialog {
     .welly-avatar mat-icon { font-size: 28px; width: 28px; height: 28px; }
     .wizard-header h2 { margin: 0; font-size: var(--text-2xl); }
     .header-sub { margin: 2px 0 0; font-size: var(--text-sm); opacity: 0.9; }
-    .wizard-header button { color: white; }
+    .wizard-header button { color: var(--color-on-primary); }
 
     .step-bar {
       display: flex; align-items: center; justify-content: center;
@@ -21295,8 +21255,8 @@ export class VehicleStatusDialog {
       align-items: center; justify-content: center;
       font-size: var(--text-sm); font-weight: 600; transition: all 0.3s;
     }
-    .step-dot.active .dot { background: var(--color-cat-teal); color: white; }
-    .step-dot.completed .dot { background: var(--color-ok); color: white; }
+    .step-dot.active .dot { background: var(--color-cat-teal); color: var(--color-on-primary); }
+    .step-dot.completed .dot { background: var(--color-ok); color: var(--color-on-primary); }
     .step-dot.completed .dot mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
     .step-label { font-size: var(--text-xs); color: var(--color-text-3); text-align: center; }
     .step-dot.active .step-label { color: var(--color-cat-teal); font-weight: 600; }
@@ -21976,7 +21936,7 @@ export class WellyTripsheetWizardDialog {
     .dialog-header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 24px; border-bottom: 1px solid var(--color-line);
-      background: linear-gradient(135deg, #ff6f00, var(--color-warn)); color: white;
+      background: linear-gradient(135deg, #ff6f00, var(--color-warn)); color: var(--color-on-primary);
       margin: -24px -24px 0;
     }
     .header-left { display: flex; align-items: center; gap: 14px; }
@@ -21988,7 +21948,7 @@ export class WellyTripsheetWizardDialog {
     .welly-avatar mat-icon { font-size: 28px; width: 28px; height: 28px; }
     .dialog-header h2 { margin: 0; font-size: var(--text-2xl); }
     .dialog-header .subtitle { font-size: var(--text-sm); opacity: 0.9; }
-    .dialog-header button { color: white; }
+    .dialog-header button { color: var(--color-on-primary); }
     .welly-speech { padding: 16px 24px 0; }
     .speech-bubble {
       background: var(--color-warn-soft); border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent); border-radius: 12px;
@@ -22005,11 +21965,11 @@ export class WellyTripsheetWizardDialog {
     .empty-state mat-icon { color: var(--color-ok); }
     .warehouse-tab-label { display: flex; align-items: center; gap: 8px; }
     .tab-badge {
-      background: var(--color-warn); color: white; border-radius: 10px;
+      background: var(--color-warn); color: var(--color-on-primary); border-radius: 10px;
       padding: 1px 8px; font-size: var(--text-xs); font-weight: 600; min-width: 20px; text-align: center;
     }
     .warehouse-banner {
-      background: linear-gradient(135deg, var(--color-warn-soft), var(--color-warn-soft));
+      background: var(--color-warn-soft);
       border: 1px solid color-mix(in srgb, var(--color-warn) 35%, transparent); border-radius: 12px;
       padding: 16px 20px; margin: 16px 0;
     }
@@ -23474,7 +23434,7 @@ export class AiTripsheetBuilderDialog implements OnInit {
     }
 
     .fuel-tx-table th {
-      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
+      background: var(--color-surface-2);
       font-weight: 600;
       color: var(--color-text);
       font-size: var(--text-xs);
@@ -23751,7 +23711,7 @@ export class FuelHistoryDialog {
       align-items: flex-start;
       padding: 20px 24px 16px;
       border-bottom: 1px solid var(--color-line);
-      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface) 100%);
+      background: var(--color-surface-2);
     }
 
     .header-info h2 {
@@ -23840,7 +23800,7 @@ export class FuelHistoryDialog {
       gap: 12px;
       padding: 14px 16px;
       border-radius: 12px;
-      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface) 100%);
+      background: var(--color-surface-2);
       border: 1px solid var(--color-line);
     }
 
@@ -23899,7 +23859,7 @@ export class FuelHistoryDialog {
     }
 
     .maint-table th {
-      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
+      background: var(--color-surface-2);
       font-weight: 600;
       color: var(--color-text);
       font-size: var(--text-xs);
@@ -25590,7 +25550,7 @@ export class TodayHistoryDialog implements AfterViewInit, OnDestroy {
     .fh-dialog { display: flex; flex-direction: column; background: var(--color-surface); }
     .fh-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 20px; background: linear-gradient(135deg, var(--color-warn) 0%, var(--color-warn) 100%); color: #fff;
+      padding: 16px 20px; background: var(--color-warn); color: #fff;
     }
     .fh-title { display: flex; align-items: center; gap: 12px; }
     .fh-title mat-icon { font-size: 30px; width: 30px; height: 30px; }
@@ -25812,7 +25772,7 @@ export class FuelHealthDialog {
   `,
   styles: [`
     .bl { display:flex; flex-direction:column; max-height:82vh; }
-    .bl__head { display:flex; align-items:center; gap:12px; padding:18px 20px; background:linear-gradient(135deg,var(--color-primary),var(--color-primary)); color:#fff; }
+    .bl__head { display:flex; align-items:center; gap:12px; padding:18px 20px; background:var(--color-primary); color:#fff; }
     .bl__head > mat-icon { font-size:30px; width:30px; height:30px; }
     .bl__title h2 { margin:0; font-size:1.1rem; }
     .bl__code { font-family:monospace; font-size:0.8rem; opacity:0.9; }
@@ -25946,10 +25906,10 @@ export class BarcodeLookupDialog {
     .dialog-header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 24px; margin: -24px -24px 0 -24px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%); color: white;
+      background: var(--color-primary); color: var(--color-on-primary);
     }
     .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: var(--text-xl); }
-    .dialog-header button { color: white; }
+    .dialog-header button { color: var(--color-on-primary); }
     mat-dialog-content { padding-top: 20px !important; }
     .hint-text { color: var(--color-text-2); font-size: var(--text-sm); margin: 0 0 12px; }
     .email-input-row { display: flex; align-items: center; gap: 12px; }
@@ -26100,7 +26060,7 @@ export class TripsheetEmailRecipientsDialog {
     }
     .doc-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 20px; background: var(--color-primary); color: white; flex-shrink: 0;
+      padding: 10px 20px; background: var(--color-primary); color: var(--color-on-primary); flex-shrink: 0;
       gap: 12px; flex-wrap: wrap;
     }
     .doc-header h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-lg); }
@@ -26109,7 +26069,7 @@ export class TripsheetEmailRecipientsDialog {
       padding: 2px 12px; font-size: var(--text-sm); font-weight: 600;
     }
     .header-actions { display: flex; align-items: center; gap: 6px; }
-    .header-actions button { color: white; }
+    .header-actions button { color: var(--color-on-primary); }
     .mode-toggle {
       background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.35);
       border-radius: 6px; margin-right: 8px; height: 36px;

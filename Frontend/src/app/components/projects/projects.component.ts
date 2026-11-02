@@ -5,8 +5,6 @@ import { HttpClient } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -17,6 +15,9 @@ import { AuthService } from '../../services/auth.service';
 import { AnnouncementService, AnnouncementListItem } from '../../services/announcement.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -28,15 +29,16 @@ import { environment } from '../../../environments/environment';
     MatCardModule,
     MatButtonModule,
     MatIconModule,
-    MatProgressSpinnerModule,
-    MatChipsModule,
     MatTooltipModule,
     MatFormFieldModule,
     MatInputModule,
     MatDialogModule,
     FormsModule,
     NavbarComponent,
-    PageHeaderComponent
+    PageHeaderComponent,
+    EmptyStateComponent,
+    SkeletonRowsComponent,
+    StatusChipComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -51,7 +53,7 @@ import { environment } from '../../../environments/environment';
         <!-- Company Announcements -->
         <mat-card class="widget announcement-widget">
           <mat-card-header>
-            <div class="widget-icon" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);">
+            <div class="widget-icon" style="background: var(--color-primary-soft); color: var(--color-primary);">
               <mat-icon>campaign</mat-icon>
             </div>
             <mat-card-title>Company Announcements</mat-card-title>
@@ -68,20 +70,11 @@ import { environment } from '../../../environments/environment';
                     <div class="announcement-header">
                       <h4>{{ announcement.title }}</h4>
                       @if (announcement.priority === 'Urgent') {
-                        <mat-chip class="priority-chip urgent-chip">
-                          <mat-icon>bolt</mat-icon>
-                          Urgent
-                        </mat-chip>
+                        <app-status-chip status="Urgent" tone="danger"></app-status-chip>
                       } @else if (announcement.priority === 'High') {
-                        <mat-chip class="priority-chip urgent-chip">
-                          <mat-icon>arrow_upward</mat-icon>
-                          High
-                        </mat-chip>
+                        <app-status-chip status="High" tone="warn"></app-status-chip>
                       } @else {
-                        <mat-chip class="priority-chip normal-chip">
-                          <mat-icon>info_outline</mat-icon>
-                          Info
-                        </mat-chip>
+                        <app-status-chip status="Info" tone="info"></app-status-chip>
                       }
                     </div>
                     <p class="announcement-text">{{ announcement.content }}</p>
@@ -99,10 +92,8 @@ import { environment } from '../../../environments/environment';
                 </div>
               }
               @if (announcements.length === 0) {
-                <div class="no-announcements">
-                  <mat-icon>campaign</mat-icon>
-                  <p>No announcements at this time</p>
-                </div>
+                <app-empty-state icon="campaign" title="No announcements right now"
+                                 message="Company announcements show up here once they are posted." [compact]="true"></app-empty-state>
               }
             </div>
           </mat-card-content>
@@ -117,7 +108,7 @@ import { environment } from '../../../environments/environment';
         <!-- Early Birds & Late Bird Today -->
         <mat-card class="widget earliest-employee-widget">
           <mat-card-header>
-            <div class="widget-icon" style="background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);">
+            <div class="widget-icon" style="background: var(--color-cat-amber-soft); color: var(--color-cat-amber);">
               <mat-icon>wb_twilight</mat-icon>
             </div>
             <mat-card-title>Attendance Today</mat-card-title>
@@ -296,8 +287,7 @@ import { environment } from '../../../environments/environment';
               </div>
             } @else if (weatherLoading) {
               <div class="weather-loading">
-                <mat-spinner diameter="40"></mat-spinner>
-                <p>Loading weather...</p>
+                <app-skeleton-rows [rows]="3" [avatar]="false"></app-skeleton-rows>
               </div>
             }
           </mat-card-content>
@@ -342,269 +332,6 @@ import { environment } from '../../../environments/environment';
 
 
 
-    /* Notification Dropdown Styles */
-    .notification-dropdown {
-      position: absolute;
-      top: 60px;
-      right: 100px;
-      width: 420px;
-      max-height: 600px;
-      background: var(--color-surface);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .notification-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--color-line);
-      background: var(--color-surface-2);
-    }
-
-    .notification-header h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--color-text);
-    }
-
-    .notification-list {
-      flex: 1;
-      overflow-y: auto;
-      max-height: 450px;
-    }
-
-    .no-notifications {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--color-text-3);
-      text-align: center;
-    }
-
-    .no-notifications mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .notification-item {
-      display: flex;
-      gap: 12px;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--color-line);
-      transition: background-color 0.2s;
-      cursor: pointer;
-    }
-
-    .notification-item:hover {
-      background-color: var(--color-canvas);
-    }
-
-    .notification-item.unread {
-      background-color: var(--color-primary-soft);
-    }
-
-    .notification-item.unread:hover {
-      background-color: #d1e7f9;
-    }
-
-    .notification-icon {
-      flex-shrink: 0;
-    }
-
-    .notification-icon mat-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
-    }
-
-    .notification-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .notification-title {
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--color-text);
-      margin: 0 0 4px 0;
-    }
-
-    .notification-message {
-      font-size: 13px;
-      color: var(--color-text-2);
-      margin: 0 0 8px 0;
-      line-height: 1.4;
-    }
-
-    .notification-time {
-      font-size: 12px;
-      color: var(--color-text-3);
-    }
-
-    .notification-footer {
-      padding: 12px 20px;
-      border-top: 1px solid var(--color-line);
-      background: var(--color-surface-2);
-      text-align: center;
-    }
-
-    /* Messages Dropdown Styles */
-    .messages-dropdown {
-      position: absolute;
-      top: 60px;
-      right: 150px;
-      width: 400px;
-      max-height: 550px;
-      background: var(--color-surface);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-      z-index: 1001;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .messages-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--color-line);
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-    }
-
-    .messages-header h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: white;
-    }
-
-    .messages-list {
-      flex: 1;
-      overflow-y: auto;
-      max-height: 400px;
-    }
-
-    .no-messages {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--color-text-3);
-      text-align: center;
-    }
-
-    .no-messages mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .no-messages button {
-      margin-top: 16px;
-    }
-
-    .message-item {
-      display: flex;
-      gap: 12px;
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--color-line);
-      transition: background-color 0.2s;
-      cursor: pointer;
-    }
-
-    .message-item:hover {
-      background-color: var(--color-surface-2);
-    }
-
-    .message-item.unread {
-      background-color: #ede7f6;
-    }
-
-    .message-item.unread:hover {
-      background-color: #e1d5f0;
-    }
-
-    .message-avatar {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .message-avatar mat-icon {
-      color: white;
-      font-size: 24px;
-    }
-
-    .message-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .message-header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-
-    .message-sender {
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--color-text);
-    }
-
-    .unread-badge {
-      background: var(--color-primary);
-      color: white;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 10px;
-    }
-
-    .message-preview {
-      font-size: 13px;
-      color: var(--color-text-2);
-      margin: 0 0 4px 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .message-time {
-      font-size: 11px;
-      color: var(--color-text-3);
-    }
-
-    .messages-footer {
-      padding: 12px 20px;
-      border-top: 1px solid var(--color-line);
-      background: var(--color-surface-2);
-      text-align: center;
-    }
-
     /* Widgets Grid */
     .widgets-grid {
       display: grid;
@@ -627,20 +354,21 @@ import { environment } from '../../../environments/environment';
 
     .widget {
       background: var(--color-surface);
-      border-radius: 16px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
 
     .widget:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-md);
     }
 
     .widget ::ng-deep .mat-mdc-card-header {
       padding: 20px;
-      background: linear-gradient(135deg, rgba(0, 0, 139, 0.05) 0%, rgba(65, 105, 225, 0.05) 100%);
+      background: var(--color-surface-2);
       display: flex;
       align-items: center;
       gap: 16px;
@@ -657,10 +385,10 @@ import { environment } from '../../../environments/environment';
     }
 
     .widget-icon mat-icon {
-      color: white;
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      color: inherit;
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
 
     .widget ::ng-deep .mat-mdc-card-title {
@@ -677,7 +405,6 @@ import { environment } from '../../../environments/environment';
     /* Company Announcements Widget */
     .announcement-widget {
       grid-column: span 2;
-      background: linear-gradient(135deg, var(--color-surface) 0%, #f8f9ff 100%);
     }
 
     .announcement-widget mat-card-header {
@@ -695,12 +422,11 @@ import { environment } from '../../../environments/environment';
       gap: 16px;
       padding: 20px;
       background: var(--color-surface);
-      border-radius: 16px;
-      border: 2px solid transparent;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-line);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
 
     .announcement-item::before {
@@ -710,32 +436,30 @@ import { environment } from '../../../environments/environment';
       top: 0;
       bottom: 0;
       width: 5px;
-      background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+      background: var(--color-primary);
       transition: width 0.3s;
     }
 
     .announcement-item.high-priority {
-      background: linear-gradient(135deg, var(--color-danger-soft) 0%, #ffe5e5 100%);
-      border-color: rgba(255, 107, 107, 0.2);
+      background: var(--color-danger-soft);
     }
 
     .announcement-item.high-priority::before {
-      background: linear-gradient(180deg, #FF6B6B 0%, #FF4757 100%);
+      background: var(--color-danger);
     }
 
     .announcement-item.normal-priority {
-      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
-      border-color: rgba(59, 130, 246, 0.2);
+      background: var(--color-primary-soft);
     }
 
     .announcement-item.normal-priority::before {
-      background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary) 100%);
+      background: var(--color-primary);
     }
 
     .announcement-item:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-      border-color: rgba(37, 99, 235, 0.3);
+      box-shadow: var(--shadow-md);
+      border-color: var(--color-primary);
     }
 
     .announcement-item:hover::before {
@@ -749,22 +473,24 @@ import { environment } from '../../../environments/environment';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+      background: var(--color-primary-soft);
       border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
     }
 
     .announcement-icon-badge mat-icon {
-      color: white;
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      color: var(--color-primary);
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
 
     .announcement-icon-badge.high-priority-badge {
-      background: linear-gradient(135deg, #FF6B6B 0%, #FF4757 100%);
-      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+      background: var(--color-danger-soft);
       animation: pulse 2s infinite;
+    }
+
+    .announcement-icon-badge.high-priority-badge mat-icon {
+      color: var(--color-danger);
     }
 
     @keyframes pulse {
@@ -793,7 +519,7 @@ import { environment } from '../../../environments/environment';
     .announcement-header h4 {
       margin: 0;
       color: var(--color-text);
-      font-size: 17px;
+      font-size: var(--text-lg);
       font-weight: 700;
       line-height: 1.4;
       flex: 1;
@@ -802,7 +528,7 @@ import { environment } from '../../../environments/environment';
     .announcement-text {
       margin: 0;
       color: var(--color-text-2);
-      font-size: 14px;
+      font-size: var(--text-md);
       line-height: 1.7;
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -821,49 +547,19 @@ import { environment } from '../../../environments/environment';
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       color: var(--color-text-3);
       font-weight: 500;
       padding: 6px 12px;
-      background: rgba(255, 255, 255, 0.7);
+      background: var(--color-surface-2);
       border-radius: 8px;
     }
 
     .announcement-meta mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
       opacity: 0.8;
-    }
-
-    .priority-chip {
-      font-size: 12px !important;
-      height: 28px !important;
-      padding: 0 12px !important;
-      font-weight: 600 !important;
-      border-radius: 8px !important;
-      display: flex !important;
-      align-items: center !important;
-      gap: 4px !important;
-    }
-
-    .priority-chip mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-      margin: 0 !important;
-    }
-
-    .urgent-chip {
-      background: linear-gradient(135deg, #FF6B6B 0%, #FF4757 100%) !important;
-      color: white !important;
-      box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
-    }
-
-    .normal-chip {
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%) !important;
-      color: white !important;
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
     }
 
     /* Early Birds Today Widget */
@@ -871,37 +567,32 @@ import { environment } from '../../../environments/environment';
       grid-column: span 1;
     }
 
-    /* Late Bird Widget */
-    .late-bird-widget {
-      grid-column: span 1;
-    }
-
     .section-label {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 600;
-      color: #FFA500;
+      color: var(--color-ok);
       margin-bottom: 12px;
       padding-bottom: 8px;
-      border-bottom: 2px solid #FFD700;
+      border-bottom: 2px solid var(--color-ok);
     }
 
     .section-label.late {
-      color: #f5576c;
-      border-bottom: 2px solid #60a5fa;
+      color: var(--color-warn);
+      border-bottom: 2px solid var(--color-warn);
     }
 
     .section-label mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
 
     .section-divider {
       height: 1px;
-      background: linear-gradient(90deg, transparent, #ddd, transparent);
+      background: var(--color-line);
       margin: 20px 0;
     }
 
@@ -916,38 +607,38 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       gap: 12px;
       padding: 8px;
-      background: var(--color-canvas);
+      background: var(--color-surface-2);
       border-radius: 8px;
       transition: all 0.2s;
     }
 
     .early-bird-item:hover {
       transform: translateX(4px);
-      background: #e8f4f8;
+      background: var(--color-surface-3);
     }
 
     .bird-photo {
       width: 50px;
       height: 50px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
       flex-shrink: 0;
     }
 
     .bird-photo.late {
-      background: linear-gradient(135deg, #60a5fa 0%, #f5576c 100%);
-      box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
     }
 
     .bird-photo mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
-      color: white;
+      color: inherit;
     }
 
     .bird-info {
@@ -956,7 +647,7 @@ import { environment } from '../../../environments/environment';
 
     .bird-info h4 {
       margin: 0 0 4px 0;
-      font-size: 15px;
+      font-size: var(--text-md);
       font-weight: 600;
       color: var(--color-text);
     }
@@ -965,24 +656,20 @@ import { environment } from '../../../environments/environment';
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
-      color: #FFA500;
+      color: var(--color-ok);
     }
 
     .bird-time.late {
-      color: #f5576c;
+      color: var(--color-warn);
     }
 
     .bird-time mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
-      color: #FFA500;
-    }
-
-    .bird-time.late mat-icon {
-      color: #f5576c;
+      color: inherit;
     }
 
     .earliest-employee-container {
@@ -994,23 +681,23 @@ import { environment } from '../../../environments/environment';
       height: 100px;
       margin: 0 auto 16px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3);
     }
 
     .earliest-photo mat-icon {
       font-size: 70px;
       width: 70px;
       height: 70px;
-      color: white;
+      color: inherit;
     }
 
     .earliest-employee-container h3 {
       margin: 0 0 8px 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       font-weight: 600;
       color: var(--color-text);
     }
@@ -1018,8 +705,8 @@ import { environment } from '../../../environments/environment';
     /* Hero Card (Rotating Welcome/Birthday) */
     .hero-card {
       grid-column: span 1;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
       min-height: 220px;
       display: flex;
       align-items: center;
@@ -1047,20 +734,9 @@ import { environment } from '../../../environments/environment';
       }
     }
 
-    .welcome-hero {
-      background: linear-gradient(135deg, rgba(17, 153, 142, 0.1) 0%, rgba(56, 239, 125, 0.1) 100%);
-      border-radius: 16px;
-      padding: 20px;
-    }
-
-    .birthday-hero {
-      background: linear-gradient(135deg, rgba(245, 87, 108, 0.1) 0%, rgba(240, 147, 251, 0.1) 100%);
-      border-radius: 16px;
-      padding: 20px;
-    }
-
+    .welcome-hero,
+    .birthday-hero,
     .upcoming-hero {
-      background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 165, 0, 0.1) 100%);
       border-radius: 16px;
       padding: 20px;
     }
@@ -1074,16 +750,14 @@ import { environment } from '../../../environments/environment';
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: white;
-      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+      color: var(--color-on-primary);
     }
 
     .hero-content h2 {
-      font-size: 26px;
+      font-size: var(--text-3xl);
       font-weight: 700;
       margin: 0 0 16px 0;
-      color: white;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      color: var(--color-on-primary);
     }
 
     .hero-photo {
@@ -1091,11 +765,11 @@ import { environment } from '../../../environments/environment';
       height: 90px;
       margin: 0 auto 12px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--color-primary-hover);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--shadow-md);
       border: 3px solid var(--color-surface);
     }
 
@@ -1105,10 +779,10 @@ import { environment } from '../../../environments/environment';
 
     @keyframes glow {
       0%, 100% {
-        box-shadow: 0 8px 24px rgba(245, 87, 108, 0.5);
+        box-shadow: var(--shadow-md);
       }
       50% {
-        box-shadow: 0 8px 32px rgba(245, 87, 108, 0.8);
+        box-shadow: var(--shadow-lg);
       }
     }
 
@@ -1116,26 +790,28 @@ import { environment } from '../../../environments/environment';
       font-size: 60px;
       width: 60px;
       height: 60px;
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .hero-content h3 {
-      font-size: 22px;
+      font-size: var(--text-2xl);
       font-weight: 600;
       margin: 0 0 6px 0;
-      color: white;
+      color: var(--color-on-primary);
     }
 
     .hero-role {
-      font-size: 16px;
-      color: rgba(255, 255, 255, 0.9);
+      font-size: var(--text-lg);
+      color: var(--color-on-primary);
+      opacity: 0.9;
       margin: 0 0 3px 0;
       font-weight: 500;
     }
 
     .hero-department {
-      font-size: 14px;
-      color: rgba(255, 255, 255, 0.8);
+      font-size: var(--text-md);
+      color: var(--color-on-primary);
+      opacity: 0.85;
       margin: 0 0 12px 0;
     }
 
@@ -1144,33 +820,32 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       gap: 6px;
       padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--color-surface);
       border-radius: 24px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
-      color: white;
-      backdrop-filter: blur(10px);
+      color: var(--color-primary);
     }
 
     .hero-badge mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
 
     .birthday-badge {
-      background: rgba(245, 87, 108, 0.3);
+      background: var(--color-cat-pink-soft);
+      color: var(--color-cat-pink);
     }
 
     .upcoming-badge {
-      background: rgba(255, 193, 7, 0.3);
+      background: var(--color-cat-amber-soft);
+      color: var(--color-cat-amber);
     }
 
     /* Weather Rotating Card */
     .weather-rotating-card {
       grid-column: span 1;
-      background: linear-gradient(135deg, #56CCF2 0%, #2F80ED 100%);
-      color: white;
       min-height: 220px;
       display: flex;
       align-items: center;
@@ -1196,17 +871,17 @@ import { environment } from '../../../environments/environment';
     }
 
     .weather-header .location-icon {
-      color: white;
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      color: var(--color-primary);
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
 
     .weather-header h3 {
       margin: 0;
-      font-size: 24px;
+      font-size: var(--text-3xl);
       font-weight: 600;
-      color: white;
+      color: var(--color-text);
     }
 
     .weather-display {
@@ -1221,21 +896,19 @@ import { environment } from '../../../environments/environment';
       font-size: 80px;
       width: 80px;
       height: 80px;
-      color: white;
-      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+      color: var(--color-primary);
     }
 
     .temperature-large {
-      font-size: 48px;
+      font-size: var(--text-4xl);
       font-weight: 700;
-      color: white;
+      color: var(--color-text);
       margin: 12px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .weather-condition-text {
-      font-size: 18px;
-      color: rgba(255, 255, 255, 0.9);
+      font-size: var(--text-xl);
+      color: var(--color-text-2);
       margin-bottom: 16px;
       font-weight: 500;
     }
@@ -1252,16 +925,15 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       gap: 6px;
       padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--color-surface-2);
       border-radius: 24px;
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 600;
-      color: white;
-      backdrop-filter: blur(10px);
+      color: var(--color-text-2);
     }
 
     .weather-detail-item mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -1277,58 +949,24 @@ import { environment } from '../../../environments/environment';
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.4);
+      background: var(--color-line-strong);
       transition: all 0.3s ease;
     }
 
     .weather-indicators .indicator.active {
-      background: var(--color-surface);
+      background: var(--color-primary);
       transform: scale(1.3);
     }
 
     .weather-loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
+      width: 100%;
       min-height: 180px;
-      color: white;
-    }
-
-    .weather-loading p {
-      margin: 0;
-      font-size: 14px;
-      opacity: 0.8;
-    }
-
-    .weather-loading mat-spinner ::ng-deep circle {
-      stroke: white !important;
-    }
-
-    .local-time-display {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 24px;
-      font-size: 16px;
-      font-weight: 600;
-      color: white;
-      backdrop-filter: blur(10px);
-    }
-
-    .local-time-display mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
     }
 
     /* Quote Widget */
     .quote-widget {
       grid-column: span 1;
-      background: linear-gradient(135deg, #FA709A 0%, #FEE140 100%);
+      background: var(--color-surface-2);
       min-height: 280px;
       display: flex;
       flex-direction: column;
@@ -1339,7 +977,7 @@ import { environment } from '../../../environments/environment';
       position: relative;
       padding: 0;
       overflow: hidden;
-      background: #1a1a1a;
+      background: var(--nav-bg);
     }
 
     .quote-widget.image-mode .slideshow-image {
@@ -1358,55 +996,6 @@ import { environment } from '../../../environments/environment';
       opacity: 1;
     }
 
-    .quote-widget mat-card-title {
-      color: white;
-    }
-
-    .quote-container {
-      position: relative;
-      padding: 24px;
-      text-align: center;
-    }
-
-    .quote-mark {
-      position: absolute;
-      top: 0;
-      left: 0;
-      font-size: 80px;
-      width: 80px;
-      height: 80px;
-      color: rgba(255, 255, 255, 0.3);
-      transform: rotate(180deg);
-    }
-
-    .quote-text {
-      font-size: 22px;
-      font-style: italic;
-      color: white;
-      line-height: 1.6;
-      margin: 0 0 16px 0;
-      position: relative;
-      z-index: 1;
-    }
-
-    .quote-author {
-      font-size: 16px;
-      color: white;
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .slideshow-container {
-      width: 100%;
-      height: 180px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 12px;
-      overflow: hidden;
-      background: rgba(0, 0, 0, 0.15);
-    }
-
   `]
 })
 export class ProjectsComponent implements OnInit, OnDestroy {
@@ -1419,7 +1008,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     {
       id: 1,
       icon: 'campaign',
-      iconColor: '#FF6B6B',
+      iconColor: 'var(--color-danger)',
       title: 'New Company Announcement',
       message: 'Important policy update has been posted',
       time: '10 minutes ago',
@@ -1428,7 +1017,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     {
       id: 2,
       icon: 'cake',
-      iconColor: '#f5576c',
+      iconColor: 'var(--color-cat-pink)',
       title: 'Birthday Today',
       message: 'Sarah Johnson from HR is celebrating today!',
       time: '1 hour ago',
@@ -1437,7 +1026,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     {
       id: 3,
       icon: 'group_add',
-      iconColor: '#11998e',
+      iconColor: 'var(--color-ok)',
       title: 'New Employee',
       message: 'Welcome Michael Brown to the Marketing team',
       time: '3 hours ago',
@@ -1446,7 +1035,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     {
       id: 4,
       icon: 'emoji_events',
-      iconColor: '#FFD700',
+      iconColor: 'var(--color-cat-amber)',
       title: 'Employee of the Month',
       message: 'Jennifer Smith has been named Employee of the Month',
       time: '1 day ago',
@@ -1455,7 +1044,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     {
       id: 5,
       icon: 'support_agent',
-      iconColor: '#4169e1',
+      iconColor: 'var(--color-primary)',
       title: 'Support Ticket Resolved',
       message: 'Your IT support ticket #1234 has been resolved',
       time: '2 days ago',
@@ -2035,7 +1624,8 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
-    MatChipsModule,
+    EmptyStateComponent,
+    StatusChipComponent,
     MatCardModule
   ],
   template: `
@@ -2062,20 +1652,11 @@ export class ProjectsComponent implements OnInit, OnDestroy {
             <div class="detail-header">
               <h3>{{ selectedAnnouncement.title }}</h3>
               @if (selectedAnnouncement.priority === 'Urgent') {
-                <mat-chip class="priority-chip urgent">
-                  <mat-icon>bolt</mat-icon>
-                  Urgent
-                </mat-chip>
+                <app-status-chip status="Urgent" tone="danger"></app-status-chip>
               } @else if (selectedAnnouncement.priority === 'High') {
-                <mat-chip class="priority-chip high">
-                  <mat-icon>arrow_upward</mat-icon>
-                  High Priority
-                </mat-chip>
+                <app-status-chip status="High priority" tone="warn"></app-status-chip>
               } @else {
-                <mat-chip class="priority-chip normal">
-                  <mat-icon>info_outline</mat-icon>
-                  Information
-                </mat-chip>
+                <app-status-chip status="Information" tone="info"></app-status-chip>
               }
             </div>
             
@@ -2103,10 +1684,8 @@ export class ProjectsComponent implements OnInit, OnDestroy {
         } @else {
           <!-- All Announcements List -->
           @if (data.announcements.length === 0) {
-            <div class="no-announcements">
-              <mat-icon>campaign</mat-icon>
-              <p>No announcements at this time</p>
-            </div>
+            <app-empty-state icon="campaign" title="No announcements right now"
+                             message="Company announcements show up here once they are posted."></app-empty-state>
           } @else {
             <div class="announcements-list">
               @for (announcement of data.announcements; track announcement.announcementId) {
@@ -2122,9 +1701,9 @@ export class ProjectsComponent implements OnInit, OnDestroy {
                       <div class="card-header">
                         <h4>{{ announcement.title }}</h4>
                         @if (announcement.priority === 'Urgent') {
-                          <mat-chip class="priority-chip urgent">Urgent</mat-chip>
+                          <app-status-chip status="Urgent" tone="danger"></app-status-chip>
                         } @else if (announcement.priority === 'High') {
-                          <mat-chip class="priority-chip high">High</mat-chip>
+                          <app-status-chip status="High" tone="warn"></app-status-chip>
                         }
                       </div>
                       <p class="card-preview">{{ announcement.content | slice:0:120 }}{{ announcement.content.length > 120 ? '...' : '' }}</p>
@@ -2160,8 +1739,8 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       align-items: center;
       padding: 16px 24px;
       border-bottom: 1px solid var(--color-line);
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
       margin: -24px -24px 0 -24px;
     }
 
@@ -2174,7 +1753,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }
 
     .dialog-header button {
-      color: white;
+      color: var(--color-text-2);
     }
 
     .dialog-content {
@@ -2197,17 +1776,17 @@ export class ProjectsComponent implements OnInit, OnDestroy {
 
     .announcement-card:hover {
       transform: translateX(4px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-md);
     }
 
     .announcement-card.urgent {
       border-left-color: var(--color-danger);
-      background: linear-gradient(90deg, rgba(244,67,54,0.05) 0%, transparent 100%);
+      background: var(--color-danger-soft);
     }
 
     .announcement-card.high {
       border-left-color: var(--color-warn);
-      background: linear-gradient(90deg, rgba(255,152,0,0.05) 0%, transparent 100%);
+      background: var(--color-warn-soft);
     }
 
     .card-content {
@@ -2229,12 +1808,12 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }
 
     .card-icon.urgent {
-      background: linear-gradient(135deg, #ff5252 0%, var(--color-danger) 100%);
-      color: white;
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
     }
 
     .card-icon mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -2279,7 +1858,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }
 
     .card-meta mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
     }
@@ -2287,26 +1866,6 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     .card-action {
       display: flex;
       align-items: center;
-    }
-
-    .priority-chip {
-      font-size: 0.7rem;
-      height: 24px;
-    }
-
-    .priority-chip.urgent {
-      background: var(--color-danger) !important;
-      color: white !important;
-    }
-
-    .priority-chip.high {
-      background: var(--color-warn) !important;
-      color: white !important;
-    }
-
-    .priority-chip.normal {
-      background: var(--color-primary) !important;
-      color: white !important;
     }
 
     /* Detail View */
@@ -2355,7 +1914,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }
 
     .detail-meta mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
       color: var(--color-primary);
@@ -2366,22 +1925,6 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       line-height: 1.8;
       color: var(--color-text);
       white-space: pre-wrap;
-    }
-
-    .no-announcements {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 48px;
-      color: var(--color-text-3);
-    }
-
-    .no-announcements mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
     }
   `]
 })

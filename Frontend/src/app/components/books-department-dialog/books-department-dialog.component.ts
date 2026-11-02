@@ -94,27 +94,27 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
 
     .dialog-header { text-align: center; margin-bottom: 24px; }
     .header-icon-wrap { width: 64px; height: 64px; border-radius: 20px; background: var(--color-primary-soft); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; }
-    .header-icon-wrap mat-icon { color: var(--color-primary); font-size: 32px; width: 32px; height: 32px; }
+    .header-icon-wrap mat-icon { color: var(--color-primary); font-size: var(--text-4xl); width: 32px; height: 32px; }
     .dialog-header h2 { margin: 0 0 4px; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
     .dialog-header p { margin: 0; color: var(--color-text-3); font-size: var(--text-md); }
 
     .dept-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-height: 400px; overflow-y: auto; padding: 2px; }
     .dept-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1.5px solid var(--color-line); border-radius: 14px; cursor: pointer; transition: all 0.2s; background: var(--color-canvas); }
     .dept-card:hover { border-color: var(--color-primary); background: var(--color-primary-soft); transform: translateY(-1px); box-shadow: var(--shadow-md); }
-    .dept-icon { color: var(--color-primary); font-size: 24px; width: 24px; height: 24px; }
+    .dept-icon { color: var(--color-primary); font-size: var(--text-3xl); width: 24px; height: 24px; }
     .dept-name { flex: 1; font-size: var(--text-md); font-weight: 600; color: var(--color-text-2); }
-    .arrow-icon { color: var(--color-line-strong); font-size: 20px; width: 20px; height: 20px; transition: color 0.2s; }
+    .arrow-icon { color: var(--color-line-strong); font-size: var(--text-2xl); width: 20px; height: 20px; transition: color 0.2s; }
     .dept-card:hover .arrow-icon { color: var(--color-primary); }
 
     .password-section { margin-bottom: 24px; }
     .password-input-wrap { position: relative; display: flex; align-items: center; border: 2px solid var(--color-line); border-radius: 14px; padding: 4px 8px 4px 16px; transition: border-color 0.2s; background: var(--color-canvas); }
     .password-input-wrap:focus-within { border-color: var(--color-primary); background: var(--color-surface); }
-    .input-icon { color: var(--color-text-3); font-size: 22px; width: 22px; height: 22px; margin-right: 12px; }
+    .input-icon { color: var(--color-text-3); font-size: var(--text-2xl); width: 20px; height: 20px; margin-right: 12px; }
     .password-input { flex: 1; border: none; outline: none; font-size: var(--text-lg); padding: 12px 0; background: transparent; color: var(--color-text); font-family: inherit; letter-spacing: 2px; }
     .toggle-pw { color: var(--color-text-3); }
 
     .error-msg { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 16px; background: var(--color-danger-soft); border: 1px solid var(--color-danger); border-radius: 10px; color: var(--color-danger); font-size: var(--text-sm); }
-    .error-msg mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .error-msg mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
 
     .dialog-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; border-top: 1px solid var(--color-surface-2); }
     .dialog-footer button { border-radius: 10px; }

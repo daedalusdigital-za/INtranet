@@ -4,20 +4,21 @@ import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { DocumentsService, SharedItem, DocumentFile } from '../../services/documents.service';
 import { AuthService } from '../../services/auth.service';
 import { ConfirmService } from '../../ui/confirm.service';
+import { ToastService } from '../../ui/toast.service';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 
 @Component({
   selector: 'app-shared-with-me',
   standalone: true,
   imports: [
     CommonModule, MatButtonModule, MatIconModule, MatTooltipModule,
-    MatProgressSpinnerModule, MatSnackBarModule, MatMenuModule, NavbarComponent
+    MatMenuModule, NavbarComponent, EmptyStateComponent, SkeletonRowsComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -49,17 +50,14 @@ import { ConfirmService } from '../../ui/confirm.service';
 
       <div class="files-container">
         @if (isLoading) {
-          <div class="loading-state"><mat-spinner diameter="48"></mat-spinner></div>
+          <div class="loading-state"><app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows></div>
         }
 
         <!-- Top level: list of shared items -->
         @if (!isLoading && !activeShare) {
           @if (sharedItems.length === 0) {
-            <div class="empty-state">
-              <mat-icon>folder_off</mat-icon>
-              <h2>Nothing shared with you yet</h2>
-              <p>When a colleague shares a file or folder, it will appear here.</p>
-            </div>
+            <app-empty-state icon="folder_off" title="Nothing shared with you yet"
+                             message="When a colleague shares a file or folder, it will appear here."></app-empty-state>
           } @else {
             <div class="files-grid">
               @for (item of sharedItems; track item.id) {
@@ -99,10 +97,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         <!-- Inside a shared folder -->
         @if (!isLoading && activeShare) {
           @if (files.length === 0) {
-            <div class="empty-state">
-              <mat-icon>folder_open</mat-icon>
-              <h2>This folder is empty</h2>
-            </div>
+            <app-empty-state icon="folder_open" title="This folder is empty"></app-empty-state>
           } @else {
             <div class="files-grid">
               @for (file of files; track file.path) {
@@ -135,53 +130,42 @@ import { ConfirmService } from '../../ui/confirm.service';
     .hub-container {
       padding: 80px 32px 32px; min-height: 100vh;
       position: relative;
-      background: var(--color-text);
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, var(--color-text) 0%, #1e1b4b 55%, var(--color-text) 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
     .header-section { max-width: 1600px; margin: 0 auto 24px; }
     .header-top { display: flex; align-items: center; margin-bottom: 20px; }
     .breadcrumb-nav { display: flex; align-items: center; gap: 12px; }
-    .back-btn { background: rgba(255,255,255,0.1); color: white; }
-    .back-btn:hover { background: rgba(255,255,255,0.2); }
-    .breadcrumb-trail { display: flex; align-items: center; gap: 8px; color: white; font-size: 18px; }
+    .back-btn { background: var(--color-surface-2); color: var(--color-text-2); }
+    .back-btn:hover { background: var(--color-surface-3); }
+    .breadcrumb-trail { display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: var(--text-xl); }
     .dept-name { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer;
-      padding: 8px 16px; border-radius: 8px; background: rgba(255,255,255,0.1); }
-    .separator { color: rgba(255,255,255,0.5); font-size: 20px !important; }
-    .crumb { cursor: pointer; padding: 4px 12px; border-radius: 4px; }
-    .crumb:hover { background: rgba(255,255,255,0.1); }
+      padding: 8px 16px; border-radius: var(--radius-control); background: var(--color-surface); border: 1px solid var(--color-line); }
+    .separator { color: var(--color-text-3); font-size: var(--text-2xl); }
+    .crumb { cursor: pointer; padding: 4px 12px; border-radius: var(--radius-sm); }
+    .crumb:hover { background: var(--color-surface-2); }
     .files-container { max-width: 1600px; margin: 0 auto; }
-    .loading-state { display: flex; justify-content: center; padding: 80px; }
-    .empty-state { text-align: center; padding: 80px 40px; background: rgba(255,255,255,0.95);
-      border-radius: 20px; }
-    .empty-state mat-icon { font-size: 100px; width: 100px; height: 100px; color: var(--color-line); }
-    .empty-state h2 { color: var(--color-text); margin: 24px 0 8px; }
-    .empty-state p { color: var(--color-text-2); }
+    .loading-state { background: var(--color-surface); border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg); overflow: hidden; }
     .files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
-    .file-card { background: rgba(255,255,255,0.95); border-radius: 16px; padding: 20px; cursor: pointer;
-      transition: all 0.3s ease; position: relative; border: 2px solid transparent; }
-    .file-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
-    .file-card.folder { border-left: 4px solid #ffc107; }
+    .file-card { background: var(--color-surface); border-radius: var(--radius-lg); padding: 20px; cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative; border: 1px solid var(--color-line); }
+    .file-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .file-card.folder { border-left: 4px solid var(--color-cat-amber); }
     .file-icon-wrapper { width: 64px; height: 64px; margin: 0 auto 16px; display: flex;
-      align-items: center; justify-content: center; border-radius: 16px; background: var(--color-surface-2); }
-    .file-icon-wrapper mat-icon { font-size: 36px; width: 36px; height: 36px; }
-    .file-icon-wrapper.folder { background: var(--color-warn-soft); } .file-icon-wrapper.folder mat-icon { color: #ffc107; }
-    .file-icon-wrapper.pdf { background: var(--color-danger-soft); } .file-icon-wrapper.pdf mat-icon { color: var(--color-danger); }
+      align-items: center; justify-content: center; border-radius: var(--radius-lg); background: var(--color-surface-2); }
+    .file-icon-wrapper mat-icon { font-size: var(--text-4xl); width: 32px; height: 32px; }
+    .file-icon-wrapper.folder { background: var(--color-cat-amber-soft); } .file-icon-wrapper.folder mat-icon { color: var(--color-cat-amber); }
+    .file-icon-wrapper.pdf { background: var(--color-cat-pink-soft); } .file-icon-wrapper.pdf mat-icon { color: var(--color-cat-pink); }
     .file-icon-wrapper.word { background: var(--color-primary-soft); } .file-icon-wrapper.word mat-icon { color: var(--color-primary); }
-    .file-icon-wrapper.excel { background: var(--color-ok-soft); } .file-icon-wrapper.excel mat-icon { color: var(--color-ok); }
-    .file-icon-wrapper.powerpoint { background: var(--color-warn-soft); } .file-icon-wrapper.powerpoint mat-icon { color: var(--color-warn); }
-    .file-icon-wrapper.image { background: var(--color-cat-purple-soft); } .file-icon-wrapper.image mat-icon { color: #7b1fa2; }
+    .file-icon-wrapper.excel { background: var(--color-cat-teal-soft); } .file-icon-wrapper.excel mat-icon { color: var(--color-cat-teal); }
+    .file-icon-wrapper.powerpoint { background: var(--color-cat-amber-soft); } .file-icon-wrapper.powerpoint mat-icon { color: var(--color-cat-amber); }
+    .file-icon-wrapper.image { background: var(--color-cat-purple-soft); } .file-icon-wrapper.image mat-icon { color: var(--color-cat-purple); }
     .file-details { text-align: center; }
     .file-name { display: block; font-weight: 500; color: var(--color-text); overflow: hidden;
       text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }
-    .file-meta { font-size: 12px; color: var(--color-text-3); }
-    .file-note { display: block; font-size: 12px; color: var(--color-primary); font-style: italic; margin-top: 4px; }
+    .file-meta { font-size: var(--text-xs); color: var(--color-text-3); }
+    .file-note { display: block; font-size: var(--text-xs); color: var(--color-primary); font-style: italic; margin-top: 4px; }
     .file-menu-btn { position: absolute; top: 8px; right: 8px; }
   `]
 })
@@ -196,7 +180,7 @@ export class SharedWithMeComponent implements OnInit {
 
   constructor(
     private documentsService: DocumentsService,
-    private snackBar: MatSnackBar,
+    private toast: ToastService,
     private router: Router,
     private authService: AuthService,
     private readonly confirmDialog: ConfirmService
@@ -212,7 +196,7 @@ export class SharedWithMeComponent implements OnInit {
     this.isLoading = true;
     this.documentsService.getSharedWithMe().subscribe({
       next: (items) => { this.sharedItems = items; this.isLoading = false; },
-      error: () => { this.isLoading = false; this.snackBar.open('Failed to load shared items', 'Close', { duration: 3000 }); }
+      error: () => { this.isLoading = false; this.toast.error('Failed to load shared items'); }
     });
   }
 
@@ -224,7 +208,7 @@ export class SharedWithMeComponent implements OnInit {
     } else {
       this.documentsService.downloadSharedFile(item.id).subscribe({
         next: (blob) => this.saveBlob(blob, item.name),
-        error: () => this.snackBar.open('Download failed', 'Close', { duration: 3000 })
+        error: () => this.toast.error('Download failed')
       });
     }
   }
@@ -235,7 +219,7 @@ export class SharedWithMeComponent implements OnInit {
     const subfolder = this.breadcrumbs.length > 0 ? this.breadcrumbs.join('/') : undefined;
     this.documentsService.getSharedFiles(this.activeShare.id, subfolder).subscribe({
       next: (files) => { this.files = files; this.isLoading = false; },
-      error: () => { this.isLoading = false; this.snackBar.open('Failed to load folder', 'Close', { duration: 3000 }); }
+      error: () => { this.isLoading = false; this.toast.error('Failed to load folder'); }
     });
   }
 
@@ -252,7 +236,7 @@ export class SharedWithMeComponent implements OnInit {
     if (!this.activeShare) return;
     this.documentsService.downloadSharedFile(this.activeShare.id, file.path).subscribe({
       next: (blob) => this.saveBlob(blob, file.name),
-      error: () => this.snackBar.open('Download failed', 'Close', { duration: 3000 })
+      error: () => this.toast.error('Download failed')
     });
   }
 
@@ -294,8 +278,8 @@ export class SharedWithMeComponent implements OnInit {
       danger: true
     }))) return;
     this.documentsService.unshare(item.id).subscribe({
-      next: () => { this.snackBar.open('Share removed', 'Close', { duration: 3000 }); this.loadShared(); },
-      error: () => this.snackBar.open('Failed to remove share', 'Close', { duration: 3000 })
+      next: () => { this.toast.done('Share removed'); this.loadShared(); },
+      error: () => this.toast.error('Failed to remove share')
     });
   }
 

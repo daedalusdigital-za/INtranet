@@ -4,12 +4,16 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { NavbarComponent } from '../../shared/navbar/navbar.component';
 import { environment } from '../../../../environments/environment';
 import { ConfirmService } from '../../../ui/confirm.service';
+import { ToastService } from '../../../ui/toast.service';
+import { PageHeaderComponent } from '../../../ui/page-header/page-header.component';
+import { KpiItem, KpiStripComponent } from '../../../ui/kpi-strip/kpi-strip.component';
+import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
+import { DataTableComponent, TableColumn, TableView, formatMoney } from '../../../ui/data-table/data-table.component';
 
 interface CustomerRow {
   customerNumber: string;
@@ -64,52 +68,30 @@ interface CustomerDetail {
 @Component({
   selector: 'app-debtors',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, MatSnackBarModule, NavbarComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule, NavbarComponent, PageHeaderComponent, KpiStripComponent, SkeletonRowsComponent, DataTableComponent],
   template: `
     <app-navbar></app-navbar>
-    <div class="db-container">
-      <button class="db-back" (click)="goBack()">
-        <mat-icon>arrow_back</mat-icon> Back to Finance
-      </button>
-      <div class="db-header">
-        <div class="db-title">
-          <div class="db-icon"><mat-icon>call_received</mat-icon></div>
-          <div>
-            <h1>Debtors</h1>
-            <p>Accounts Receivable — sales owed to the business, by company & customer</p>
-          </div>
-        </div>
-      </div>
+    <main class="db-container">
+      <app-page-header [crumbs]="['People and money', 'Finance']" title="Debtors"
+                       subtitle="Accounts receivable: sales owed to the business, by company and customer">
+        <button mat-stroked-button (click)="goBack()"><mat-icon>arrow_back</mat-icon>Finance overview</button>
+      </app-page-header>
 
       @if (loading()) {
-        <div class="db-loading"><mat-spinner diameter="44"></mat-spinner></div>
+        <div class="db-card"><app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows></div>
       } @else {
         @if (summary(); as s) {
-        <div class="db-stats">
-          <div class="db-hero">
-            <span class="db-hero-label">Outstanding (Not Collected)</span>
-            <span class="db-hero-value">{{ s.totalOutstanding | currency:'ZAR':'symbol':'1.2-2' }}</span>
-            <span class="db-hero-sub">of {{ s.totalReceivable | currency:'ZAR':'symbol':'1.0-0' }} net sales</span>
-          </div>
-          <div class="db-stat collected">
-            <span class="db-stat-value">{{ s.totalCollected | currency:'ZAR':'symbol':'1.0-0' }}</span>
-            <span class="db-stat-label">Collected</span>
-          </div>
-          <div class="db-stat">
-            <span class="db-stat-value">{{ s.customerCount | number }}</span>
-            <span class="db-stat-label">Customers</span>
-          </div>
-        </div>
+        <app-kpi-strip [items]="kpis()"></app-kpi-strip>
 
         <!-- Company breakdown / tabs -->
         <div class="db-companies">
-          <button class="db-company" [class.active]="activeCompany() === null" (click)="selectCompany(null)">
-            <span class="db-company-name">All Companies</span>
+          <button type="button" class="db-company" [class.active]="activeCompany() === null" [attr.aria-pressed]="activeCompany() === null" (click)="selectCompany(null)">
+            <span class="db-company-name">All companies</span>
             <span class="db-company-out">{{ s.totalOutstanding | currency:'ZAR':'symbol':'1.0-0' }}</span>
             <span class="db-company-meta">{{ s.customerCount }} customers</span>
           </button>
           @for (co of s.byCompany; track co.code) {
-            <button class="db-company" [class.active]="activeCompany() === co.code" (click)="selectCompany(co.code ?? null)">
+            <button type="button" class="db-company" [class.active]="activeCompany() === co.code" [attr.aria-pressed]="activeCompany() === co.code" (click)="selectCompany(co.code ?? null)">
               <span class="db-company-name">{{ co.company }}</span>
               <span class="db-company-out">{{ co.outstanding | currency:'ZAR':'symbol':'1.0-0' }}</span>
               <span class="db-company-meta">{{ co.customerCount }} customers · {{ co.collected | currency:'ZAR':'symbol':'1.0-0' }} collected</span>
@@ -117,68 +99,41 @@ interface CustomerDetail {
           }
         </div>
 
-        <div class="db-filters">
-          <div class="db-search">
-            <mat-icon>search</mat-icon>
-            <input type="text" [(ngModel)]="search" placeholder="Search customer name or number…" />
-          </div>
-          <label class="db-toggle">
-            <input type="checkbox" [(ngModel)]="onlyOutstanding" /> Only with outstanding
-          </label>
-        </div>
-
-        <div class="db-table-wrap">
-          <table class="db-table">
-            <thead>
-              <tr><th>Customer</th><th>Number</th><th>Txns</th><th>Net Sales</th><th>Collected</th><th>Outstanding</th><th></th></tr>
-            </thead>
-            <tbody>
-              @for (c of filtered(); track c.customerNumber) {
-                <tr (click)="openCustomer(c)" class="db-row">
-                  <td class="db-name">{{ c.customerName }}</td>
-                  <td class="db-num">{{ c.customerNumber }}</td>
-                  <td>{{ c.transactionCount }}</td>
-                  <td class="db-amount">{{ c.netSales | currency:'ZAR':'symbol':'1.0-0' }}</td>
-                  <td class="db-collected">{{ c.collected | currency:'ZAR':'symbol':'1.0-0' }}</td>
-                  <td class="db-outstanding" [class.zero]="c.outstanding <= 0">{{ c.outstanding | currency:'ZAR':'symbol':'1.0-0' }}</td>
-                  <td><mat-icon class="db-chevron">chevron_right</mat-icon></td>
-                </tr>
-              }
-            </tbody>
-          </table>
-          @if (filtered().length === 0) { <div class="db-empty">No customers match your search.</div> }
-        </div>
+        <app-data-table tableId="finance-debtors" itemName="customers" caption="Debtors by customer"
+                        [rows]="s.byCustomer" [columns]="columns" [views]="views" [rowKey]="rowKey"
+                        (rowClick)="openCustomer($event)" emptyIcon="people"
+                        emptyMessage="Customers with sales show up here."></app-data-table>
         }
       }
-    </div>
+    </main>
 
     <!-- Customer drill-down -->
     @if (detail(); as d) {
       <div class="db-overlay" (click)="closeDetail()">
-        <div class="db-dialog" (click)="$event.stopPropagation()">
+        <div class="db-dialog" role="dialog" aria-modal="true" aria-labelledby="db-detail-title" (click)="$event.stopPropagation()">
           <div class="db-dialog-head">
             <div>
-              <h2>{{ d.customerName || d.customerNumber }}</h2>
+              <h2 id="db-detail-title">{{ d.customerName || d.customerNumber }}</h2>
               <span class="db-dialog-sub">{{ d.customerNumber }} · {{ d.transactionCount }} transactions</span>
             </div>
-            <button aria-label="Close" class="db-close" (click)="closeDetail()"><mat-icon>close</mat-icon></button>
+            <button aria-label="Close" mat-icon-button (click)="closeDetail()"><mat-icon>close</mat-icon></button>
           </div>
 
           <div class="db-dialog-metrics">
-            <div class="db-metric"><span class="db-metric-label">Net Sales</span><span class="db-metric-value">{{ d.netSales | currency:'ZAR':'symbol':'1.2-2' }}</span></div>
+            <div class="db-metric"><span class="db-metric-label">Net sales</span><span class="db-metric-value">{{ d.netSales | currency:'ZAR':'symbol':'1.2-2' }}</span></div>
             <div class="db-metric"><span class="db-metric-label">Collected</span><span class="db-metric-value green">{{ d.collected | currency:'ZAR':'symbol':'1.2-2' }}</span></div>
             <div class="db-metric"><span class="db-metric-label">Outstanding</span><span class="db-metric-value" [class.red]="d.outstanding > 0">{{ d.outstanding | currency:'ZAR':'symbol':'1.2-2' }}</span></div>
-            <button class="db-collect-btn" (click)="openCollect(d)"><mat-icon>payments</mat-icon> Record Collection</button>
+            <button mat-flat-button color="primary" class="db-collect-btn" (click)="openCollect(d)"><mat-icon>payments</mat-icon> Record collection</button>
           </div>
 
           <div class="db-dialog-body">
             @if (detailLoading()) {
-              <div class="db-loading"><mat-spinner diameter="32"></mat-spinner></div>
+              <app-skeleton-rows [rows]="4" [avatar]="false"></app-skeleton-rows>
             } @else {
               @if (d.payments.length > 0) {
                 <div class="db-section-title">Collections</div>
-                <table class="db-table">
-                  <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>By</th><th>Amount</th><th></th></tr></thead>
+                <table class="app-table">
+                  <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>By</th><th class="num">Amount</th><th><span class="sr-only">Actions</span></th></tr></thead>
                   <tbody>
                     @for (p of d.payments; track p.id) {
                       <tr>
@@ -186,27 +141,27 @@ interface CustomerDetail {
                         <td>{{ p.paymentMethod || '—' }}</td>
                         <td>{{ p.paymentReference || '—' }}</td>
                         <td>{{ p.recordedByName || '—' }}</td>
-                        <td class="db-collected">{{ p.amount | currency:'ZAR':'symbol':'1.2-2' }}</td>
-                        <td><button aria-label="Delete" class="db-del" (click)="deleteCollection(p, d)"><mat-icon>delete</mat-icon></button></td>
+                        <td class="num db-collected">{{ p.amount | currency:'ZAR':'symbol':'1.2-2' }}</td>
+                        <td><button mat-icon-button class="db-del" aria-label="Delete collection" (click)="deleteCollection(p, d)"><mat-icon>delete</mat-icon></button></td>
                       </tr>
                     }
                   </tbody>
                 </table>
               }
-              <div class="db-section-title">Sales Transactions</div>
-              <table class="db-table">
+              <div class="db-section-title">Sales transactions</div>
+              <table class="app-table">
                 <thead>
-                  <tr><th>Trans #</th><th>Date</th><th>Type</th><th>Product</th><th>Qty</th><th>Net</th></tr>
+                  <tr><th>Trans #</th><th>Date</th><th>Type</th><th>Product</th><th class="num">Qty</th><th class="num">Net</th></tr>
                 </thead>
                 <tbody>
                   @for (i of d.items; track i.id) {
                     <tr>
-                      <td>{{ i.transactionNumber }}</td>
+                      <td class="ref">{{ i.transactionNumber }}</td>
                       <td>{{ i.transactionDate | date:'dd MMM yyyy' }}</td>
                       <td>{{ i.transactionType }}</td>
                       <td class="db-prod">{{ i.productDescription }}</td>
-                      <td>{{ i.quantity | number:'1.0-2' }}</td>
-                      <td class="db-amount">{{ i.netSales | currency:'ZAR':'symbol':'1.2-2' }}</td>
+                      <td class="num">{{ i.quantity | number:'1.0-2' }}</td>
+                      <td class="num">{{ i.netSales | currency:'ZAR':'symbol':'1.2-2' }}</td>
                     </tr>
                   }
                 </tbody>
@@ -220,10 +175,10 @@ interface CustomerDetail {
     <!-- Record collection dialog -->
     @if (collectFor(); as cf) {
       <div class="db-overlay" (click)="closeCollect()">
-        <div class="db-collect-dialog" (click)="$event.stopPropagation()">
+        <div class="db-collect-dialog" role="dialog" aria-modal="true" aria-labelledby="db-collect-title" (click)="$event.stopPropagation()">
           <div class="db-dialog-head">
-            <h2>Record Collection</h2>
-            <button aria-label="Close" class="db-close" (click)="closeCollect()"><mat-icon>close</mat-icon></button>
+            <h2 id="db-collect-title">Record collection</h2>
+            <button aria-label="Close" mat-icon-button (click)="closeCollect()"><mat-icon>close</mat-icon></button>
           </div>
           <div class="db-collect-body">
             <p class="db-collect-cust">{{ cf.customerName || cf.customerNumber }} · Outstanding {{ cf.outstanding | currency:'ZAR':'symbol':'1.2-2' }}</p>
@@ -245,9 +200,9 @@ interface CustomerDetail {
             <label>Notes</label>
             <textarea [(ngModel)]="collectNotes" rows="2" placeholder="Optional"></textarea>
             <div class="db-collect-actions">
-              <button class="db-btn-cancel" (click)="closeCollect()">Cancel</button>
-              <button class="db-btn-save" [disabled]="!collectAmount || collectAmount <= 0 || saving()" (click)="saveCollection()">
-                {{ saving() ? 'Saving…' : 'Record Collection' }}
+              <button mat-button (click)="closeCollect()">Cancel</button>
+              <button mat-flat-button color="primary" [disabled]="!collectAmount || collectAmount <= 0 || saving()" (click)="saveCollection()">
+                {{ saving() ? 'Saving…' : 'Record collection' }}
               </button>
             </div>
           </div>
@@ -256,88 +211,46 @@ interface CustomerDetail {
     }
   `,
   styles: [`
-    :host { display:block; min-height:100vh; background:linear-gradient(135deg,var(--color-ok) 0%,#047857 100%); }
-    .db-container { max-width:1300px; margin:0 auto; padding:24px 20px 60px; }
-    .db-back { display:inline-flex; align-items:center; gap:6px; margin-bottom:16px; padding:8px 16px 8px 12px; border:none; border-radius:10px; background:rgba(255,255,255,.2); color:#fff; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
-    .db-back:hover { background:rgba(255,255,255,.32); }
-    .db-back mat-icon { font-size:20px; width:20px; height:20px; }
-    .db-header { margin-bottom:20px; }
-    .db-title { display:flex; align-items:center; gap:16px; }
-    .db-icon { width:56px; height:56px; border-radius:16px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; }
-    .db-icon mat-icon { color:#fff; font-size:30px; width:30px; height:30px; }
-    .db-title h1 { margin:0; color:#fff; font-size:24px; font-weight:700; }
-    .db-title p { margin:4px 0 0; color:rgba(255,255,255,.85); font-size:14px; }
+    :host { display:block; }
+    .db-container { max-width:1320px; margin:0 auto; padding:var(--space-5) var(--space-5) var(--space-8); display:grid; gap:var(--space-4); }
+    @media (max-width:600px) { .db-container { padding:var(--space-4) var(--space-4) var(--space-6); } }
 
-    .db-loading { background:var(--color-surface); border-radius:14px; padding:60px; display:flex; justify-content:center; }
-    .db-stats { display:grid; grid-template-columns:2fr 1fr 1fr; gap:14px; margin-bottom:16px; }
-    .db-hero { background:linear-gradient(135deg,#065f46,#047857); border-radius:16px; padding:24px 28px; display:flex; flex-direction:column; gap:4px; }
-    .db-hero-label { color:rgba(255,255,255,.85); font-size:13px; text-transform:uppercase; letter-spacing:.05em; }
-    .db-hero-value { color:#fff; font-size:32px; font-weight:800; }
-    .db-hero-sub { color:rgba(255,255,255,.7); font-size:13px; }
-    .db-stat { background:var(--color-surface); border-radius:14px; padding:20px; display:flex; flex-direction:column; gap:2px; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.1); }
-    .db-stat.collected .db-stat-value { color:var(--color-ok); }
-    .db-stat-value { font-size:24px; font-weight:700; color:var(--color-text); }
-    .db-stat-label { font-size:12px; text-transform:uppercase; color:var(--color-text-3); font-weight:600; }
+    .db-card { background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-md); overflow:hidden; }
 
-    .db-companies { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; margin-bottom:20px; }
-    .db-company { text-align:left; background:rgba(255,255,255,.9); border:2px solid transparent; border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:3px; cursor:pointer; transition:all .15s; }
-    .db-company:hover { background:var(--color-surface); }
-    .db-company.active { border-color:var(--color-surface); background:var(--color-surface); box-shadow:0 4px 14px rgba(0,0,0,.18); }
-    .db-company-name { font-weight:700; color:#065f46; font-size:14px; }
-    .db-company-out { font-size:20px; font-weight:800; color:var(--color-text); }
-    .db-company-meta { font-size:11px; color:var(--color-text-3); }
+    .db-companies { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:var(--space-3); }
+    .db-company { text-align:left; font-family:inherit; background:var(--color-surface); border:1px solid var(--color-line); border-radius:var(--radius-md); padding:12px 14px; display:flex; flex-direction:column; gap:3px; cursor:pointer; transition:background .15s, border-color .15s; }
+    .db-company:hover { background:var(--color-surface-2); }
+    .db-company.active { border-color:var(--color-primary); background:var(--color-primary-soft); box-shadow:0 0 0 1px var(--color-primary); }
+    .db-company-name { font-weight:700; color:var(--color-text); font-size:var(--text-md); }
+    .db-company-out { font-size:var(--text-2xl); font-weight:800; color:var(--color-text); font-variant-numeric:tabular-nums; }
+    .db-company-meta { font-size:var(--text-xs); color:var(--color-text-3); }
 
-    .db-filters { margin-bottom:16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-    .db-search { display:flex; align-items:center; gap:8px; background:var(--color-surface); padding:12px 16px; border-radius:12px; max-width:420px; flex:1; min-width:260px; }
-    .db-search mat-icon { color:var(--color-text-3); }
-    .db-search input { border:none; outline:none; font-size:14px; width:100%; }
-    .db-toggle { display:flex; align-items:center; gap:6px; color:#fff; font-size:14px; font-weight:600; cursor:pointer; }
-
-    .db-table-wrap { background:var(--color-surface); border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); }
-    .db-table { width:100%; border-collapse:collapse; }
-    .db-table th { text-align:left; padding:12px 16px; font-size:12px; text-transform:uppercase; color:var(--color-text-3); background:var(--color-canvas); border-bottom:1px solid var(--color-line); }
-    .db-table td { padding:13px 16px; font-size:14px; color:var(--color-text-2); border-bottom:1px solid var(--color-surface-2); }
-    .db-row { cursor:pointer; transition:background .15s; }
-    .db-row:hover { background:var(--color-ok-soft); }
-    .db-name { font-weight:600; color:var(--color-text); }
-    .db-num { font-family:monospace; color:var(--color-text-3); }
-    .db-amount { font-weight:600; color:var(--color-text-2); }
     .db-collected { font-weight:600; color:var(--color-ok); }
-    .db-outstanding { font-weight:700; color:var(--color-danger); }
-    .db-outstanding.zero { color:var(--color-text-3); }
-    .db-chevron { color:var(--color-line-strong); }
     .db-prod { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .db-empty { padding:30px; text-align:center; color:var(--color-text-3); }
 
-    .db-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px; }
-    .db-dialog { background:var(--color-surface); border-radius:16px; width:900px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
-    .db-dialog-head { display:flex; justify-content:space-between; align-items:flex-start; padding:20px 24px; border-bottom:1px solid var(--color-line); }
-    .db-dialog-head h2 { margin:0; font-size:19px; }
-    .db-dialog-sub { font-size:13px; color:var(--color-text-3); }
-    .db-close { background:none; border:none; cursor:pointer; color:var(--color-text-3); }
-    .db-dialog-metrics { display:flex; align-items:center; gap:24px; padding:16px 24px; background:var(--color-canvas); border-bottom:1px solid var(--color-line); flex-wrap:wrap; }
+    .db-overlay { position:fixed; inset:0; background:var(--color-scrim); display:flex; align-items:center; justify-content:center; z-index:1000; padding:var(--space-5); }
+    .db-dialog { background:var(--color-surface); color:var(--color-text); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); width:900px; max-width:95vw; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
+    .db-dialog-head { display:flex; justify-content:space-between; align-items:flex-start; padding:var(--space-4) var(--space-3) var(--space-4) var(--space-5); border-bottom:1px solid var(--color-line); }
+    .db-dialog-head h2 { margin:0; font-size:var(--text-xl); }
+    .db-dialog-sub { font-size:var(--text-sm); color:var(--color-text-3); }
+    .db-dialog-metrics { display:flex; align-items:center; gap:var(--space-5); padding:var(--space-4) var(--space-5); background:var(--color-surface-2); border-bottom:1px solid var(--color-line); flex-wrap:wrap; }
     .db-metric { display:flex; flex-direction:column; gap:2px; }
-    .db-metric-label { font-size:11px; text-transform:uppercase; color:var(--color-text-3); font-weight:600; }
-    .db-metric-value { font-size:18px; font-weight:700; color:var(--color-text); }
+    .db-metric-label { font-size:var(--text-xs); text-transform:uppercase; color:var(--color-text-3); font-weight:600; }
+    .db-metric-value { font-size:var(--text-xl); font-weight:700; color:var(--color-text); font-variant-numeric:tabular-nums; }
     .db-metric-value.green { color:var(--color-ok); }
     .db-metric-value.red { color:var(--color-danger); }
-    .db-collect-btn { margin-left:auto; display:inline-flex; align-items:center; gap:6px; background:var(--color-ok); color:#fff; border:none; border-radius:10px; padding:10px 18px; font-size:14px; font-weight:600; cursor:pointer; }
-    .db-collect-btn:hover { background:#047857; }
-    .db-dialog-body { padding:0 24px 20px; overflow-y:auto; }
-    .db-section-title { font-size:12px; text-transform:uppercase; color:var(--color-text-3); font-weight:700; margin:18px 0 8px; }
-    .db-del { background:none; border:none; cursor:pointer; color:var(--color-danger); }
-    .db-del mat-icon { font-size:18px; width:18px; height:18px; }
+    .db-collect-btn { margin-left:auto; }
+    .db-dialog-body { padding:0 var(--space-5) var(--space-4); overflow-y:auto; }
+    .db-section-title { font-size:var(--text-xs); text-transform:uppercase; color:var(--color-text-3); font-weight:700; margin:18px 0 8px; }
+    .db-del { color:var(--color-danger); }
 
-    .db-collect-dialog { background:var(--color-surface); border-radius:16px; width:460px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
-    .db-collect-body { padding:20px 24px 24px; display:flex; flex-direction:column; overflow-y:auto; }
-    .db-collect-cust { margin:0 0 12px; font-size:13px; color:var(--color-text-3); }
-    .db-collect-body label { font-size:12px; font-weight:600; color:var(--color-text-2); margin:10px 0 4px; text-transform:uppercase; }
-    .db-collect-body input, .db-collect-body select, .db-collect-body textarea { border:1px solid var(--color-line-strong); border-radius:8px; padding:10px 12px; font-size:14px; outline:none; }
-    .db-collect-body input:focus, .db-collect-body select:focus, .db-collect-body textarea:focus { border-color:var(--color-ok); }
-    .db-collect-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
-    .db-btn-cancel { background:var(--color-surface-2); color:var(--color-text-2); border:none; border-radius:8px; padding:10px 18px; font-weight:600; cursor:pointer; }
-    .db-btn-save { background:var(--color-ok); color:#fff; border:none; border-radius:8px; padding:10px 18px; font-weight:600; cursor:pointer; }
-    .db-btn-save:disabled { opacity:.5; cursor:not-allowed; }
+    .db-collect-dialog { background:var(--color-surface); color:var(--color-text); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); width:460px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+    .db-collect-body { padding:var(--space-4) var(--space-5) var(--space-5); display:flex; flex-direction:column; overflow-y:auto; }
+    .db-collect-cust { margin:0 0 var(--space-3); font-size:var(--text-sm); color:var(--color-text-3); }
+    .db-collect-body label { font-size:var(--text-xs); font-weight:600; color:var(--color-text-2); margin:10px 0 4px; text-transform:uppercase; }
+    .db-collect-body input, .db-collect-body select, .db-collect-body textarea { border:1px solid var(--color-line-strong); border-radius:var(--radius-control); background:var(--color-surface); color:var(--color-text); padding:10px 12px; font-size:var(--text-md); font-family:inherit; outline:none; }
+    .db-collect-body input:focus, .db-collect-body select:focus, .db-collect-body textarea:focus { border-color:var(--color-primary); box-shadow:0 0 0 3px var(--color-primary-soft); }
+    .db-collect-actions { display:flex; justify-content:flex-end; gap:var(--space-2); margin-top:var(--space-5); }
   `]
 })
 export class DebtorsComponent implements OnInit {
@@ -346,8 +259,6 @@ export class DebtorsComponent implements OnInit {
   detail = signal<CustomerDetail | null>(null);
   detailLoading = signal(false);
   activeCompany = signal<string | null>(null);
-  search = '';
-  onlyOutstanding = false;
 
   // Collection dialog state
   collectFor = signal<CustomerDetail | null>(null);
@@ -358,19 +269,33 @@ export class DebtorsComponent implements OnInit {
   collectReference = '';
   collectNotes = '';
 
-  filtered = computed(() => {
+  readonly rowKey = (c: CustomerRow) => c.customerNumber;
+
+  readonly columns: TableColumn<CustomerRow>[] = [
+    { key: 'name', label: 'Customer', value: c => c.customerName },
+    { key: 'number', label: 'Number', type: 'ref', value: c => c.customerNumber },
+    { key: 'txns', label: 'Txns', type: 'number', value: c => c.transactionCount },
+    { key: 'netSales', label: 'Net sales', type: 'money', value: c => c.netSales },
+    { key: 'collected', label: 'Collected', type: 'money', value: c => c.collected },
+    { key: 'outstanding', label: 'Outstanding', type: 'money', value: c => c.outstanding }
+  ];
+
+  readonly views: TableView<CustomerRow>[] = [
+    { id: 'all', label: 'All' },
+    { id: 'outstanding', label: 'With outstanding', filter: c => c.outstanding > 0 }
+  ];
+
+  kpis = computed<KpiItem[]>(() => {
     const s = this.summary();
     if (!s) return [];
-    const q = this.search.trim().toLowerCase();
-    let list = s.byCustomer;
-    if (this.onlyOutstanding) list = list.filter(c => c.outstanding > 0);
-    if (q) list = list.filter(c =>
-      (c.customerName || '').toLowerCase().includes(q) ||
-      (c.customerNumber || '').toLowerCase().includes(q));
-    return list;
+    return [
+      { label: 'Outstanding (not collected)', value: formatMoney(s.totalOutstanding), note: `of ${formatMoney(s.totalReceivable)} net sales` },
+      { label: 'Collected', value: formatMoney(s.totalCollected) },
+      { label: 'Customers', value: s.customerCount.toLocaleString('en-ZA') }
+    ];
   });
 
-  constructor(private http: HttpClient, private router: Router, private snack: MatSnackBar, private readonly confirmDialog: ConfirmService) {}
+  constructor(private http: HttpClient, private router: Router, private readonly toast: ToastService, private readonly confirmDialog: ConfirmService) {}
 
   goBack(): void { this.router.navigate(['/finance']); }
 
@@ -430,12 +355,12 @@ export class DebtorsComponent implements OnInit {
     this.http.post(`${environment.apiUrl}/finance/debtors/collect`, body).subscribe({
       next: () => {
         this.saving.set(false);
-        this.snack.open('Collection recorded', 'OK', { duration: 2500 });
+        this.toast.done('Collection recorded');
         this.closeCollect();
         this.refreshCustomer(cf.customerNumber);
         this.load();
       },
-      error: () => { this.saving.set(false); this.snack.open('Failed to record collection', 'Dismiss', { duration: 3000 }); }
+      error: () => { this.saving.set(false); this.toast.error("Couldn't record the collection. Try again."); }
     });
   }
 
@@ -453,8 +378,8 @@ export class DebtorsComponent implements OnInit {
       danger: true
     }))) return;
     this.http.delete(`${environment.apiUrl}/finance/debtors/payments/${p.id}`).subscribe({
-      next: () => { this.snack.open('Collection removed', 'OK', { duration: 2000 }); this.refreshCustomer(d.customerNumber); this.load(); },
-      error: () => this.snack.open('Failed to remove', 'Dismiss', { duration: 3000 })
+      next: () => { this.toast.done('Collection removed'); this.refreshCustomer(d.customerNumber); this.load(); },
+      error: () => this.toast.error("Couldn't remove the collection. Try again.")
     });
   }
 }

@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import * as XLSX from 'xlsx';
@@ -354,6 +354,12 @@ export class UploaderDialogComponent {
   readonly mode = signal<UploaderMode>('home');
   readonly dragging = signal(false);
   readonly busy = signal(false);
+
+  constructor() {
+    // Optional: open straight into a mode, e.g. dialog.open(UploaderDialogComponent, { data: { mode: 'pod' } })
+    const data = inject<{ mode?: UploaderMode } | null>(MAT_DIALOG_DATA, { optional: true });
+    if (data?.mode) this.mode.set(data.mode);
+  }
 
   readonly cards: UploaderCard[] = [
     { mode: 'pod', icon: 'fact_check', title: 'POD Uploader', accent: '#6366f1',

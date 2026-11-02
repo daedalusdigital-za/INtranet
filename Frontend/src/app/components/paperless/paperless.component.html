@@ -243,7 +243,7 @@
               <svg viewBox="0 0 40 40" width="44" height="44">
                 <circle class="pl-ring-bg" cx="20" cy="20" r="16"></circle>
                 <circle class="pl-ring-fg" cx="20" cy="20" r="16"
-                        [style.stroke]="stackCount(d) > 0 ? '#e11d48' : statusColour(d.status)"
+                        [style.stroke]="stackCount(d) > 0 ? 'var(--color-danger)' : statusColour(d.status)"
                         [style.stroke-dasharray]="ringCirc"
                         [style.stroke-dashoffset]="ringOffset(d.progress)"></circle>
               </svg>
@@ -256,7 +256,7 @@
             <div class="pl-doc__main">
               <div class="pl-doc__name" [title]="d.name">{{ d.name }}</div>
               <div class="pl-doc__meta">
-                <span class="pl-chip" [style.background]="statusColour(d.status) + '1f'"
+                <span class="pl-chip" [style.background]="statusSoft(d.status)"
                       [style.color]="statusColour(d.status)">
                   <span class="material-icons">{{ statusIcon(d.status) }}</span>
                   {{ statusLabel(d.status) }}
@@ -500,10 +500,7 @@
           }
         </div>
       } @empty {
-        <div class="pl-empty">
-          <span class="material-icons">folder_open</span>
-          <p>No documents yet. Upload one to get started.</p>
-        </div>
+        <app-empty-state compact icon="folder_open" title="No documents yet" message="Upload a file above to get started."></app-empty-state>
       }
     </div>
   </div>
@@ -590,18 +587,12 @@
         @if (p.kind === 'tripsheet') {
           <div class="pl-preview__pdf">
             @if (paperless.previewLoading()) {
-              <div class="pl-empty">
-                <span class="material-icons pl-spin">progress_activity</span>
-                <p>Loading tripsheet…</p>
-              </div>
+              <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
             } @else {
               @if (previewPdfUrl(); as url) {
               <iframe [src]="url" class="pl-page__pdf" title="Tripsheet"></iframe>
               } @else {
-              <div class="pl-empty">
-                <span class="material-icons">visibility_off</span>
-                <p>Tripsheet preview unavailable.</p>
-              </div>
+              <app-empty-state icon="visibility_off" title="Tripsheet preview unavailable" message="The tripsheet could not be loaded for preview."></app-empty-state>
               }
             }
           </div>
@@ -610,18 +601,12 @@
         @if (p.kind === 'pod') {
           <div class="pl-preview__pdf">
             @if (paperless.previewLoading()) {
-              <div class="pl-empty">
-                <span class="material-icons pl-spin">progress_activity</span>
-                <p>Loading POD…</p>
-              </div>
+              <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
             } @else {
               @if (previewPdfUrl(); as url) {
               <iframe [src]="url" class="pl-page__pdf" title="POD"></iframe>
               } @else {
-              <div class="pl-empty">
-                <span class="material-icons">visibility_off</span>
-                <p>POD preview unavailable.</p>
-              </div>
+              <app-empty-state icon="visibility_off" title="POD preview unavailable" message="The proof of delivery could not be loaded for preview."></app-empty-state>
               }
             }
           </div>
@@ -672,13 +657,11 @@
               </div>
             }
           } @else {
-            <div class="pl-page__unsupported">
-              <span class="material-icons">visibility_off</span>
-              <p>Preview not available for this file type.</p>
+            <app-empty-state icon="visibility_off" title="Preview not available" message="This file type can't be previewed here.">
               <a class="pl-btn pl-btn--primary" [href]="d.dataUrl" [download]="d.name">
                 <span class="material-icons">download</span> Download
               </a>
-            </div>
+            </app-empty-state>
           }
 
           <!-- Interaction overlay (above the iframe) -->
@@ -846,10 +829,7 @@
         </div>
       }
       } @else {
-      <div class="pl-empty pl-empty--big">
-        <span class="material-icons">description</span>
-        <p>Open a document from the Paperless controller to view, annotate and sign it.</p>
-      </div>
+      <app-empty-state icon="description" title="No document open" message="Open a document from the Paperless controller to view, annotate and sign it."></app-empty-state>
       }
     }
   </div>

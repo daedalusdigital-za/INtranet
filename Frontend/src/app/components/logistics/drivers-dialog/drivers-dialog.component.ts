@@ -461,7 +461,7 @@ interface Driver {
           align-items: center;
           justify-content: center;
           flex: none;
-          font-size: 22px;
+          font-size: var(--text-2xl);
           width: 40px;
           height: 40px;
           border-radius: var(--radius-md);
@@ -576,9 +576,9 @@ interface Driver {
             box-shadow: var(--shadow-sm);
 
             mat-icon {
-              font-size: 28px;
-              width: 28px;
-              height: 28px;
+              font-size: var(--text-3xl);
+              width: 24px;
+              height: 24px;
               color: var(--color-cat-purple);
             }
 
@@ -714,7 +714,7 @@ interface Driver {
             font-variant-numeric: tabular-nums;
 
             mat-icon {
-              font-size: 16px;
+              font-size: var(--text-lg);
               width: 16px;
               height: 16px;
             }
@@ -751,7 +751,7 @@ interface Driver {
             background: var(--color-cat-amber-soft);
 
             mat-icon {
-              font-size: 18px;
+              font-size: var(--text-xl);
               width: 18px;
               height: 18px;
             }

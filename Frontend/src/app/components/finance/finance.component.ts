@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Router } from '@angular/router';
+import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -19,6 +19,13 @@ import { FinanceService } from '../../services/finance.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { environment } from '../../../environments/environment';
+import { FinancePodsComponent } from './finance-pods.component';
+import { FinanceVaultComponent } from './finance-vault.component';
+import { TenderService } from '../../services/tender.service';
+
+/** Tab order in finance.component.html */
+const TABS = ['overview', 'approvals', 'invoices', 'pods', 'vault'] as const;
+type FinanceTab = typeof TABS[number];
 
 interface BookInvoice {
   id: number;
@@ -75,12 +82,27 @@ interface RequestedPayment {
     MatProgressSpinnerModule,
     MatTooltipModule,
     NavbarComponent,
-    PageHeaderComponent
+    PageHeaderComponent,
+    FinancePodsComponent,
+    FinanceVaultComponent
   ],
   templateUrl: './finance.component.html',
   styleUrls: ['./finance.component.scss']
 })
 export class FinanceComponent implements OnInit {
+  // ── Tabs ──
+  tabIndex = 0;
+  private approvalsLoaded = false;
+
+  // ── POD / Vault headline numbers for the overview ──
+  podUnlinked = 0;
+  vaultExpiring = 0;
+  vaultExpired = 0;
+
+  get approvalsBadge(): number {
+    return (this.stats.requestedPayments || 0) + (this.requisitionCounts.requested || 0) + (this.stationeryCounts.pending || 0);
+  }
+
   stats = {
     totalInvoices: 0,
     totalAmount: 0,
@@ -156,7 +178,9 @@ export class FinanceComponent implements OnInit {
     private financeService: FinanceService,
     private http: HttpClient,
     private router: Router,
-    private toast: ToastService
+    private route: ActivatedRoute,
+    private toast: ToastService,
+    private tenderService: TenderService
   ) {}
 
   ngOnInit(): void {
@@ -164,6 +188,43 @@ export class FinanceComponent implements OnInit {
     this.loadStats();
     this.loadStationeryCounts();
     this.loadRequisitionCounts();
+    this.loadPodAndVaultCounts();
+
+    // Deep link: /finance?tab=pods|vault|approvals|invoices (&section=stationery|requisitions)
+    this.route.queryParamMap.subscribe(q => {
+      const t = (q.get('tab') || '') as FinanceTab;
+      const idx = TABS.indexOf(t);
+      if (idx >= 0 && idx !== this.tabIndex) this.onTabChange(idx);
+      const section = q.get('section');
+      if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+    });
+  }
+
+  onTabChange(i: number): void {
+    this.tabIndex = i;
+    const tab = TABS[i] ?? 'overview';
+    if (tab === 'approvals' && !this.approvalsLoaded) {
+      this.approvalsLoaded = true;
+      this.loadRequisitions();
+      this.loadStationeryRequests();
+    }
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab: tab === 'overview' ? null : tab }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
+  goTab(tab: FinanceTab, section?: string): void {
+    this.onTabChange(TABS.indexOf(tab));
+    if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+  }
+
+  private loadPodAndVaultCounts(): void {
+    this.http.get<any>(`${environment.apiUrl}/PodDocuments/summary`).subscribe({
+      next: s => this.podUnlinked = s?.unlinked || 0,
+      error: () => {}
+    });
+    this.tenderService.getComplianceSummary().subscribe({
+      next: s => { this.vaultExpiring = (s?.expiring || 0) + (s?.warning || 0); this.vaultExpired = s?.expired || 0; },
+      error: () => {}
+    });
   }
 
   loadDepartments(): void {

@@ -252,6 +252,13 @@ namespace ProjectTracker.API.Controllers
             n.Rationale = string.IsNullOrWhiteSpace(reason) ? n.Rationale : $"{(accept ? "Accepted" : "Rejected")} by {me}: {reason}";
             n.UpdatedAt = now; n.UpdatedByUserId = Uid; n.ReviewDueAt = accept && n.Type != "gap" ? now.AddMonths(6) : n.ReviewDueAt;
             _db.CortexChanges.Add(new CortexChange { Target = "node", TargetKey = key, Kind = accept ? "accepted" : "rejected", Field = "Status", OldValue = old, NewValue = n.Status, ChangedBy = "user", UserId = Uid, UserName = me, OccurredAt = now });
+            // the to-do the scheduler raised for this item is done once a decision is made
+            var todoIds = await _db.CortexChanges.Where(c => c.Kind == "tasked" && c.TargetKey == key && c.NewValue != null).Select(c => c.NewValue!).ToListAsync();
+            foreach (var tid in todoIds.Select(t => int.TryParse(t, out var i) ? i : 0).Where(i => i > 0))
+            {
+                var todo = await _db.TodoTasks.FindAsync(tid);
+                if (todo != null && !todo.IsCompleted) { todo.IsCompleted = true; todo.Status = "Completed"; todo.CompletedAt = now; todo.UpdatedAt = now; }
+            }
             await _db.SaveChangesAsync();
             return Ok(new { n.Key, n.Status, n.Provenance, n.Rationale });
         }

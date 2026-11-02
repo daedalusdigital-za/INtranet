@@ -171,19 +171,19 @@
   <!-- Legend -->
   <div class="legend">
     <div class="legend-item">
-      <span class="color-box" style="background-color: var(--color-ok);"></span>
+      <span class="color-box" [style.background-color]="getStatusColor('Active')"></span>
       <span>Active</span>
     </div>
     <div class="legend-item">
-      <span class="color-box" style="background-color: #FFC107;"></span>
+      <span class="color-box" [style.background-color]="getStatusColor('LowStock')"></span>
       <span>Low Stock</span>
     </div>
     <div class="legend-item">
-      <span class="color-box" style="background-color: var(--color-danger);"></span>
+      <span class="color-box" [style.background-color]="getStatusColor('Empty')"></span>
       <span>Empty</span>
     </div>
     <div class="legend-item">
-      <span class="color-box" style="background-color: #9E9E9E;"></span>
+      <span class="color-box" [style.background-color]="getStatusColor('Blocked')"></span>
       <span>Blocked</span>
     </div>
   </div>

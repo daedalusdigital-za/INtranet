@@ -156,17 +156,34 @@ namespace ProjectTracker.API.Services.Cortex
 
             // Technology: sources and modules (positions/blurbs live in cortex-model.ts)
             foreach (var s in Sources) N(s.Key, "source", s.Label, "group", null, "code:cortex-model.ts");
-            foreach (var m in Modules) N(m.Key, "module", m.Label, "group", null, "code:cortex-model.ts", route: m.Route, perm: m.Perm, data: new { perm = m.Perm });
+            // modules are added after users are loaded, so each one can carry its day-to-day owner (see below)
             foreach (var h in Handoffs) E(h.From, h.To, "handoff", h.Label, h.How, h.Ref, "code");
             foreach (var k in new[] { "sales", "tenders", "logistics", "stock", "finance", "paperless", "hr" }) E(k, "mgmt", "handoff", "Rolled up on the Management dashboard", CortexHandoff.ReadOnly, "ManagementController.cs:184", "code");
 
             // Organisation: departments, roles, people
-            var depts = await _db.Departments.AsNoTracking().OrderBy(d => d.Name).ToListAsync(ct);
+            var depts = await _db.Departments.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.Name).ToListAsync(ct);
             var users = await _db.Users.AsNoTracking().Where(u => u.IsActive).Select(u => new { u.UserId, Name = u.Name + " " + u.Surname, u.Email, u.Role, u.Title, u.DepartmentId, u.Permissions, u.LinkedEmpId }).ToListAsync(ct);
             var emps = await _db.EmpRegistrations.AsNoTracking().Select(e => new { e.EmpId, Name = ((e.Name ?? "") + " " + (e.LastName ?? "")).Trim(), e.Department, e.JobTitle }).ToListAsync(ct);
             var flows = await _db.FlowDefinitions.AsNoTracking().Where(f => !f.IsTemplate).ToListAsync(ct);
             var runStats = await _db.FlowRuns.AsNoTracking().GroupBy(r => r.FlowDefinitionId)
                 .Select(g => new { Id = g.Key, Total = g.Count(), Active = g.Count(r => r.Status == Models.Flows.FlowRunStatus.Running || r.Status == Models.Flows.FlowRunStatus.Waiting), Last = (DateTime?)g.Max(r => r.StartedAt) }).ToDictionaryAsync(x => x.Id, ct);
+
+            // Modules, each with a day-to-day owner derived from who holds its permission: a single non-admin holder owns
+            // it outright; several holders -> the department most of them sit in (team-level, never a guess at one name).
+            foreach (var m in Modules)
+            {
+                var holders = m.Perm == null ? new() : users.Where(u => !IsAdmin(u.Role) && ModulesOf(u.Permissions, u.Role).Contains(m.Perm)).ToList();
+                int? ownerId = null; string? ownerLabel = null;
+                if (holders.Count == 1) { ownerId = holders[0].UserId; ownerLabel = holders[0].Name; }
+                else if (holders.Count > 1)
+                {
+                    var top = holders.Where(h => h.DepartmentId != null).GroupBy(h => h.DepartmentId).OrderByDescending(g => g.Count()).FirstOrDefault();
+                    var td = top == null ? null : depts.FirstOrDefault(d => d.DepartmentId == top.Key);
+                    ownerLabel = td != null ? $"{td.Name} ({top!.Count()} of {holders.Count} holders)" : $"{holders.Count} people";
+                }
+                N(m.Key, "module", m.Label, "group", null, "code:cortex-model.ts", route: m.Route, perm: m.Perm, ownerUserId: ownerId, ownerLabel: ownerLabel,
+                  data: new { perm = m.Perm, holders = holders.Count, admins = users.Count(u => IsAdmin(u.Role)) });
+            }
 
             // Hand-off metrics: how long a task sits at a step (created → completed) and how many are open there now. Last 180 days.
             var since = now.AddDays(-180);
@@ -314,7 +331,7 @@ namespace ProjectTracker.API.Services.Cortex
                 N($"gap:handoff:{h.From}>{h.To}", "gap", $"Not built: {h.From} → {h.To}", h.To, h.Label, "derived", data: new { kind = "not_built", from = h.From, to = h.To, codeRef = h.Ref, cost = "unknown", priority = 2 });
             foreach (var f in flows.Where(f => f.IsEnabled && (!runStats.TryGetValue(f.Id, out var rs) || rs.Total == 0)))
                 N($"gap:noevents:flow:{f.Id}", "gap", $"No runs yet: {f.Name}", $"flow:{f.Id}", "A process with no runs does not count towards coverage until the owner confirms it or work passes through it.", "derived", ownerUserId: f.OwnerUserId, ownerLabel: f.OwnerName, data: new { kind = "no_events", priority = 1 });
-            foreach (var d in depts.Where(d => !flows.Any(f => Norm(f.DepartmentName) == Norm(d.Name)) && users.Any(u => u.DepartmentId == d.DepartmentId)))
+            foreach (var d in depts.Where(d => !flows.Any(f => f.IsEnabled && Norm(f.DepartmentName) == Norm(d.Name)) && users.Any(u => u.DepartmentId == d.DepartmentId)))
                 N($"gap:uncaptured:dept:{d.DepartmentId}", "gap", $"Work not captured yet: {d.Name}", DeptKey(d.DepartmentId), $"{d.Name} has people but no process on the map. Shown at team level, never against a person.", "derived", ownerLabel: d.ManagerName, data: new { kind = "uncaptured", people = users.Count(u => u.DepartmentId == d.DepartmentId), priority = 3 });
             foreach (var m in Modules.Where(m => m.Perm != null))
                 if (!users.Any(u => !IsAdmin(u.Role) && ModulesOf(u.Permissions, u.Role).Contains(m.Perm!)))

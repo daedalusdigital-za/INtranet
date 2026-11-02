@@ -1,6 +1,7 @@
 import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { sanitizeUntrustedHtml } from '../../utils/sanitize-html';
@@ -18,7 +19,7 @@ interface MessageDetail { index: number; subject: string; from: string; to: stri
 @Component({
   selector: 'app-archives',
   standalone: true,
-  imports: [CommonModule, FormsModule, NavbarComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, NavbarComponent],
   templateUrl: './archives.component.html',
   styleUrls: ['./archives.component.scss']
 })

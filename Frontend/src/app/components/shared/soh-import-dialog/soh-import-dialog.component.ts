@@ -190,7 +190,6 @@ export interface SohImportDialogResult {
         <!-- Step 2: Uploading -->
         @if (currentStep() === 'uploading') {
           <div class="uploading-section">
-            <mat-spinner diameter="60"></mat-spinner>
             <h3>Processing Stock on Hand File...</h3>
             <p>Parsing and validating data</p>
             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -292,7 +291,7 @@ export interface SohImportDialogResult {
                 </mat-panel-title>
               </mat-expansion-panel-header>
               <div class="data-preview">
-                <table class="preview-table">
+                <table class="preview-table app-table">
                   <thead>
                     <tr>
                       <th>Row</th>
@@ -300,22 +299,22 @@ export interface SohImportDialogResult {
                       <th>Description</th>
                       <th>Location</th>
                       <th>UOM</th>
-                      <th class="right">Qty On Hand</th>
-                      <th class="right">Available</th>
-                      <th class="right">Total Cost</th>
+                      <th class="num">Qty On Hand</th>
+                      <th class="num">Available</th>
+                      <th class="num">Total Cost</th>
                     </tr>
                   </thead>
                   <tbody>
                     @for (line of previewLines(); track line.rowIndex) {
                       <tr [class.has-issues]="line.hasIssues">
                         <td>{{ line.rowIndex }}</td>
-                        <td class="item-code">{{ line.itemCode }}</td>
+                        <td class="ref">{{ line.itemCode }}</td>
                         <td class="description">{{ line.itemDescription || '-' }}</td>
                         <td>{{ line.location }}</td>
                         <td>{{ line.uom }}</td>
-                        <td class="right">{{ formatNumber(line.qtyOnHand) }}</td>
-                        <td class="right">{{ formatNumber(line.stockAvailable) }}</td>
-                        <td class="right">{{ formatCurrency(line.totalCostForQOH) }}</td>
+                        <td class="num">{{ formatNumber(line.qtyOnHand) }}</td>
+                        <td class="num">{{ formatNumber(line.stockAvailable) }}</td>
+                        <td class="num">{{ formatCurrency(line.totalCostForQOH) }}</td>
                       </tr>
                     }
                   </tbody>
@@ -335,7 +334,6 @@ export interface SohImportDialogResult {
         <!-- Step 4: Committing -->
         @if (currentStep() === 'committing') {
           <div class="committing-section">
-            <mat-spinner diameter="60"></mat-spinner>
             <h3>Committing Import...</h3>
             <p>Saving {{ importSummary()?.lines || 0 }} stock records to database</p>
             <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -399,14 +397,14 @@ export interface SohImportDialogResult {
       gap: 12px;
       margin: 0;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #00695c, #004d40);
-      color: white;
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0;
 
       mat-icon {
         font-size: 28px;
         width: 28px;
         height: 28px;
+        color: var(--color-primary);
       }
     }
 
@@ -459,8 +457,8 @@ export interface SohImportDialogResult {
       background: var(--color-canvas);
 
       &:hover:not(.disabled) {
-        border-color: #00695c;
-        background: #e0f2f1;
+        border-color: var(--color-primary);
+        background: var(--color-primary-soft);
       }
 
       &.disabled {
@@ -470,8 +468,8 @@ export interface SohImportDialogResult {
       }
 
       &.drag-over {
-        border-color: #00695c;
-        background: #e0f2f1;
+        border-color: var(--color-primary);
+        background: var(--color-primary-soft);
         transform: scale(1.02);
       }
 
@@ -479,7 +477,7 @@ export interface SohImportDialogResult {
         font-size: 64px;
         width: 64px;
         height: 64px;
-        color: #00695c;
+        color: var(--color-primary);
       }
 
       .file-icon {
@@ -500,7 +498,7 @@ export interface SohImportDialogResult {
       }
 
       .file-hint {
-        font-size: 12px;
+        font-size: var(--text-xs);
         color: var(--color-text-3);
         margin-top: 8px;
       }
@@ -521,7 +519,7 @@ export interface SohImportDialogResult {
         color: var(--color-text);
 
         mat-icon {
-          color: #00695c;
+          color: var(--color-primary);
         }
       }
 
@@ -540,7 +538,7 @@ export interface SohImportDialogResult {
       }
 
       .toggle-hint {
-        font-size: 12px;
+        font-size: var(--text-xs);
         color: var(--color-text-2);
         margin: 0;
         padding-left: 48px;
@@ -592,13 +590,13 @@ export interface SohImportDialogResult {
       }
 
       .value {
-        font-size: 18px;
+        font-size: var(--text-xl);
         font-weight: 700;
         margin: 4px 0;
       }
 
       .label {
-        font-size: 11px;
+        font-size: var(--text-xs);
         color: var(--color-text-2);
         text-transform: uppercase;
       }
@@ -630,11 +628,11 @@ export interface SohImportDialogResult {
       }
 
       .location-chip {
-        background: #00695c;
-        color: white;
+        background: var(--color-primary-soft);
+        color: var(--color-primary);
         padding: 4px 12px;
         border-radius: 16px;
-        font-size: 13px;
+        font-size: var(--text-sm);
       }
     }
 
@@ -662,10 +660,10 @@ export interface SohImportDialogResult {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #e0f2f1;
+      background: var(--color-surface-2);
       border-radius: 8px;
       margin-bottom: 16px;
-      color: #00695c;
+      color: var(--color-text-2);
 
       mat-icon {
         font-size: 20px;
@@ -690,7 +688,7 @@ export interface SohImportDialogResult {
       gap: 8px;
       padding: 8px 12px;
       border-radius: 4px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       margin-bottom: 4px;
       align-items: center;
 
@@ -709,9 +707,9 @@ export interface SohImportDialogResult {
       }
 
       .issue-code {
-        font-family: monospace;
+        font-family: var(--font-mono);
         color: var(--color-text-3);
-        font-size: 11px;
+        font-size: var(--text-xs);
       }
 
       .issue-message {
@@ -719,8 +717,8 @@ export interface SohImportDialogResult {
       }
 
       .issue-item-code {
-        font-family: monospace;
-        font-size: 11px;
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
         color: var(--color-text-2);
         background: var(--color-surface-2);
         padding: 2px 6px;
@@ -742,33 +740,6 @@ export interface SohImportDialogResult {
     }
 
     .preview-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-
-      th, td {
-        padding: 8px 12px;
-        text-align: left;
-        border-bottom: 1px solid var(--color-line);
-      }
-
-      th {
-        background: var(--color-canvas);
-        font-weight: 500;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-      }
-
-      .right {
-        text-align: right;
-      }
-
-      .item-code {
-        font-family: monospace;
-        font-size: 12px;
-      }
-
       .description {
         max-width: 200px;
         white-space: nowrap;

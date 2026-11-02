@@ -11,8 +11,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatRadioModule } from '@angular/material/radio';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { ToastService } from '../../../ui/toast.service';
 
 @Component({
   selector: 'app-private-meeting-request-dialog',
@@ -30,7 +30,6 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     MatIconModule,
     MatCheckboxModule,
     MatRadioModule,
-    MatSnackBarModule,
     MatProgressSpinnerModule
   ],
   template: `
@@ -181,26 +180,28 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       justify-content: center;
       gap: 12px;
       padding: 20px 24px;
-      background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       position: relative;
     }
 
     .header-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
+      color: var(--color-primary);
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: var(--text-3xl);
       text-align: center;
     }
 
     .close-btn {
-      color: white;
+      color: var(--color-text-2);
       position: absolute;
       right: 16px;
       top: 50%;
@@ -231,7 +232,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     .urgency-label {
       display: block;
       margin-bottom: 12px;
-      font-size: 0.9rem;
+      font-size: var(--text-md);
       color: var(--color-text-2);
     }
 
@@ -247,7 +248,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
     }
 
     .urgency-option mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -258,14 +259,14 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
       gap: 12px;
       padding: 16px;
       background: var(--color-cat-purple-soft);
-      border-radius: 8px;
-      color: #7b1fa2;
-      font-size: 0.9rem;
+      border-radius: var(--radius-control);
+      color: var(--color-cat-purple);
+      font-size: var(--text-md);
       line-height: 1.4;
     }
 
     .confidential-notice mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
       flex-shrink: 0;
@@ -297,7 +298,7 @@ export class PrivateMeetingRequestDialogComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private dialogRef: MatDialogRef<PrivateMeetingRequestDialogComponent>,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -319,11 +320,7 @@ export class PrivateMeetingRequestDialogComponent implements OnInit {
       // Simulate API call
       setTimeout(() => {
         this.isSubmitting = false;
-        this.snackBar.open('Private meeting request submitted successfully!', 'Close', {
-          duration: 3000,
-          horizontalPosition: 'center',
-          verticalPosition: 'top'
-        });
+        this.toast.done('Private meeting request submitted.');
         this.dialogRef.close(this.meetingForm.value);
       }, 1500);
     }

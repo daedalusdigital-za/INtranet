@@ -488,7 +488,7 @@ export class MessageService {
       // Show notification if message is from someone else
       if (message.senderId !== this.currentUserId) {
         const preview = message.content?.trim()
-          || (message.attachments?.length ? `📎 ${message.attachments[0].fileName}` : 'Sent an attachment');
+          || (message.attachments?.length ? `Attachment: ${message.attachments[0].fileName}` : 'Sent an attachment');
         this.notificationService.showMessageNotification(
           message.senderFullName || message.senderName,
           preview

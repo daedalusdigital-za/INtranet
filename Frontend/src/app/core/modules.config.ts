@@ -17,6 +17,7 @@ import { subPageRoutes } from '../ui/sub-pages';
 import { LOGISTICS_SECTIONS } from '../components/logistics/logistics-sections';
 import { SALES_SECTIONS } from '../components/sales/sales-sections';
 import { STOCK_SECTIONS } from '../components/stock-management/stock-sections';
+import { SETTINGS_SECTIONS } from '../components/settings/settings-sections';
 
 // ============================================================================
 // MODULE KEYS - All available module permission keys
@@ -599,7 +600,8 @@ export function getModuleRoutes(): Routes {
       path: 'settings', 
       title: 'Admin settings',
       loadComponent: () => import('../components/settings/settings.component').then(m => m.SettingsComponent),
-      canActivate: [authGuard, adminGuard] 
+      canActivate: [authGuard, adminGuard],
+      children: subPageRoutes(SETTINGS_SECTIONS, 'Admin settings')
     },
     
     // Management / Executive Oversight Module

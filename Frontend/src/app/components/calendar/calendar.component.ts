@@ -6,12 +6,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialogModule, MatDialog, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
+import { ToastService } from '../../ui/toast.service';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 interface TodoTask {
   id: number;
@@ -53,8 +54,8 @@ interface UserBirthday {
     MatDialogModule,
     MatCheckboxModule,
     MatTooltipModule,
-    MatSnackBarModule,
-    NavbarComponent
+    NavbarComponent,
+    EmptyStateComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -121,7 +122,7 @@ interface UserBirthday {
             @for (birthday of getCurrentMonthBirthdays(); track birthday.userId) {
               <mat-card class="birthday-card">
                 <mat-card-header>
-                  <div class="birthday-avatar">🎂</div>
+                  <div class="birthday-avatar"><mat-icon>cake</mat-icon></div>
                   <div class="birthday-info">
                     <mat-card-title>{{ birthday.name }} {{ birthday.surname }}</mat-card-title>
                     <mat-card-subtitle>{{ getBirthdayDate(birthday.birthday) | date:'MMMM d' }}</mat-card-subtitle>
@@ -200,7 +201,7 @@ interface UserBirthday {
             </mat-card>
           }
           @if (getCurrentMonthEvents().length === 0) {
-            <p style="color: white; font-size: 1.1rem; opacity: 0.9;">No events scheduled for this month.</p>
+            <app-empty-state icon="event_busy" title="No events this month" message="Public holidays, birthdays and meetings for {{ monthNames[currentMonth] }} will show up here."></app-empty-state>
           }
         </div>
       </div>
@@ -211,14 +212,7 @@ interface UserBirthday {
       padding: 80px;
       min-height: calc(100vh - 64px);
       position: relative;
-      background: var(--color-text);
-      background-image:
-        radial-gradient(circle at 15% 20%, rgba(99, 102, 241, 0.35) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.32) 0%, transparent 45%),
-        radial-gradient(circle at 75% 85%, rgba(236, 72, 153, 0.26) 0%, transparent 45%),
-        radial-gradient(circle at 25% 90%, rgba(16, 185, 129, 0.24) 0%, transparent 45%),
-        linear-gradient(135deg, var(--color-text) 0%, #1e1b4b 55%, var(--color-text) 100%);
-      background-attachment: fixed;
+      background: var(--color-canvas);
       overflow-x: hidden;
     }
 
@@ -232,28 +226,27 @@ interface UserBirthday {
       align-items: center;
       gap: 32px;
       padding: 32px 0;
-      color: white;
+      color: var(--color-text);
     }
 
     .calendar-header h1 {
       font-size: 2.5rem;
       font-weight: 600;
       margin: 0;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .calendar-header button {
-      color: white;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
+      color: var(--color-text);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
     }
 
     .calendar-header button:hover {
-      background: rgba(255, 255, 255, 0.3);
+      background: var(--color-surface-2);
     }
 
     .calendar-header mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
     }
@@ -263,16 +256,17 @@ interface UserBirthday {
       margin: 0 auto;
       padding: 0 24px;
       background: var(--color-surface);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
       overflow: hidden;
     }
 
     .calendar-weekdays {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
-      color: white;
+      background: var(--color-primary);
+      color: var(--color-on-primary);
     }
 
     .weekday {
@@ -307,7 +301,7 @@ interface UserBirthday {
     .calendar-day.clickable:hover {
       background: var(--color-surface-2);
       transform: scale(1.02);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-md);
       z-index: 10;
     }
 
@@ -321,13 +315,13 @@ interface UserBirthday {
     }
 
     .calendar-day.today {
-      background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft) 100%);
+      background: var(--color-primary-soft);
       border: 2px solid var(--color-primary);
     }
 
     .calendar-day.today .day-number {
       background: var(--color-primary);
-      color: white;
+      color: var(--color-on-primary);
       border-radius: 50%;
       width: 36px;
       height: 36px;
@@ -363,12 +357,12 @@ interface UserBirthday {
       padding: 2px 6px;
       background: var(--color-primary-soft);
       border-radius: 4px;
-      font-size: 10px;
+      font-size: var(--text-xs);
       color: var(--color-primary);
     }
 
     .task-indicator mat-icon {
-      font-size: 12px;
+      font-size: var(--text-xs);
       width: 12px;
       height: 12px;
     }
@@ -394,15 +388,11 @@ interface UserBirthday {
       gap: 8px;
       font-size: 1.3rem;
       margin: 24px 0 16px;
-      color: white;
-    }
-
-    .section-title.birthday-title {
-      color: #fce4ec;
+      color: var(--color-text);
     }
 
     .section-title.birthday-title mat-icon {
-      color: #E91E63;
+      color: var(--color-cat-pink);
     }
 
     .birthdays-list {
@@ -413,15 +403,15 @@ interface UserBirthday {
     }
 
     .birthday-card {
-      background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%);
-      border-radius: 12px;
+      background: var(--color-cat-pink-soft);
+      border-radius: var(--radius-md);
       transition: all 0.3s ease;
-      border-left: 4px solid #E91E63;
+      border-left: 4px solid var(--color-cat-pink);
     }
 
     .birthday-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(233, 30, 99, 0.3);
+      box-shadow: var(--shadow-md);
     }
 
     .birthday-card mat-card-header {
@@ -431,14 +421,21 @@ interface UserBirthday {
     }
 
     .birthday-avatar {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 48px;
       height: 48px;
       display: flex;
       align-items: center;
       justify-content: center;
       background: var(--color-surface);
+      color: var(--color-cat-pink);
       border-radius: 50%;
+    }
+
+    .birthday-avatar mat-icon {
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
 
     .birthday-info {
@@ -446,22 +443,22 @@ interface UserBirthday {
     }
 
     .birthday-card mat-card-title {
-      color: #880e4f;
+      color: var(--color-text);
       font-size: 1.1rem;
       margin-bottom: 4px;
     }
 
     .birthday-card mat-card-subtitle {
-      color: #ad1457;
+      color: var(--color-text-2);
     }
 
     .department-badge {
       display: inline-block;
       padding: 4px 12px;
-      background: rgba(255, 255, 255, 0.8);
+      background: var(--color-surface);
       border-radius: 12px;
-      font-size: 12px;
-      color: #880e4f;
+      font-size: var(--text-xs);
+      color: var(--color-cat-pink);
     }
 
     .tasks-list {
@@ -479,7 +476,7 @@ interface UserBirthday {
 
     .task-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-md);
     }
 
     .task-card.completed {
@@ -517,7 +514,7 @@ interface UserBirthday {
     .priority-badge, .status-badge {
       padding: 2px 8px;
       border-radius: 12px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 500;
     }
 
@@ -531,12 +528,12 @@ interface UserBirthday {
     .status-completed { background: var(--color-ok-soft); color: var(--color-ok); }
 
     .assigned-by {
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-2);
     }
 
     .task-description {
-      font-size: 13px;
+      font-size: var(--text-sm);
       color: var(--color-text-2);
       margin-top: 8px;
     }
@@ -545,14 +542,13 @@ interface UserBirthday {
       max-width: 1400px;
       margin: 32px auto 0;
       padding: 0 24px;
-      color: white;
+      color: var(--color-text);
     }
 
     .events-sidebar h2 {
       font-size: 2rem;
       font-weight: 600;
       margin-bottom: 24px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .events-list {
@@ -567,7 +563,7 @@ interface UserBirthday {
 
     .event-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--shadow-md);
     }
 
     .event-card mat-card-title {
@@ -591,7 +587,7 @@ interface UserBirthday {
     }
 
     .event-details mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
       color: var(--color-primary);
@@ -662,7 +658,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 102,
@@ -671,7 +667,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 103,
@@ -680,7 +676,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 104,
@@ -689,7 +685,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 105,
@@ -698,7 +694,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 106,
@@ -707,7 +703,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 107,
@@ -716,7 +712,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 108,
@@ -725,7 +721,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 109,
@@ -734,7 +730,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: "Public Holiday observed for National Women's Day",
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 110,
@@ -743,7 +739,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 111,
@@ -752,7 +748,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 112,
@@ -761,7 +757,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     {
       id: 113,
@@ -770,7 +766,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Public Holiday',
       description: 'South African Public Holiday',
-      color: '#DC143C'
+      color: 'var(--color-danger)'
     },
     // Regular events
     {
@@ -780,7 +776,7 @@ export class CalendarComponent implements OnInit {
       time: '10:00 AM - 11:00 AM',
       location: 'Conference Room A',
       description: 'Monthly team sync-up and planning session',
-      color: '#4CAF50'
+      color: 'var(--color-ok)'
     },
     {
       id: 2,
@@ -789,7 +785,7 @@ export class CalendarComponent implements OnInit {
       time: '5:00 PM',
       location: 'Development Team',
       description: 'E-Commerce platform final delivery',
-      color: '#F44336'
+      color: 'var(--color-danger)'
     },
     {
       id: 3,
@@ -798,7 +794,7 @@ export class CalendarComponent implements OnInit {
       time: 'All Day',
       location: 'Company-wide',
       description: 'Thanksgiving Day - Office Closed',
-      color: '#FF9800'
+      color: 'var(--color-warn)'
     },
     {
       id: 4,
@@ -807,7 +803,7 @@ export class CalendarComponent implements OnInit {
       time: '2:00 PM - 4:00 PM',
       location: 'Training Room',
       description: 'New software tools and best practices',
-      color: '#2196F3'
+      color: 'var(--color-primary)'
     },
     {
       id: 5,
@@ -816,7 +812,7 @@ export class CalendarComponent implements OnInit {
       time: '3:00 PM - 4:30 PM',
       location: 'Board Room',
       description: 'Q4 results and future roadmap',
-      color: '#9C27B0'
+      color: 'var(--color-cat-purple)'
     }
   ];
 
@@ -825,7 +821,7 @@ export class CalendarComponent implements OnInit {
     private authService: AuthService,
     private dialog: MatDialog,
     private http: HttpClient,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {
     const today = new Date();
     this.currentMonth = today.getMonth();
@@ -874,12 +870,12 @@ export class CalendarComponent implements OnInit {
       const birthDate = new Date(birthday.birthday);
       this.upcomingEvents.push({
         id: 2000 + index,
-        title: `🎂 ${birthday.name} ${birthday.surname || ''}'s Birthday`,
+        title: `${birthday.name} ${birthday.surname || ''}'s Birthday`,
         date: new Date(this.currentYear, birthDate.getMonth(), birthDate.getDate()),
         time: 'All Day',
         location: birthday.departmentName || 'Company',
         description: `Happy Birthday to ${birthday.name} ${birthday.surname || ''}!`,
-        color: '#E91E63' // Pink for birthdays
+        color: 'var(--color-cat-pink)'
       });
     });
   }
@@ -892,14 +888,14 @@ export class CalendarComponent implements OnInit {
       .subscribe({
         next: (meetings) => {
           // Remove existing meeting events
-          this.upcomingEvents = this.upcomingEvents.filter(e => !e.title.startsWith('📅'));
+          this.upcomingEvents = this.upcomingEvents.filter(e => e.id < 3000);
           
           // Add meeting events
           meetings.forEach((meeting, index) => {
             const meetingDate = new Date(meeting.start);
             this.upcomingEvents.push({
               id: 3000 + index,
-              title: `📅 ${meeting.title}`,
+              title: meeting.title,
               date: meetingDate,
               time: meetingDate.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }),
               location: meeting.location,
@@ -1028,12 +1024,12 @@ export class CalendarComponent implements OnInit {
 
     this.http.post(`${environment.apiUrl}/todo/${task.id}/complete`, {}).subscribe({
       next: () => {
-        this.snackBar.open('Task completed!', 'Close', { duration: 3000 });
+        this.toast.done('Task completed.');
         this.loadTasks();
       },
       error: (err) => {
         console.error('Error completing task:', err);
-        this.snackBar.open('Error completing task', 'Close', { duration: 3000 });
+        this.toast.error('The task could not be completed. Try again.');
       }
     });
   }
@@ -1223,7 +1219,7 @@ export class CalendarComponent implements OnInit {
       </mat-dialog-content>
 
       <mat-dialog-actions>
-        <button mat-flat-button mat-dialog-close class="modern-close-btn">
+        <button mat-flat-button color="primary" mat-dialog-close class="modern-close-btn">
           <mat-icon>check_circle</mat-icon>
           Got it
         </button>
@@ -1233,7 +1229,7 @@ export class CalendarComponent implements OnInit {
   styles: [`
     .modern-dialog-container {
       position: relative;
-      background: linear-gradient(135deg, #f8f9ff 0%, var(--color-surface) 100%);
+      background: var(--color-surface);
     }
 
     .dialog-header {
@@ -1241,23 +1237,13 @@ export class CalendarComponent implements OnInit {
       justify-content: space-between;
       align-items: flex-start;
       padding: 32px 32px 24px 32px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-bottom: 1px solid var(--color-line);
       margin: -24px -24px 0 -24px;
       border-radius: 12px 12px 0 0;
       position: relative;
       overflow: hidden;
-    }
-
-    .dialog-header::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      right: -10%;
-      width: 300px;
-      height: 300px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 50%;
     }
 
     .header-content {
@@ -1271,17 +1257,16 @@ export class CalendarComponent implements OnInit {
     .icon-wrapper {
       width: 56px;
       height: 56px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      border-radius: var(--radius-md);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     }
 
     .icon-wrapper mat-icon {
-      font-size: 32px;
+      font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
     }
@@ -1301,16 +1286,13 @@ export class CalendarComponent implements OnInit {
     }
 
     .close-btn {
-      background: rgba(255, 255, 255, 0.2);
-      color: white;
+      color: var(--color-text-2);
       position: relative;
       z-index: 1;
-      transition: all 0.3s ease;
     }
 
     .close-btn:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: rotate(90deg);
+      background: var(--color-surface-2);
     }
 
     mat-dialog-content {
@@ -1324,15 +1306,15 @@ export class CalendarComponent implements OnInit {
       align-items: center;
       gap: 12px;
       padding: 16px 20px;
-      background: linear-gradient(135deg, #2563eb15 0%, #1e40af15 100%);
-      border-radius: 12px;
+      background: var(--color-primary-soft);
+      border-radius: var(--radius-md);
       margin-bottom: 24px;
       border-left: 4px solid var(--color-primary);
     }
 
     .events-count mat-icon {
       color: var(--color-primary);
-      font-size: 24px;
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
     }
@@ -1351,9 +1333,9 @@ export class CalendarComponent implements OnInit {
 
     .event-card {
       background: var(--color-surface);
-      border-radius: 16px;
+      border-radius: var(--radius-lg);
       padding: 24px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--shadow-sm);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       border: 2px solid transparent;
       position: relative;
@@ -1372,7 +1354,7 @@ export class CalendarComponent implements OnInit {
 
     .event-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+      box-shadow: var(--shadow-md);
       border-color: var(--event-color);
     }
 
@@ -1390,13 +1372,12 @@ export class CalendarComponent implements OnInit {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--color-on-primary);
       flex-shrink: 0;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     .event-badge mat-icon {
-      font-size: 24px;
+      font-size: var(--text-3xl);
       width: 24px;
       height: 24px;
     }
@@ -1419,7 +1400,7 @@ export class CalendarComponent implements OnInit {
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
+      background: var(--color-surface-2);
       border-radius: 8px;
       font-size: 0.9rem;
       font-weight: 600;
@@ -1427,7 +1408,7 @@ export class CalendarComponent implements OnInit {
     }
 
     .event-time mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -1448,7 +1429,7 @@ export class CalendarComponent implements OnInit {
     .detail-icon {
       width: 40px;
       height: 40px;
-      background: linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%);
+      background: var(--color-surface-2);
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -1457,7 +1438,7 @@ export class CalendarComponent implements OnInit {
     }
 
     .detail-icon mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
       color: var(--color-text-2);
@@ -1488,7 +1469,7 @@ export class CalendarComponent implements OnInit {
 
     mat-dialog-actions {
       padding: 24px 32px;
-      background: linear-gradient(180deg, transparent 0%, #f8f9ff 100%);
+      background: var(--color-surface);
       margin: 0 -24px -24px -24px;
       display: flex;
       justify-content: center;
@@ -1500,16 +1481,7 @@ export class CalendarComponent implements OnInit {
       height: 48px;
       font-weight: 700;
       font-size: 1rem;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
-      transition: all 0.3s ease;
-    }
-
-    .modern-close-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(37, 99, 235, 0.4);
+      border-radius: var(--radius-md);
     }
 
     .modern-close-btn mat-icon {
@@ -1537,7 +1509,7 @@ export class CalendarComponent implements OnInit {
     /* Task-specific styles */
     .tasks-count {
       border-left-color: var(--color-primary);
-      background: linear-gradient(135deg, rgba(25, 118, 210, 0.08) 0%, rgba(25, 118, 210, 0.04) 100%);
+      background: var(--color-primary-soft);
     }
 
     .tasks-count mat-icon {
@@ -1576,7 +1548,7 @@ export class CalendarComponent implements OnInit {
     .task-status-badge.status-pending { background: var(--color-warn-soft); color: var(--color-warn); }
     .task-status-badge.status-accepted { background: var(--color-primary-soft); color: var(--color-primary); }
     .task-status-badge.status-completed { background: var(--color-ok-soft); color: var(--color-ok); }
-    .task-status-badge.status-inprogress { background: var(--color-surface-3); color: #3f51b5; }
+    .task-status-badge.status-inprogress { background: var(--color-surface-3); color: var(--color-primary); }
 
     .task-action {
       margin-top: 16px;
@@ -1585,9 +1557,9 @@ export class CalendarComponent implements OnInit {
     }
 
     .complete-task-btn {
-      background: linear-gradient(135deg, var(--color-ok) 0%, var(--color-ok) 100%);
-      color: white;
-      border-radius: 10px;
+      background: var(--color-ok);
+      color: var(--color-on-primary);
+      border-radius: var(--radius-md);
       font-weight: 600;
       padding: 0 20px;
       height: 40px;
@@ -1596,12 +1568,12 @@ export class CalendarComponent implements OnInit {
 
     .complete-task-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 16px rgba(46, 125, 50, 0.3);
+      box-shadow: var(--shadow-md);
     }
 
     .complete-task-btn mat-icon {
       margin-right: 6px;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -1620,7 +1592,7 @@ export class CalendarComponent implements OnInit {
     }
 
     .task-pending-note mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -1632,17 +1604,17 @@ export class DayEventsDialogComponent {
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: { date: Date; events: any[]; tasks: TodoTask[] },
     private http: HttpClient,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   getTaskColor(task: TodoTask): string {
-    if (task.isCompleted) return '#4caf50';
+    if (task.isCompleted) return 'var(--color-ok)';
     switch (task.priority.toLowerCase()) {
-      case 'urgent': return '#d32f2f';
-      case 'high': return '#f57c00';
-      case 'normal': return '#1976d2';
-      case 'low': return '#78909c';
-      default: return '#1976d2';
+      case 'urgent': return 'var(--color-danger)';
+      case 'high': return 'var(--color-warn)';
+      case 'normal': return 'var(--color-primary)';
+      case 'low': return 'var(--color-text-3)';
+      default: return 'var(--color-primary)';
     }
   }
 
@@ -1651,11 +1623,11 @@ export class DayEventsDialogComponent {
       next: () => {
         task.isCompleted = true;
         task.status = 'Completed';
-        this.snackBar.open('Task completed!', 'Close', { duration: 3000 });
+        this.toast.done('Task completed.');
         this.taskCompleted.emit();
       },
       error: () => {
-        this.snackBar.open('Error completing task', 'Close', { duration: 3000 });
+        this.toast.error('The task could not be completed. Try again.');
       }
     });
   }

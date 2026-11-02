@@ -485,16 +485,16 @@ interface User {
     }
 
     .header-icon mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
       color: white;
     }
 
     .header-text h2 {
       margin: 0;
       color: white;
-      font-size: 24px;
+      font-size: var(--text-3xl);
       font-weight: 600;
       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
@@ -502,7 +502,7 @@ interface User {
     .header-subtitle {
       margin: 4px 0 0 0;
       color: rgba(255, 255, 255, 0.85);
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .header-stats {
@@ -522,14 +522,14 @@ interface User {
 
     .stat-value {
       display: block;
-      font-size: 24px;
+      font-size: var(--text-3xl);
       font-weight: 700;
       color: white;
     }
 
     .stat-label {
       display: block;
-      font-size: 11px;
+      font-size: var(--text-xs);
       color: rgba(255, 255, 255, 0.85);
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -567,7 +567,7 @@ interface User {
       border-radius: 12px;
       cursor: pointer;
       transition: all 0.3s ease;
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 500;
       color: var(--color-text-3);
     }
@@ -584,7 +584,7 @@ interface User {
     }
 
     .tab-btn mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
     }
@@ -592,7 +592,7 @@ interface User {
     .tab-badge {
       background: var(--color-danger);
       color: white;
-      font-size: 11px;
+      font-size: var(--text-xs);
       padding: 2px 8px;
       border-radius: 10px;
       font-weight: 600;
@@ -639,7 +639,7 @@ interface User {
       border-radius: 24px;
       cursor: pointer;
       transition: all 0.2s ease;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 500;
       color: var(--color-text-3);
     }
@@ -656,7 +656,7 @@ interface User {
     }
 
     .filter-chip mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -744,7 +744,7 @@ interface User {
 
     .task-title {
       font-weight: 600;
-      font-size: 15px;
+      font-size: var(--text-md);
       color: var(--color-text);
       margin-bottom: 4px;
     }
@@ -755,7 +755,7 @@ interface User {
     }
 
     .task-description-preview {
-      font-size: 13px;
+      font-size: var(--text-sm);
       color: var(--color-text-3);
       white-space: nowrap;
       overflow: hidden;
@@ -766,13 +766,13 @@ interface User {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       color: var(--color-text-3);
       margin-top: 4px;
     }
 
     .assignee-info mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -797,7 +797,7 @@ interface User {
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-3);
       padding: 4px 10px;
       background: var(--color-surface-2);
@@ -805,7 +805,7 @@ interface User {
     }
 
     .due-date mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
     }
@@ -818,7 +818,7 @@ interface User {
     .priority-badge, .status-badge {
       padding: 4px 10px;
       border-radius: 6px;
-      font-size: 11px;
+      font-size: var(--text-xs);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.3px;
@@ -846,7 +846,7 @@ interface User {
     }
 
     .task-actions mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -866,12 +866,12 @@ interface User {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-3);
     }
 
     .assigned-by mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
     }
@@ -917,14 +917,14 @@ interface User {
 
     .empty-state h3 {
       margin: 0 0 8px 0;
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 600;
       color: var(--color-text);
     }
 
     .empty-state p {
       margin: 0 0 24px 0;
-      font-size: 14px;
+      font-size: var(--text-md);
       color: var(--color-text-3);
     }
 
@@ -952,15 +952,15 @@ interface User {
     }
 
     .form-header mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
       color: var(--color-primary);
     }
 
     .form-header h3 {
       margin: 0;
-      font-size: 20px;
+      font-size: var(--text-2xl);
       font-weight: 600;
       color: var(--color-text);
     }
@@ -994,7 +994,7 @@ interface User {
     }
 
     .user-email {
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-3);
       margin-left: auto;
     }
@@ -1011,11 +1011,11 @@ interface User {
       background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
       color: white;
       border-radius: 24px;
-      font-size: 14px;
+      font-size: var(--text-md);
     }
 
     .assignee-chip mat-icon {
-      font-size: 18px;
+      font-size: var(--text-xl);
       width: 18px;
       height: 18px;
     }
@@ -1028,7 +1028,7 @@ interface User {
     }
 
     .assignee-chip button mat-icon {
-      font-size: 16px;
+      font-size: var(--text-lg);
       width: 16px;
       height: 16px;
     }
@@ -1062,7 +1062,7 @@ interface User {
     }
 
     .notifications-count {
-      font-size: 14px;
+      font-size: var(--text-md);
       color: var(--color-text-3);
     }
 
@@ -1118,7 +1118,7 @@ interface User {
     }
 
     .notification-message {
-      font-size: 14px;
+      font-size: var(--text-md);
       color: var(--color-text);
       font-weight: 500;
     }
@@ -1127,13 +1127,13 @@ interface User {
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
+      font-size: var(--text-xs);
       color: var(--color-text-3);
       margin-top: 6px;
     }
 
     .notification-time mat-icon {
-      font-size: 14px;
+      font-size: var(--text-md);
       width: 14px;
       height: 14px;
     }

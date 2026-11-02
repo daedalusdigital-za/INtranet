@@ -13,6 +13,8 @@ import {
 import { NotificationService } from '../../services/notification.service';
 import { ConfirmService } from '../../ui/confirm.service';
 import { ToastService } from '../../ui/toast.service';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 
 // Use the bundled pdf.js worker so we can render PDFs into scrollable canvases
 // (an <iframe> viewer scrolls internally and detaches the annotation overlay).
@@ -41,7 +43,7 @@ type ViewerTool = 'none' | 'annotate' | 'sign' | 'stack';
 @Component({
   selector: 'app-paperless',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, EmptyStateComponent, SkeletonRowsComponent],
   templateUrl: './paperless.component.html',
   styleUrls: ['./paperless.component.scss']
 })
@@ -440,8 +442,14 @@ export class PaperlessComponent {
   }
 
   /** Rename a document's friendly display name. */
-  rename(d: PaperlessDocument): void {
-    const name = prompt('Rename document', d.name);
+  async rename(d: PaperlessDocument): Promise<void> {
+    const name = await this.confirmDialog.askText({
+      title: 'Rename document',
+      label: 'Document name',
+      value: d.name,
+      required: true,
+      confirmText: 'Rename'
+    });
     if (name && name.trim() && name.trim() !== d.name) {
       this.paperless.renameDocument(d.id, name.trim());
     }
@@ -592,9 +600,17 @@ export class PaperlessComponent {
   markActed(d: PaperlessDocument, r: PaperlessRecipient): void {
     this.paperless.recordAction(d.id, r.id);
   }
-  markDeclined(d: PaperlessDocument, r: PaperlessRecipient): void {
-    const reason = prompt(`Decline reason for ${r.name} (optional):`) ?? undefined;
-    this.paperless.recordDecline(d.id, r.id, reason || undefined);
+  async markDeclined(d: PaperlessDocument, r: PaperlessRecipient): Promise<void> {
+    const reason = await this.confirmDialog.askText({
+      title: `Record a decline for ${r.name}?`,
+      label: 'Reason (optional)',
+      multiline: true,
+      required: false,
+      confirmText: 'Record decline',
+      danger: true
+    });
+    if (reason === null) return;
+    this.paperless.recordDecline(d.id, r.id, reason.trim() || undefined);
   }
   remind(d: PaperlessDocument, r: PaperlessRecipient): void {
     this.paperless.remind(d.id, r.id);
@@ -649,12 +665,22 @@ export class PaperlessComponent {
   }
   statusColour(s: PaperlessStatus): string {
     return {
-      draft: '#64748b',
-      out_for_signature: '#6366f1',
-      in_progress: '#0ea5e9',
-      completed: '#10b981',
-      declined: '#ef4444',
-      cancelled: '#94a3b8'
+      draft: 'var(--color-text-3)',
+      out_for_signature: 'var(--color-warn)',
+      in_progress: 'var(--color-primary)',
+      completed: 'var(--color-ok)',
+      declined: 'var(--color-danger)',
+      cancelled: 'var(--color-text-3)'
+    }[s];
+  }
+  statusSoft(s: PaperlessStatus): string {
+    return {
+      draft: 'var(--color-surface-2)',
+      out_for_signature: 'var(--color-warn-soft)',
+      in_progress: 'var(--color-primary-soft)',
+      completed: 'var(--color-ok-soft)',
+      declined: 'var(--color-danger-soft)',
+      cancelled: 'var(--color-surface-2)'
     }[s];
   }
   statusIcon(s: PaperlessStatus): string {
@@ -676,9 +702,9 @@ export class PaperlessComponent {
   }
   recipStateColour(state: string): string {
     return {
-      waiting: '#94a3b8', viewed: '#0ea5e9',
-      signed: '#10b981', approved: '#10b981', declined: '#ef4444'
-    }[state] ?? '#94a3b8';
+      waiting: 'var(--color-text-3)', viewed: 'var(--color-primary)',
+      signed: 'var(--color-ok)', approved: 'var(--color-ok)', declined: 'var(--color-danger)'
+    }[state] ?? 'var(--color-text-3)';
   }
   recipStateIcon(state: string): string {
     return {
@@ -714,7 +740,7 @@ export class PaperlessComponent {
   }
 
   // ── Left viewer: annotations ───────────────────────────────
-  onPageClick(evt: MouseEvent): void {
+  async onPageClick(evt: MouseEvent): Promise<void> {
     if (this.tool() !== 'annotate') return;
     const d = this.doc();
     if (!d) return;
@@ -722,7 +748,13 @@ export class PaperlessComponent {
     const rect = el.getBoundingClientRect();
     const xPct = ((evt.clientX - rect.left) / rect.width) * 100;
     const yPct = ((evt.clientY - rect.top) / rect.height) * 100;
-    const text = prompt('Annotation note:');
+    const text = await this.confirmDialog.askText({
+      title: 'Add an annotation',
+      label: 'Note',
+      multiline: true,
+      required: true,
+      confirmText: 'Add note'
+    });
     if (text && text.trim()) {
       this.paperless.addAnnotation(d.id, { text: text.trim(), xPct, yPct, colour: this.annotationColour() });
     }

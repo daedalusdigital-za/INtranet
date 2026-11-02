@@ -48,7 +48,7 @@ import { OpenMapComponent } from './open-map.component';
       padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.1);
       background:var(--color-text); flex-shrink:0;
     }
-    .omd-title { display:flex; align-items:center; gap:10px; color:#fff; font-size:16px; font-weight:600; }
+    .omd-title { display:flex; align-items:center; gap:10px; color:#fff; font-size:var(--text-lg); font-weight:600; }
     .omd-title mat-icon { color:#60a5fa; }
     .omd-actions { display:flex; align-items:center; gap:8px; }
     .omd-actions button { color:#fff !important; border-color:rgba(255,255,255,0.3) !important; }

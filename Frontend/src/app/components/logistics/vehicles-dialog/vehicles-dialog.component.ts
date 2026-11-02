@@ -437,7 +437,7 @@ interface VehicleType {
         color: var(--color-text);
 
         mat-icon {
-          font-size: 24px;
+          font-size: var(--text-3xl);
           width: 24px;
           height: 24px;
           color: var(--color-primary);
@@ -481,7 +481,7 @@ interface VehicleType {
         font-weight: 600;
 
         mat-icon {
-          font-size: 18px;
+          font-size: var(--text-xl);
           width: 18px;
           height: 18px;
         }
@@ -551,7 +551,7 @@ interface VehicleType {
 
       .vehicle-icon {
         color: var(--color-primary);
-        font-size: 20px;
+        font-size: var(--text-2xl);
         width: 20px;
         height: 20px;
       }
@@ -564,7 +564,7 @@ interface VehicleType {
       color: var(--color-primary);
 
       mat-icon {
-        font-size: 18px;
+        font-size: var(--text-xl);
         width: 18px;
         height: 18px;
       }
@@ -586,7 +586,7 @@ interface VehicleType {
       text-overflow: ellipsis;
 
       mat-icon {
-        font-size: 16px;
+        font-size: var(--text-lg);
         width: 16px;
         height: 16px;
         color: var(--color-danger);

@@ -211,7 +211,7 @@ interface PumaOrder {
       display: flex; align-items: center; gap: 8px; flex: 1 1 320px; min-width: 240px;
       background: var(--color-surface-2); border-radius: 10px; padding: 8px 12px;
     }
-    .puma-search mat-icon { color: var(--color-text-3); font-size: 20px; width: 20px; height: 20px; }
+    .puma-search mat-icon { color: var(--color-text-3); font-size: var(--text-2xl); width: 20px; height: 20px; }
     .puma-search input { border: none; background: transparent; outline: none; width: 100%; font-size: var(--text-md); color: var(--color-text); }
 
     .puma-import, .puma-add { margin: 0 20px 8px; padding: 16px; background: var(--color-canvas); border: 1px dashed var(--color-line-strong); border-radius: var(--radius-md); }

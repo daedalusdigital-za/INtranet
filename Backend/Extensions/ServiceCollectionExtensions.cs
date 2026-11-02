@@ -286,6 +286,7 @@ namespace ProjectTracker.API.Extensions
             // Flows: automated business processes (engine, data sources, event bus, scheduler)
             services.AddScoped<Services.Flows.IFlowEngine, Services.Flows.FlowEngine>();
             services.AddScoped<Services.Cortex.CortexGraphBuilder>();
+            services.AddHostedService<Services.Cortex.CortexMaintenanceService>();
             services.AddScoped<Services.Flows.IFlowDataSources, Services.Flows.FlowDataSources>();
             services.AddSingleton<Services.Flows.IFlowEventPublisher, Services.Flows.FlowEventPublisher>();
             services.AddHostedService<Services.Flows.FlowSchedulerService>();

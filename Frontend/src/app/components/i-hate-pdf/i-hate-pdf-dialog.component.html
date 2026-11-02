@@ -3,7 +3,7 @@
   <div class="ihp__head">
     <div class="ihp__brand">
       @if (mode() !== 'home') {
-        <button class="ihp__back" (click)="back()" title="Back">
+        <button class="ihp__back" (click)="back()" title="Back" aria-label="Back">
           <span class="material-icons">arrow_back</span>
         </button>
       }
@@ -25,7 +25,7 @@
         </div>
       </div>
     </div>
-    <button class="ihp__close" (click)="close()" title="Close">
+    <button class="ihp__close" (click)="close()" title="Close" aria-label="Close">
       <span class="material-icons">close</span>
     </button>
   </div>
@@ -162,19 +162,19 @@
                 </div>
               </div>
               <div class="ihp-merge-item__actions">
-                <button class="ihp-iconbtn" (click)="moveMergeItem(it.id, -1)" [disabled]="idx === 0" title="Move up">
+                <button class="ihp-iconbtn" (click)="moveMergeItem(it.id, -1)" [disabled]="idx === 0" title="Move up" aria-label="Move up">
                   <span class="material-icons">arrow_upward</span>
                 </button>
-                <button class="ihp-iconbtn" (click)="moveMergeItem(it.id, 1)" [disabled]="idx === mergeItems().length - 1" title="Move down">
+                <button class="ihp-iconbtn" (click)="moveMergeItem(it.id, 1)" [disabled]="idx === mergeItems().length - 1" title="Move down" aria-label="Move down">
                   <span class="material-icons">arrow_downward</span>
                 </button>
-                <button class="ihp-iconbtn" (click)="rotateMergeItem(it.id, -90)" title="Rotate left">
+                <button class="ihp-iconbtn" (click)="rotateMergeItem(it.id, -90)" title="Rotate left" aria-label="Rotate left">
                   <span class="material-icons">rotate_left</span>
                 </button>
-                <button class="ihp-iconbtn" (click)="rotateMergeItem(it.id, 90)" title="Rotate right">
+                <button class="ihp-iconbtn" (click)="rotateMergeItem(it.id, 90)" title="Rotate right" aria-label="Rotate right">
                   <span class="material-icons">rotate_right</span>
                 </button>
-                <button class="ihp-iconbtn ihp-iconbtn--danger" (click)="removeMergeItem(it.id)" title="Remove">
+                <button class="ihp-iconbtn ihp-iconbtn--danger" (click)="removeMergeItem(it.id)" title="Remove" aria-label="Remove">
                   <span class="material-icons">delete</span>
                 </button>
               </div>
@@ -359,7 +359,7 @@
                          (mousedown)="startDrag(st.id, 'move', $event)"
                          (click)="$event.stopPropagation()">
                       <img [src]="stampUrl(st.assetKey)" [alt]="stampName(st.assetKey)" draggable="false" />
-                      <button class="ihp-placed__del" (mousedown)="$event.stopPropagation()" (click)="removePlaced(st.id, $event)" title="Remove stamp">
+                      <button class="ihp-placed__del" (mousedown)="$event.stopPropagation()" (click)="removePlaced(st.id, $event)" title="Remove stamp" aria-label="Remove stamp">
                         <span class="material-icons">close</span>
                       </button>
                       <span class="ihp-placed__resize" (mousedown)="startDrag(st.id, 'resize', $event)" title="Drag to resize"></span>

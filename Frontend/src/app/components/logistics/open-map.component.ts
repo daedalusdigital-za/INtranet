@@ -236,7 +236,7 @@ interface LiveVehicle {
     .dot-idling { background:#fbbf24; } .dot-offline { background:var(--color-text-3); }
     .dot-alert { background:var(--color-danger); box-shadow:0 0 0 3px rgba(239,68,68,.25); }
     .veh-reg { font-weight:700; color:var(--color-line); font-size:.9rem; display:flex; align-items:center; gap:4px; }
-    .warn-ic { color:var(--color-danger); font-size:16px; width:16px; height:16px; }
+    .warn-ic { color:var(--color-danger); font-size:var(--text-lg); width:16px; height:16px; }
     .veh-meta { font-size:.76rem; color:var(--color-text-3); margin-top:2px; }
     .veh-zone { font-size:.72rem; color:var(--color-text-3); margin-top:2px; }
     .veh-empty { padding:24px; text-align:center; color:var(--color-text-3); font-size:.85rem; }
@@ -254,7 +254,7 @@ interface LiveVehicle {
       background:rgba(15,23,42,.85); padding:6px 10px; border-radius:8px; font-size:.72rem; color:var(--color-line-strong);
     }
     .map-legend i.lg { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
-    .map-legend .lg-ic { font-size:14px; width:14px; height:14px; vertical-align:middle; margin-right:3px; color:#0ea5e9; }
+    .map-legend .lg-ic { font-size:var(--text-md); width:14px; height:14px; vertical-align:middle; margin-right:3px; color:#0ea5e9; }
     .lg.blu{background:#60a5fa;} .lg.amb{background:#fbbf24;} .lg.grn{background:var(--color-ok);}
     .lg.gry{background:var(--color-text-3);} .lg.red{background:var(--color-danger);}
 

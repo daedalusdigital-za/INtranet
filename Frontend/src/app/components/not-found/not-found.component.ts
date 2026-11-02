@@ -23,13 +23,13 @@ import { MatCardModule } from '@angular/material/card';
         </div>
         
         <h1 class="error-code">404</h1>
-        <h2 class="error-title">Oops! Page Not Found</h2>
+        <h2 class="error-title">Page not found</h2>
         <p class="error-message">
           The page you're looking for doesn't exist or has been moved.
         </p>
         
         <div class="action-buttons">
-          <button mat-raised-button color="primary" (click)="goHome()">
+          <button mat-flat-button color="primary" (click)="goHome()">
             <mat-icon>home</mat-icon>
             Go to Home
           </button>
@@ -43,12 +43,6 @@ import { MatCardModule } from '@angular/material/card';
           <p>Redirecting to home in {{ countdown }} seconds...</p>
         </div>
       </div>
-      
-      <div class="decoration">
-        <div class="circle circle-1"></div>
-        <div class="circle circle-2"></div>
-        <div class="circle circle-3"></div>
-      </div>
     </div>
   `,
   styles: [`
@@ -57,7 +51,7 @@ import { MatCardModule } from '@angular/material/card';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+      background: var(--color-canvas);
       position: relative;
       overflow: hidden;
     }
@@ -66,9 +60,10 @@ import { MatCardModule } from '@angular/material/card';
       text-align: center;
       z-index: 10;
       padding: 40px;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      background: var(--color-surface);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
       max-width: 500px;
       margin: 20px;
     }
@@ -81,32 +76,26 @@ import { MatCardModule } from '@angular/material/card';
       font-size: 80px;
       width: 80px;
       height: 80px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--color-primary);
     }
 
     .error-code {
       font-size: 120px;
       font-weight: 800;
       margin: 0;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--color-primary);
       line-height: 1;
     }
 
     .error-title {
-      font-size: 28px;
+      font-size: var(--text-3xl);
       font-weight: 600;
       color: var(--color-text);
       margin: 16px 0;
     }
 
     .error-message {
-      font-size: 16px;
+      font-size: var(--text-lg);
       color: var(--color-text-2);
       margin-bottom: 32px;
       line-height: 1.6;
@@ -131,62 +120,13 @@ import { MatCardModule } from '@angular/material/card';
       margin-top: 24px;
       padding: 12px 20px;
       background: var(--color-surface-2);
-      border-radius: 8px;
+      border-radius: var(--radius-control);
     }
 
     .countdown p {
       margin: 0;
       color: var(--color-text-2);
-      font-size: 14px;
-    }
-
-    /* Decorative elements */
-    .decoration {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      top: 0;
-      left: 0;
-      pointer-events: none;
-    }
-
-    .circle {
-      position: absolute;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    .circle-1 {
-      width: 300px;
-      height: 300px;
-      top: -100px;
-      right: -100px;
-      animation: float 6s ease-in-out infinite;
-    }
-
-    .circle-2 {
-      width: 200px;
-      height: 200px;
-      bottom: -50px;
-      left: -50px;
-      animation: float 8s ease-in-out infinite reverse;
-    }
-
-    .circle-3 {
-      width: 150px;
-      height: 150px;
-      top: 50%;
-      left: 10%;
-      animation: float 7s ease-in-out infinite;
-    }
-
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0) rotate(0deg);
-      }
-      50% {
-        transform: translateY(-20px) rotate(5deg);
-      }
+      font-size: var(--text-md);
     }
 
     @media (max-width: 600px) {
@@ -195,7 +135,7 @@ import { MatCardModule } from '@angular/material/card';
       }
 
       .error-title {
-        font-size: 22px;
+        font-size: var(--text-2xl);
       }
 
       .content-wrapper {

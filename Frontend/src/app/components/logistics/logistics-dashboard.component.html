@@ -169,14 +169,11 @@
             @case ('loads') {
               <div class="tab-content">
                 @if (activeLoads().length === 0) {
-                  <div class="empty-state">
-                    <mat-icon>local_shipping</mat-icon>
-                    <h3>No Active Loads</h3>
-                    <p>Create a new load to get started</p>
+                  <app-empty-state icon="local_shipping" title="No active loads" message="Create a new load to get started">
                     <button mat-raised-button color="primary" class="modern-action-btn" (click)="createNewLoad()">
                       <mat-icon>add</mat-icon> Create Load
                     </button>
-                  </div>
+                  </app-empty-state>
                 } @else {
                   <table mat-table [dataSource]="activeLoads()" class="loads-table modern-table">
                     <ng-container matColumnDef="loadNumber">
@@ -335,14 +332,11 @@
                   </div>
                 </div>
                 @if (vehicles().length === 0) {
-                  <div class="empty-state">
-                    <mat-icon>directions_car</mat-icon>
-                    <h3>No Vehicles</h3>
-                    <p>Add vehicles to your fleet or check CarTrack connection</p>
+                  <app-empty-state icon="directions_car" title="No vehicles" message="Add vehicles to your fleet or check CarTrack connection">
                     <button mat-raised-button color="primary" (click)="addVehicle()">
                       <mat-icon>add</mat-icon> Add Vehicle
                     </button>
-                  </div>
+                  </app-empty-state>
                 } @else {
                   <div class="fleet-grid">
                     @for (vehicle of filteredVehicles(); track $index) {
@@ -518,11 +512,9 @@
                     }
                   </div>
                   @if (filteredVehicles().length === 0) {
-                    <div class="fleet-no-results">
-                      <mat-icon>search_off</mat-icon>
-                      <p>No vehicles match “{{ fleetSearch() }}”</p>
+                    <app-empty-state icon="search_off" title="No vehicles match “{{ fleetSearch() }}”">
                       <button mat-stroked-button (click)="fleetSearch.set(''); filterChanged()">Clear search</button>
-                    </div>
+                    </app-empty-state>
                   }
                 }
               </div>
@@ -672,10 +664,8 @@
                 }
 
                 @if (getFilteredMaintenanceRecords().length === 0) {
-                  <div class="empty-state">
-                    <mat-icon>build_circle</mat-icon>
-                    <h3>No Maintenance Records</h3>
-                    <p>{{ maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' || maintenanceAssignedToFilter !== 'all' ? 'No records match your filters' : 'No vehicles are currently scheduled for maintenance' }}</p>
+                  <app-empty-state icon="build_circle" title="No maintenance records"
+                    [message]="maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' || maintenanceAssignedToFilter !== 'all' ? 'No records match your filters' : 'No vehicles are currently scheduled for maintenance'">
                     @if (maintenanceSearch || maintenanceVehicleFilter !== 'all' || maintenanceStatusFilter !== 'all' || maintenanceTypeFilter !== 'all' || maintenanceAssignedToFilter !== 'all') {
                       <button mat-raised-button (click)="clearMaintenanceFilters()">
                         <mat-icon>filter_list_off</mat-icon> Clear Filters
@@ -685,7 +675,7 @@
                         <mat-icon>add</mat-icon> Schedule Maintenance
                       </button>
                     }
-                  </div>
+                  </app-empty-state>
                 } @else {
                   <!-- Modern Table View -->
                   <div class="maintenance-table-container">
@@ -903,10 +893,7 @@
                       <div class="attachments-list">
                         <h4>Uploaded Files ({{ maintenanceAttachments().length }})</h4>
                         @if (maintenanceAttachments().length === 0) {
-                          <div class="no-attachments">
-                            <mat-icon>folder_open</mat-icon>
-                            <p>No files uploaded yet</p>
-                          </div>
+                          <app-empty-state compact icon="folder_open" title="No files uploaded yet" />
                         } @else {
                           @for (att of maintenanceAttachments(); track att.id) {
                             <div class="attachment-item">
@@ -1064,11 +1051,7 @@
                   </div>
 
                   @if (filteredTripsheets().length === 0) {
-                    <div class="empty-state">
-                      <mat-icon>description</mat-icon>
-                      <h3>No Tripsheets Found</h3>
-                      <p>Tripsheets are generated when loads are dispatched</p>
-                    </div>
+                    <app-empty-state icon="description" title="No tripsheets found" message="Tripsheets are generated when loads are dispatched" />
                   } @else {
                     <table mat-table [dataSource]="filteredTripsheets()" class="tripsheets-table">
                       <ng-container matColumnDef="tripNumber">
@@ -1273,7 +1256,7 @@
                           <button class="nopod-chip" [class.active]="noPodMinDays === 30" (click)="noPodMinDays = 30">&gt; 30 days</button>
                           <span class="nopod-count">{{ noPodVisible.length }} loads</span>
                         </div>
-                        <table class="nopod-table">
+                        <table class="app-table nopod-table">
                           <thead>
                             <tr>
                               <th>Load</th><th>Customer</th><th>Driver</th><th>Warehouse</th><th>Delivered</th>
@@ -1411,16 +1394,9 @@
 
                   <!-- Loading State -->
                   @if (podLoading) {
-                    <div class="loading-state">
-                      <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
-                      <p>Loading POD documents...</p>
-                    </div>
+                    <app-skeleton-rows [rows]="5" [avatar]="false" />
                   } @else if (podDocuments.length === 0) {
-                    <div class="empty-state">
-                      <mat-icon>verified</mat-icon>
-                      <h3>No POD Documents Found</h3>
-                      <p>Adjust your filters or upload new POD documents</p>
-                    </div>
+                    <app-empty-state icon="verified" title="No POD documents found" message="Adjust your filters or upload new POD documents" />
                   } @else {
                     <!-- Grid View -->
                     @if (podViewMode === 'grid') {
@@ -1755,16 +1731,9 @@
                   }
 
                   @if (fuelLoading()) {
-                    <div class="loading-state">
-                      <mat-spinner diameter="40"></mat-spinner>
-                      <p>Loading fuel data...</p>
-                    </div>
+                    <app-skeleton-rows [rows]="5" [avatar]="false" />
                   } @else if (!fuelReport() && !fuelLoading()) {
-                    <div class="empty-state">
-                      <mat-icon>local_gas_station</mat-icon>
-                      <h3>No Fuel Data</h3>
-                      <p>Select a period above to view fuel history</p>
-                    </div>
+                    <app-empty-state icon="local_gas_station" title="No fuel data" message="Select a period above to view fuel history" />
                   } @else {
                     <!-- Summary View -->
                     @if (fuelViewMode === 'summary' && fuelReport()) {
@@ -1979,23 +1948,23 @@
                   @if (reqSummary()) {
                     <div class="fuel-stats-bar" style="padding: 8px 16px; gap: 20px; flex-wrap: wrap;">
                       <span class="fuel-stat">
-                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">check_circle</mat-icon>
+                        <mat-icon style="font-size: var(--text-lg); height: 16px; width: 16px;">check_circle</mat-icon>
                         Active: {{ reqSummary().activeCount }}
                       </span>
                       <span class="fuel-stat">
-                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">cancel</mat-icon>
+                        <mat-icon style="font-size: var(--text-lg); height: 16px; width: 16px;">cancel</mat-icon>
                         Cancelled: {{ reqSummary().cancelledCount }}
                       </span>
                       <span class="fuel-stat">
-                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">account_balance_wallet</mat-icon>
+                        <mat-icon style="font-size: var(--text-lg); height: 16px; width: 16px;">account_balance_wallet</mat-icon>
                         E-Wallet: R{{ reqSummary().totalEwallet | number:'1.2-2' }}
                       </span>
                       <span class="fuel-stat">
-                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">local_gas_station</mat-icon>
+                        <mat-icon style="font-size: var(--text-lg); height: 16px; width: 16px;">local_gas_station</mat-icon>
                         Diesel: R{{ reqSummary().totalDiesel | number:'1.2-2' }}
                       </span>
                       <span class="fuel-stat">
-                        <mat-icon style="font-size: 16px; height: 16px; width: 16px;">payments</mat-icon>
+                        <mat-icon style="font-size: var(--text-lg); height: 16px; width: 16px;">payments</mat-icon>
                         Non-Diesel: R{{ reqSummary().totalNonDiesel | number:'1.2-2' }}
                       </span>
                     </div>
@@ -2012,9 +1981,7 @@
 
                   <!-- Requisitions Table -->
                   @if (reqLoading()) {
-                    <div style="display: flex; justify-content: center; padding: 40px;">
-                      <mat-spinner diameter="40"></mat-spinner>
-                    </div>
+                    <app-skeleton-rows [rows]="5" [avatar]="false" />
                   } @else {
                     <div class="table-container">
                       <table mat-table [dataSource]="filteredRequisitions()" class="full-width-table">
@@ -2078,10 +2045,7 @@
                         <tr mat-row *matRowDef="let row; columns: reqColumns;" [ngClass]="{'cancelled-row': row.status === 'Cancelled'}"></tr>
                       </table>
                       @if (filteredRequisitions().length === 0) {
-                        <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">
-                          <mat-icon style="font-size: 48px; height: 48px; width: 48px;">receipt_long</mat-icon>
-                          <p>No requisitions found</p>
-                        </div>
+                        <app-empty-state icon="receipt_long" title="No requisitions found" message="There are no requisitions for the selected period." />
                       }
 
                       <!-- Period navigation footer -->
@@ -2154,7 +2118,7 @@
                           <mat-option value="pending">Pending</mat-option>
                           <mat-option value="assigned">Assigned</mat-option>
                           <mat-option value="delivered">Delivered</mat-option>
-                          <mat-option value="query">⚠️ Queries ({{ queryInvoiceCount() }})</mat-option>
+                          <mat-option value="query">Queries ({{ queryInvoiceCount() }})</mat-option>
                         </mat-select>
                       </mat-form-field>
                       <mat-form-field appearance="outline" class="filter-field">
@@ -2212,11 +2176,7 @@
                   </div>
 
                   @if (filteredInvoices().length === 0) {
-                    <div class="empty-state">
-                      <mat-icon>receipt_long</mat-icon>
-                      <h3>No Invoices Found</h3>
-                      <p>Import invoices from ERP system to manage deliveries</p>
-                    </div>
+                    <app-empty-state icon="receipt_long" title="No invoices found" message="Import invoices from ERP system to manage deliveries" />
                   } @else {
                     <div class="table-container">
                       <table mat-table [dataSource]="filteredInvoices()" class="invoices-table">

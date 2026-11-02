@@ -231,7 +231,7 @@ const MONTHS = ['January','February','March','April','May','June',
     .header-left { display: flex; align-items: center; gap: 12px; }
     .back-btn { color: var(--color-text-3); }
     .header-icon-wrap { width: 48px; height: 48px; border-radius: var(--radius-lg); background: var(--color-primary-soft); display: flex; align-items: center; justify-content: center; }
-    .header-icon-wrap mat-icon { color: var(--color-primary); font-size: 26px; width: 26px; height: 26px; }
+    .header-icon-wrap mat-icon { color: var(--color-primary); font-size: var(--text-3xl); width: 24px; height: 24px; }
     h1 { margin: 0; font-size: var(--text-2xl); font-weight: 700; color: var(--color-text); }
     .subtitle { margin: 0; font-size: var(--text-sm); color: var(--color-text-3); }
     .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -244,7 +244,7 @@ const MONTHS = ['January','February','March','April','May','June',
     .year-label { font-size: var(--text-lg); font-weight: 700; color: var(--color-text); min-width: 48px; text-align: center; }
     .summary-cards { display: flex; gap: 10px; flex-wrap: wrap; }
     .s-card { display: flex; align-items: center; gap: 10px; background: var(--color-surface); border-radius: 12px; padding: 10px 16px; box-shadow: var(--shadow-sm); }
-    .s-card mat-icon { font-size: 22px; width: 22px; height: 22px; }
+    .s-card mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; }
     .s-card.total mat-icon { color: var(--color-primary); }
     .s-card.amount mat-icon { color: var(--color-cat-teal); }
     .s-card.paid mat-icon { color: var(--color-ok); }
@@ -263,7 +263,7 @@ const MONTHS = ['January','February','March','April','May','June',
     .filters-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
     .search-wrap { display: flex; align-items: center; gap: 8px; background: var(--color-surface); border: 1.5px solid var(--color-line); border-radius: 10px; padding: 8px 14px; flex: 1; min-width: 200px; }
     .search-wrap:focus-within { border-color: var(--color-primary); }
-    .search-icon { color: var(--color-text-3); font-size: 20px; width: 20px; height: 20px; }
+    .search-icon { color: var(--color-text-3); font-size: var(--text-2xl); width: 20px; height: 20px; }
     .search-input { border: none; outline: none; font-size: var(--text-md); color: var(--color-text); background: transparent; flex: 1; }
     .filter-sel { padding: 9px 12px; border: 1.5px solid var(--color-line); border-radius: 10px; background: var(--color-surface); font-size: var(--text-sm); color: var(--color-text-2); cursor: pointer; }
     .filter-sel:focus { outline: none; border-color: var(--color-primary); }
@@ -271,13 +271,13 @@ const MONTHS = ['January','February','March','April','May','June',
     /* Table */
     .table-wrap { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); overflow-x: auto; }
     .exp-table th.sortable { cursor: pointer; }
-    .exp-table th mat-icon.sort-icon { font-size: 14px; vertical-align: middle; width: 14px; height: 14px; }
+    .exp-table th mat-icon.sort-icon { font-size: var(--text-md); vertical-align: middle; width: 14px; height: 14px; }
     .row-paid td { background: var(--color-ok-soft); }
     .row-cancelled td { background: var(--color-danger-soft); opacity: 0.7; }
 
     .company-name { font-weight: 600; color: var(--color-text); }
     .linked-inv { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-primary); margin-top: 2px; }
-    .linked-inv mat-icon { font-size: 12px; width: 12px; height: 12px; }
+    .linked-inv mat-icon { font-size: var(--text-xs); width: 12px; height: 12px; }
     .services-cell { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .amount-cell { font-weight: 600; color: var(--color-text); }
     .date-col { white-space: nowrap; }
@@ -615,7 +615,7 @@ export class ExpenseTrackerComponent implements OnInit {
   styles: [`
     .ei-dialog { display: flex; flex-direction: column; }
     .ei-header { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; border-bottom: 1px solid var(--color-surface-2); }
-    .ei-header mat-icon { color: var(--color-primary); font-size: 26px; width: 26px; height: 26px; }
+    .ei-header mat-icon { color: var(--color-primary); font-size: var(--text-3xl); width: 24px; height: 24px; }
     .ei-header h2 { flex: 1; margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
     .ei-body { padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
     .ei-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px 16px; border-top: 1px solid var(--color-surface-2); }
@@ -750,7 +750,7 @@ export class ExpenseItemDialogComponent {
     .li-body { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
     .li-footer { flex-shrink: 0; padding: 10px 20px 14px; border-top: 1px solid var(--color-surface-2); display: flex; justify-content: flex-end; }
     .search-wrap { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--color-line); border-radius: 10px; padding: 8px 14px; }
-    .search-wrap mat-icon { color: var(--color-text-3); font-size: 18px; }
+    .search-wrap mat-icon { color: var(--color-text-3); font-size: var(--text-xl); }
     .sinput { border: none; outline: none; font-size: var(--text-md); flex: 1; background: transparent; color: var(--color-text); }
     .inv-list { display: flex; flex-direction: column; gap: 6px; }
     .inv-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1.5px solid var(--color-line); border-radius: 10px; cursor: pointer; transition: all .15s; }
@@ -883,7 +883,7 @@ export class LinkInvoiceDialogComponent implements OnInit {
     .finput:focus { outline: none; border-color: var(--color-primary); }
     .fsel { padding: 9px 12px; border: 1.5px solid var(--color-line); border-radius: 8px; font-size: var(--text-md); background: var(--color-surface); color: var(--color-text); width: 100%; }
     .drop-zone { border: 2px dashed var(--color-line-strong); border-radius: 14px; padding: 32px; text-align: center; cursor: pointer; transition: all .2s; color: var(--color-text-3); font-size: var(--text-md); }
-    .drop-zone mat-icon { font-size: 40px; width: 40px; height: 40px; color: var(--color-line-strong); display: block; margin: 0 auto 10px; }
+    .drop-zone mat-icon { font-size: var(--text-4xl); width: 32px; height: 32px; color: var(--color-line-strong); display: block; margin: 0 auto 10px; }
     .drop-zone:hover, .drop-zone.has-file { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary-hover); }
     .drop-zone.has-file mat-icon { color: var(--color-ok); }
     .result-box { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; font-size: var(--text-sm); }
