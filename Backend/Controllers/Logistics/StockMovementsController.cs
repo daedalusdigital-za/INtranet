@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.Logistics;
 using System.Security.Claims;
 
 namespace ProjectTracker.API.Controllers.Logistics
@@ -15,8 +16,6 @@ namespace ProjectTracker.API.Controllers.Logistics
         private readonly ApplicationDbContext _context;
         private readonly ILogger<StockMovementsController> _logger;
 
-        private const string DispatchApproverPermission = "stock_dispatch_approver";
-
         public StockMovementsController(ApplicationDbContext context, ILogger<StockMovementsController> logger)
         {
             _context = context;
@@ -26,18 +25,8 @@ namespace ProjectTracker.API.Controllers.Logistics
         private string CurrentUserName =>
             User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue("name") ?? User.FindFirstValue(ClaimTypes.Email) ?? "Unknown";
 
-        private async Task<bool> IsDispatchApproverAsync()
-        {
-            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-            if (!int.TryParse(idClaim, out var userId)) return false;
-            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId);
-            if (user == null) return false;
-            var role = (user.Role ?? "").ToLower();
-            if (role.Contains("admin") || role.Contains("manager")) return true;
-            var perms = (user.Permissions ?? "").ToLower();
-            // Stock controllers (stock_management permission) or explicit approvers
-            return perms.Contains("stock_management") || perms.Contains(DispatchApproverPermission);
-        }
+        // Approvers are the people with Stock Management access (see StockAccess)
+        private Task<bool> IsDispatchApproverAsync() => StockAccess.CanManageAsync(_context, User);
 
         // ═══ GET: list movements (ledger) ═══
         [HttpGet]
@@ -97,10 +86,59 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(ids);
         }
 
+        // ═══ GET: stock state of every live load — the approval work-queue ═══
+        // Same rule as ApproveDispatch: a load is "baseline" (already in the counted stock) only when every
+        // linked line was counted after it was dispatched. Loads with no linked lines fall back to the
+        // warehouse's latest count. Everything else not yet deducted is "awaiting".
+        [HttpGet("load-stock-state")]
+        public async Task<ActionResult<IEnumerable<object>>> GetLoadStockState()
+        {
+            var deducted = (await _context.WarehouseStockMovements
+                .Where(m => m.LoadId != null && m.MovementType == "Dispatch" && m.Status == "Approved" && m.ReversedByMovementId == null)
+                .Select(m => m.LoadId!.Value).Distinct().ToListAsync()).ToHashSet();
+
+            var loads = await _context.Loads.AsNoTracking()
+                .Where(l => l.Status != "Cancelled")
+                .ToListAsync();
+            var lines = (await _context.StopCommodities.AsNoTracking()
+                    .Where(sc => sc.CommodityId != null && sc.Quantity > 0)
+                    .Select(sc => new { sc.LoadStop.LoadId, CommodityId = sc.CommodityId!.Value })
+                    .ToListAsync())
+                .ToLookup(x => x.LoadId, x => x.CommodityId);
+            var counts = await _context.WarehouseInventory.AsNoTracking()
+                .Where(i => i.LastCountDate != null)
+                .Select(i => new { i.WarehouseId, i.CommodityId, Counted = i.LastCountDate!.Value })
+                .ToListAsync();
+            var countOf = counts.ToDictionary(c => (c.WarehouseId, c.CommodityId), c => c.Counted);
+            var warehouseCount = counts.GroupBy(c => c.WarehouseId).ToDictionary(g => g.Key, g => g.Max(c => c.Counted));
+
+            var result = loads.Select(l =>
+            {
+                var dispatched = LoadStockGuard.DispatchDate(l);
+                string state;
+                if (deducted.Contains(l.Id)) state = "deducted";
+                else if (l.WarehouseId == null) state = "awaiting";
+                else
+                {
+                    var wh = l.WarehouseId.Value;
+                    var items = lines[l.Id].Distinct().ToList();
+                    var baseline = items.Count > 0
+                        ? items.All(c => countOf.TryGetValue((wh, c), out var counted) && dispatched < counted)
+                        : warehouseCount.TryGetValue(wh, out var whCounted) && dispatched < whCounted;
+                    state = baseline ? "baseline" : "awaiting";
+                }
+                return new { loadId = l.Id, state, dispatchDate = dispatched, delivered = l.Status == "Delivered" || l.Status == "Completed" };
+            }).ToList();
+            return Ok(result);
+        }
+
         // ═══ POST: manual movement (Receive / Return / Adjustment) ═══
         [HttpPost]
         public async Task<ActionResult<object>> CreateMovement([FromBody] ManualMovementDto dto)
         {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             var allowed = new[] { "Receive", "Return", "Adjustment", "Scrap" };
             if (!allowed.Contains(dto.MovementType))
                 return BadRequest(new { message = "MovementType must be Receive, Return, Adjustment or Scrap" });
@@ -131,6 +169,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                 await tx.RollbackAsync();
                 return BadRequest(new { message = ex.Message });
             }
+            catch (Exception ex) when (StockLedger.IsStockConflict(ex))
+            {
+                await tx.RollbackAsync();
+                return Conflict(new { message = StockLedger.ConflictMessage });
+            }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
@@ -143,6 +186,9 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPost("transfer")]
         public async Task<ActionResult<object>> TransferStock([FromBody] TransferStockDto dto)
         {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             if (dto.FromWarehouseId == dto.ToWarehouseId)
                 return BadRequest(new { message = "Source and destination warehouses must differ" });
             if (dto.Quantity <= 0)
@@ -174,6 +220,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                 await tx.RollbackAsync();
                 return BadRequest(new { message = ex.Message });
             }
+            catch (Exception ex) when (StockLedger.IsStockConflict(ex))
+            {
+                await tx.RollbackAsync();
+                return Conflict(new { message = StockLedger.ConflictMessage });
+            }
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
@@ -191,48 +242,91 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             var load = await _context.Loads.Include(l => l.Warehouse).FirstOrDefaultAsync(l => l.Id == dto.LoadId);
             if (load == null) return NotFound(new { message = "Load not found" });
+            if (string.Equals(load.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
+                return Conflict(new { message = $"Load {load.LoadNumber} is cancelled, so it takes no stock." });
             var warehouseId = dto.WarehouseId ?? load.WarehouseId;
             if (warehouseId == null) return BadRequest(new { message = "Load has no warehouse — specify warehouseId" });
 
-            var alreadyDeducted = await _context.WarehouseStockMovements.AnyAsync(m =>
-                m.LoadId == dto.LoadId && m.MovementType == "Dispatch" && m.Status == "Approved" && m.ReversedByMovementId == null);
-            if (alreadyDeducted)
+            if (await LoadStockGuard.HasLiveDeductionAsync(_context, dto.LoadId))
                 return Conflict(new { message = $"Load {load.LoadNumber} has already had stock deducted. Use a reversal first if this was a mistake." });
-
-            // Loads dated before the warehouse's stock-count baseline are already in the imported quantities
-            var baseline = await _context.WarehouseInventory
-                .Where(i => i.WarehouseId == warehouseId.Value && i.LastCountDate != null)
-                .MaxAsync(i => i.LastCountDate);
-            var loadDate = load.ActualDeliveryDate ?? load.ScheduledDeliveryDate ?? load.CreatedAt;
-            if (baseline != null && loadDate < baseline.Value)
-                return Conflict(new { message = $"Load {load.LoadNumber} ({loadDate:dd MMM yyyy}) predates the {load.Warehouse?.Name} stock count of {baseline:dd MMM yyyy} and is already reflected in stock on hand." });
 
             if (dto.Lines == null || dto.Lines.Count == 0)
                 return BadRequest(new { message = "No lines to dispatch" });
 
+            // A line with no stock item would never deduct, and once a load is approved nothing
+            // more can be added to it, so every line must be linked first.
+            var unlinked = await _context.StopCommodities
+                .CountAsync(sc => sc.LoadStop.LoadId == dto.LoadId && sc.CommodityId == null && sc.Quantity > 0);
+            if (unlinked > 0)
+                return Conflict(new
+                {
+                    message = $"{unlinked} line(s) on {load.LoadNumber} aren't linked to a stock item yet. Link every line before approving.",
+                    unlinkedLines = unlinked
+                });
+
+            // What the load actually carries — the dispatch may ship less than this, never more or anything else.
+            var planned = await _context.StopCommodities
+                .Where(sc => sc.LoadStop.LoadId == dto.LoadId && sc.CommodityId != null && sc.Quantity > 0)
+                .GroupBy(sc => sc.CommodityId!.Value)
+                .Select(g => new { CommodityId = g.Key, Qty = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.CommodityId, x => x.Qty);
+            if (planned.Count == 0)
+                return Conflict(new { message = $"{load.LoadNumber} has no stock lines, so there is nothing to deduct." });
+
+            var requested = dto.Lines
+                .Where(l => l.DispatchedQuantity > 0)
+                .GroupBy(l => l.CommodityId)
+                .Select(g => new
+                {
+                    CommodityId = g.Key,
+                    Qty = g.Sum(x => Math.Abs(x.DispatchedQuantity)),
+                    Reason = g.Select(x => x.Reason).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r))
+                })
+                .ToList();
+            if (requested.Count == 0)
+                return BadRequest(new { message = "All dispatched quantities were zero" });
+
+            var notOnLoad = requested.Where(r => !planned.ContainsKey(r.CommodityId)).Select(r => r.CommodityId).ToList();
+            if (notOnLoad.Count > 0)
+                return BadRequest(new { message = $"{notOnLoad.Count} line(s) are not on {load.LoadNumber}. Only the load's own items can be dispatched." });
+            var over = requested.Where(r => r.Qty > planned[r.CommodityId]).ToList();
+            if (over.Count > 0)
+                return BadRequest(new { message = $"{over.Count} line(s) dispatch more than {load.LoadNumber} carries. Correct the load first, then approve." });
+
+            // Lines counted after the load went out are already reflected in that count, so they are skipped
+            // (per item, so a recount of one product doesn't block every other load in the warehouse).
+            var loadDate = LoadStockGuard.DispatchDate(load);
+            var commodityIds = requested.Select(r => r.CommodityId).ToList();
+            var countDates = await _context.WarehouseInventory
+                .Where(i => i.WarehouseId == warehouseId.Value && commodityIds.Contains(i.CommodityId) && i.LastCountDate != null)
+                .ToDictionaryAsync(i => i.CommodityId, i => i.LastCountDate!.Value);
+            var toDeduct = requested.Where(r => !(countDates.TryGetValue(r.CommodityId, out var counted) && loadDate < counted)).ToList();
+            var skipped = requested.Count - toDeduct.Count;
+            if (toDeduct.Count == 0)
+                return Conflict(new { message = $"Load {load.LoadNumber} left on {loadDate:dd MMM yyyy}, before the {load.Warehouse?.Name} stock count of every item on it, so it is already reflected in stock on hand." });
+
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-                var results = new List<object>();
-                foreach (var line in dto.Lines.Where(l => l.DispatchedQuantity > 0))
-                {
-                    var r = await ApplyMovementAsync(warehouseId.Value, line.CommodityId, "Dispatch",
-                        -Math.Abs(line.DispatchedQuantity), dto.LoadId, null, load.LoadNumber, line.Reason);
-                    results.Add(r);
-                }
-                if (results.Count == 0)
-                {
-                    await tx.RollbackAsync();
-                    return BadRequest(new { message = "All dispatched quantities were zero" });
-                }
+                foreach (var line in toDeduct)
+                    await ApplyMovementAsync(warehouseId.Value, line.CommodityId, "Dispatch",
+                        -line.Qty, dto.LoadId, null, load.LoadNumber, line.Reason);
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
-                return Ok(new { loadId = dto.LoadId, loadNumber = load.LoadNumber, lines = results.Count });
+                var message = skipped == 0
+                    ? $"Stock deducted for {load.LoadNumber}"
+                    : $"Stock deducted for {load.LoadNumber}; {skipped} line(s) skipped because they were counted after the load went out";
+                return Ok(new { loadId = dto.LoadId, loadNumber = load.LoadNumber, lines = toDeduct.Count, skippedLines = skipped, message });
             }
             catch (InvalidOperationException ex)
             {
                 await tx.RollbackAsync();
                 return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex) when (StockLedger.IsStockConflict(ex))
+            {
+                await tx.RollbackAsync();
+                return Conflict(new { message = $"Load {load.LoadNumber} was approved by someone else, or its stock changed while saving. Refresh and check before trying again." });
             }
             catch (Exception ex)
             {
@@ -259,6 +353,9 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPost("map-stop-commodity")]
         public async Task<ActionResult<object>> MapStopCommodity([FromBody] MapStopCommodityDto dto)
         {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             if (dto.StopCommodityIds == null || dto.StopCommodityIds.Count == 0)
                 return BadRequest(new { message = "No tripsheet lines supplied" });
 
@@ -283,10 +380,122 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(new { updated, commodityId = commodity.Id, code = commodity.Code, name = commodity.Name });
         }
 
+        // ═══ POST: one-off repair of loads created before stock lines were linked automatically ═══
+        // 1) Loads made from sales invoices that got no stock lines at all get one line per invoice.
+        // 2) Unlinked lines are linked by product code, taken from the line's invoice (when that settles
+        //    on a single code) or a "CODE: Name" comment. Ambiguous lines are left for manual linking.
+        // Cancelled loads and loads whose stock is already deducted are left alone. dryRun only reports.
+        [HttpPost("loads/backfill-stock-lines")]
+        public async Task<ActionResult<object>> BackfillLoadStockLines([FromQuery] bool dryRun = true)
+        {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = "You need the Stock Dispatch Approver permission to repair load stock lines" });
+
+            var deductedLoadIds = await _context.WarehouseStockMovements
+                .Where(m => m.LoadId != null && m.MovementType == "Dispatch" && m.Status == "Approved" && m.ReversedByMovementId == null)
+                .Select(m => m.LoadId!.Value).Distinct().ToListAsync();
+            var eligible = _context.Loads.Where(l => l.Status != "Cancelled" && !deductedLoadIds.Contains(l.Id));
+
+            // 1) Invoice loads with stops but no stock lines
+            var bareLoads = await eligible
+                .Where(l => l.Stops.Any() && !l.Stops.SelectMany(s => s.Commodities).Any()
+                            && _context.ImportedInvoices.Any(i => i.LoadId == l.Id))
+                .Include(l => l.Stops)
+                .ToListAsync();
+            var bareIds = bareLoads.Select(l => l.Id).ToList();
+            var bareInvoices = await _context.ImportedInvoices.Where(i => i.LoadId != null && bareIds.Contains(i.LoadId.Value)).ToListAsync();
+            var createCodes = await CommodityCodeMatcher.BuildAsync(_context, bareInvoices.Select(i => i.ProductCode));
+
+            int linesCreated = 0, createdLinked = 0;
+            foreach (var load in bareLoads)
+            {
+                var stops = load.Stops.OrderBy(s => s.StopSequence).ToList();
+                foreach (var inv in bareInvoices.Where(i => i.LoadId == load.Id))
+                {
+                    var stop = stops.FirstOrDefault(s => string.Equals((s.CompanyName ?? "").Trim(), inv.CustomerName.Trim(), StringComparison.OrdinalIgnoreCase))
+                               ?? stops[0];
+                    var commodityId = CommodityCodeMatcher.Match(createCodes, inv.ProductCode);
+                    _context.StopCommodities.Add(new StopCommodity
+                    {
+                        LoadStopId = stop.Id,
+                        CommodityId = commodityId,
+                        Quantity = inv.Quantity,
+                        UnitPrice = inv.SalesAmount / (inv.Quantity != 0 ? inv.Quantity : 1),
+                        TotalPrice = inv.NetSales,
+                        InvoiceNumber = inv.TransactionNumber,
+                        Comment = inv.ProductDescription,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    linesCreated++;
+                    if (commodityId != null) createdLinked++;
+                }
+            }
+
+            // 2) Existing lines with no stock item
+            var unlinked = await _context.StopCommodities
+                .Where(sc => sc.CommodityId == null && sc.Quantity > 0 && eligible.Any(l => l.Id == sc.LoadStop.LoadId))
+                .ToListAsync();
+
+            static List<string> InvoiceNumbers(string? s) =>
+                (s ?? "").Split(new[] { ',', ';', '/' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            var invoiceNumbers = unlinked.SelectMany(sc => InvoiceNumbers(sc.InvoiceNumber)).Distinct().ToList();
+            var invoiceLines = await _context.ImportedInvoices.AsNoTracking()
+                .Where(i => invoiceNumbers.Contains(i.TransactionNumber) && i.ProductCode != null && i.ProductCode != "")
+                .Select(i => new { i.TransactionNumber, i.ProductCode, i.ProductDescription })
+                .ToListAsync();
+            var byInvoice = invoiceLines.ToLookup(i => i.TransactionNumber, StringComparer.OrdinalIgnoreCase);
+
+            string? CodeFor(StopCommodity sc)
+            {
+                var candidates = InvoiceNumbers(sc.InvoiceNumber).SelectMany(n => byInvoice[n]).ToList();
+                var described = candidates.Where(c => string.Equals((c.ProductDescription ?? "").Trim(), (sc.Comment ?? "").Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+                foreach (var set in new[] { described, candidates })
+                {
+                    var codes = set.Select(c => CommodityCodeMatcher.Normalize(c.ProductCode)).Distinct().ToList();
+                    if (codes.Count == 1) return codes[0];
+                }
+                // "CODE: Name" comments from the load editor
+                var colon = (sc.Comment ?? "").IndexOf(':');
+                return colon > 0 ? sc.Comment![..colon].Trim() : null;
+            }
+
+            var lineCodes = unlinked.Select(sc => new { sc, Code = CodeFor(sc) }).ToList();
+            var linkCodes = await CommodityCodeMatcher.BuildAsync(_context, lineCodes.Select(x => x.Code));
+            int linked = 0;
+            foreach (var x in lineCodes)
+            {
+                var commodityId = CommodityCodeMatcher.Match(linkCodes, x.Code);
+                if (commodityId == null) continue;
+                x.sc.CommodityId = commodityId;
+                linked++;
+            }
+
+            if (!dryRun)
+            {
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Load stock-line backfill by {User}: {Created} lines created on {Loads} loads ({CreatedLinked} linked), {Linked} of {Unlinked} existing lines linked",
+                    CurrentUserName, linesCreated, bareLoads.Count, createdLinked, linked, unlinked.Count);
+            }
+
+            return Ok(new
+            {
+                dryRun,
+                loadsGivenLines = bareLoads.Count,
+                linesCreated,
+                linesCreatedLinked = createdLinked,
+                existingUnlinked = unlinked.Count,
+                existingLinked = linked,
+                stillUnlinked = (linesCreated - createdLinked) + (unlinked.Count - linked)
+            });
+        }
+
         // ═══ POST: stock take — post counted quantities; each variance becomes an Adjustment ═══
         [HttpPost("stock-take")]
         public async Task<ActionResult<object>> PostStockTake([FromBody] StockTakeDto dto)
         {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             if (dto.Lines == null || dto.Lines.Count == 0)
                 return BadRequest(new { message = "No counted lines supplied" });
             if (string.IsNullOrWhiteSpace(dto.Reason))
@@ -302,18 +511,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             try
             {
                 var adjusted = 0; var confirmed = 0;
+                var countedAt = DateTime.UtcNow;
                 foreach (var line in dto.Lines)
                 {
-                    var inv = await _context.WarehouseInventory
-                        .FirstOrDefaultAsync(i => i.WarehouseId == dto.WarehouseId && i.CommodityId == line.CommodityId);
-                    var system = inv?.QuantityOnHand ?? 0m;
-                    var variance = line.CountedQuantity - system;
-                    if (variance == 0) { confirmed++; if (inv != null) { inv.LastCountDate = DateTime.UtcNow; } continue; }
-
-                    await ApplyMovementAsync(dto.WarehouseId, line.CommodityId, "Adjustment", variance,
-                        null, null, reference, $"Stock take: counted {line.CountedQuantity}, system {system}. {dto.Reason}");
-                    if (inv != null) inv.LastCountDate = DateTime.UtcNow;
-                    adjusted++;
+                    var movement = await StockLedger.PostCountAsync(_context, dto.WarehouseId, line.CommodityId,
+                        line.CountedQuantity, countedAt, reference, dto.Reason, CurrentUserName);
+                    if (movement == null) confirmed++; else adjusted++;
                 }
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -323,6 +526,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             {
                 await tx.RollbackAsync();
                 return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex) when (StockLedger.IsStockConflict(ex))
+            {
+                await tx.RollbackAsync();
+                return Conflict(new { message = StockLedger.ConflictMessage });
             }
             catch (Exception ex)
             {
@@ -338,6 +546,9 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPatch("inventory/{inventoryId}/cell")]
         public async Task<ActionResult<object>> EditInventoryCell(int inventoryId, [FromBody] InventoryCellEditDto dto)
         {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             var inv = await _context.WarehouseInventory.Include(i => i.Commodity).FirstOrDefaultAsync(i => i.Id == inventoryId);
             if (inv == null) return NotFound(new { message = "Stock line not found" });
             var field = (dto.Field ?? string.Empty).Trim().ToLowerInvariant();
@@ -360,7 +571,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                         }
                         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
                     }
-                    inv.LastCountDate = now;
+                    // A correction is an adjustment, not a count: it must not move the count date that
+                    // decides which loads are already reflected in stock (see ApproveDispatch).
                     break;
                 }
                 case "binlocation":
@@ -392,7 +604,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
 
             inv.UpdatedAt = now;
-            await _context.SaveChangesAsync();
+            try { await _context.SaveChangesAsync(); }
+            catch (Exception ex) when (StockLedger.IsStockConflict(ex)) { return Conflict(new { message = StockLedger.ConflictMessage }); }
             _logger.LogInformation("Inventory cell edited: line {Id} field {Field} by {User}", inventoryId, field, CurrentUserName);
             return Ok(new
             {
@@ -415,6 +628,9 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPost("inventory/apply-invoice-prices")]
         public async Task<ActionResult<object>> ApplyInvoicePrices()
         {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             static string Norm(string? s) => new string((s ?? "").Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
 
             // Average selling price per invoice product code (sales ÷ qty, invoices only)
@@ -504,14 +720,15 @@ namespace ProjectTracker.API.Controllers.Logistics
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-                var reversal = (WarehouseStockMovement)(await ApplyMovementAsync(original.WarehouseId, original.CommodityId,
-                    "Reversal", -original.Quantity, original.LoadId, original.TransferId,
-                    $"REV of #{original.Id} ({original.Reference})", dto.Reason, returnEntity: true))!;
-                original.ReversedByMovementId = reversal.Id;
-                reversal.ReversesMovementId = original.Id;
+                var reversal = await ReverseAsync(original, dto.Reason);
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
                 return Ok(new { reversedMovementId = original.Id, reversalMovementId = reversal.Id });
+            }
+            catch (Exception ex) when (StockLedger.IsStockConflict(ex))
+            {
+                await tx.RollbackAsync();
+                return Conflict(new { message = StockLedger.ConflictMessage });
             }
             catch (Exception ex)
             {
@@ -521,94 +738,67 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
-        /// <summary>
-        /// Core: insert a ledger row and update the cached WarehouseInventory.QuantityOnHand
-        /// in the same EF change-set (caller controls the transaction).
-        /// Auto-creates missing inventory rows (logged as an Issue) and
-        /// auto-logs an Issue when a balance goes negative (reason required by callers).
-        /// </summary>
+        // ═══ POST: reverse every stock deduction for one load ═══
+        // Loads with stock deducted can't be edited, cancelled or deleted (LoadStockGuard);
+        // this puts the whole load's stock back in one step so they can.
+        [HttpPost("loads/{loadId}/reverse-dispatch")]
+        public async Task<ActionResult<object>> ReverseLoadDispatch(int loadId, [FromBody] ReverseDto dto)
+        {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = "You need the Stock Dispatch Approver permission to reverse movements" });
+            if (string.IsNullOrWhiteSpace(dto.Reason)) return BadRequest(new { message = "A reason is required for reversals" });
+
+            var deductions = await _context.WarehouseStockMovements
+                .Where(m => m.LoadId == loadId && m.MovementType == "Dispatch" && m.Status == "Approved" && m.ReversedByMovementId == null)
+                .ToListAsync();
+            if (deductions.Count == 0) return NotFound(new { message = "No stock has been deducted for this load" });
+
+            using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var original in deductions)
+                    await ReverseAsync(original, dto.Reason);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return Ok(new { loadId, reversedLines = deductions.Count });
+            }
+            catch (Exception ex) when (StockLedger.IsStockConflict(ex))
+            {
+                await tx.RollbackAsync();
+                return Conflict(new { message = StockLedger.ConflictMessage });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _logger.LogError(ex, "Error reversing the dispatch of load {LoadId}", loadId);
+                return StatusCode(500, new { message = "An error occurred while reversing the load's dispatch" });
+            }
+        }
+
+        /// <summary>Posts the opposite of an approved movement and links the two (caller saves and commits).</summary>
+        private async Task<WarehouseStockMovement> ReverseAsync(WarehouseStockMovement original, string reason)
+        {
+            var reversal = (WarehouseStockMovement)(await ApplyMovementAsync(original.WarehouseId, original.CommodityId,
+                "Reversal", -original.Quantity, original.LoadId, original.TransferId,
+                $"REV of #{original.Id} ({original.Reference})", reason, returnEntity: true))!;
+            original.ReversedByMovementId = reversal.Id;
+            reversal.ReversesMovementId = original.Id;
+            return reversal;
+        }
+
+        /// <summary>Posts through the shared StockLedger (caller saves and controls the transaction).</summary>
         private async Task<object?> ApplyMovementAsync(int warehouseId, int commodityId, string movementType,
             decimal signedQty, int? loadId, int? transferId, string? reference, string? reason, bool returnEntity = false)
         {
-            var inv = await _context.WarehouseInventory
-                .FirstOrDefaultAsync(i => i.WarehouseId == warehouseId && i.CommodityId == commodityId);
-
-            if (inv == null)
-            {
-                var commodity = await _context.Commodities.FindAsync(commodityId)
-                    ?? throw new InvalidOperationException($"Commodity {commodityId} not found");
-                inv = new WarehouseInventory
-                {
-                    WarehouseId = warehouseId,
-                    CommodityId = commodityId,
-                    QuantityOnHand = 0,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.WarehouseInventory.Add(inv);
-
-                _context.StockIssues.Add(new StockIssue
-                {
-                    WarehouseId = warehouseId,
-                    ItemCode = commodity.Code,
-                    ItemDescription = commodity.Name,
-                    IssueType = "Item not in warehouse stock",
-                    Detail = $"A {movementType} movement was recorded for an item with no stock record at this warehouse. Row auto-created at 0.",
-                    IssueDate = DateTime.UtcNow,
-                    Status = "Open",
-                    CreatedBy = CurrentUserName,
-                    Source = "System"
-                });
-            }
-
-            var newBalance = inv.QuantityOnHand + signedQty;
-            if (newBalance < 0)
-            {
-                if (string.IsNullOrWhiteSpace(reason))
-                    throw new InvalidOperationException(
-                        $"This would take stock negative ({inv.QuantityOnHand} → {newBalance}). A reason is required.");
-
-                var commodity = await _context.Commodities.FindAsync(commodityId);
-                _context.StockIssues.Add(new StockIssue
-                {
-                    WarehouseId = warehouseId,
-                    ItemCode = commodity?.Code,
-                    ItemDescription = commodity?.Name,
-                    IssueType = "Negative balance",
-                    Detail = $"{movementType} of {signedQty} took balance from {inv.QuantityOnHand} to {newBalance}. Reason: {reason}",
-                    IssueDate = DateTime.UtcNow,
-                    Status = "Open",
-                    CreatedBy = CurrentUserName,
-                    Source = "System"
-                });
-            }
-
-            inv.QuantityOnHand = newBalance;
-            inv.UpdatedAt = DateTime.UtcNow;
-            if (signedQty > 0) inv.LastRestockDate = DateTime.UtcNow;
-
-            var movement = new WarehouseStockMovement
-            {
-                WarehouseId = warehouseId,
-                CommodityId = commodityId,
-                MovementType = movementType,
-                Quantity = signedQty,
-                LoadId = loadId,
-                TransferId = transferId,
-                Reference = reference,
-                Reason = reason,
-                Status = "Approved",
-                BalanceAfter = newBalance,
-                CreatedBy = CurrentUserName,
-                CreatedAt = DateTime.UtcNow
-            };
-            _context.WarehouseStockMovements.Add(movement);
+            var movement = await StockLedger.ApplyAsync(_context, warehouseId, commodityId, movementType, signedQty,
+                loadId, transferId, reference, reason, CurrentUserName);
 
             if (returnEntity)
             {
                 await _context.SaveChangesAsync(); // need Id for reversal linking
                 return movement;
             }
-            return new { commodityId, movementType, quantity = signedQty, balanceAfter = newBalance };
+            return new { commodityId, movementType, quantity = signedQty, balanceAfter = movement.BalanceAfter };
         }
     }
 

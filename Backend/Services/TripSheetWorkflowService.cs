@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.Logistics;
 
 namespace ProjectTracker.API.Services
 {
@@ -346,6 +347,8 @@ namespace ProjectTracker.API.Services
                 // Group invoices by customer → create LoadStops + StopCommodities
                 decimal totalValue = 0;
                 var customerGroups = invoices.GroupBy(i => i.CustomerName).ToList();
+                // Link each line to its stock item up front so the load can deduct stock without manual mapping
+                var stockCodes = await CommodityCodeMatcher.BuildAsync(db, invoices.Select(i => i.ProductCode));
                 int stopSequence = 1;
 
                 foreach (var customerGroup in customerGroups)
@@ -376,6 +379,7 @@ namespace ProjectTracker.API.Services
                         var commodity = new StopCommodity
                         {
                             LoadStopId = stop.Id,
+                            CommodityId = CommodityCodeMatcher.Match(stockCodes, invoice.ProductCode),
                             Quantity = invoice.Quantity,
                             UnitPrice = invoice.SalesAmount / (invoice.Quantity != 0 ? invoice.Quantity : 1),
                             TotalPrice = invoice.NetSales,

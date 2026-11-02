@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.Logistics;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -248,6 +249,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 // Add stops with commodities
                 decimal totalWeight = 0;
                 decimal totalVolume = 0;
+                // Lines sent without a stock item are linked by product code so the load can deduct stock
+                var stockCodes = await CommodityCodeMatcher.BuildAsync(_context,
+                    dto.Stops.SelectMany(s => s.Commodities).Select(c => c.CommodityCode));
 
                 foreach (var stopDto in dto.Stops.OrderBy(s => s.StopSequence))
                 {
@@ -307,7 +311,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         var stopCommodity = new StopCommodity
                         {
                             LoadStopId = stop.Id,
-                            CommodityId = commodityDto.CommodityId,  // Nullable - imported invoices don't have Commodity FK
+                            CommodityId = commodityDto.CommodityId ?? CommodityCodeMatcher.Match(stockCodes, commodityDto.CommodityCode),
                             ContractId = commodityDto.ContractId,
                             Quantity = commodityDto.Quantity,
                             UnitOfMeasure = commodityDto.UnitOfMeasure,
@@ -428,6 +432,15 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (load == null)
                 return NotFound();
 
+            // Once stock has come off for this load its goods are fixed until the dispatch is
+            // reversed. Driver, vehicle, dates and addresses can still change.
+            if (await LoadStockGuard.HasLiveDeductionAsync(_context, load.Id))
+            {
+                var refused = await DescribeGoodsChangeAsync(load, dto);
+                if (refused != null)
+                    return Conflict(LoadStockGuard.Blocked(load.LoadNumber, refused));
+            }
+
             if (dto.VehicleId.HasValue) load.VehicleId = dto.VehicleId;
             if (dto.DriverId.HasValue) load.DriverId = dto.DriverId;
             if (dto.VehicleTypeId.HasValue) load.VehicleTypeId = dto.VehicleTypeId;
@@ -453,6 +466,18 @@ namespace ProjectTracker.API.Controllers.Logistics
             // Update stops if provided
             if (dto.Stops != null && dto.Stops.Any())
             {
+                // The edit form resends every line without its stock item, so keep each line's
+                // link to a stock item (made in Stock when approving a dispatch) across the rebuild.
+                var stockLinks = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var old in load.Stops.SelectMany(s => s.Commodities).Where(c => c.CommodityId != null))
+                {
+                    stockLinks.TryAdd(LineKey(old.InvoiceNumber, old.Comment), old.CommodityId!.Value);
+                    stockLinks.TryAdd(LineKey(old.InvoiceNumber, old.Quantity), old.CommodityId!.Value);
+                }
+                // Lines that were never linked fall back to their product code
+                var stockCodes = await CommodityCodeMatcher.BuildAsync(_context,
+                    dto.Stops.SelectMany(s => s.Commodities).Select(c => c.CommodityCode));
+
                 // Remove existing stops and their commodities
                 foreach (var stop in load.Stops.ToList())
                 {
@@ -538,10 +563,15 @@ namespace ProjectTracker.API.Controllers.Logistics
                                     : commDto.CommodityName;
                             }
 
+                            var stockItemId = commDto.CommodityId
+                                ?? (stockLinks.TryGetValue(LineKey(commDto.InvoiceNumber, comment), out var byComment) ? byComment
+                                    : stockLinks.TryGetValue(LineKey(commDto.InvoiceNumber, commDto.Quantity), out var byQty) ? byQty
+                                    : CommodityCodeMatcher.Match(stockCodes, commDto.CommodityCode));
+
                             var commodity = new StopCommodity
                             {
                                 LoadStopId = stop.Id,
-                                CommodityId = commDto.CommodityId,  // Nullable - imported invoices don't have Commodity FK
+                                CommodityId = stockItemId,  // Nullable - imported invoices don't have Commodity FK
                                 Quantity = commDto.Quantity,
                                 UnitPrice = commDto.UnitPrice,
                                 TotalPrice = commDto.TotalPrice.HasValue
@@ -614,6 +644,10 @@ namespace ProjectTracker.API.Controllers.Logistics
             {
                 return BadRequest($"Invalid status. Valid values are: {string.Join(", ", validStatuses)}");
             }
+
+            if (dto.Status == "Cancelled" && load.Status != "Cancelled"
+                && await LoadStockGuard.HasLiveDeductionAsync(_context, load.Id))
+                return Conflict(LoadStockGuard.Blocked(load.LoadNumber, "cancel it"));
 
             // Closing a load requires proof of delivery: either a POD document attached
             // to the load, or a POD linked to every invoice on the load.
@@ -1200,6 +1234,44 @@ namespace ProjectTracker.API.Controllers.Logistics
             public decimal Value { get; set; }
         }
 
+        /// <summary>
+        /// For a load whose stock has been deducted: what this edit would change about its goods,
+        /// worded to finish "you can't …", or null when the goods stay the same. The edit form
+        /// always resends stops and invoices, so they're compared rather than refused outright.
+        /// </summary>
+        private async Task<string?> DescribeGoodsChangeAsync(Load load, UpdateLoadDto dto)
+        {
+            if (dto.Status == "Cancelled" && load.Status != "Cancelled")
+                return "cancel it";
+            if (dto.WarehouseId.HasValue && dto.WarehouseId != load.WarehouseId)
+                return "move it to another warehouse";
+
+            if (dto.InvoiceIds != null && dto.InvoiceIds.Any())
+            {
+                var linked = await _context.ImportedInvoices.Where(i => i.LoadId == load.Id).Select(i => i.Id).ToListAsync();
+                if (!linked.ToHashSet().SetEquals(dto.InvoiceIds))
+                    return "add or remove invoices";
+            }
+
+            if (dto.Stops != null && dto.Stops.Any())
+            {
+                var before = load.Stops.SelectMany(s => s.Commodities)
+                    .Select(c => LineKey(c.InvoiceNumber, c.Quantity)).OrderBy(k => k, StringComparer.Ordinal);
+                var after = dto.Stops.SelectMany(s => s.Commodities ?? new List<CreateStopCommodityDto>())
+                    .Select(c => LineKey(c.InvoiceNumber, c.Quantity)).OrderBy(k => k, StringComparer.Ordinal);
+                if (!before.SequenceEqual(after))
+                    return "change its lines or quantities";
+            }
+
+            return null;
+        }
+
+        private static string LineKey(string? invoiceNumber, decimal quantity) =>
+            $"{NormalizeInvoiceNumber(invoiceNumber ?? string.Empty)}|{quantity:0.####}";
+
+        private static string LineKey(string? invoiceNumber, string? comment) =>
+            $"{NormalizeInvoiceNumber(invoiceNumber ?? string.Empty)}|{(comment ?? string.Empty).Trim()}";
+
         private static string NormalizeInvoiceNumber(string invoiceNo)
         {
             if (string.IsNullOrWhiteSpace(invoiceNo))
@@ -1329,6 +1401,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             var load = await _context.Loads.FindAsync(id);
             if (load == null)
                 return NotFound();
+
+            if (await LoadStockGuard.HasLiveDeductionAsync(_context, load.Id))
+                return Conflict(LoadStockGuard.Blocked(load.LoadNumber, "delete it"));
 
             _context.Loads.Remove(load);
             await _context.SaveChangesAsync();

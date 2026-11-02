@@ -34,6 +34,10 @@ namespace ProjectTracker.API.Models.Logistics
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 
+        // Concurrency token: two postings against the same line can't overwrite each other's balance
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // Navigation properties
         [ForeignKey("WarehouseId")]
         public virtual Warehouse Warehouse { get; set; } = null!;

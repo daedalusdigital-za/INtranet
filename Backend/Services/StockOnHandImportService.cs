@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.Logistics;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
@@ -566,6 +567,67 @@ public class StockOnHandImportService
     }
 
     /// <summary>
+    /// The SOH report is a count, so it is posted into the warehouse stock ledger (WarehouseInventory) the same way a
+    /// stock take is: each variance becomes an Adjustment and the line's count date moves to the report date. This keeps
+    /// the building view and the warehouse stock that Sales and dispatch use telling the same story.
+    /// A warehouse is only synced when the file covers every one of its active buildings — a partial file would
+    /// otherwise under-count it — and a line already counted after the report date is left alone.
+    /// </summary>
+    private async Task<string> SyncWarehouseLedgerAsync(SohImportBatch batch, Dictionary<string, int> buildings,
+        HashSet<int> coveredBuildingIds, int userId)
+    {
+        var buildingWarehouse = await _context.WarehouseBuildings
+            .Where(b => b.IsActive)
+            .Select(b => new { b.Id, b.WarehouseId })
+            .ToListAsync();
+        var fullyCovered = buildingWarehouse
+            .GroupBy(b => b.WarehouseId)
+            .Where(g => g.All(b => coveredBuildingIds.Contains(b.Id)))
+            .Select(g => g.Key)
+            .ToHashSet();
+        var partial = buildingWarehouse.Where(b => coveredBuildingIds.Contains(b.Id)).Select(b => b.WarehouseId)
+            .Distinct().Count(w => !fullyCovered.Contains(w));
+        if (fullyCovered.Count == 0)
+            return partial > 0 ? $"Warehouse stock not updated: the file doesn't cover every building of {partial} warehouse(s)." : "";
+
+        var warehouseOfBuilding = buildingWarehouse.ToDictionary(b => b.Id, b => b.WarehouseId);
+        var counted = batch.Lines
+            .Where(l => !string.IsNullOrEmpty(l.ItemCode) && !string.IsNullOrEmpty(l.Location) && l.QtyOnHand.HasValue
+                        && buildings.TryGetValue(l.Location!, out var bid) && fullyCovered.Contains(warehouseOfBuilding[bid]))
+            .GroupBy(l => new { WarehouseId = warehouseOfBuilding[buildings[l.Location!]], Code = CommodityCodeMatcher.Normalize(l.ItemCode) })
+            .Select(g => new { g.Key.WarehouseId, g.Key.Code, Qty = g.Sum(x => x.QtyOnHand!.Value) })
+            .ToList();
+
+        var codeMap = await CommodityCodeMatcher.BuildAsync(_context, counted.Select(c => c.Code));
+        var userName = await _context.Users.Where(u => u.UserId == userId).Select(u => u.Name).FirstOrDefaultAsync() ?? "SOH import";
+        // "As at" a date means close of that day
+        var countedAt = (batch.AsAtDate ?? DateTime.Today).Date.AddDays(1).AddTicks(-1);
+        var reference = $"SOH-{countedAt:yyyy-MM-dd}";
+
+        int adjusted = 0, confirmed = 0, unmatched = 0, newer = 0;
+        foreach (var c in counted)
+        {
+            var commodityId = CommodityCodeMatcher.Match(codeMap, c.Code);
+            if (commodityId == null) { unmatched++; continue; }
+
+            var existing = await StockLedger.FindInventoryAsync(_context, c.WarehouseId, commodityId.Value);
+            if (existing?.LastCountDate != null && existing.LastCountDate.Value >= countedAt) { newer++; continue; }
+
+            var movement = await StockLedger.PostCountAsync(_context, c.WarehouseId, commodityId.Value, c.Qty, countedAt,
+                reference, "Stock-on-hand import", userName);
+            if (movement == null) confirmed++; else adjusted++;
+        }
+
+        _logger.LogInformation("SOH import synced to warehouse stock: {Adjusted} adjusted, {Confirmed} confirmed, {Unmatched} unmatched, {Newer} skipped (counted later), {Partial} partial warehouse(s)",
+            adjusted, confirmed, unmatched, newer, partial);
+        var parts = new List<string> { $"Warehouse stock: {adjusted} adjusted, {confirmed} unchanged" };
+        if (unmatched > 0) parts.Add($"{unmatched} code(s) not linked to a stock item");
+        if (newer > 0) parts.Add($"{newer} already counted more recently");
+        if (partial > 0) parts.Add($"{partial} warehouse(s) skipped as the file doesn't cover all their buildings");
+        return string.Join("; ", parts) + ".";
+    }
+
+    /// <summary>
     /// Commit the import to the database
     /// Deletes existing snapshot for the same AsAtDate and locations, then inserts new data
     /// </summary>
@@ -619,6 +681,7 @@ public class StockOnHandImportService
 
             var insertedCount = 0;
             var updatedCount = 0;
+            var coveredBuildingIds = new HashSet<int>();
 
             foreach (var locationGroup in linesByLocation)
             {
@@ -629,6 +692,7 @@ public class StockOnHandImportService
                         locationGroup.Key, locationGroup.Count());
                     continue;
                 }
+                coveredBuildingIds.Add(buildingId);
 
                 foreach (var line in locationGroup)
                 {
@@ -670,6 +734,8 @@ public class StockOnHandImportService
                 }
             }
 
+            var ledgerSummary = await SyncWarehouseLedgerAsync(batch, buildings, coveredBuildingIds, userId);
+
             await _context.SaveChangesAsync();
 
             // Update batch status and remove from cache
@@ -684,7 +750,7 @@ public class StockOnHandImportService
             {
                 ImportId = importId,
                 Success = true,
-                Message = $"Successfully committed {insertedCount} new items, updated {updatedCount} existing items.",
+                Message = $"Successfully committed {insertedCount} new items, updated {updatedCount} existing items. {ledgerSummary}".Trim(),
                 LinesCommitted = insertedCount + updatedCount,
                 LinesDeleted = 0
             };

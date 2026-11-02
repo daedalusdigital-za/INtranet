@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.Logistics;
 
 namespace ProjectTracker.API.Controllers
 {
@@ -16,6 +17,46 @@ namespace ProjectTracker.API.Controllers
         public OrderCancellationsController(ApplicationDbContext context)
         {
             _context = context;
+        }
+
+        /// <summary>
+        /// An order on a load can't simply be cancelled: its lines would still go out on the truck (or,
+        /// once stock is deducted, stay deducted). It has to come off the load first. Returns null when the
+        /// rows can be cancelled, otherwise the response explaining what to do.
+        /// </summary>
+        private async Task<ActionResult?> RefuseIfNotCancellableAsync(List<ImportedInvoice> rows)
+        {
+            if (rows.Any(r => r.Status == "Delivered"))
+                return BadRequest("Cannot cancel a delivered order");
+
+            var onLoad = rows.FirstOrDefault(r => r.LoadId != null);
+            if (onLoad == null) return null;
+
+            var load = await _context.Loads.AsNoTracking().Where(l => l.Id == onLoad.LoadId).Select(l => new { l.Id, l.LoadNumber }).FirstOrDefaultAsync();
+            if (load != null && await LoadStockGuard.HasLiveDeductionAsync(_context, load.Id))
+                return Conflict(LoadStockGuard.Blocked(load.LoadNumber, $"cancel order {onLoad.TransactionNumber}"));
+            var text = $"Order {onLoad.TransactionNumber} is on {load?.LoadNumber ?? "a load"}. Take it off the load first, then cancel it.";
+            return Conflict(new { error = text, message = text, code = "on-load" });
+        }
+
+        /// <summary>The invoice rows a cancellation covers: every line of the order, or just the one row it was raised on.</summary>
+        private async Task<List<ImportedInvoice>> CoveredRowsAsync(OrderCancellation c)
+        {
+            if (c.ItemCount > 1 && !string.IsNullOrEmpty(c.OrderNumber))
+                return await _context.ImportedInvoices.Where(i => i.TransactionNumber == c.OrderNumber && i.Status == "Cancelled").ToListAsync();
+            if (c.ImportedInvoiceId is int id)
+                return await _context.ImportedInvoices.Where(i => i.Id == id && i.Status == "Cancelled").ToListAsync();
+            return new List<ImportedInvoice>();
+        }
+
+        /// <summary>Undo a cancellation on its rows. Cancelling is refused for rows on a load, so they go back to the open queue.</summary>
+        private static void Restore(IEnumerable<ImportedInvoice> rows)
+        {
+            foreach (var r in rows)
+            {
+                r.Status = r.LoadId != null ? "Assigned" : "Pending";
+                r.UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         // GET: api/OrderCancellations
@@ -86,13 +127,16 @@ namespace ProjectTracker.API.Controllers
         [HttpPost]
         public async Task<ActionResult<OrderCancellation>> CreateCancellation([FromBody] CreateCancellationRequest request)
         {
-            // Check if order exists in ImportedInvoices
-            ImportedInvoice? invoice = null;
-            if (!string.IsNullOrEmpty(request.OrderNumber))
-            {
-                invoice = await _context.ImportedInvoices
-                    .FirstOrDefaultAsync(i => i.TransactionNumber == request.OrderNumber);
-            }
+            // Every line of the order: an invoice with several products is several rows
+            var rows = string.IsNullOrEmpty(request.OrderNumber)
+                ? new List<ImportedInvoice>()
+                : await _context.ImportedInvoices
+                    .Where(i => i.TransactionNumber == request.OrderNumber && i.Status != "Cancelled")
+                    .OrderBy(i => i.Id)
+                    .ToListAsync();
+            var refused = await RefuseIfNotCancellableAsync(rows);
+            if (refused != null) return refused;
+            var invoice = rows.FirstOrDefault();
 
             var cancellation = new OrderCancellation
             {
@@ -101,8 +145,8 @@ namespace ProjectTracker.API.Controllers
                 CustomerNumber = request.CustomerNumber ?? invoice?.CustomerNumber ?? "",
                 CustomerName = request.CustomerName ?? invoice?.CustomerName ?? "",
                 CustomerId = request.CustomerId ?? invoice?.CustomerId,
-                OrderAmount = request.OrderAmount ?? invoice?.SalesAmount ?? 0,
-                ItemCount = request.ItemCount ?? 1,
+                OrderAmount = request.OrderAmount ?? (rows.Count > 0 ? rows.Sum(r => r.SalesAmount) : 0),
+                ItemCount = rows.Count > 0 ? rows.Count : (request.ItemCount ?? 1),
                 OriginalOrderDate = request.OriginalOrderDate ?? invoice?.TransactionDate ?? DateTime.UtcNow,
                 CancellationReason = request.CancellationReason,
                 CancellationNotes = request.CancellationNotes,
@@ -117,11 +161,10 @@ namespace ProjectTracker.API.Controllers
 
             _context.OrderCancellations.Add(cancellation);
 
-            // Update original invoice status if found
-            if (invoice != null)
+            foreach (var row in rows)
             {
-                invoice.Status = "Cancelled";
-                invoice.UpdatedAt = DateTime.UtcNow;
+                row.Status = "Cancelled";
+                row.UpdatedAt = DateTime.UtcNow;
             }
 
             await _context.SaveChangesAsync();
@@ -143,8 +186,8 @@ namespace ProjectTracker.API.Controllers
             if (invoice.Status == "Cancelled")
                 return BadRequest("Order is already cancelled");
 
-            if (invoice.Status == "Delivered")
-                return BadRequest("Cannot cancel a delivered order");
+            var refused = await RefuseIfNotCancellableAsync(new List<ImportedInvoice> { invoice });
+            if (refused != null) return refused;
 
             var cancellation = new OrderCancellation
             {
@@ -220,16 +263,8 @@ namespace ProjectTracker.API.Controllers
             cancellation.ApprovalNotes = request.Notes;
             cancellation.UpdatedAt = DateTime.UtcNow;
 
-            // Revert the original invoice status if needed
-            if (cancellation.ImportedInvoiceId.HasValue)
-            {
-                var invoice = await _context.ImportedInvoices.FindAsync(cancellation.ImportedInvoiceId.Value);
-                if (invoice != null)
-                {
-                    invoice.Status = "Pending"; // Revert to original status
-                    invoice.UpdatedAt = DateTime.UtcNow;
-                }
-            }
+            // Revert the order's rows to their real status
+            Restore(await CoveredRowsAsync(cancellation));
 
             await _context.SaveChangesAsync();
 
@@ -293,16 +328,8 @@ namespace ProjectTracker.API.Controllers
             if (cancellation.ApprovalStatus != "Pending")
                 return BadRequest("Cannot delete processed cancellations");
 
-            // Revert the original invoice status if needed
-            if (cancellation.ImportedInvoiceId.HasValue)
-            {
-                var invoice = await _context.ImportedInvoices.FindAsync(cancellation.ImportedInvoiceId.Value);
-                if (invoice != null)
-                {
-                    invoice.Status = "Pending";
-                    invoice.UpdatedAt = DateTime.UtcNow;
-                }
-            }
+            // Revert the order's rows to their real status
+            Restore(await CoveredRowsAsync(cancellation));
 
             _context.OrderCancellations.Remove(cancellation);
             await _context.SaveChangesAsync();

@@ -2,15 +2,17 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
+using ProjectTracker.API.Services.Logistics;
 
 namespace ProjectTracker.API.Controllers.Logistics;
 
 /// <summary>
-/// Links sales invoices (ImportedInvoices) to live stock (BuildingInventory)
-/// so users can see which invoice demand can be fulfilled from current stock,
-/// and reserve / dispatch stock against orders.
+/// Links sales invoices (ImportedInvoices) to stock on hand so users can see which invoice demand
+/// can be fulfilled from current stock.
 ///
-/// Matching key: ImportedInvoice.ProductCode == BuildingInventory.ItemCode
+/// Stock comes from the warehouse stock ledger (WarehouseInventory), the same figures Stock Management,
+/// dispatch approval and the Sales back-order badge use. Matching key: ImportedInvoice.ProductCode ==
+/// Commodity.Code, ignoring case, spaces and punctuation.
 /// </summary>
 [Authorize]
 [ApiController]
@@ -26,8 +28,20 @@ public class StockFulfillmentController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>Stock on hand per normalised product code, summed across warehouses.</summary>
+    private async Task<Dictionary<string, decimal>> OnHandByCodeAsync()
+    {
+        var rows = await _context.WarehouseInventory.AsNoTracking()
+            .Where(i => i.Commodity.Code != null && i.Commodity.Code != "")
+            .Select(i => new { i.Commodity.Code, i.QuantityOnHand })
+            .ToListAsync();
+        return rows
+            .GroupBy(r => CommodityCodeMatcher.Normalize(r.Code))
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.QuantityOnHand));
+    }
+
     // ---------------------------------------------------------------------
-    // 1) Stock availability for a single product code (across all buildings)
+    // 1) Stock availability for a single product code (across all warehouses)
     // ---------------------------------------------------------------------
     // GET: api/stock-fulfillment/availability/{itemCode}
     [HttpGet("availability/{itemCode}")]
@@ -37,34 +51,42 @@ public class StockFulfillmentController : ControllerBase
         if (string.IsNullOrEmpty(itemCode))
             return BadRequest("Item code is required.");
 
-        var rows = await _context.BuildingInventory
-            .Where(i => i.ItemCode == itemCode)
-            .Include(i => i.Building!)
-                .ThenInclude(b => b.Warehouse)
-            .ToListAsync();
+        var key = CommodityCodeMatcher.Normalize(itemCode);
+        var rows = (await _context.WarehouseInventory.AsNoTracking()
+                .Where(i => i.Commodity.Code != null && i.Commodity.Code != "")
+                .Select(i => new
+                {
+                    i.WarehouseId,
+                    WarehouseName = i.Warehouse.Name,
+                    i.Commodity.Code,
+                    i.Commodity.Name,
+                    i.Commodity.UnitOfMeasure,
+                    i.QuantityOnHand
+                })
+                .ToListAsync())
+            .Where(r => CommodityCodeMatcher.Normalize(r.Code) == key)
+            .ToList();
 
         if (rows.Count == 0)
             return NotFound(new { itemCode, message = "No stock found for this item code." });
 
-        var locations = rows.Select(i => new StockLocationDto
-        {
-            BuildingId = i.BuildingId,
-            BuildingName = i.Building?.Name ?? "",
-            WarehouseName = i.Building?.Warehouse?.Name ?? "",
-            QuantityOnHand = i.QuantityOnHand,
-            QuantityReserved = i.QuantityReserved,
-            QuantityAvailable = i.QuantityOnHand - i.QuantityReserved
-        }).ToList();
-
+        var total = rows.Sum(r => r.QuantityOnHand);
         return Ok(new StockAvailabilityDto
         {
             ItemCode = itemCode,
-            ItemDescription = rows.First().ItemDescription,
-            Uom = rows.First().Uom,
-            TotalOnHand = rows.Sum(r => r.QuantityOnHand),
-            TotalReserved = rows.Sum(r => r.QuantityReserved),
-            TotalAvailable = rows.Sum(r => r.QuantityOnHand - r.QuantityReserved),
-            Locations = locations
+            ItemDescription = rows.First().Name,
+            Uom = rows.First().UnitOfMeasure ?? "Each",
+            TotalOnHand = total,
+            TotalReserved = 0,
+            TotalAvailable = total,
+            Locations = rows.Select(r => new StockLocationDto
+            {
+                WarehouseId = r.WarehouseId,
+                WarehouseName = r.WarehouseName ?? "",
+                QuantityOnHand = r.QuantityOnHand,
+                QuantityReserved = 0,
+                QuantityAvailable = r.QuantityOnHand
+            }).ToList()
         });
     }
 
@@ -99,25 +121,14 @@ public class StockFulfillmentController : ControllerBase
             })
             .ToListAsync();
 
-        // Available stock grouped by item code
-        var stock = await _context.BuildingInventory
-            .GroupBy(i => i.ItemCode)
-            .Select(g => new
-            {
-                ItemCode = g.Key,
-                OnHand = g.Sum(x => x.QuantityOnHand),
-                Reserved = g.Sum(x => x.QuantityReserved)
-            })
-            .ToListAsync();
-
-        var stockMap = stock.ToDictionary(s => s.ItemCode, s => s);
+        // Stock on hand per product code (warehouse stock ledger)
+        var stockMap = await OnHandByCodeAsync();
 
         var lines = new List<FulfillmentLineDto>();
         foreach (var d in demand)
         {
-            stockMap.TryGetValue(d.ProductCode!, out var s);
-            var available = s == null ? 0m : s.OnHand - s.Reserved;
-            var hasStockRecord = s != null;
+            var hasStockRecord = stockMap.TryGetValue(CommodityCodeMatcher.Normalize(d.ProductCode), out var onHand);
+            var available = hasStockRecord ? onHand : 0m;
 
             if (onlyMatched && !hasStockRecord)
                 continue;
@@ -139,7 +150,7 @@ public class StockFulfillmentController : ControllerBase
                 OrderLines = d.OrderLines,
                 Customers = d.Customers,
                 AvailableQty = available,
-                OnHandQty = s?.OnHand ?? 0,
+                OnHandQty = available,
                 CanFulfillQty = canFulfill,
                 ShortfallQty = shortfall,
                 Status = fulfilStatus
@@ -208,9 +219,7 @@ public class StockFulfillmentController : ControllerBase
             .ToListAsync();
 
         // total available stock for this code
-        var available = await _context.BuildingInventory
-            .Where(i => i.ItemCode == itemCode)
-            .SumAsync(i => (decimal?)(i.QuantityOnHand - i.QuantityReserved)) ?? 0m;
+        var available = (await OnHandByCodeAsync()).GetValueOrDefault(CommodityCodeMatcher.Normalize(itemCode));
 
         // allocate available across invoices oldest-first
         var remaining = available;
@@ -247,84 +256,21 @@ public class StockFulfillmentController : ControllerBase
     }
 
     // ---------------------------------------------------------------------
-    // 3) Reserve stock for an order line (increments QuantityReserved)
+    // 3) Reserve / dispatch: retired
+    //    These moved a separate building-level stock table that nothing else read, so stock could
+    //    leave here without ever leaving the warehouse ledger. Stock now leaves only through
+    //    dispatch approval on a load (Stock Management > Approve dispatch).
+    // ---------------------------------------------------------------------
     [HttpPost("reserve")]
-    public async Task<IActionResult> Reserve([FromBody] StockActionDto dto)
-    {
-        if (dto == null || string.IsNullOrWhiteSpace(dto.ItemCode) || dto.Quantity <= 0)
-            return BadRequest("ItemCode and a positive Quantity are required.");
+    public IActionResult Reserve([FromBody] StockActionDto dto) => Gone();
 
-        var rows = await _context.BuildingInventory
-            .Where(i => i.ItemCode == dto.ItemCode)
-            .OrderByDescending(i => i.QuantityOnHand - i.QuantityReserved)
-            .ToListAsync();
-
-        if (rows.Count == 0)
-            return NotFound($"No stock found for item code {dto.ItemCode}.");
-
-        var totalAvailable = rows.Sum(r => r.QuantityOnHand - r.QuantityReserved);
-        if (totalAvailable < dto.Quantity)
-            return BadRequest($"Insufficient available stock. Available: {totalAvailable}, Requested: {dto.Quantity}.");
-
-        // Reserve greedily from the building with the most available stock first
-        var remaining = dto.Quantity;
-        foreach (var row in rows)
-        {
-            if (remaining <= 0) break;
-            var avail = row.QuantityOnHand - row.QuantityReserved;
-            if (avail <= 0) continue;
-            var take = Math.Min(avail, remaining);
-            row.QuantityReserved += take;
-            row.UpdatedAt = DateTime.UtcNow;
-            remaining -= take;
-        }
-
-        await _context.SaveChangesAsync();
-        _logger.LogInformation("Reserved {Qty} of {Code} across {N} buildings", dto.Quantity, dto.ItemCode, rows.Count);
-        return Ok(new { dto.ItemCode, reserved = dto.Quantity, remainingAvailable = totalAvailable - dto.Quantity });
-    }
-
-    // ---------------------------------------------------------------------
-    // 4) Dispatch stock for an order line (decrements OnHand and Reserved)
-    // ---------------------------------------------------------------------
-    // POST: api/stock-fulfillment/dispatch
     [HttpPost("dispatch")]
-    public async Task<IActionResult> Dispatch([FromBody] StockActionDto dto)
+    public IActionResult Dispatch([FromBody] StockActionDto dto) => Gone();
+
+    private ObjectResult Gone() => StatusCode(StatusCodes.Status410Gone, new
     {
-        if (dto == null || string.IsNullOrWhiteSpace(dto.ItemCode) || dto.Quantity <= 0)
-            return BadRequest("ItemCode and a positive Quantity are required.");
-
-        var rows = await _context.BuildingInventory
-            .Where(i => i.ItemCode == dto.ItemCode)
-            .OrderByDescending(i => i.QuantityOnHand)
-            .ToListAsync();
-
-        if (rows.Count == 0)
-            return NotFound($"No stock found for item code {dto.ItemCode}.");
-
-        var totalOnHand = rows.Sum(r => r.QuantityOnHand);
-        if (totalOnHand < dto.Quantity)
-            return BadRequest($"Insufficient stock on hand. On hand: {totalOnHand}, Requested: {dto.Quantity}.");
-
-        var remaining = dto.Quantity;
-        foreach (var row in rows)
-        {
-            if (remaining <= 0) break;
-            if (row.QuantityOnHand <= 0) continue;
-            var take = Math.Min(row.QuantityOnHand, remaining);
-            row.QuantityOnHand -= take;
-            // release any reservation we were holding, down to zero
-            if (row.QuantityReserved > 0)
-                row.QuantityReserved = Math.Max(0, row.QuantityReserved - take);
-            row.LastMovementDate = DateTime.UtcNow;
-            row.UpdatedAt = DateTime.UtcNow;
-            remaining -= take;
-        }
-
-        await _context.SaveChangesAsync();
-        _logger.LogInformation("Dispatched {Qty} of {Code}", dto.Quantity, dto.ItemCode);
-        return Ok(new { dto.ItemCode, dispatched = dto.Quantity, remainingOnHand = totalOnHand - dto.Quantity });
-    }
+        message = "Stock is no longer reserved or dispatched here. Put the order on a load and approve its dispatch in Stock Management."
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -343,8 +289,7 @@ public class StockAvailabilityDto
 
 public class StockLocationDto
 {
-    public int BuildingId { get; set; }
-    public string BuildingName { get; set; } = string.Empty;
+    public int WarehouseId { get; set; }
     public string WarehouseName { get; set; } = string.Empty;
     public decimal QuantityOnHand { get; set; }
     public decimal QuantityReserved { get; set; }

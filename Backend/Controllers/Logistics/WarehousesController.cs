@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.Logistics;
+using System.Security.Claims;
 
 namespace ProjectTracker.API.Controllers.Logistics
 {
@@ -20,6 +22,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             _context = context;
             _logger = logger;
         }
+
+        private string CurrentUserName =>
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue("name") ?? User.FindFirstValue(ClaimTypes.Email) ?? "Unknown";
 
         // Warehouse Endpoints
         [HttpGet]
@@ -317,18 +322,29 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPost("inventory")]
         public async Task<ActionResult<WarehouseInventoryDto>> CreateInventoryItem(CreateWarehouseInventoryDto dto)
         {
+            if (!await StockAccess.CanManageAsync(_context, User))
+                return StatusCode(403, new { message = StockAccess.Denied });
+
+            if (dto.QuantityOnHand < 0)
+                return BadRequest(new { message = "Opening quantity can't be negative" });
+            if (await _context.WarehouseInventory.AnyAsync(i => i.WarehouseId == dto.WarehouseId && i.CommodityId == dto.CommodityId))
+                return Conflict(new { message = "This item already has a stock line in this warehouse" });
+
             var inventory = new WarehouseInventory
             {
                 WarehouseId = dto.WarehouseId,
                 CommodityId = dto.CommodityId,
-                QuantityOnHand = dto.QuantityOnHand,
+                QuantityOnHand = 0,
                 ReorderLevel = dto.ReorderLevel,
                 MaximumLevel = dto.MaximumLevel,
-                BinLocation = dto.BinLocation,
-                LastRestockDate = DateTime.UtcNow
+                BinLocation = dto.BinLocation
             };
-
             _context.WarehouseInventory.Add(inventory);
+
+            // The opening quantity goes through the ledger so the movement history adds up to the balance
+            if (dto.QuantityOnHand != 0)
+                await StockLedger.ApplyAsync(_context, dto.WarehouseId, dto.CommodityId, "Adjustment", dto.QuantityOnHand,
+                    null, null, "OPENING", $"Opening balance set by {CurrentUserName}", CurrentUserName);
             await _context.SaveChangesAsync();
 
             return Ok(inventory);
@@ -337,18 +353,33 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPut("inventory/{id}")]
         public async Task<IActionResult> UpdateInventory(int id, UpdateInventoryDto dto)
         {
+            if (!await StockAccess.CanManageAsync(_context, User))
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             var inventory = await _context.WarehouseInventory.FindAsync(id);
             if (inventory == null)
                 return NotFound();
 
-            inventory.QuantityOnHand = dto.QuantityOnHand;
+            // Quantity changes are posted as an Adjustment, never overwritten, so the ledger stays in step
+            var variance = dto.QuantityOnHand - inventory.QuantityOnHand;
+            if (variance != 0)
+            {
+                try
+                {
+                    await StockLedger.ApplyAsync(_context, inventory.WarehouseId, inventory.CommodityId, "Adjustment", variance,
+                        null, null, $"EDIT-{inventory.WarehouseId}-{DateTime.UtcNow:yyyyMMdd}",
+                        $"Edited by {CurrentUserName}: {inventory.QuantityOnHand} → {dto.QuantityOnHand}", CurrentUserName);
+                }
+                catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+            }
             if (dto.ReorderLevel.HasValue) inventory.ReorderLevel = dto.ReorderLevel;
             if (dto.MaximumLevel.HasValue) inventory.MaximumLevel = dto.MaximumLevel;
             if (dto.BinLocation != null) inventory.BinLocation = dto.BinLocation;
 
             inventory.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            try { await _context.SaveChangesAsync(); }
+            catch (Exception ex) when (StockLedger.IsStockConflict(ex)) { return Conflict(new { message = StockLedger.ConflictMessage }); }
             return NoContent();
         }
 

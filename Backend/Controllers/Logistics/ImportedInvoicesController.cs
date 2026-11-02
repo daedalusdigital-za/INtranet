@@ -5,6 +5,7 @@ using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Models.Logistics;
 using ProjectTracker.API.Services;
+using ProjectTracker.API.Services.Logistics;
 using System.Security.Claims;
 using System.Globalization;
 
@@ -376,32 +377,35 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             _context.ImportBatches.Add(importBatch);
 
-            // Tracks invoice numbers already added during THIS batch so that duplicate
-            // rows within the same payload are skipped too. The DB AnyAsync check below
-            // can't see same-batch additions because they haven't been saved yet.
+            // An invoice with several products arrives as several rows sharing one number, so a duplicate
+            // is the same number AND the same product line (code, quantity, amount) — not just the number.
+            // Tracks lines already added during THIS batch; the DB check below can't see unsaved rows.
             var seenInBatch = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var invoiceDto in dto.Invoices)
             {
                 try
                 {
-                    var txnKey = (invoiceDto.TransactionNumber ?? string.Empty).Trim();
+                    var txn = (invoiceDto.TransactionNumber ?? string.Empty).Trim();
+                    var code = (invoiceDto.Product?.ProductCode ?? string.Empty).Trim();
+                    var lineKey = $"{txn}|{code}|{invoiceDto.Quantity}|{invoiceDto.SalesAmount}";
 
                     // Skip duplicates already queued earlier in THIS batch
-                    if (!string.IsNullOrEmpty(txnKey) && !seenInBatch.Add(txnKey))
+                    if (!string.IsNullOrEmpty(txn) && !seenInBatch.Add(lineKey))
                     {
-                        result.Errors.Add($"Invoice {invoiceDto.TransactionNumber} appears more than once in this file - duplicate skipped");
+                        result.Errors.Add($"Invoice {invoiceDto.TransactionNumber} line {code} appears more than once in this file - duplicate skipped");
                         result.FailedRecords++;
                         continue;
                     }
 
                     // Check for duplicates already in the database
                     var exists = await _context.ImportedInvoices
-                        .AnyAsync(i => i.TransactionNumber == invoiceDto.TransactionNumber);
+                        .AnyAsync(i => i.TransactionNumber == invoiceDto.TransactionNumber && i.ProductCode == invoiceDto.Product.ProductCode
+                                       && i.Quantity == invoiceDto.Quantity && i.SalesAmount == invoiceDto.SalesAmount);
 
                     if (exists)
                     {
-                        result.Errors.Add($"Invoice {invoiceDto.TransactionNumber} already exists - skipped");
+                        result.Errors.Add($"Invoice {invoiceDto.TransactionNumber} line {code} already exists - skipped");
                         result.FailedRecords++;
                         continue;
                     }
@@ -445,6 +449,27 @@ namespace ProjectTracker.API.Controllers.Logistics
             var invoice = await _context.ImportedInvoices.FindAsync(id);
             if (invoice == null)
                 return NotFound(new { error = "Imported invoice not found" });
+
+            // Once an invoice is on a load, its stock lines were copied from it: a new quantity or product here
+            // would not reach the load, and after dispatch approval it would contradict the stock deducted.
+            if (invoice.LoadId is int loadId)
+            {
+                var changesGoods = (dto.Quantity.HasValue && dto.Quantity.Value != invoice.Quantity)
+                    || (dto.ProductCode != null && dto.ProductCode != invoice.ProductCode);
+                var changesIdentity = (dto.TransactionNumber != null && dto.TransactionNumber != invoice.TransactionNumber)
+                    || (dto.Status != null && dto.Status != invoice.Status);
+                if (changesGoods || changesIdentity)
+                {
+                    var loadNumber = await _context.Loads.Where(l => l.Id == loadId).Select(l => l.LoadNumber).FirstOrDefaultAsync();
+                    if (await LoadStockGuard.HasLiveDeductionAsync(_context, loadId))
+                        return Conflict(LoadStockGuard.Blocked(loadNumber, $"change the quantity, product, number or status of invoice {invoice.TransactionNumber}"));
+                    if (changesGoods)
+                    {
+                        var text = $"Invoice {invoice.TransactionNumber} is on {loadNumber ?? "a load"}, which carries its quantity and product. Take it off the load first, or change the load's lines instead.";
+                        return Conflict(new { error = text, message = text, code = "on-load" });
+                    }
+                }
+            }
 
             if (dto.TransactionNumber != null) invoice.TransactionNumber = dto.TransactionNumber;
             if (dto.CustomerNumber != null) invoice.CustomerNumber = dto.CustomerNumber;
@@ -1099,6 +1124,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             // Group invoices by customer for stops
             var customerGroups = invoices.GroupBy(i => new { i.CustomerNumber, i.CustomerName });
+            var stockCodes = await CommodityCodeMatcher.BuildAsync(_context, invoices.Select(i => i.ProductCode));
             int stopSequence = 1;
 
             foreach (var group in customerGroups)
@@ -1133,6 +1159,19 @@ namespace ProjectTracker.API.Controllers.Logistics
                     invoice.LoadId = load.Id;
                     invoice.Status = "Assigned";
                     invoice.UpdatedAt = DateTime.UtcNow;
+
+                    // Stock line for the stop: this is what dispatch approval deducts. Without it the
+                    // load carries nothing stock can come off, so it could never be approved.
+                    stop.Commodities.Add(new StopCommodity
+                    {
+                        CommodityId = CommodityCodeMatcher.Match(stockCodes, invoice.ProductCode),
+                        Quantity = invoice.Quantity,
+                        UnitPrice = invoice.SalesAmount / (invoice.Quantity != 0 ? invoice.Quantity : 1),
+                        TotalPrice = invoice.NetSales,
+                        InvoiceNumber = invoice.TransactionNumber,
+                        Comment = invoice.ProductDescription,
+                        CreatedAt = DateTime.UtcNow
+                    });
 
                     // Create LoadItem for each invoice line
                     var loadItem = new LoadItem
@@ -1267,6 +1306,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             var invoice = await _context.ImportedInvoices.FindAsync(id);
             if (invoice == null)
                 return NotFound(new { error = "Imported invoice not found" });
+
+            if (invoice.LoadId is int loadId && await LoadStockGuard.HasLiveDeductionAsync(_context, loadId))
+            {
+                var loadNumber = await _context.Loads.Where(l => l.Id == loadId).Select(l => l.LoadNumber).FirstOrDefaultAsync();
+                return Conflict(LoadStockGuard.Blocked(loadNumber, $"take invoice {invoice.TransactionNumber} off it"));
+            }
 
             invoice.LoadId = null;
             invoice.Status = "Pending";

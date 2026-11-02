@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.DTOs.Logistics;
 using ProjectTracker.API.Services;
+using ProjectTracker.API.Services.Logistics;
 using ClosedXML.Excel;
 using System.Text;
 using iText.Html2pdf;
@@ -323,6 +324,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 // Link invoices to this tripsheet and create stops
                 decimal totalValue = 0;
                 var customerGroups = invoices.GroupBy(i => i.CustomerName).ToList();
+                // Link each line to its stock item up front so the load can deduct stock without manual mapping
+                var stockCodes = await CommodityCodeMatcher.BuildAsync(_context, invoices.Select(i => i.ProductCode));
                 int stopSequence = 1;
 
                 foreach (var customerGroup in customerGroups)
@@ -355,6 +358,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         var stopCommodity = new Models.Logistics.StopCommodity
                         {
                             LoadStopId = stop.Id,
+                            CommodityId = CommodityCodeMatcher.Match(stockCodes, invoice.ProductCode),
                             Quantity = invoice.Quantity,
                             UnitPrice = invoice.SalesAmount / (invoice.Quantity != 0 ? invoice.Quantity : 1),
                             TotalPrice = invoice.NetSales,
@@ -503,6 +507,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (load == null)
                 return NotFound(new { error = "TripSheet not found" });
 
+            if (await LoadStockGuard.HasLiveDeductionAsync(_context, load.Id))
+                return Conflict(LoadStockGuard.Blocked(load.LoadNumber, "delete it"));
+
             // Reset any linked invoices back to Pending status
             var linkedInvoices = await _context.ImportedInvoices
                 .Where(i => i.LoadId == tripSheetId)
@@ -573,6 +580,10 @@ namespace ProjectTracker.API.Controllers.Logistics
             var validStatuses = new[] { "Pending", "Scheduled", "Active", "In Transit", "Completed", "Cancelled" };
             if (!validStatuses.Contains(dto.Status))
                 return BadRequest(new { error = $"Invalid status. Must be one of: {string.Join(", ", validStatuses)}" });
+
+            if (dto.Status == "Cancelled" && load.Status != "Cancelled"
+                && await LoadStockGuard.HasLiveDeductionAsync(_context, load.Id))
+                return Conflict(LoadStockGuard.Blocked(load.LoadNumber, "cancel it"));
 
             var oldStatus = load.Status;
             load.Status = dto.Status;

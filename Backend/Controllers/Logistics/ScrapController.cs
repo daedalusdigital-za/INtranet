@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services.Logistics;
 using System.Security.Claims;
 
 namespace ProjectTracker.API.Controllers.Logistics
@@ -20,6 +21,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             _context = context;
             _logger = logger;
         }
+
+        private string CurrentUserName =>
+            User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue("name") ?? User.FindFirstValue(ClaimTypes.Email) ?? "Unknown";
 
         // GET: api/logistics/scrap?warehouseId=1
         [HttpGet]
@@ -110,6 +114,9 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPost]
         public async Task<ActionResult<object>> CreateScrapRecord([FromBody] ScrapRecordDto dto)
         {
+            if (!await StockAccess.CanManageAsync(_context, User))
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             try
             {
                 // Validate warehouse exists
@@ -124,6 +131,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                 if (commodity == null)
                 {
                     return BadRequest(new { message = "Commodity not found" });
+                }
+
+                if (dto.Quantity <= 0)
+                {
+                    return BadRequest(new { message = "Quantity must be greater than zero" });
                 }
 
                 // Check if there's enough inventory
@@ -163,11 +175,12 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 _context.ScrapRecords.Add(scrapRecord);
 
-                // Update inventory - reduce quantity
-                inventory.QuantityOnHand -= dto.Quantity;
-                inventory.UpdatedAt = DateTime.UtcNow;
+                // Reduce stock through the ledger so the movement history matches the balance
+                await StockLedger.ApplyAsync(_context, dto.WarehouseId, dto.CommodityId, "Scrap", -Math.Abs(dto.Quantity),
+                    null, null, $"SCRAP {commodity.Code}", $"{dto.Reason}{(string.IsNullOrWhiteSpace(dto.Notes) ? "" : ": " + dto.Notes)}", CurrentUserName);
 
-                await _context.SaveChangesAsync();
+                try { await _context.SaveChangesAsync(); }
+                catch (Exception ex) when (StockLedger.IsStockConflict(ex)) { return Conflict(new { message = StockLedger.ConflictMessage }); }
 
                 _logger.LogInformation("Scrap record created: {Quantity} units of {CommodityName} from {WarehouseName}",
                     dto.Quantity, commodity.Name, warehouse.Name);
@@ -208,6 +221,9 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteScrapRecord(int id)
         {
+            if (!await StockAccess.CanManageAsync(_context, User))
+                return StatusCode(403, new { message = StockAccess.Denied });
+
             try
             {
                 var scrapRecord = await _context.ScrapRecords.FindAsync(id);
@@ -216,20 +232,14 @@ namespace ProjectTracker.API.Controllers.Logistics
                     return NotFound(new { message = "Scrap record not found" });
                 }
 
-                // Optionally, restore the inventory (uncomment if needed)
-                /*
-                var inventory = await _context.WarehouseInventory
-                    .FirstOrDefaultAsync(wi => wi.WarehouseId == scrapRecord.WarehouseId && wi.CommodityId == scrapRecord.CommodityId);
-                
-                if (inventory != null)
-                {
-                    inventory.QuantityOnHand += scrapRecord.Quantity;
-                    inventory.UpdatedAt = DateTime.UtcNow;
-                }
-                */
+                // Deleting a scrap record means the stock wasn't scrapped after all, so put it back
+                await StockLedger.ApplyAsync(_context, scrapRecord.WarehouseId, scrapRecord.CommodityId, "Return",
+                    Math.Abs(scrapRecord.Quantity), null, null, $"SCRAP #{scrapRecord.Id} deleted",
+                    $"Scrap record #{scrapRecord.Id} ({scrapRecord.Reason}) deleted by {CurrentUserName}; stock restored", CurrentUserName);
 
                 _context.ScrapRecords.Remove(scrapRecord);
-                await _context.SaveChangesAsync();
+                try { await _context.SaveChangesAsync(); }
+                catch (Exception ex) when (StockLedger.IsStockConflict(ex)) { return Conflict(new { message = StockLedger.ConflictMessage }); }
 
                 _logger.LogInformation("Scrap record {Id} deleted", id);
 

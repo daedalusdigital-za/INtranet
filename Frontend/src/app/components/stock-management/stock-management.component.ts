@@ -15,8 +15,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatListModule } from '@angular/material/list';
@@ -27,7 +25,11 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
 import { SubNavComponent } from '../../ui/sub-nav/sub-nav.component';
 import { isFilterRecord, queryText, recordFilters, toQuery } from '../../ui/sub-pages';
 import { STOCK_SECTIONS, StockSlug, stockSection } from './stock-sections';
-import { EmptyStateComponent } from '../shared/ui/empty-state.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { ToastService } from '../../ui/toast.service';
+import { ConfirmService } from '../../ui/confirm.service';
 import { Warehouse3DComponent } from '../warehouse-3d/warehouse-3d.component';
 import { environment } from '../../../environments/environment';
 import Chart from 'chart.js/auto';
@@ -120,8 +122,6 @@ interface ComprehensiveAnalysisResponse {
     MatTableModule,
     MatDialogModule,
     MatChipsModule,
-    MatProgressSpinnerModule,
-    MatSnackBarModule,
     MatMenuModule,
     MatTooltipModule,
     MatProgressBarModule,
@@ -129,6 +129,8 @@ interface ComprehensiveAnalysisResponse {
     PageHeaderComponent,
     SubNavComponent,
     EmptyStateComponent,
+    SkeletonRowsComponent,
+    StatusChipComponent,
     MatListModule,
     FormsModule,
     MatFormFieldModule,
@@ -306,10 +308,10 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-stroked-button (click)="openManualMovement('Adjustment')" matTooltip="Correct a quantity (+/-) with a reason"><mat-icon>tune</mat-icon> Adjust</button>
                 <button mat-raised-button color="primary" (click)="openManualMovement('Receive')" matTooltip="Book in a delivery (GRV)"><mat-icon>south_west</mat-icon> Receive Stock</button>
               </div>
-              @if (invLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading stock...</div> }
+              @if (invLoading) { <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows> }
               @else {
                 <div class="stk-table-wrap">
-                  <table class="stk-table">
+                  <table class="app-table stk-table">
                     <thead><tr>
                       <th>Code</th><th>Description</th><th>Company</th><th>Warehouse</th><th>UOM</th>
                       <th class="num">Qty On Hand</th><th class="num">Unit Price</th><th class="num">Value</th><th>Status</th>
@@ -317,7 +319,7 @@ interface ComprehensiveAnalysisResponse {
                     <tbody>
                       @for (r of sohRows.slice(0, 400); track r.id) {
                         <tr>
-                          <td class="mono" [class.code-inv]="invMatched(r.commodityCode)" [matTooltip]="invMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">{{ r.commodityCode }}</td>
+                          <td class="ref" [class.code-inv]="invMatched(r.commodityCode)" [matTooltip]="invMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">{{ r.commodityCode }}</td>
                           <td class="desc">{{ r.commodityName }}</td>
                           <td><span class="stk-chip">{{ r.category || '—' }}</span></td>
                           <td>{{ r.warehouseName }}</td>
@@ -325,10 +327,12 @@ interface ComprehensiveAnalysisResponse {
                           <td class="num"><b>{{ r.quantityOnHand | number }}</b></td>
                           <td class="num">{{ r.unitPrice ? ('R' + (r.unitPrice | number:'1.2-2')) : '—' }}</td>
                           <td class="num">{{ r.lineValue ? ('R' + (r.lineValue | number:'1.0-0')) : '—' }}</td>
-                          <td><span class="stk-badge" [class.b-in]="r.quantityOnHand > 0" [class.b-out]="r.quantityOnHand === 0" [class.b-neg]="r.quantityOnHand < 0">
-                            {{ r.quantityOnHand > 0 ? 'In stock' : (r.quantityOnHand < 0 ? 'Negative' : 'Out of stock') }}</span></td>
+                          <td><app-status-chip [status]="r.quantityOnHand > 0 ? 'In stock' : (r.quantityOnHand < 0 ? 'Negative' : 'Out of stock')"
+                                [tone]="r.quantityOnHand > 0 ? 'ok' : 'danger'"></app-status-chip></td>
                         </tr>
-                      } @empty { <tr><td colspan="9" class="stk-empty">No stock items found</td></tr> }
+                      } @empty { <tr><td colspan="9"><app-empty-state compact icon="inventory_2" title="No stock items found" [message]="sohSearch || companyFilter || whFilterId ? 'Nothing matches the current search or filters.' : 'No stock has been recorded yet.'">
+                  @if (sohSearch || companyFilter || whFilterId) { <button mat-stroked-button (click)="sohSearch = ''; companyFilter = ''; whFilterId = null">Clear the filters</button> }
+                </app-empty-state></td></tr> }
                     </tbody>
                   </table>
                   @if (sohRows.length > 400) { <div class="stk-more">Showing first 400 — refine your search to narrow down ({{ sohRows.length | number }} matches)</div> }
@@ -359,7 +363,7 @@ interface ComprehensiveAnalysisResponse {
                   <mat-icon>fact_check</mat-icon> New Stock Take</button>
               </div>
               <div class="stk-table-wrap">
-                <table class="stk-table">
+                <table class="app-table stk-table">
                   <thead><tr>
                     <th>Warehouse</th><th class="num">Items Counted</th><th class="num">Units</th><th class="num">Value</th>
                     <th class="num">In Stock</th><th class="num">Out of Stock</th><th>Last Count</th><th>Companies</th>
@@ -372,7 +376,7 @@ interface ComprehensiveAnalysisResponse {
                         <td class="num">{{ w.totalQuantityOnHand | number }}</td>
                         <td class="num">{{ formatValue(w.totalStockValue) }}</td>
                         <td class="num">{{ w.itemsInStock | number }}</td>
-                        <td class="num" [style.color]="w.itemsOutOfStock > 0 ? '#dc2626' : ''">{{ w.itemsOutOfStock | number }}</td>
+                        <td class="num" [style.color]="w.itemsOutOfStock > 0 ? 'var(--color-danger)' : ''">{{ w.itemsOutOfStock | number }}</td>
                         <td>{{ w.lastCountDate ? (w.lastCountDate | date:'dd MMM yyyy') : '—' }}</td>
                         <td>
                           @for (c of w.byClient; track c.client) {
@@ -409,10 +413,10 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-stroked-button (click)="exportIssues()"><mat-icon>file_download</mat-icon> Export</button>
                 <button mat-raised-button color="primary" (click)="openCreateIssue()"><mat-icon>add</mat-icon> New Issue</button>
               </div>
-              @if (issuesLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading issues...</div> }
+              @if (issuesLoading) { <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows> }
               @else {
                 <div class="stk-table-wrap">
-                  <table class="stk-table">
+                  <table class="app-table stk-table">
                     <thead><tr>
                       <th>Date</th><th>Warehouse</th><th>Company</th><th>Code</th><th>Description</th><th>Issue</th><th>Detail</th><th>Status</th><th style="text-align:right;">Actions</th>
                     </tr></thead>
@@ -422,11 +426,11 @@ interface ComprehensiveAnalysisResponse {
                           <td>{{ i.issueDate ? (i.issueDate | date:'dd MMM') : '—' }}</td>
                           <td>{{ i.warehouseName || '—' }}</td>
                           <td><span class="stk-chip">{{ i.company || '—' }}</span></td>
-                          <td class="mono">{{ i.itemCode || '—' }}</td>
+                          <td class="ref">{{ i.itemCode || '—' }}</td>
                           <td class="desc">{{ i.itemDescription }}</td>
                           <td><b>{{ i.issueType }}</b></td>
                           <td class="desc" [matTooltip]="i.detail">{{ i.detail }}</td>
-                          <td><span class="stk-badge" [class.b-out]="i.status === 'Open'" [class.b-warn]="i.status === 'InProgress'" [class.b-in]="i.status === 'Resolved'">{{ i.status }}</span>
+                          <td><app-status-chip [status]="i.status" [tone]="i.status === 'Open' ? 'danger' : (i.status === 'InProgress' ? 'warn' : (i.status === 'Resolved' ? 'ok' : 'neutral'))"></app-status-chip>
                             @if (i.resolution) { <div class="stk-resolution" [matTooltip]="'By ' + (i.resolvedBy || '?')">{{ i.resolution }}</div> }
                           </td>
                           <td style="text-align:right;white-space:nowrap;">
@@ -442,7 +446,9 @@ interface ComprehensiveAnalysisResponse {
                             }
                           </td>
                         </tr>
-                      } @empty { <tr><td colspan="9" class="stk-empty">No issues found{{ whFilterName }} 🎉</td></tr> }
+                      } @empty { <tr><td colspan="9"><app-empty-state compact icon="task_alt" title="No issues found{{ whFilterName }}" [message]="issueStatusFilter || issueSearch || companyFilter || whFilterId ? 'No issue matches the current filters.' : 'Nothing needs attention right now.'">
+                  @if (issueStatusFilter || issueSearch || companyFilter || whFilterId) { <button mat-stroked-button (click)="issueStatusFilter = ''; issueSearch = ''; companyFilter = ''; whFilterId = null">Clear the filters</button> }
+                </app-empty-state></td></tr> }
                     </tbody>
                   </table>
                   @if (issueRows.length > 400) { <div class="stk-more">Showing first 400 of {{ issueRows.length | number }} issues</div> }
@@ -465,20 +471,20 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-stroked-button (click)="exportExceptions()"><mat-icon>file_download</mat-icon> Export</button>
               </div>
               <div class="stk-table-wrap">
-                <table class="stk-table">
+                <table class="app-table stk-table">
                   <thead><tr><th>Code</th><th>Description</th><th>Company</th><th>Warehouse</th><th class="num">Qty</th><th>Issue</th></tr></thead>
                   <tbody>
                     @for (r of exceptionRows.slice(0, 400); track r.id) {
                       <tr>
-                        <td class="mono" [class.code-inv]="invMatched(r.commodityCode)" [matTooltip]="invMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">{{ r.commodityCode }}</td>
+                        <td class="ref" [class.code-inv]="invMatched(r.commodityCode)" [matTooltip]="invMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">{{ r.commodityCode }}</td>
                         <td class="desc">{{ r.commodityName }}</td>
                         <td><span class="stk-chip">{{ r.category || '—' }}</span></td>
                         <td>{{ r.warehouseName }}</td>
                         <td class="num"><b>{{ r.quantityOnHand | number }}</b></td>
-                        <td><span class="stk-badge" [class.b-out]="excMode === 'out'" [class.b-neg]="excMode === 'neg'" [class.b-warn]="excMode === 'unpriced'">
-                          {{ excMode === 'out' ? 'Out of stock' : (excMode === 'neg' ? 'Negative stock' : 'No sales price') }}</span></td>
+                        <td><app-status-chip [status]="excMode === 'out' ? 'Out of stock' : (excMode === 'neg' ? 'Negative stock' : 'No sales price')"
+                               [tone]="excMode === 'unpriced' ? 'warn' : 'danger'"></app-status-chip></td>
                       </tr>
-                    } @empty { <tr><td colspan="6" class="stk-empty">No exceptions — all good 🎉</td></tr> }
+                    } @empty { <tr><td colspan="6"><app-empty-state compact icon="task_alt" title="No exceptions" message="Nothing to flag in this view."></app-empty-state></td></tr> }
                   </tbody>
                 </table>
               </div>
@@ -494,6 +500,11 @@ interface ComprehensiveAnalysisResponse {
                 <div class="mov-stat ms-amber" [class.ms-zero]="pendingDispatchCount === 0">
                   <mat-icon>pending_actions</mat-icon>
                   <div><b>{{ pendingDispatchCount | number }}</b><span>Pending Dispatch Approvals</span></div>
+                </div>
+                <div class="mov-stat ms-red" [class.ms-zero]="deliveredNotDeductedCount === 0"
+                     matTooltip="Delivered to the customer but stock was never deducted — approve these first so stock on hand is right">
+                  <mat-icon>report</mat-icon>
+                  <div><b>{{ deliveredNotDeductedCount | number }}</b><span>Delivered, Not Deducted</span></div>
                 </div>
                 <div class="mov-stat ms-green">
                   <mat-icon>south_west</mat-icon>
@@ -516,6 +527,12 @@ interface ComprehensiveAnalysisResponse {
                     <mat-icon>fact_check</mat-icon>
                     <b>Awaiting Stock Deduction</b>
                     <span class="mov-queue-sub">Tripsheets since the stock-count baseline that have not been approved against stock — review the picking slip and approve to deduct.</span>
+                    @if (canApprove) {
+                      <span class="stk-spacer"></span>
+                      <button mat-stroked-button (click)="requestBackfillStockLines()"
+                              matTooltip="Give older loads their missing stock lines and link unlinked lines by product code (PIN required)">
+                        <mat-icon>link</mat-icon> Link Stock Lines</button>
+                    }
                   </div>
                   @for (l of pendingDispatchLoads; track l.id) {
                     <div class="mov-queue-row">
@@ -523,8 +540,7 @@ interface ComprehensiveAnalysisResponse {
                       <span class="mq-wh">{{ l.warehouseName || '—' }}</span>
                       <span class="mq-cust">{{ l.customerName || '—' }}</span>
                       <span class="mq-date">{{ (l.actualDeliveryDate || l.scheduledDeliveryDate || l.createdAt) | date:'dd MMM yyyy' }}</span>
-                      <span class="stk-badge" [class.b-in]="l.status === 'Delivered' || l.status === 'Completed'"
-                            [class.b-warn]="l.status !== 'Delivered' && l.status !== 'Completed'">{{ l.status }}</span>
+                      <app-status-chip [status]="l.status" [tone]="l.status === 'Delivered' || l.status === 'Completed' ? 'ok' : 'warn'"></app-status-chip>
                       <span class="stk-spacer"></span>
                       <button mat-stroked-button (click)="openLoadDoc(l, 'picking')" matTooltip="View picking slip"><mat-icon>checklist</mat-icon> Slip</button>
                       @if (canApprove) {
@@ -567,23 +583,23 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-stroked-button (click)="openManualMovement('Scrap')" matTooltip="Write off damaged or expired stock" style="color:var(--color-danger);"><mat-icon>delete_sweep</mat-icon> Scrap</button>
                 <button mat-raised-button color="primary" (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon> Receive Stock</button>
               </div>
-              @if (ledgerLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading movements...</div> }
+              @if (ledgerLoading) { <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows> }
               @else {
                 <div class="stk-table-wrap">
-                  <table class="stk-table">
+                  <table class="app-table stk-table">
                     <thead><tr><th>Date</th><th>Type</th><th>Warehouse</th><th>Code</th><th>Description</th>
                       <th class="num">Qty</th><th class="num">Balance After</th><th>Reference</th><th>By</th><th style="text-align:right;">Actions</th></tr></thead>
                     <tbody>
                       @for (m of ledgerRows; track m.id) {
                         <tr [class.stk-row-resolved]="m.reversedByMovementId">
                           <td>{{ m.createdAt | date:'dd MMM HH:mm' }}</td>
-                          <td><span class="stk-badge" [class.b-in]="m.quantity > 0" [class.b-out]="m.quantity < 0">{{ m.movementType }}</span></td>
+                          <td><app-status-chip [status]="m.movementType" [tone]="m.quantity > 0 ? 'ok' : (m.quantity < 0 ? 'danger' : 'neutral')"></app-status-chip></td>
                           <td>{{ m.warehouseName }}</td>
-                          <td class="mono">{{ m.commodityCode }}</td>
+                          <td class="ref">{{ m.commodityCode }}</td>
                           <td class="desc">{{ m.commodityName }}</td>
-                          <td class="num"><b [style.color]="m.quantity < 0 ? '#dc2626' : '#16a34a'">{{ m.quantity > 0 ? '+' : '' }}{{ m.quantity | number }}</b></td>
-                          <td class="num" [style.color]="m.balanceAfter < 0 ? '#dc2626' : ''">{{ m.balanceAfter | number }}</td>
-                          <td class="mono" [matTooltip]="m.reason">{{ m.reference }}</td>
+                          <td class="num"><b [style.color]="m.quantity < 0 ? 'var(--color-danger)' : 'var(--color-ok)'">{{ m.quantity > 0 ? '+' : '' }}{{ m.quantity | number }}</b></td>
+                          <td class="num" [style.color]="m.balanceAfter < 0 ? 'var(--color-danger)' : ''">{{ m.balanceAfter | number }}</td>
+                          <td class="ref" [matTooltip]="m.reason">{{ m.reference }}</td>
                           <td>{{ m.createdBy }}</td>
                           <td style="text-align:right;white-space:nowrap;">
                             @if (m.loadId) {
@@ -596,7 +612,9 @@ interface ComprehensiveAnalysisResponse {
                             @if (m.reversesMovementId) { <span class="stk-chip" matTooltip="Reversal of movement #{{ m.reversesMovementId }}">↩ #{{ m.reversesMovementId }}</span> }
                           </td>
                         </tr>
-                      } @empty { <tr><td colspan="10" class="stk-empty">No stock movements{{ movSearch ? ' matching "' + movSearch + '"' : '' }} — approve a dispatch or receive stock to start the ledger</td></tr> }
+                      } @empty { <tr><td colspan="10"><app-empty-state compact icon="swap_horiz" title="No stock movements" [message]="movSearch || movTypeFilter ? 'Nothing matches the current search or filter.' : 'Approve a dispatch or receive stock to start the ledger.'">
+                  @if (movSearch || movTypeFilter) { <button mat-stroked-button (click)="movSearch = ''; movTypeFilter = ''">Clear the filters</button> }
+                </app-empty-state></td></tr> }
                     </tbody>
                   </table>
                 </div>
@@ -633,10 +651,10 @@ interface ComprehensiveAnalysisResponse {
 
               <!-- TRIPSHEETS / PICKING SLIPS -->
               @if (dispatchMode === 'tripsheets' || dispatchMode === 'picking') {
-                @if (loadsLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading tripsheets...</div> }
+                @if (loadsLoading) { <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows> }
                 @else {
                   <div class="stk-table-wrap">
-                    <table class="stk-table">
+                    <table class="app-table stk-table">
                       <thead><tr>
                         <th>Load #</th><th>Warehouse</th><th>Customer</th><th>Driver</th><th>Vehicle</th>
                         <th class="num">Stops</th><th>Status</th><th>Delivery</th><th>POD</th><th>Stock</th><th style="text-align:right;">Actions</th>
@@ -644,21 +662,21 @@ interface ComprehensiveAnalysisResponse {
                       <tbody>
                         @for (l of dispatchRows.slice(0, 500); track l.id) {
                           <tr>
-                            <td class="mono">{{ l.loadNumber }}</td>
+                            <td class="ref">{{ l.loadNumber }}</td>
                             <td>{{ l.warehouseName || '—' }}</td>
                             <td class="desc">{{ l.customerName || '—' }}</td>
                             <td>{{ l.driverName || '—' }}</td>
                             <td>{{ l.vehicleRegistration || '—' }}</td>
                             <td class="num"><b>{{ l.stops?.length || 0 }}</b></td>
-                            <td><span class="stk-badge" [class.b-in]="l.status === 'Delivered' || l.status === 'Completed'"
-                                  [class.b-warn]="l.status === 'InTransit' || l.status === 'Pending' || l.status === 'Assigned'">{{ l.status }}</span></td>
+                            <td><app-status-chip [status]="l.status"
+                                 [tone]="l.status === 'Delivered' || l.status === 'Completed' ? 'ok' : (l.status === 'InTransit' || l.status === 'Pending' || l.status === 'Assigned' ? 'warn' : 'neutral')"></app-status-chip></td>
                             <td>{{ (l.actualDeliveryDate || l.scheduledDeliveryDate) ? ((l.actualDeliveryDate || l.scheduledDeliveryDate) | date:'dd MMM yyyy') : '—' }}</td>
-                            <td>@if (l.hasPOD) { <mat-icon style="color:var(--color-ok);font-size:18px;width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { — }</td>
+                            <td>@if (l.hasPOD) { <mat-icon style="color:var(--color-ok);font-size:var(--text-xl);width:18px;height:18px;" matTooltip="POD on file">verified</mat-icon> } @else { — }</td>
                             <td>
                               @switch (loadStockState(l)) {
-                                @case ('deducted') { <span class="stk-badge b-in">Deducted</span> }
+                                @case ('deducted') { <app-status-chip status="Deducted" tone="ok"></app-status-chip> }
                                 @case ('baseline') { <span class="stk-chip" matTooltip="Dated before the warehouse stock count — already in the baseline">Baseline</span> }
-                                @default { <span class="stk-badge b-warn">Awaiting</span> }
+                                @default { <app-status-chip status="Awaiting" tone="warn"></app-status-chip> }
                               }
                             </td>
                             <td style="text-align:right;white-space:nowrap;">
@@ -672,7 +690,9 @@ interface ComprehensiveAnalysisResponse {
                               <button aria-label="View picking slip" mat-icon-button matTooltip="View picking slip" (click)="openLoadDoc(l, 'picking')"><mat-icon>checklist</mat-icon></button>
                             </td>
                           </tr>
-                        } @empty { <tr><td colspan="11" class="stk-empty">No tripsheets found{{ whFilterName }}</td></tr> }
+                        } @empty { <tr><td colspan="11"><app-empty-state compact icon="local_shipping" title="No tripsheets found{{ whFilterName }}" [message]="dispatchSearch || dispatchDeductFilter ? 'Nothing matches the current search or filter.' : 'Tripsheets will be listed here once they are created.'">
+                  @if (dispatchSearch || dispatchDeductFilter) { <button mat-stroked-button (click)="dispatchSearch = ''; dispatchDeductFilter = ''">Clear the filters</button> }
+                </app-empty-state></td></tr> }
                       </tbody>
                     </table>
                     @if (dispatchRows.length > 500) { <div class="stk-more">Showing first 500 of {{ dispatchRows.length | number }} tripsheets — refine your search</div> }
@@ -682,24 +702,24 @@ interface ComprehensiveAnalysisResponse {
 
               <!-- INVOICES -->
               @if (dispatchMode === 'invoices') {
-                @if (loadsLoading) { <div class="stk-loading"><mat-spinner diameter="32"></mat-spinner> Loading invoices...</div> }
+                @if (loadsLoading) { <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows> }
                 @else {
                   <div class="stk-table-wrap">
-                    <table class="stk-table">
+                    <table class="app-table stk-table">
                       <thead><tr>
                         <th>Invoice #</th><th>Order #</th><th>Customer / Stop</th><th>Load #</th><th>Warehouse</th><th>Status</th><th>Stock</th><th>Delivery</th><th style="text-align:right;">Actions</th>
                       </tr></thead>
                       <tbody>
                         @for (r of dispatchInvoiceRows.slice(0, 500); track $index) {
                           <tr>
-                            <td class="mono">{{ r.invoiceNumber }}</td>
-                            <td class="mono">{{ r.orderNumber || '—' }}</td>
+                            <td class="ref">{{ r.invoiceNumber }}</td>
+                            <td class="ref">{{ r.orderNumber || '—' }}</td>
                             <td class="desc">{{ r.customerName }}</td>
-                            <td class="mono">{{ r.loadNumber }}</td>
+                            <td class="ref">{{ r.loadNumber }}</td>
                             <td>{{ r.warehouseName || '—' }}</td>
-                            <td><span class="stk-badge" [class.b-in]="r.status === 'Delivered' || r.status === 'Completed'"
-                                  [class.b-warn]="r.status === 'InTransit' || r.status === 'Pending' || r.status === 'Assigned'">{{ r.status }}</span></td>
-                            <td><span class="stk-badge" [class.b-in]="r.deducted" [class.b-warn]="!r.deducted">{{ r.deducted ? 'Deducted' : 'Awaiting' }}</span></td>
+                            <td><app-status-chip [status]="r.status"
+                                 [tone]="r.status === 'Delivered' || r.status === 'Completed' ? 'ok' : (r.status === 'InTransit' || r.status === 'Pending' || r.status === 'Assigned' ? 'warn' : 'neutral')"></app-status-chip></td>
+                            <td><app-status-chip [status]="r.deducted ? 'Deducted' : 'Awaiting'" [tone]="r.deducted ? 'ok' : 'warn'"></app-status-chip></td>
                             <td>{{ r.deliveryDate ? (r.deliveryDate | date:'dd MMM yyyy') : '—' }}</td>
                             <td style="text-align:right;white-space:nowrap;">
                               @if (!r.deducted && canApprove) {
@@ -708,7 +728,9 @@ interface ComprehensiveAnalysisResponse {
                               <button aria-label="View trip sheet" mat-icon-button matTooltip="View trip sheet" (click)="openLoadDoc(r.load, 'tripsheet')"><mat-icon>receipt_long</mat-icon></button>
                             </td>
                           </tr>
-                        } @empty { <tr><td colspan="9" class="stk-empty">No invoices found on tripsheets{{ whFilterName }}</td></tr> }
+                        } @empty { <tr><td colspan="9"><app-empty-state compact icon="description" title="No invoices found on tripsheets{{ whFilterName }}" [message]="dispatchSearch || dispatchDeductFilter ? 'Nothing matches the current search or filter.' : 'Invoices will be listed here once they are on a tripsheet.'">
+                  @if (dispatchSearch || dispatchDeductFilter) { <button mat-stroked-button (click)="dispatchSearch = ''; dispatchDeductFilter = ''">Clear the filters</button> }
+                </app-empty-state></td></tr> }
                       </tbody>
                     </table>
                     @if (dispatchInvoiceRows.length > 500) { <div class="stk-more">Showing first 500 of {{ dispatchInvoiceRows.length | number }} invoices</div> }
@@ -744,7 +766,7 @@ interface ComprehensiveAnalysisResponse {
               <!-- Valuation by company × warehouse -->
               @if (reportMode === 'valuation') {
                 <div class="stk-table-wrap">
-                  <table class="stk-table">
+                  <table class="app-table stk-table">
                     <thead><tr><th>Company</th><th>Warehouse</th><th class="num">Items</th><th class="num">In Stock</th><th class="num">Out</th><th class="num">Units</th><th class="num">Sales Value</th><th class="num">Cost Value</th></tr></thead>
                     <tbody>
                       @for (r of valuationReport; track r.key) {
@@ -753,12 +775,12 @@ interface ComprehensiveAnalysisResponse {
                           <td>{{ r.warehouse }}</td>
                           <td class="num">{{ r.items | number }}</td>
                           <td class="num">{{ r.inStock | number }}</td>
-                          <td class="num" [style.color]="r.out > 0 ? '#dc2626' : ''">{{ r.out | number }}</td>
+                          <td class="num" [style.color]="r.out > 0 ? 'var(--color-danger)' : ''">{{ r.out | number }}</td>
                           <td class="num">{{ formatQty(r.units) }}</td>
                           <td class="num"><b>{{ formatValue(r.value) }}</b></td>
                           <td class="num">{{ formatValue(r.cost) }}</td>
                         </tr>
-                      } @empty { <tr><td colspan="8" class="stk-empty">No stock data</td></tr> }
+                      } @empty { <tr><td colspan="8"><app-empty-state compact icon="inventory_2" title="No stock data" message="No stock has been recorded yet."></app-empty-state></td></tr> }
                     </tbody>
                   </table>
                 </div>
@@ -768,7 +790,7 @@ interface ComprehensiveAnalysisResponse {
               <!-- Movement activity by type × warehouse -->
               @if (reportMode === 'activity') {
                 <div class="stk-table-wrap">
-                  <table class="stk-table">
+                  <table class="app-table stk-table">
                     <thead><tr><th>Warehouse</th><th>Type</th><th class="num">Movements</th><th class="num">Units In</th><th class="num">Units Out</th><th class="num">Net</th><th>Last</th></tr></thead>
                     <tbody>
                       @for (r of activityReport; track r.key) {
@@ -778,10 +800,12 @@ interface ComprehensiveAnalysisResponse {
                           <td class="num">{{ r.count | number }}</td>
                           <td class="num" style="color:var(--color-ok);">+{{ formatQty(r.unitsIn) }}</td>
                           <td class="num" style="color:var(--color-danger);">-{{ formatQty(r.unitsOut) }}</td>
-                          <td class="num"><b [style.color]="r.net < 0 ? '#dc2626' : '#16a34a'">{{ r.net > 0 ? '+' : '' }}{{ formatQty(r.net) }}</b></td>
+                          <td class="num"><b [style.color]="r.net < 0 ? 'var(--color-danger)' : 'var(--color-ok)'">{{ r.net > 0 ? '+' : '' }}{{ formatQty(r.net) }}</b></td>
                           <td>{{ r.last ? (r.last | date:'dd MMM HH:mm') : '—' }}</td>
                         </tr>
-                      } @empty { <tr><td colspan="7" class="stk-empty">No ledger movements in this period{{ whFilterName }}</td></tr> }
+                      } @empty { <tr><td colspan="7"><app-empty-state compact icon="swap_horiz" title="No ledger movements in this period{{ whFilterName }}" [message]="reportDays !== 0 ? 'Try a longer period.' : 'The ledger has no movements yet.'">
+                  @if (reportDays !== 0) { <button mat-stroked-button (click)="reportDays = 0">Show all time</button> }
+                </app-empty-state></td></tr> }
                     </tbody>
                   </table>
                 </div>
@@ -790,7 +814,7 @@ interface ComprehensiveAnalysisResponse {
               <!-- Dispatch compliance -->
               @if (reportMode === 'dispatch') {
                 <div class="stk-table-wrap">
-                  <table class="stk-table">
+                  <table class="app-table stk-table">
                     <thead><tr><th>Warehouse</th><th class="num">Tripsheets</th><th class="num">Pre-baseline</th><th class="num">Since baseline</th><th class="num">Stock Deducted</th><th class="num">Awaiting Approval</th><th class="num">% Approved</th><th class="num">Delivered but not deducted</th><th class="num">With POD</th></tr></thead>
                     <tbody>
                       @for (r of dispatchReport; track r.key) {
@@ -800,12 +824,12 @@ interface ComprehensiveAnalysisResponse {
                           <td class="num" style="color:var(--color-text-3);">{{ r.baseline | number }}</td>
                           <td class="num">{{ r.live | number }}</td>
                           <td class="num" style="color:var(--color-ok);">{{ r.deducted | number }}</td>
-                          <td class="num" [style.color]="r.pending > 0 ? '#d97706' : ''">{{ r.pending | number }}</td>
+                          <td class="num" [style.color]="r.pending > 0 ? 'var(--color-warn)' : ''">{{ r.pending | number }}</td>
                           <td class="num"><b>{{ r.live ? (r.deducted / r.live * 100 | number:'1.0-0') : 0 }}%</b></td>
-                          <td class="num" [style.color]="r.deliveredPending > 0 ? '#dc2626' : ''">{{ r.deliveredPending | number }}</td>
+                          <td class="num" [style.color]="r.deliveredPending > 0 ? 'var(--color-danger)' : ''">{{ r.deliveredPending | number }}</td>
                           <td class="num">{{ r.withPod | number }}</td>
                         </tr>
-                      } @empty { <tr><td colspan="9" class="stk-empty">No tripsheets</td></tr> }
+                      } @empty { <tr><td colspan="9"><app-empty-state compact icon="local_shipping" title="No tripsheets" message="No tripsheets have been recorded yet."></app-empty-state></td></tr> }
                     </tbody>
                   </table>
                 </div>
@@ -815,19 +839,19 @@ interface ComprehensiveAnalysisResponse {
               <!-- Exceptions summary -->
               @if (reportMode === 'exceptions') {
                 <div class="stk-table-wrap">
-                  <table class="stk-table">
+                  <table class="app-table stk-table">
                     <thead><tr><th>Warehouse</th><th class="num">Out of Stock</th><th class="num">Negative</th><th class="num">Unpriced with Stock</th><th class="num">Open Issues</th><th class="num">In Progress</th></tr></thead>
                     <tbody>
                       @for (r of exceptionReport; track r.key) {
                         <tr [class.stk-row-total]="r.isTotal">
                           <td><b>{{ r.warehouse }}</b></td>
-                          <td class="num" [style.color]="r.out > 0 ? '#dc2626' : ''">{{ r.out | number }}</td>
-                          <td class="num" [style.color]="r.neg > 0 ? '#dc2626' : ''">{{ r.neg | number }}</td>
-                          <td class="num" [style.color]="r.unpriced > 0 ? '#d97706' : ''">{{ r.unpriced | number }}</td>
+                          <td class="num" [style.color]="r.out > 0 ? 'var(--color-danger)' : ''">{{ r.out | number }}</td>
+                          <td class="num" [style.color]="r.neg > 0 ? 'var(--color-danger)' : ''">{{ r.neg | number }}</td>
+                          <td class="num" [style.color]="r.unpriced > 0 ? 'var(--color-warn)' : ''">{{ r.unpriced | number }}</td>
                           <td class="num">{{ r.openIssues | number }}</td>
                           <td class="num">{{ r.inProgress | number }}</td>
                         </tr>
-                      } @empty { <tr><td colspan="6" class="stk-empty">No data</td></tr> }
+                      } @empty { <tr><td colspan="6"><app-empty-state compact icon="warehouse" title="No data" message="There is no warehouse data to report on yet."></app-empty-state></td></tr> }
                     </tbody>
                   </table>
                 </div>
@@ -855,7 +879,7 @@ interface ComprehensiveAnalysisResponse {
             <div class="welly-panel-body" id="welly-analysis-content">
               @if (wellyLoading) {
                 <div class="welly-loading">
-                  <mat-spinner diameter="36"></mat-spinner>
+                  <app-skeleton-rows [rows]="5" [avatar]="false"></app-skeleton-rows>
                   <p>Welly is analyzing stock, invoices & logistics for {{ selectedWarehouse?.name }}...</p>
                 </div>
               } @else if (wellyResult) {
@@ -981,58 +1005,31 @@ interface ComprehensiveAnalysisResponse {
       margin-bottom: var(--space-5);
     }
 
-    @media (max-width: 820px) {
-      .warehouses-grid { grid-template-columns: 1fr; }
-    }
-
-    .warehouse-progress-bar ::ng-deep .mdc-linear-progress__bar-inner {
-      border-top-width: 8px;
-    }
-
-    .warehouse-progress-bar ::ng-deep .mdc-linear-progress__buffer-bar {
-      background-color: var(--color-line) !important;
-    }
-
-    .warehouse-progress-bar ::ng-deep .mdc-linear-progress__bar {
-      animation: none;
-    }
-
     .loading-state {
       display: flex; justify-content: center; padding: 60px 20px;
     }
     .loading-card {
-      background: rgba(255,255,255,0.97); border-radius: 20px;
-      padding: 48px 56px; text-align: center; box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+      background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg);
+      padding: 48px 56px; text-align: center; box-shadow: var(--shadow-md);
       max-width: 520px; width: 100%;
     }
-    .loading-card h3 { color: var(--color-text); margin: 16px 0 6px; font-size: 20px; font-weight: 700; }
-    .loading-card p { color: var(--color-text-3); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+    .loading-card h3 { color: var(--color-text); margin: 16px 0 6px; font-size: var(--text-2xl); font-weight: 700; }
+    .loading-card p { color: var(--color-text-3); margin: 0 0 20px; font-size: var(--text-md); line-height: 1.5; }
     .lc-icon-wrap {
       width: 72px; height: 72px; border-radius: 50%; margin: 0 auto;
-      background: linear-gradient(135deg, rgba(14,165,233,0.12), rgba(6,182,212,0.12));
+      background: var(--color-primary-soft);
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 20px rgba(14,165,233,0.15);
     }
-    .lc-icon { font-size: 36px; width: 36px; height: 36px; color: #0ea5e9; }
+    .lc-icon { font-size: var(--text-4xl); width: 32px; height: 32px; color: var(--color-primary); }
     .pulse-icon { animation: pulseGlow 2s ease-in-out infinite; }
     @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.08); } }
-    .lc-subtitle { color: var(--color-text-3) !important; font-size: 13px !important; }
+    .loading-card .lc-subtitle { color: var(--color-text-3); font-size: var(--text-sm); }
     .lc-progress-wrap { margin: 8px 0 24px; }
     .lc-progress-track { height: 8px; border-radius: 4px; background: var(--color-surface-2); overflow: hidden; position: relative; }
-    .lc-progress-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #0ea5e9, #38bdf8, #06b6d4);
-      background-size: 200% 100%; animation: shimmer 2s ease-in-out infinite;
-      transition: width 0.15s ease-out; position: relative;
-    }
-    .lc-progress-fill::after {
-      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4)); border-radius: 0 4px 4px 0;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; }
+    .lc-progress-fill { height: 100%; border-radius: 4px; background: var(--color-primary); transition: width 0.15s ease-out; }
+    .lc-progress-info { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: var(--text-xs); }
     .lc-progress-message { color: var(--color-text-3); font-weight: 500; }
-    .lc-progress-pct { color: #0ea5e9; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .lc-progress-pct { color: var(--color-primary); font-weight: 700; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
     .lc-steps { display: flex; justify-content: space-between; gap: 4px; padding-top: 4px; border-top: 1px solid var(--color-line); }
     .lc-step {
       display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -1043,50 +1040,16 @@ interface ComprehensiveAnalysisResponse {
     .lc-step-dot {
       width: 32px; height: 32px; border-radius: 50%; background: var(--color-surface-2);
       display: flex; align-items: center; justify-content: center;
-      transition: background 0.3s ease, box-shadow 0.3s ease;
+      transition: background 0.3s ease;
     }
-    .lc-step-dot mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--color-text-3); transition: color 0.3s ease; }
-    .lc-step.active .lc-step-dot { background: linear-gradient(135deg, #0ea5e9, #06b6d4); box-shadow: 0 2px 10px rgba(14,165,233,0.3); }
-    .lc-step.active .lc-step-dot mat-icon { color: #fff; }
+    .lc-step-dot mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-text-3); transition: color 0.3s ease; }
+    .lc-step.active .lc-step-dot { background: var(--color-primary); }
+    .lc-step.active .lc-step-dot mat-icon { color: var(--color-on-primary); }
     .lc-step.done .lc-step-dot { background: var(--color-ok-soft); }
     .lc-step.done .lc-step-dot mat-icon { color: var(--color-ok); }
-    .lc-step-label { font-size: 11px; font-weight: 600; color: var(--color-text-3); white-space: nowrap; }
-    .lc-step.active .lc-step-label { color: #0ea5e9; }
+    .lc-step-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-3); white-space: nowrap; }
+    .lc-step.active .lc-step-label { color: var(--color-primary); }
     .lc-step.done .lc-step-label { color: var(--color-ok); }
-
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 72px;
-      background: var(--color-surface);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      color: var(--ink);
-    }
-
-    .empty-state mat-icon {
-      font-size: 64px;
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      color: var(--color-line-strong);
-    }
-
-    .empty-state h3 {
-      font-size: 1.3rem;
-      margin: 0 0 8px 0;
-    }
-
-    .empty-state p {
-      color: var(--muted);
-      margin: 0;
-    }
-
-    @media (max-width: 820px) {
-      .operations-grid { grid-template-columns: 1fr; }
-    }
 
     @keyframes slideUp {
       from {
@@ -1106,7 +1069,7 @@ interface ComprehensiveAnalysisResponse {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--color-scrim);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1120,14 +1083,15 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .welly-panel {
-      background: #f5f5f7;
-      border-radius: 16px;
+      background: var(--color-canvas);
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-lg);
       width: 900px;
       max-width: 94vw;
       max-height: 90vh;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--shadow-lg);
       overflow: hidden;
       animation: slideUp 0.3s ease-out;
     }
@@ -1137,8 +1101,9 @@ interface ComprehensiveAnalysisResponse {
       align-items: center;
       justify-content: space-between;
       padding: 16px 24px;
-      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-      color: white;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-line);
+      color: var(--color-text);
     }
 
     .welly-panel-title {
@@ -1149,35 +1114,33 @@ interface ComprehensiveAnalysisResponse {
 
     .welly-panel-title h3 {
       margin: 0;
-      font-size: 17px;
+      font-size: var(--text-lg);
       font-weight: 600;
     }
 
     .welly-sparkle {
-      color: #ffd700;
-    }
-
-    .welly-panel-header button {
-      color: white;
+      color: var(--color-primary);
     }
 
     .welly-panel-body {
       padding: 20px 24px;
       overflow-y: auto;
       max-height: calc(90vh - 60px);
+      background: var(--color-canvas);
     }
 
     .welly-loading {
       display: flex;
       flex-direction: column;
-      align-items: center;
       gap: 16px;
-      padding: 48px 32px;
+      padding: 24px 0;
     }
 
     .welly-loading p {
       color: var(--color-text-2);
-      font-size: 14px;
+      font-size: var(--text-md);
+      text-align: center;
+      margin: 0;
     }
 
     /* Summary Cards */
@@ -1190,12 +1153,13 @@ interface ComprehensiveAnalysisResponse {
 
     .welly-summary-card {
       background: var(--color-surface);
-      border-radius: 12px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 14px 16px;
       display: flex;
       align-items: center;
       gap: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      box-shadow: var(--shadow-sm);
       border-left: 4px solid var(--color-primary);
     }
 
@@ -1203,19 +1167,19 @@ interface ComprehensiveAnalysisResponse {
     .welly-summary-card.card-stock .summary-icon { color: var(--color-primary); }
     .welly-summary-card.card-value { border-left-color: var(--color-ok); }
     .welly-summary-card.card-value .summary-icon { color: var(--color-ok); }
-    .welly-summary-card.card-alert { border-left-color: #ef5350; }
-    .welly-summary-card.card-alert .summary-icon { color: #ef5350; }
+    .welly-summary-card.card-alert { border-left-color: var(--color-danger); }
+    .welly-summary-card.card-alert .summary-icon { color: var(--color-danger); }
     .welly-summary-card.card-invoice { border-left-color: var(--color-warn); }
     .welly-summary-card.card-invoice .summary-icon { color: var(--color-warn); }
-    .welly-summary-card.card-delivery { border-left-color: #26a69a; }
-    .welly-summary-card.card-delivery .summary-icon { color: #26a69a; }
-    .welly-summary-card.card-rate { border-left-color: #7e57c2; }
-    .welly-summary-card.card-rate .summary-icon { color: #7e57c2; }
+    .welly-summary-card.card-delivery { border-left-color: var(--color-cat-teal); }
+    .welly-summary-card.card-delivery .summary-icon { color: var(--color-cat-teal); }
+    .welly-summary-card.card-rate { border-left-color: var(--color-cat-purple); }
+    .welly-summary-card.card-rate .summary-icon { color: var(--color-cat-purple); }
 
     .summary-icon mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
+      font-size: var(--text-3xl);
+      width: 24px;
+      height: 24px;
     }
 
     .summary-info {
@@ -1224,14 +1188,14 @@ interface ComprehensiveAnalysisResponse {
     }
 
     .summary-value {
-      font-size: 18px;
+      font-size: var(--text-xl);
       font-weight: 700;
       color: var(--color-text);
       line-height: 1.2;
     }
 
     .summary-label {
-      font-size: 11px;
+      font-size: var(--text-xs);
       color: var(--color-text-3);
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -1248,14 +1212,15 @@ interface ComprehensiveAnalysisResponse {
 
     .welly-chart-card {
       background: var(--color-surface);
-      border-radius: 12px;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-md);
       padding: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      box-shadow: var(--shadow-sm);
     }
 
     .welly-chart-card h4 {
       margin: 0 0 12px 0;
-      font-size: 13px;
+      font-size: var(--text-sm);
       font-weight: 600;
       color: var(--color-text-2);
       text-transform: uppercase;
@@ -1273,13 +1238,13 @@ interface ComprehensiveAnalysisResponse {
       align-items: center;
       gap: 8px;
       margin: 0 0 12px 0;
-      font-size: 14px;
+      font-size: var(--text-md);
       font-weight: 600;
       color: var(--color-text-2);
     }
 
     .welly-section-title mat-icon {
-      font-size: 20px;
+      font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
       color: var(--color-primary);
@@ -1288,9 +1253,9 @@ interface ComprehensiveAnalysisResponse {
     .welly-result-text {
       background: var(--color-surface);
       border: 1px solid var(--color-line);
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       padding: 18px;
-      font-size: 13px;
+      font-size: var(--text-sm);
       line-height: 1.7;
       white-space: pre-wrap;
       max-height: 40vh;
@@ -1311,95 +1276,60 @@ interface ComprehensiveAnalysisResponse {
     .client-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; position: relative; z-index: 1; }
     .client-chip {
       display: inline-flex; align-items: center; gap: 5px;
-      padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
-      background: rgba(255,255,255,0.75); color: var(--color-text-2); border: 1px solid rgba(148,163,184,0.35);
+      padding: 3px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600;
+      background: var(--color-surface-2); color: var(--color-text-2); border: 1px solid var(--color-line);
     }
     .client-chip b { color: var(--color-text); }
     .stock-asat {
       display: flex; align-items: center; gap: 6px; margin-top: 8px;
-      font-size: 11.5px; color: var(--color-text-3); position: relative; z-index: 1;
+      font-size: var(--text-xs); color: var(--color-text-3); position: relative; z-index: 1;
     }
-    .stock-asat mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    .stock-asat mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
 
     /* ═══ Dashboard redesign ═══ */
     .stk-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 18px; }
     @media (max-width: 1400px) { .stk-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 760px) { .stk-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
     .stk-kpi {
-      background: var(--color-surface); border-radius: 22px; padding: 18px 18px; box-shadow: 0 10px 34px rgba(2,6,23,0.28);
-      border-top: 4px solid transparent; transition: transform .25s ease, box-shadow .25s ease;
-      position: relative; overflow: hidden;
+      background: var(--color-surface); border: 1px solid var(--color-line); border-top: 4px solid transparent;
+      border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-sm);
+      transition: box-shadow .2s ease; position: relative; overflow: hidden;
     }
-    .stk-kpi:hover { transform: translateY(-6px); box-shadow: 0 22px 52px rgba(2,6,23,0.38); }
-    .stk-kpi mat-icon { font-size: 24px; width: 24px; height: 24px; opacity: 0.9; }
-    .stk-kpi-val { font-size: 26px; font-weight: 700; color: var(--color-text); margin-top: 6px; line-height: 1.1; }
-    .stk-kpi-lbl { font-size: 12px; color: var(--color-text-2); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-top: 3px; }
-    .k-indigo { border-color: var(--color-primary); } .k-indigo mat-icon { color: var(--color-primary); }
-    .k-green { border-color: var(--color-ok); } .k-green mat-icon { color: var(--color-ok); }
-    .k-teal { border-color: #0d9488; } .k-teal mat-icon { color: #0d9488; }
-    .k-emerald { border-color: var(--color-ok); } .k-emerald mat-icon { color: var(--color-ok); }
-    .k-red { border-color: var(--color-danger); } .k-red mat-icon { color: var(--color-danger); }
+    .stk-kpi:hover { box-shadow: var(--shadow-md); }
+    .stk-kpi mat-icon { font-size: var(--text-3xl); width: 24px; height: 24px; opacity: 0.9; }
+    .stk-kpi-val { font-size: var(--text-3xl); font-weight: 700; color: var(--color-text); margin-top: 6px; line-height: 1.1; }
+    .stk-kpi-lbl { font-size: var(--text-xs); color: var(--color-text-2); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-top: 3px; }
+    .k-indigo { border-top-color: var(--color-primary); } .k-indigo mat-icon { color: var(--color-primary); }
+    .k-green { border-top-color: var(--color-ok); } .k-green mat-icon { color: var(--color-ok); }
+    .k-teal { border-top-color: var(--color-cat-teal); } .k-teal mat-icon { color: var(--color-cat-teal); }
+    .k-emerald { border-top-color: var(--color-ok); } .k-emerald mat-icon { color: var(--color-ok); }
+    .k-red { border-top-color: var(--color-danger); } .k-red mat-icon { color: var(--color-danger); }
 
     .stk-wh-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
     @media (max-width: 1200px) { .stk-wh-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 700px) { .stk-wh-grid { grid-template-columns: 1fr; } }
-    .stk-link { cursor: pointer; color: #0369a1; text-decoration: none; }
+    .stk-link { cursor: pointer; color: var(--color-primary); text-decoration: none; }
     .stk-link:hover { text-decoration: underline; }
     .stk-chip-btn { cursor: pointer; border: 1px solid transparent; font: inherit; }
-    .stk-chip-btn:hover { border-color: #0369a1; color: #0369a1; background: var(--color-primary-soft); }
+    .stk-chip-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
     .stk-wh-card {
-      background: var(--color-surface); border-radius: 16px; padding: 18px; cursor: pointer;
-      box-shadow: 0 10px 34px rgba(2,6,23,0.28); border: 2px solid transparent; transition: all .25s ease;
+      background: var(--color-surface); border-radius: var(--radius-lg); padding: 18px; cursor: pointer;
+      box-shadow: var(--shadow-sm); border: 1px solid var(--color-line); transition: box-shadow .2s ease, border-color .2s ease;
     }
-    .stk-wh-card:hover { box-shadow: 0 22px 52px rgba(2,6,23,0.38); transform: translateY(-4px); }
-    .stk-wh-card.active {
-      border-color: var(--color-ok); background: var(--color-ok-soft);
-      box-shadow: 0 10px 34px rgba(22,163,74,0.35);
-      animation: whPulse 2.6s ease-in-out infinite;
-      position: relative;
-    }
-    .stk-wh-card.active .stk-wh-ico { color: var(--color-ok); }
-    @keyframes whPulse {
-      0%, 100% { box-shadow: 0 10px 34px rgba(22,163,74,0.30), 0 0 0 0 rgba(22,163,74,0.45); }
-      50% { box-shadow: 0 10px 34px rgba(22,163,74,0.40), 0 0 0 7px rgba(22,163,74,0); }
-    }
-    /* Green shimmer running around the edges every now and again */
-    .stk-wh-card.active::after {
-      content: '';
-      position: absolute; inset: -2px;
-      border-radius: 16px;
-      padding: 2px;
-      background: conic-gradient(from var(--wh-angle, 0deg), transparent 0 78%, var(--color-ok) 88%, #4ade80 93%, transparent 100%);
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      pointer-events: none;
-      animation: whBorderSweep 4s linear infinite;
-    }
-    @property --wh-angle {
-      syntax: '<angle>';
-      initial-value: 0deg;
-      inherits: false;
-    }
-    @keyframes whBorderSweep {
-      0% { --wh-angle: 0deg; opacity: 0; }
-      10% { opacity: 1; }
-      55% { --wh-angle: 360deg; opacity: 1; }
-      62% { --wh-angle: 360deg; opacity: 0; }
-      100% { --wh-angle: 360deg; opacity: 0; }
-    }
+    .stk-wh-card:hover { box-shadow: var(--shadow-md); }
+    .stk-wh-card.active { border-color: var(--color-primary); background: var(--color-primary-soft); }
     .stk-wh-head { display: flex; align-items: center; gap: 10px; }
     .stk-wh-ico { color: var(--color-primary); }
     .stk-wh-title { flex: 1; min-width: 0; }
     .stk-wh-title h3 { margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .stk-wh-title span { font-size: 11.5px; color: var(--color-text-3); }
+    .stk-wh-title span { font-size: var(--text-xs); color: var(--color-text-3); }
     .stk-wh-ops { color: var(--color-text-3); }
     .stk-wh-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
-    .stk-wh-stats > div { text-align: center; background: var(--color-canvas); border-radius: 8px; padding: 6px 2px; }
-    .stk-wh-card.active .stk-wh-stats > div { background: rgba(255,255,255,0.7); }
-    .stk-wh-stats b { display: block; font-size: 13px; color: var(--color-text); }
-    .stk-wh-stats b .out-sub { font-style: normal; font-size: 10px; color: var(--color-danger); font-weight: 600; }
-    .stk-wh-stats span { font-size: 9.5px; color: var(--color-text-3); text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
+    .stk-wh-stats > div { text-align: center; background: var(--color-canvas); border-radius: var(--radius-control); padding: 6px 2px; }
+    .stk-wh-card.active .stk-wh-stats > div { background: var(--color-surface); }
+    .stk-wh-stats b { display: block; font-size: var(--text-sm); color: var(--color-text); }
+    .stk-wh-stats b .out-sub { font-style: normal; font-size: var(--text-xs); color: var(--color-danger); font-weight: 600; }
+    .stk-wh-stats span { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
 
     .stk-tabs { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 30px; }
 
@@ -1407,15 +1337,15 @@ interface ComprehensiveAnalysisResponse {
     .sh-company-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
     .sh-company-chip {
       display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
-      border: 1.5px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.92); border-radius: 999px;
-      font-size: 13px; font-weight: 600; color: var(--color-text-2); cursor: pointer;
-      transition: all .18s ease; box-shadow: 0 4px 14px rgba(2,6,23,0.25);
+      border: 1.5px solid var(--color-line); background: var(--color-surface); border-radius: 999px;
+      font-size: var(--text-sm); font-weight: 600; color: var(--color-text-2); cursor: pointer;
+      transition: all .18s ease;
     }
-    .sh-company-chip mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .sh-company-chip:hover { background: var(--color-surface); transform: translateY(-1px); }
+    .sh-company-chip mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
+    .sh-company-chip:hover { background: var(--color-surface-2); }
     .sh-company-chip.active {
-      border-color: var(--chip-color, #1a237e); color: var(--chip-color, var(--color-brand));
-      background: var(--color-surface); box-shadow: 0 6px 18px rgba(2,6,23,0.35);
+      border-color: var(--chip-color, var(--color-primary)); color: var(--chip-color, var(--color-brand));
+      background: var(--color-surface);
     }
     .sh-company-chip--logo { padding: 6px 14px 6px 8px; gap: 8px; }
     .sh-chip-logo {
@@ -1424,7 +1354,7 @@ interface ComprehensiveAnalysisResponse {
     }
     .sh-company-chip--logo:hover .sh-chip-logo { filter: grayscale(0%); opacity: 1; }
     .sh-company-chip--logo.active .sh-chip-logo { filter: none; opacity: 1; }
-    .sh-chip-label { font-size: 12.5px; font-weight: 600; color: var(--color-text-2); }
+    .sh-chip-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-2); }
     .sh-company-chip--logo.active .sh-chip-label { color: var(--chip-color, var(--color-brand)); }
     .stk-tab-body { padding: 16px; }
     .stk-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -1434,54 +1364,41 @@ interface ComprehensiveAnalysisResponse {
     /* Movements tab */
     .mov-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
     @media (max-width: 1100px) { .mov-stats { grid-template-columns: repeat(2, 1fr); } }
-    .mov-stat { display: flex; align-items: center; gap: 12px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 14px; padding: 12px 16px; }
-    .mov-stat mat-icon { font-size: 26px; width: 26px; height: 26px; }
-    .mov-stat b { display: block; font-size: 20px; line-height: 1.1; color: var(--color-text); }
-    .mov-stat span { font-size: 11.5px; color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.4px; }
-    .mov-stat.ms-amber mat-icon { color: var(--color-warn); } .mov-stat.ms-amber { border-color: #fcd34d; background: var(--color-warn-soft); }
+    .mov-stat { display: flex; align-items: center; gap: 12px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: 12px 16px; }
+    .mov-stat mat-icon { font-size: var(--text-3xl); width: 24px; height: 24px; }
+    .mov-stat b { display: block; font-size: var(--text-2xl); line-height: 1.1; color: var(--color-text); }
+    .mov-stat span { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.4px; }
+    .mov-stat.ms-amber mat-icon { color: var(--color-warn); } .mov-stat.ms-amber { border-color: var(--color-warn); background: var(--color-warn-soft); }
     .mov-stat.ms-amber.ms-zero { border-color: var(--color-line); background: var(--color-surface); }
     .mov-stat.ms-green mat-icon { color: var(--color-ok); } .mov-stat.ms-green b { color: var(--color-ok); }
     .mov-stat.ms-red mat-icon { color: var(--color-danger); } .mov-stat.ms-red b { color: var(--color-danger); }
     .mov-stat.ms-blue mat-icon { color: var(--color-primary); }
-    .mov-queue { background: var(--color-warn-soft); border: 1px solid #fcd34d; border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; }
-    .mov-queue-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: #92400e; }
+    .mov-queue { background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-lg); padding: 12px 16px; margin-bottom: 16px; }
+    .mov-queue-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--color-warn); }
     .mov-queue-head mat-icon { color: var(--color-warn); }
-    .mov-queue-sub { font-size: 12px; color: #a16207; font-weight: 400; }
-    .mov-queue-row { display: flex; align-items: center; gap: 14px; padding: 8px 10px; background: var(--color-surface); border: 1px solid #fde68a; border-radius: 10px; margin-bottom: 6px; font-size: 13px; }
-    .mq-load { font-weight: 700; min-width: 110px; }
+    .mov-queue-sub { font-size: var(--text-xs); color: var(--color-warn); font-weight: 400; }
+    .mov-queue-row { display: flex; align-items: center; gap: 14px; padding: 8px 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-bottom: 6px; font-size: var(--text-sm); }
+    .mq-load { font-family: var(--font-mono); font-weight: 700; min-width: 110px; }
     .mq-wh { min-width: 170px; color: var(--color-text-2); }
     .mq-cust { flex: 1; color: var(--color-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .mq-date { color: var(--color-text-3); white-space: nowrap; }
-    .mq-noperm { font-size: 12px; color: var(--color-text-3); font-style: italic; }
-    .mov-queue-more { font-size: 12px; color: #a16207; text-align: center; padding: 4px 0 0; }
-    .stk-count { font-size: 12.5px; color: var(--color-text-3); font-weight: 600; }
+    .mq-noperm { font-size: var(--text-xs); color: var(--color-text-3); font-style: italic; }
+    .mov-queue-more { font-size: var(--text-xs); color: var(--color-warn); text-align: center; padding: 4px 0 0; }
+    .stk-count { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 600; }
     .stk-spacer { flex: 1; }
     .stk-sep { width: 1px; height: 26px; background: var(--color-line); margin: 0 4px; }
     .stk-row-total td { background: var(--color-canvas); font-weight: 700; border-top: 2px solid var(--color-line-strong); }
     .stk-filter-on { background: var(--color-primary-soft) !important; border-color: var(--color-primary) !important; color: var(--color-primary-hover) !important; }
-    .stk-loading { display: flex; align-items: center; gap: 12px; padding: 30px; color: var(--color-text-3); }
-    .stk-table-wrap { overflow-x: auto; border: 1px solid var(--color-line); border-radius: 10px; }
-    .stk-table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--color-surface); }
-    .stk-table thead th { text-align: left; padding: 9px 12px; background: var(--color-surface-2); color: var(--color-text-2); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; position: sticky; top: 0; }
-    .stk-table th.num, .stk-table td.num { text-align: right; }
-    .stk-table tbody td { padding: 8px 12px; border-top: 1px solid var(--color-surface-2); color: var(--color-text-2); }
-    .stk-table tbody tr:hover { background: var(--color-canvas); }
-    .stk-table td.mono { font-family: monospace; font-weight: 600; color: var(--color-text); white-space: nowrap; }
-    .stk-table td.mono.code-inv, .ws-table td.mono.code-inv { color: var(--color-ok) !important; font-weight: 800; }
+    .stk-table-wrap { overflow-x: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
+    .stk-table td.ref { font-weight: 600; white-space: nowrap; }
+    .stk-table td.ref.code-inv { color: var(--color-ok); font-weight: 800; }
     .stk-table td.desc { max-width: 340px; }
-    .stk-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--color-line); color: var(--color-text-2); }
-    .stk-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--color-line); color: var(--color-text-2); white-space: nowrap; }
-    .stk-badge.b-in { background: var(--color-ok-soft); color: #166534; }
-    .stk-badge.b-out { background: var(--color-danger-soft); color: #991b1b; }
-    .stk-badge.b-neg { background: #7f1d1d; color: #fff; }
-    .stk-badge.b-warn { background: var(--color-warn-soft); color: #92400e; }
-    .stk-empty { text-align: center; padding: 28px; color: var(--color-text-3); }
+    .stk-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-line); color: var(--color-text-2); }
     .stk-row-resolved td { opacity: 0.55; }
-    .stk-resolution { font-size: 11px; color: var(--color-ok); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-    .stk-more { text-align: center; padding: 10px; font-size: 12px; color: var(--color-text-3); background: var(--color-canvas); }
-    .stk-note { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; color: var(--color-text-3); }
-    .stk-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--color-primary); }
-    @media (max-width: 1100px) { .stk-reports-grid { grid-template-columns: repeat(2, 1fr); } }
+    .stk-resolution { font-size: var(--text-xs); color: var(--color-ok); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .stk-more { text-align: center; padding: 10px; font-size: var(--text-xs); color: var(--color-text-3); background: var(--color-canvas); }
+    .stk-note { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: var(--text-xs); color: var(--color-text-3); }
+    .stk-note mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-primary); }
   `]
 })
 export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
@@ -1531,11 +1448,11 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   /** Company filter (matches Commodities.Category) — same companies as Sales */
   companyFilter = '';
   stockCompanies = [
-    { key: 'PROMED', shortName: 'Promed', color: '#1a237e', logo: 'logos/promed-round.png?v=4' },
-    { key: 'ACCESS', shortName: 'Access', color: '#00695c', logo: 'logos/access-round.png?v=4' },
-    { key: 'PHARMACARE', shortName: 'Pharmatech', color: '#c62828', logo: 'logos/pharmatech-round.png?v=4' },
-    { key: 'SEBENZANI', shortName: 'Sebenzani', color: '#6a1b9a', logo: 'logos/sebenzani-round.png?v=4' },
-    { key: 'KOG', shortName: 'KOG', color: '#b45309', logo: '' }
+    { key: 'PROMED', shortName: 'Promed', color: 'var(--color-brand)', logo: 'logos/promed-round.png?v=4' },
+    { key: 'ACCESS', shortName: 'Access', color: 'var(--color-cat-teal)', logo: 'logos/access-round.png?v=4' },
+    { key: 'PHARMACARE', shortName: 'Pharmatech', color: 'var(--color-cat-pink)', logo: 'logos/pharmatech-round.png?v=4' },
+    { key: 'SEBENZANI', shortName: 'Sebenzani', color: 'var(--color-cat-purple)', logo: 'logos/sebenzani-round.png?v=4' },
+    { key: 'KOG', shortName: 'KOG', color: 'var(--color-cat-amber)', logo: '' }
   ];
 
   /** Inventory scoped to the selected warehouse + company filters */
@@ -1734,9 +1651,11 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   }
   get pendingDispatchCount(): number { return this.pendingDispatchAll.length; }
   get pendingDispatchLoads(): any[] {
+    // Delivered loads first (stock is already gone), then most recently dispatched
+    const delivered = (l: any) => l.status === 'Delivered' || l.status === 'Completed' ? 1 : 0;
     return [...this.pendingDispatchAll]
-      .sort((a, b) => new Date(b.actualDeliveryDate || b.scheduledDeliveryDate || b.createdAt || 0).getTime()
-                    - new Date(a.actualDeliveryDate || a.scheduledDeliveryDate || a.createdAt || 0).getTime())
+      .sort((a, b) => delivered(b) - delivered(a)
+                    || new Date(this.loadDispatchDate(b) || 0).getTime() - new Date(this.loadDispatchDate(a) || 0).getTime())
       .slice(0, 15);
   }
 
@@ -1750,20 +1669,39 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
       next: d => this.deductedLoadIds = new Set(d || []),
       error: () => {}
     });
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/stock-movements/load-stock-state`).subscribe({
+      next: d => this.loadStockStates = new Map((d || []).map(s => [s.loadId, s])),
+      error: () => {}
+    });
   }
+
+  /** Server-computed state per load (same rule dispatch approval uses: per-item count dates vs the dispatch date) */
+  loadStockStates = new Map<number, { state: string; dispatchDate: string; delivered: boolean }>();
 
   isLoadDeducted(loadId: number): boolean { return this.deductedLoadIds.has(loadId); }
 
+  /** When the load's stock left: pickup first, CreatedAt last (tripsheets are often captured after the trip) */
+  loadDispatchDate(l: any): string {
+    return this.loadStockStates.get(l.id)?.dispatchDate
+      || l.actualPickupDate || l.scheduledPickupDate || l.actualDeliveryDate || l.scheduledDeliveryDate || l.createdAt;
+  }
+
   /**
-   * Loads dated before the warehouse's stock-count baseline are already reflected in the imported
+   * Loads that left before their items were counted are already reflected in the counted
    * quantities, so they must never be approved again (that would double-deduct).
    */
   isLoadBaseline(l: any): boolean {
     if (this.deductedLoadIds.has(l.id)) return false;
+    const s = this.loadStockStates.get(l.id);
+    if (s) return s.state === 'baseline';
     const w = this.warehouses.find(x => x.id === l.warehouseId);
     if (!w?.lastCountDate) return false;
-    const loadDate = new Date(l.actualDeliveryDate || l.scheduledDeliveryDate || l.createdAt || 0).getTime();
-    return loadDate < new Date(w.lastCountDate).getTime();
+    return new Date(this.loadDispatchDate(l) || 0).getTime() < new Date(w.lastCountDate).getTime();
+  }
+
+  /** Delivered to the customer but stock never came off — the drift to clear first */
+  get deliveredNotDeductedCount(): number {
+    return this.pendingDispatchAll.filter(l => l.status === 'Delivered' || l.status === 'Completed').length;
   }
   /** Awaiting = after baseline and not yet deducted */
   isLoadAwaiting(l: any): boolean { return !this.deductedLoadIds.has(l.id) && !this.isLoadBaseline(l); }
@@ -1793,12 +1731,12 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   openLedgerLoadDoc(m: any): void {
     const load = this.loads.find(l => l.id === m.loadId);
     if (load) { this.openLoadDoc(load, 'picking'); }
-    else { this.snackBar.open(`Load #${m.loadId} not loaded in dispatch list`, 'Close', { duration: 3000 }); }
+    else { this.toast.warn(`Load #${m.loadId} not loaded in dispatch list`); }
   }
 
   openApproveDispatch(load: any): void {
     const whId = load.warehouseId;
-    if (!whId) { this.snackBar.open('This load has no originating warehouse set', 'Close', { duration: 4000 }); return; }
+    if (!whId) { this.toast.warn('This load has no originating warehouse set'); return; }
     const ref = this.dialog.open(ApproveDispatchDialog, {
       width: '1100px', maxWidth: '96vw',
       data: { load, inventory: this.allInventory.filter(r => r.warehouseId === whId) }
@@ -1808,12 +1746,18 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     });
   }
 
-  reverseMovement(m: any): void {
-    const reason = prompt(`Reverse ${m.movementType} of ${m.quantity} × ${m.commodityCode}?\n\nReason for reversal (required):`);
+  async reverseMovement(m: any): Promise<void> {
+    const reason = await this.confirm.askText({
+      title: `Reverse ${m.movementType} of ${m.quantity} × ${m.commodityCode}?`,
+      label: 'Reason for reversal',
+      required: true,
+      confirmText: 'Reverse movement',
+      danger: true
+    });
     if (!reason || !reason.trim()) return;
     this.http.post(`${environment.apiUrl}/logistics/stock-movements/${m.id}/reverse`, { reason: reason.trim() }).subscribe({
-      next: () => { this.snackBar.open('Movement reversed', 'Close', { duration: 3000 }); this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); },
-      error: (e) => this.snackBar.open(e?.error?.message || 'Failed to reverse movement', 'Close', { duration: 4000 })
+      next: () => { this.toast.done('Movement reversed'); this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); },
+      error: (e) => this.toast.error(e?.error?.message || 'Failed to reverse movement')
     });
   }
 
@@ -1866,8 +1810,8 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
 
   setIssueStatus(issue: any, status: string): void {
     this.http.put(`${environment.apiUrl}/logistics/stock-issues/${issue.id}/status`, { status }).subscribe({
-      next: () => { issue.status = status; this.snackBar.open(`Issue marked ${status}`, 'Close', { duration: 2500 }); },
-      error: () => this.snackBar.open('Failed to update issue', 'Close', { duration: 3000 })
+      next: () => { issue.status = status; this.toast.done(`Issue marked ${status}`); },
+      error: () => this.toast.error('Failed to update issue')
     });
   }
 
@@ -1967,7 +1911,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
         window.open(objUrl, '_blank');
         setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
       },
-      error: () => this.snackBar.open(`Could not load ${kind === 'picking' ? 'picking slip' : 'trip sheet'} for ${load.loadNumber}`, 'Close', { duration: 4000 })
+      error: () => this.toast.error(`Could not load ${kind === 'picking' ? 'picking slip' : 'trip sheet'} for ${load.loadNumber}`)
     });
   }
 
@@ -2015,7 +1959,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
       return this.warehouses.find(x => x.id === this.whFilterId) || null;
     }
     if (this.warehouses.length === 1) return this.warehouses[0];
-    this.snackBar.open('Click a warehouse card above to choose where this action happens', 'OK', { duration: 4000 });
+    this.toast.info('Click a warehouse card above to choose where this action happens');
     return null;
   }
 
@@ -2042,7 +1986,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   /** Stock Counts tab: open a datasheet of everything on hand at a warehouse (optionally one company only). */
   openWarehouseSheet(w: WarehouseSummary, company?: string): void {
     const rows = this.allInventory.filter(r => r.warehouseId === w.id);
-    if (!rows.length) { this.snackBar.open(`No stock on hand recorded at ${w.name}`, 'Close', { duration: 3000 }); return; }
+    if (!rows.length) { this.toast.info(`No stock on hand recorded at ${w.name}`); return; }
     this.dialog.open(WarehouseStockSheetDialog, {
       width: '1200px', maxWidth: '96vw', maxHeight: '92vh',
       data: { warehouse: w, rows, company: company || '', invMatched: (c: string) => this.invMatched(c) }
@@ -2054,7 +1998,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     if (!w) return;
     const inv = this.allInventory.filter(r => r.warehouseId === w.id)
       .sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.commodityCode || '').localeCompare(b.commodityCode || ''));
-    if (!inv.length) { this.snackBar.open('No stock items at this warehouse', 'Close', { duration: 3000 }); return; }
+    if (!inv.length) { this.toast.info('No stock items at this warehouse'); return; }
     const today = new Date().toISOString().substring(0, 10);
     const rows = inv.map(r => ({
       'Code': r.commodityCode || '', 'Description': r.commodityName || '', 'Company': r.category || '',
@@ -2081,7 +2025,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     XLSX.utils.book_append_sheet(wb, info, 'Instructions');
     const safe = (w.code || w.name || String(w.id)).replace(/[^A-Za-z0-9_-]+/g, '_');
     XLSX.writeFile(wb, `StockCount_${safe}_${today}.xlsx`);
-    this.snackBar.open(`Count template for ${w.name} downloaded (${rows.length} items)`, 'Close', { duration: 4000 });
+    this.toast.done(`Count template for ${w.name} downloaded (${rows.length} items)`);
   }
 
   /** Importing a count overrides stock on hand — require the 4-digit unlock PIN before opening the file picker. */
@@ -2100,15 +2044,48 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     });
     ref.afterClosed().subscribe(ok => {
       if (ok !== true) return;
-      this.snackBar.open('Matching invoice prices to unpriced stock…', undefined, { duration: 10000 });
+      this.toast.info('Matching invoice prices to unpriced stock…');
       this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/inventory/apply-invoice-prices`, {}).subscribe({
         next: res => {
-          this.snackBar.open(`Invoice prices applied: ${res.matched} of ${res.totalUnpriced} unpriced lines now have a price (${res.stillUnpriced} still unpriced)`, 'Close', { duration: 8000 });
+          this.toast.done(`Invoice prices applied: ${res.matched} of ${res.totalUnpriced} unpriced lines now have a price (${res.stillUnpriced} still unpriced)`);
           this.loadWarehouses(); this.loadDashboardData();
           this.http.get<any[]>(`${environment.apiUrl}/warehouses/inventory`).subscribe({ next: d => this.allInventory = d || [], error: () => {} });
         },
-        error: err => this.snackBar.open(err?.error?.message || 'Failed to apply invoice prices', 'Close', { duration: 6000 })
+        error: err => this.toast.error(err?.error?.message || 'Failed to apply invoice prices')
       });
+    });
+  }
+
+  /** One-off repair: older loads get their missing stock lines and unlinked lines are linked by code. Previews first, PIN-gated. */
+  requestBackfillStockLines(): void {
+    const url = `${environment.apiUrl}/logistics/stock-movements/loads/backfill-stock-lines`;
+    this.http.post<any>(`${url}?dryRun=true`, {}).subscribe({
+      next: p => {
+        if (!p.linesCreated && !p.existingLinked) {
+          this.toast.info(`Nothing to link — ${p.stillUnlinked} line(s) still need linking by hand`);
+          return;
+        }
+        const ref = this.dialog.open(CountImportPinDialog, {
+          width: '380px', disableClose: true,
+          data: {
+            title: 'Link Stock Lines',
+            message: `${p.loadsGivenLines} load(s) will get ${p.linesCreated} missing stock line(s) (${p.linesCreatedLinked} linked to a stock item), ` +
+              `and ${p.existingLinked} of ${p.existingUnlinked} unlinked line(s) will be linked by product code. ` +
+              `${p.stillUnlinked} line(s) will still need linking by hand. No stock is deducted. Enter the PIN to continue.`
+          }
+        });
+        ref.afterClosed().subscribe(ok => {
+          if (ok !== true) return;
+          this.http.post<any>(`${url}?dryRun=false`, {}).subscribe({
+            next: r => {
+              this.toast.done(`Stock lines linked: ${r.linesCreated} created, ${r.existingLinked} linked (${r.stillUnlinked} still need linking)`);
+              this.loadLedger(); this.loadDashboardData();
+            },
+            error: err => this.toast.error(err?.error?.message || 'Failed to link stock lines')
+          });
+        });
+      },
+      error: err => this.toast.error(err?.error?.message || 'Failed to check load stock lines')
     });
   }
 
@@ -2122,24 +2099,24 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     try {
       const result = await parseCountSheet(file, this.allInventory.filter(r => r.warehouseId === w.id));
       if (!result.matched) {
-        this.snackBar.open(`No rows matched items at ${w.name}. Check the Code column and that the right warehouse is selected.`, 'Close', { duration: 6000 });
+        this.toast.warn(`No rows matched items at ${w.name}. Check the Code column and that the right warehouse is selected.`);
         return;
       }
       this.openStockTakeForFilter(result);
     } catch (e: any) {
-      this.snackBar.open(e?.message || 'Could not read the count sheet', 'Close', { duration: 5000 });
+      this.toast.error(e?.message || 'Could not read the count sheet');
     }
   }
 
   // ═══ Excel exports ═══
   private async writeExcel(rows: any[], sheet: string, file: string): Promise<void> {
-    if (!rows.length) { this.snackBar.open('Nothing to export', 'Close', { duration: 3000 }); return; }
+    if (!rows.length) { this.toast.info('Nothing to export'); return; }
     const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheet);
     XLSX.writeFile(wb, file);
-    this.snackBar.open(`Exported ${rows.length} rows`, 'Close', { duration: 3000 });
+    this.toast.done(`Exported ${rows.length} rows`);
   }
 
   exportSoh(): void {
@@ -2208,7 +2185,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   constructor(
     private dialog: MatDialog,
     private http: HttpClient,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   // ---------- Sub-pages with their own addresses (design review D-12) ----------
@@ -2222,6 +2199,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   /** Each sub-page's filters as last used, so its link in the sub-navigation brings them back. */
   readonly sectionQuery = signal<Partial<Record<StockSlug, Params>>>({});
 
+  private readonly confirm = inject(ConfirmService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly subscriptions = new Subscription();
@@ -2489,7 +2467,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
         setTimeout(() => this.renderWellyCharts(), 150);
       },
       error: () => {
-        this.snackBar.open('Welly could not analyze stock. Please try again.', 'Close', { duration: 3000 });
+        this.toast.error('Welly could not analyze stock. Please try again.');
         this.wellyLoading = false;
         this.showWellyPanel = false;
         if (this.wellyActivityId !== null) { this.wellyActivity.stop(this.wellyActivityId); this.wellyActivityId = null; }
@@ -2601,7 +2579,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     const element = document.getElementById('welly-analysis-content');
     if (!element) return;
 
-    this.snackBar.open('Generating PDF...', '', { duration: 2000 });
+    this.toast.info('Generating PDF...');
 
     try {
       const html2canvas = (await import('html2canvas')).default;
@@ -2655,16 +2633,16 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
 
       const filename = `Stock-Analysis-${(this.selectedWarehouse?.name || 'Report').replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
       pdf.save(filename);
-      this.snackBar.open('PDF downloaded ✓', 'Close', { duration: 2000 });
+      this.toast.done('PDF downloaded');
     } catch (err) {
       console.error('PDF generation error:', err);
-      this.snackBar.open('Failed to generate PDF. Please try again.', 'Close', { duration: 3000 });
+      this.toast.error('Failed to generate PDF. Please try again.');
     }
   }
 
   copyWellyResult(): void {
     navigator.clipboard.writeText(this.wellyResult).then(() => {
-      this.snackBar.open('Copied to clipboard ✓', 'Close', { duration: 2000 });
+      this.toast.done('Copied to clipboard');
     });
   }
 }
@@ -2719,7 +2697,7 @@ async function parseCountSheet(file: File, inventory: any[]): Promise<CountImpor
 @Component({
   selector: 'warehouse-stock-sheet-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTooltipModule],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatTooltipModule, EmptyStateComponent],
   template: `
     <div class="ws-head">
       <div class="ws-title">
@@ -2764,7 +2742,7 @@ async function parseCountSheet(file: File, inventory: any[]): Promise<CountImpor
     </div>
 
     <mat-dialog-content class="ws-body">
-      <table class="ws-table" [class.editable]="unlocked">
+      <table class="app-table ws-table" [class.editable]="unlocked">
         <thead><tr>
           <th (click)="sortBy('commodityCode')">Code {{ arrow('commodityCode') }}</th>
           <th (click)="sortBy('commodityName')">Description {{ arrow('commodityName') }}</th>
@@ -2779,7 +2757,7 @@ async function parseCountSheet(file: File, inventory: any[]): Promise<CountImpor
         <tbody>
           @for (r of filtered; track r.id) {
             <tr [class.zero]="!r.quantityOnHand" [class.saving]="savingId === r.id">
-              <td class="mono edit" [class.code-inv]="isInvMatched(r.commodityCode)" (dblclick)="beginEdit(r, 'commodityCode')"
+              <td class="ref edit" [class.code-inv]="isInvMatched(r.commodityCode)" (dblclick)="beginEdit(r, 'commodityCode')"
                   [matTooltip]="isInvMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">
                 @if (isEditing(r, 'commodityCode')) { <input class="ws-input" [(ngModel)]="editValue" (keydown)="editKey($event, r)" (blur)="commit(r)" autofocus> }
                 @else { {{ r.commodityCode || '—' }} }
@@ -2812,7 +2790,9 @@ async function parseCountSheet(file: File, inventory: any[]): Promise<CountImpor
               <td class="ro" matTooltip="Set automatically when the quantity is edited or counted">{{ r.lastCountDate ? (r.lastCountDate | date:'dd MMM yyyy') : '—' }}</td>
             </tr>
           } @empty {
-            <tr><td colspan="9" class="ws-empty">No items match.</td></tr>
+            <tr><td colspan="9"><app-empty-state compact icon="search_off" title="No items match" [message]="search || company || hideZero ? 'No item matches the current filters.' : 'This warehouse has no items.'">
+                  @if (search || company || hideZero) { <button mat-stroked-button (click)="search = ''; company = ''; hideZero = false">Clear the filters</button> }
+                </app-empty-state></td></tr>
           }
         </tbody>
         @if (filtered.length) {
@@ -2830,53 +2810,46 @@ async function parseCountSheet(file: File, inventory: any[]): Promise<CountImpor
   `,
   styles: [`
     :host { display: block; }
-    .ws-locked, .ws-unlocked { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 4px 12px; }
+    .ws-locked, .ws-unlocked { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-weight: 600; border-radius: 999px; padding: 4px 12px; }
     .ws-locked { color: var(--color-text-3); background: var(--color-surface-2); }
-    .ws-unlocked { color: #065f46; background: var(--color-ok-soft); }
-    .ws-locked mat-icon, .ws-unlocked mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .ws-unlocked { color: var(--color-ok); background: var(--color-ok-soft); }
+    .ws-locked mat-icon, .ws-unlocked mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; }
     .ws-table.editable td.edit { cursor: cell; }
-    .ws-table.editable td.edit:hover { outline: 2px solid #0369a1; outline-offset: -2px; background: var(--color-primary-soft); }
+    .ws-table.editable td.edit:hover { outline: 2px solid var(--color-primary); outline-offset: -2px; background: var(--color-primary-soft); }
     .ws-table td.ro { color: var(--color-text-3); font-style: italic; }
-    .ws-table td.noprice { color: var(--color-warn); font-weight: 600; font-size: 12px; }
+    .ws-table td.noprice { color: var(--color-warn); font-weight: 600; font-size: var(--text-xs); }
     .ws-table tr.saving td { opacity: .5; }
-    .ws-input { width: 100%; box-sizing: border-box; border: 2px solid #0369a1; border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; background: var(--color-surface); }
+    .ws-input { width: 100%; box-sizing: border-box; border: 2px solid var(--color-primary); border-radius: var(--radius-sm); padding: 5px 8px; font: inherit; font-size: var(--text-sm); background: var(--color-surface); color: var(--color-text); }
     .ws-input.num { text-align: right; font-weight: 700; }
-    .ws-input:focus { outline: none; box-shadow: 0 0 0 3px #bfdbfe; }
+    .ws-input:focus { outline: none; box-shadow: 0 0 0 2px var(--color-focus); }
     .ws-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px 10px; }
     .ws-title { display: flex; align-items: center; gap: 14px; }
-    .ws-title > mat-icon { font-size: 36px; width: 36px; height: 36px; color: #0369a1; }
-    .ws-title h2 { margin: 0; font-size: 20px; font-weight: 800; color: var(--color-text); }
-    .ws-title span { font-size: 12.5px; color: var(--color-text-3); }
+    .ws-title > mat-icon { font-size: var(--text-4xl); width: 32px; height: 32px; color: var(--color-primary); }
+    .ws-title h2 { margin: 0; font-size: var(--text-2xl); font-weight: 800; color: var(--color-text); }
+    .ws-title span { font-size: var(--text-xs); color: var(--color-text-3); }
     .ws-companies { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 24px 12px; }
-    .ws-chip { border: 1.5px solid var(--color-line-strong); background: var(--color-surface); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: var(--color-text-2); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
-    .ws-chip b { background: var(--color-line); border-radius: 999px; padding: 0 8px; font-size: 12px; }
-    .ws-chip:hover { border-color: #0369a1; color: #0369a1; }
-    .ws-chip.active { background: #0369a1; border-color: #0369a1; color: #fff; }
-    .ws-chip.active b { background: rgba(255,255,255,0.25); color: #fff; }
+    .ws-chip { border: 1.5px solid var(--color-line-strong); background: var(--color-surface); border-radius: 999px; padding: 6px 14px; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-2); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+    .ws-chip b { background: var(--color-line); border-radius: 999px; padding: 0 8px; font-size: var(--text-xs); }
+    .ws-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .ws-chip.active { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+    .ws-chip.active b { background: var(--color-on-primary); color: var(--color-primary); }
     .ws-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 0 24px 12px; }
-    .ws-kpis > div { background: var(--color-surface-2); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
-    .ws-kpis b { font-size: 20px; font-weight: 800; color: var(--color-text); line-height: 1.1; }
-    .ws-kpis span { font-size: 11.5px; color: var(--color-text-3); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+    .ws-kpis > div { background: var(--color-surface-2); border-radius: var(--radius-md); padding: 10px 14px; display: flex; flex-direction: column; }
+    .ws-kpis b { font-size: var(--text-2xl); font-weight: 800; color: var(--color-text); line-height: 1.1; }
+    .ws-kpis span { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
     .ws-kpis .warn b { color: var(--color-danger); }
     .ws-toolbar { display: flex; align-items: center; gap: 14px; padding: 0 24px 6px; }
     .ws-search { width: 340px; }
     .ws-search ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
-    .ws-toggle { font-size: 13px; color: var(--color-text-2); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .ws-toggle { font-size: var(--text-sm); color: var(--color-text-2); display: flex; align-items: center; gap: 6px; cursor: pointer; }
     .ws-body { padding: 0 24px 20px !important; max-height: 60vh; }
-    .ws-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .ws-table th { position: sticky; top: 0; background: var(--color-text); color: #fff; text-align: left; padding: 10px 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; user-select: none; white-space: nowrap; z-index: 1; }
-    .ws-table th.num, .ws-table td.num { text-align: right; }
-    .ws-table td { padding: 8px 10px; border-bottom: 1px solid var(--color-line); color: var(--color-text); vertical-align: middle; }
-    .ws-table tbody tr:hover td { background: var(--color-canvas); }
+    .ws-table th { cursor: pointer; user-select: none; }
     .ws-table tr.zero td { color: var(--color-text-3); }
     .ws-table tr.zero td.qty { color: var(--color-danger); font-weight: 700; }
-    .ws-table td.qty { font-weight: 700; font-size: 14px; }
-    .ws-table td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
-    .ws-table td.mono.code-inv { color: var(--color-ok) !important; font-weight: 800; }
+    .ws-table td.qty { font-weight: 700; font-size: var(--text-md); }
+    .ws-table td.ref.code-inv { color: var(--color-ok); font-weight: 800; }
     .ws-table td.desc { max-width: 420px; }
-    .ws-tag { background: var(--color-primary-soft); color: #075985; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; font-weight: 600; }
-    .ws-table tfoot td { background: var(--color-surface-2); border-top: 2px solid var(--color-line-strong); border-bottom: none; font-size: 13.5px; }
-    .ws-empty { text-align: center; color: var(--color-text-3); padding: 28px !important; }
+    .ws-tag { background: var(--color-primary-soft); color: var(--color-primary); border-radius: var(--radius-sm); padding: 2px 8px; font-size: var(--text-xs); font-weight: 600; }
   `]
 })
 export class WarehouseStockSheetDialog {
@@ -2895,7 +2868,7 @@ export class WarehouseStockSheetDialog {
   savingId: number | null = null;
   changed = false;
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
   private dialog = inject(MatDialog);
 
   constructor(public dialogRef: MatDialogRef<WarehouseStockSheetDialog>,
@@ -2956,8 +2929,8 @@ export class WarehouseStockSheetDialog {
     const curStr = isNum ? (current === null || current === undefined ? '' : String(+current)) : String(current ?? '').trim();
     this.cancelEdit();
     if (newStr === curStr) return;
-    if (field === 'quantityOnHand' && (isNaN(+raw) || +raw < 0)) { this.snackBar.open('Quantity must be 0 or more', 'Close', { duration: 3000 }); return; }
-    if (field === 'unitPrice' && newStr !== '' && (isNaN(+raw) || +raw < 0)) { this.snackBar.open('Unit price must be 0 or more', 'Close', { duration: 3000 }); return; }
+    if (field === 'quantityOnHand' && (isNaN(+raw) || +raw < 0)) { this.toast.warn('Quantity must be 0 or more'); return; }
+    if (field === 'unitPrice' && newStr !== '' && (isNaN(+raw) || +raw < 0)) { this.toast.warn('Unit price must be 0 or more'); return; }
 
     this.savingId = r.id;
     this.http.patch<any>(`${environment.apiUrl}/logistics/stock-movements/inventory/${r.id}/cell`, { field, value: newStr }).subscribe({
@@ -2968,12 +2941,12 @@ export class WarehouseStockSheetDialog {
         if (field === 'unitPrice') r.unitPrice = res.unitPrice != null ? +res.unitPrice : undefined;
         r.lineValue = r.unitPrice ? Math.round(r.quantityOnHand * r.unitPrice * 100) / 100 : undefined;
         if (field === 'category') this.rebuildCompanies();
-        this.snackBar.open(
+        this.toast.done(
           field === 'quantityOnHand' ? 'Quantity updated — adjustment posted to ledger, last count set to today'
           : field === 'unitPrice' ? (newStr === '' ? 'Price override cleared' : `Unit price set — value now ${this.money(r.lineValue || 0)}`)
-          : 'Saved', 'Close', { duration: 2500 });
+          : 'Saved');
       },
-      error: e => { this.savingId = null; this.snackBar.open(e?.error?.message || 'Failed to save', 'Close', { duration: 5000 }); }
+      error: e => { this.savingId = null; this.toast.error(e?.error?.message || 'Failed to save'); }
     });
   }
 
@@ -3041,12 +3014,12 @@ const COUNT_IMPORT_PIN = '2630';
     </mat-dialog-actions>
   `,
   styles: [`
-    .pin-body p { font-size: 13.5px; color: var(--color-text-2); margin: 0 0 16px; line-height: 1.5; }
+    .pin-body p { font-size: var(--text-sm); color: var(--color-text-2); margin: 0 0 16px; line-height: 1.5; }
     .pin-boxes { display: flex; gap: 12px; justify-content: center; margin-bottom: 8px; }
-    .pin-box { width: 52px; height: 60px; text-align: center; font-size: 28px; font-weight: 700; border: 2px solid var(--color-line-strong); border-radius: 10px; letter-spacing: 0; }
-    .pin-box:focus { outline: none; border-color: var(--color-warn); box-shadow: 0 0 0 3px #fde68a; }
-    .pin-error { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--color-danger); font-size: 13px; font-weight: 600; margin-top: 6px; }
-    .pin-error mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .pin-box { width: 52px; height: 60px; text-align: center; font-size: var(--text-3xl); font-weight: 700; border: 2px solid var(--color-line-strong); border-radius: var(--radius-md); letter-spacing: 0; background: var(--color-surface); color: var(--color-text); }
+    .pin-box:focus { outline: none; border-color: var(--color-warn); box-shadow: 0 0 0 3px var(--color-warn-soft); }
+    .pin-error { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--color-danger); font-size: var(--text-sm); font-weight: 600; margin-top: 6px; }
+    .pin-error mat-icon { font-size: var(--text-xl); width: 18px; height: 18px; }
     .shake { animation: shake .35s; }
     @keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
   `]
@@ -3096,8 +3069,8 @@ export class CountImportPinDialog {
     MatFormFieldModule,
     MatInputModule,
     MatChipsModule,
-    MatProgressSpinnerModule,
-    MatTooltipModule
+    MatTooltipModule,
+    EmptyStateComponent
   ],
   template: `
     <h2 mat-dialog-title>
@@ -3139,7 +3112,7 @@ export class CountImportPinDialog {
       </div>
 
       <div class="st-table-wrap">
-        <table class="st-table">
+        <table class="app-table st-table">
           <thead><tr>
             <th>Code</th><th>Description</th><th>Company</th><th>UOM</th>
             <th class="num">System Qty</th><th class="num" style="width:130px;">Counted</th><th class="num">Variance</th>
@@ -3147,7 +3120,7 @@ export class CountImportPinDialog {
           <tbody>
             @for (r of rows().slice(0, 500); track r.commodityId) {
               <tr [class.st-diff]="r.counted !== null && r.counted !== r.systemQty">
-                <td class="mono">{{ r.code }}</td>
+                <td class="ref">{{ r.code }}</td>
                 <td class="desc">{{ r.name }}</td>
                 <td><span class="st-chip">{{ r.company || '—' }}</span></td>
                 <td>{{ r.uom }}</td>
@@ -3155,12 +3128,14 @@ export class CountImportPinDialog {
                 <td class="num"><input class="st-qty" type="number" min="0" [(ngModel)]="r.counted" placeholder="—"></td>
                 <td class="num">
                   @if (r.counted !== null && r.counted !== undefined) {
-                    <b [style.color]="varianceOf(r) > 0 ? '#16a34a' : (varianceOf(r) < 0 ? '#dc2626' : '#94a3b8')">
+                    <b [style.color]="varianceOf(r) > 0 ? 'var(--color-ok)' : (varianceOf(r) < 0 ? 'var(--color-danger)' : 'var(--color-text-3)')">
                       {{ varianceOf(r) > 0 ? '+' : '' }}{{ varianceOf(r) | number }}</b>
                   } @else { <span style="color:var(--color-line-strong);">—</span> }
                 </td>
               </tr>
-            } @empty { <tr><td colspan="7" class="st-empty">No items match</td></tr> }
+            } @empty { <tr><td colspan="7"><app-empty-state compact icon="search_off" title="No items match" message="No item matches the current filter.">
+                  @if (searchQuery || onlyCounted || onlyVariance) { <button mat-stroked-button (click)="searchQuery = ''; onlyCounted = false; onlyVariance = false">Clear the filters</button> }
+                </app-empty-state></td></tr> }
           </tbody>
         </table>
         @if (rows().length > 500) { <div class="st-more">Showing first 500 of {{ rows().length | number }} — narrow the filter</div> }
@@ -3192,29 +3167,24 @@ export class CountImportPinDialog {
     .st-ref { width: 220px; }
     .st-bar mat-form-field { margin-bottom: -1.25em; }
     .st-on { background: var(--color-warn-soft) !important; border-color: var(--color-warn) !important; }
-    .st-table-wrap { max-height: 50vh; overflow: auto; border: 1px solid var(--color-line); border-radius: 10px; }
-    .st-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .st-table th { position: sticky; top: 0; background: var(--color-canvas); text-align: left; padding: 8px 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); border-bottom: 1px solid var(--color-line); }
-    .st-table td { padding: 6px 10px; border-bottom: 1px solid var(--color-surface-2); }
-    .st-table .num { text-align: right; }
-    .st-table .mono { font-family: monospace; font-weight: 600; }
+    .st-table-wrap { max-height: 50vh; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
     .st-table .desc { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .st-diff { background: var(--color-warn-soft); }
-    .st-chip { font-size: 11px; background: var(--color-primary-soft); color: #3730a3; padding: 2px 8px; border-radius: 10px; }
-    .st-qty { width: 110px; text-align: right; padding: 5px 8px; border: 1px solid var(--color-line-strong); border-radius: 6px; font-weight: 600; }
+    .st-chip { font-size: var(--text-xs); background: var(--color-primary-soft); color: var(--color-primary); padding: 2px 8px; border-radius: var(--radius-md); }
+    .st-qty { width: 110px; text-align: right; padding: 5px 8px; border: 1px solid var(--color-line-strong); border-radius: var(--radius-sm); font-weight: 600; background: var(--color-surface); color: var(--color-text); }
     .st-qty:focus { outline: 2px solid var(--color-warn); border-color: transparent; }
-    .st-empty, .st-more { text-align: center; color: var(--color-text-3); padding: 16px; font-size: 12.5px; }
+    .st-more { text-align: center; color: var(--color-text-3); padding: 16px; font-size: var(--text-xs); }
     .st-summary { display: flex; gap: 14px; margin-top: 12px; }
-    .st-summary > div { flex: 1; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; }
-    .st-summary b { font-size: 20px; }
-    .st-summary span { font-size: 12px; color: var(--color-text-3); }
+    .st-summary > div { flex: 1; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 10px 14px; display: flex; flex-direction: column; }
+    .st-summary b { font-size: var(--text-2xl); }
+    .st-summary span { font-size: var(--text-xs); color: var(--color-text-3); }
     .st-summary .pos b { color: var(--color-ok); } .st-summary .neg b { color: var(--color-danger); }
-    .st-note { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--color-text-3); margin-top: 12px; }
-    .st-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--color-primary); }
-    .st-import { display: flex; gap: 10px; align-items: flex-start; background: var(--color-primary-soft); border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: var(--color-primary-hover); }
+    .st-note { display: flex; align-items: center; gap: 8px; font-size: var(--text-xs); color: var(--color-text-3); margin-top: 12px; }
+    .st-note mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-primary); }
+    .st-import { display: flex; gap: 10px; align-items: flex-start; background: var(--color-primary-soft); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 10px 14px; margin-bottom: 12px; font-size: var(--text-sm); color: var(--color-primary-hover); }
     .st-import mat-icon { color: var(--color-primary); flex-shrink: 0; }
-    .st-warn { color: #b45309; font-weight: 600; }
-    .st-import-detail { margin-top: 4px; font-size: 12px; color: var(--color-text-2); display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
+    .st-warn { color: var(--color-warn); font-weight: 600; }
+    .st-import-detail { margin-top: 4px; font-size: var(--text-xs); color: var(--color-text-2); display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
   `]
 })
 export class StockTakeDialog implements OnInit {
@@ -3230,7 +3200,7 @@ export class StockTakeDialog implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<StockTakeDialog>,
     @Inject(MAT_DIALOG_DATA) public data: any,
-    private snackBar: MatSnackBar
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -3281,10 +3251,10 @@ export class StockTakeDialog implements OnInit {
     };
     this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/stock-take`, payload).subscribe({
       next: (r) => {
-        this.snackBar.open(`Stock take posted — ${r?.adjusted ?? payload.lines.length} adjustment(s) written to the ledger`, 'Close', { duration: 5000 });
+        this.toast.done(`Stock take posted — ${r?.adjusted ?? payload.lines.length} adjustment(s) written to the ledger`);
         this.dialogRef.close(true);
       },
-      error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to post stock take', 'Close', { duration: 5000 }); }
+      error: (e) => { this.saving = false; this.toast.error(e?.error?.message || 'Failed to post stock take'); }
     });
   }
 }
@@ -3311,7 +3281,7 @@ export class StockTakeDialog implements OnInit {
     .w3d-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--color-line); }
     .w3d-title { display: flex; align-items: center; gap: 10px; }
     .w3d-title mat-icon { color: var(--color-ok); }
-    .w3d-title h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--color-text); }
+    .w3d-title h2 { margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
     .w3d-body { flex: 1; min-height: 0; overflow: hidden; }
     .w3d-body app-warehouse-3d { display: block; height: 100%; }
   `]
@@ -3412,7 +3382,7 @@ export class CreateIssueDialog {
   saving = false;
 
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   constructor(
     public dialogRef: MatDialogRef<CreateIssueDialog>,
@@ -3437,8 +3407,8 @@ export class CreateIssueDialog {
       detail: this.detail || null
     };
     this.http.post(`${environment.apiUrl}/logistics/stock-issues`, payload).subscribe({
-      next: () => { this.snackBar.open('Issue created', 'Close', { duration: 3000 }); this.dialogRef.close(true); },
-      error: () => { this.saving = false; this.snackBar.open('Failed to create issue', 'Close', { duration: 3000 }); }
+      next: () => { this.toast.done('Issue created'); this.dialogRef.close(true); },
+      error: () => { this.saving = false; this.toast.error('Failed to create issue'); }
     });
   }
 }
@@ -3451,7 +3421,7 @@ export class CreateIssueDialog {
             MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon style="vertical-align:middle;margin-right:8px;" [style.color]="data.status === 'Resolved' ? '#16a34a' : '#64748b'">
+      <mat-icon style="vertical-align:middle;margin-right:8px;" [style.color]="data.status === 'Resolved' ? 'var(--color-ok)' : 'var(--color-text-3)'">
         {{ data.status === 'Resolved' ? 'task_alt' : 'block' }}</mat-icon>
       {{ data.status === 'Resolved' ? 'Resolve' : 'Dismiss' }} Issue
     </h2>
@@ -3483,11 +3453,11 @@ export class CreateIssueDialog {
     </mat-dialog-actions>
   `,
   styles: [`
-    .ri-summary { background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
-    .ri-code { font-family: monospace; background: var(--color-line); border-radius: 6px; padding: 1px 7px; margin-left: 8px; font-size: 12px; }
-    .ri-detail { font-size: 12.5px; color: var(--color-text-3); margin-top: 6px; }
+    .ri-summary { background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 12px; margin-bottom: 14px; }
+    .ri-code { font-family: var(--font-mono); background: var(--color-line); border-radius: 6px; padding: 1px 7px; margin-left: 8px; font-size: var(--text-xs); }
+    .ri-detail { font-size: var(--text-xs); color: var(--color-text-3); margin-top: 6px; }
     .ri-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-    .ri-chip { font-size: 11.5px !important; line-height: 28px !important; padding: 0 10px !important; border-radius: 999px !important; }
+    .ri-chip { font-size: var(--text-xs) !important; line-height: 28px !important; padding: 0 10px !important; border-radius: 999px !important; }
   `]
 })
 export class ResolveIssueDialog {
@@ -3497,7 +3467,7 @@ export class ResolveIssueDialog {
   quickNotes: string[] = [];
 
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   constructor(
     public dialogRef: MatDialogRef<ResolveIssueDialog>,
@@ -3512,8 +3482,8 @@ export class ResolveIssueDialog {
     this.saving = true;
     this.http.put(`${environment.apiUrl}/logistics/stock-issues/${this.data.issue.id}/status`,
       { status: this.data.status, resolution: this.resolution.trim() }).subscribe({
-      next: () => { this.snackBar.open(`Issue ${this.data.status.toLowerCase()}`, 'Close', { duration: 3000 }); this.dialogRef.close(true); },
-      error: () => { this.saving = false; this.snackBar.open('Failed to update issue', 'Close', { duration: 3000 }); }
+      next: () => { this.toast.done(`Issue ${this.data.status.toLowerCase()}`); this.dialogRef.close(true); },
+      error: () => { this.saving = false; this.toast.error('Failed to update issue'); }
     });
   }
 }
@@ -3526,7 +3496,7 @@ export class ResolveIssueDialog {
             MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title>
-      <mat-icon style="vertical-align:middle;margin-right:8px;" [style.color]="data.type === 'Scrap' ? '#dc2626' : '#16a34a'">{{ typeIcon() }}</mat-icon>
+      <mat-icon style="vertical-align:middle;margin-right:8px;" [style.color]="data.type === 'Scrap' ? 'var(--color-danger)' : 'var(--color-ok)'">{{ typeIcon() }}</mat-icon>
       {{ typeTitle() }}
     </h2>
     <mat-dialog-content>
@@ -3584,15 +3554,15 @@ export class ResolveIssueDialog {
     </mat-dialog-actions>
   `,
   styles: [`
-    .mm-list { max-height: 260px; overflow: auto; border: 1px solid var(--color-line); border-radius: 10px; }
+    .mm-list { max-height: 260px; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
     .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; }
     .mm-item:hover { background: var(--color-ok-soft); }
-    .mm-code { font-family: monospace; font-weight: 700; min-width: 110px; }
-    .mm-name { flex: 1; font-size: 13px; color: var(--color-text-2); }
-    .mm-qty { font-size: 12px; color: var(--color-text-3); white-space: nowrap; }
+    .mm-code { font-family: var(--font-mono); font-weight: 700; min-width: 110px; }
+    .mm-name { flex: 1; font-size: var(--text-sm); color: var(--color-text-2); }
+    .mm-qty { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; }
     .mm-empty { padding: 20px; text-align: center; color: var(--color-text-3); }
-    .mm-selected { background: var(--color-ok-soft); border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-    .mm-onhand { font-size: 13px; color: var(--color-text-2); margin: 4px 0; }
+    .mm-selected { background: var(--color-ok-soft); border: 1px solid var(--color-ok); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px; }
+    .mm-onhand { font-size: var(--text-sm); color: var(--color-text-2); margin: 4px 0; }
     .mm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     mat-form-field { width: 100%; }
   `]
@@ -3607,7 +3577,7 @@ export class ManualMovementDialog {
   saving = false;
 
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   constructor(
     public dialogRef: MatDialogRef<ManualMovementDialog>,
@@ -3653,10 +3623,10 @@ export class ManualMovementDialog {
       reason: this.reason || null
     }).subscribe({
       next: (r: any) => {
-        this.snackBar.open(`${this.data.type} recorded — new balance ${r?.balanceAfter ?? ''}`, 'Close', { duration: 3500 });
+        this.toast.done(`${this.data.type} recorded — new balance ${r?.balanceAfter ?? ''}`);
         this.dialogRef.close(true);
       },
-      error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to record movement', 'Close', { duration: 4000 }); }
+      error: (e) => { this.saving = false; this.toast.error(e?.error?.message || 'Failed to record movement'); }
     });
   }
 }
@@ -3741,15 +3711,15 @@ export class ManualMovementDialog {
     .ts-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
     .ts-arrow { color: var(--color-primary); margin-top: -18px; }
     .ts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .mm-list { max-height: 220px; overflow: auto; border: 1px solid var(--color-line); border-radius: 10px; }
+    .mm-list { max-height: 220px; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
     .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; }
     .mm-item:hover { background: var(--color-primary-soft); }
-    .mm-code { font-family: monospace; font-weight: 700; min-width: 110px; }
-    .mm-name { flex: 1; font-size: 13px; color: var(--color-text-2); }
-    .mm-qty { font-size: 12px; color: var(--color-text-3); white-space: nowrap; }
+    .mm-code { font-family: var(--font-mono); font-weight: 700; min-width: 110px; }
+    .mm-name { flex: 1; font-size: var(--text-sm); color: var(--color-text-2); }
+    .mm-qty { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; }
     .mm-empty { padding: 20px; text-align: center; color: var(--color-text-3); }
-    .mm-selected { background: var(--color-primary-soft); border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-    .mm-onhand { font-size: 13px; color: var(--color-text-2); margin: 4px 0; }
+    .mm-selected { background: var(--color-primary-soft); border: 1px solid var(--color-primary); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px; }
+    .mm-onhand { font-size: var(--text-sm); color: var(--color-text-2); margin: 4px 0; }
     mat-form-field { width: 100%; }
   `]
 })
@@ -3764,7 +3734,7 @@ export class TransferStockDialog {
   saving = false;
 
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   constructor(
     public dialogRef: MatDialogRef<TransferStockDialog>,
@@ -3804,10 +3774,10 @@ export class TransferStockDialog {
       reason: this.reason || null
     }).subscribe({
       next: () => {
-        this.snackBar.open('Transfer recorded — two ledger entries written', 'Close', { duration: 3500 });
+        this.toast.done('Transfer recorded — two ledger entries written');
         this.dialogRef.close(true);
       },
-      error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to transfer stock', 'Close', { duration: 4000 }); }
+      error: (e) => { this.saving = false; this.toast.error(e?.error?.message || 'Failed to transfer stock'); }
     });
   }
 }
@@ -3817,7 +3787,7 @@ export class TransferStockDialog {
   selector: 'app-approve-dispatch-dialog',
   standalone: true,
   imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
-            MatFormFieldModule, MatInputModule, MatTooltipModule],
+            MatFormFieldModule, MatInputModule, MatTooltipModule, EmptyStateComponent],
   template: `
     <h2 mat-dialog-title>
       <mat-icon style="vertical-align:middle;margin-right:8px;color:var(--color-warn);">fact_check</mat-icon>
@@ -3835,12 +3805,12 @@ export class TransferStockDialog {
       @if (unmapped.length) {
         <div class="ad-unmapped">
           <div class="ad-unmapped-head"><mat-icon>link_off</mat-icon> {{ unmapped.length }} line(s) are not linked to a stock item and will <b>not</b> deduct stock — search and link them below</div>
-          <table class="ad-table ad-table-sm">
+          <table class="app-table ad-table ad-table-sm">
             <thead><tr><th>Code</th><th>Description</th><th class="num">Qty</th><th>Invoice</th><th style="min-width:280px;">Link to stock item</th></tr></thead>
             <tbody>
               @for (u of unmapped; track u.id) {
                 <tr>
-                  <td class="mono">{{ u.code || '—' }}</td><td>{{ u.name }}</td><td class="num">{{ u.planned | number }}</td><td class="mono">{{ u.invoice || '—' }}</td>
+                  <td class="ref">{{ u.code || '—' }}</td><td>{{ u.name }}</td><td class="num">{{ u.planned | number }}</td><td class="ref">{{ u.invoice || '—' }}</td>
                   <td class="ad-link-cell">
                     <input class="ad-link-search" type="text" placeholder="Search code or name…" [(ngModel)]="u.search" [disabled]="u.linking">
                     @if (u.search && u.search.length >= 2) {
@@ -3863,10 +3833,10 @@ export class TransferStockDialog {
       }
 
       @if (!lines.length) {
-        <div class="ad-empty">No mappable commodity lines on this tripsheet.</div>
+        <app-empty-state compact icon="link_off" title="No mappable lines" message="This tripsheet has no commodity lines that can deduct stock."></app-empty-state>
       } @else {
         <div class="ad-table-wrap">
-          <table class="ad-table">
+          <table class="app-table ad-table">
             <thead><tr>
               <th style="width:120px;">Code</th>
               <th>Description</th>
@@ -3879,7 +3849,7 @@ export class TransferStockDialog {
             <tbody>
               @for (l of lines; track l.commodityId) {
                 <tr [class.ad-row-neg]="l.qty > l.onHand" [class.ad-row-short]="l.qty < l.planned">
-                  <td class="mono">{{ l.code || '—' }}</td>
+                  <td class="ref">{{ l.code || '—' }}</td>
                   <td class="desc" [matTooltip]="l.name">{{ l.name }}</td>
                   <td class="num ad-big">{{ l.planned | number }}</td>
                   <td class="num ad-big" [class.ad-red]="l.onHand < l.qty">{{ l.onHand | number }}</td>
@@ -3920,51 +3890,43 @@ export class TransferStockDialog {
     </mat-dialog-actions>
   `,
   styles: [`
-    .ad-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+    .ad-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; background: var(--color-canvas); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 14px; }
     .ad-meta > div { display: flex; flex-direction: column; gap: 2px; }
-    .ad-meta-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-3); font-weight: 600; }
-    .ad-meta-val { font-size: 14.5px; color: var(--color-text); font-weight: 600; }
-    .ad-meta-val small { color: #b45309; font-weight: 600; font-size: 12px; }
-    .ad-strong { font-size: 20px; color: var(--color-primary-hover); font-weight: 800; }
-    .ad-table-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--color-line); border-radius: 10px; }
-    .ad-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
-    .ad-table th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 10px 12px; background: var(--color-surface-2); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-2); border-bottom: 2px solid var(--color-line); }
-    .ad-table th.num, .ad-table td.num { text-align: right; }
-    .ad-table td { padding: 10px 12px; border-bottom: 1px solid var(--color-surface-2); vertical-align: middle; color: var(--color-text); }
-    .ad-table tbody tr:nth-child(even) td { background: var(--color-surface-2); }
-    .ad-table td.mono { font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: 13px; color: var(--color-text-2); }
+    .ad-meta-lbl { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-3); font-weight: 600; }
+    .ad-meta-val { font-size: var(--text-md); color: var(--color-text); font-weight: 600; }
+    .ad-meta-val small { color: var(--color-warn); font-weight: 600; font-size: var(--text-xs); }
+    .ad-strong { font-size: var(--text-2xl); color: var(--color-primary-hover); font-weight: 800; }
+    .ad-table-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
     .ad-table td.desc { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ad-table tfoot td { background: var(--color-canvas); font-weight: 800; border-top: 2px solid var(--color-line); color: var(--color-text); }
-    .ad-big { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .ad-red { color: var(--color-danger) !important; }
-    .ad-row-neg td { background: var(--color-danger-soft) !important; }
-    .ad-row-short td { background: var(--color-warn-soft) !important; }
-    .ad-qty { width: 120px; padding: 8px 10px; border: 2px solid var(--color-text-3); border-radius: 8px; text-align: right; font-weight: 800; font-size: 17px; color: var(--color-text); background: var(--color-surface); font-variant-numeric: tabular-nums; }
-    .ad-qty:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px #bfdbfe; }
-    .ad-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-    .ad-tag mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .ad-tag-ok { background: var(--color-ok-soft); color: #166534; }
-    .ad-tag-short { background: var(--color-warn-soft); color: #92400e; }
+    .ad-table td.ref { font-weight: 700; color: var(--color-text-2); }
+    .ad-big { font-size: var(--text-lg); font-weight: 700; }
+    .ad-red { color: var(--color-danger); }
+    .ad-row-neg td { background: var(--color-danger-soft); }
+    .ad-row-short td { background: var(--color-warn-soft); }
+    .ad-qty { width: 120px; padding: 8px 10px; border: 2px solid var(--color-text-3); border-radius: var(--radius-control); text-align: right; font-weight: 800; font-size: var(--text-lg); color: var(--color-text); background: var(--color-surface); font-variant-numeric: tabular-nums; }
+    .ad-qty:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-focus); }
+    .ad-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700; white-space: nowrap; }
+    .ad-tag mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
+    .ad-tag-ok { background: var(--color-ok-soft); color: var(--color-ok); }
+    .ad-tag-short { background: var(--color-warn-soft); color: var(--color-warn); }
     .ad-tag-over { background: var(--color-primary-soft); color: var(--color-primary-hover); }
-    .ad-tag-neg { background: var(--color-danger-soft); color: #991b1b; }
-    .ad-unmapped { border: 1px solid #fcd34d; background: var(--color-warn-soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
-    .ad-unmapped-head { display: flex; align-items: center; gap: 8px; color: #92400e; font-size: 13.5px; margin-bottom: 8px; }
-    .ad-unmapped-head mat-icon { font-size: 20px; width: 20px; height: 20px; }
-    .ad-table-sm { font-size: 13px; background: var(--color-surface); border-radius: 8px; overflow: hidden; }
-    .ad-table-sm th { position: static; background: var(--color-warn-soft); color: #78350f; padding: 7px 10px; }
-    .ad-table-sm td { padding: 7px 10px; }
+    .ad-tag-neg { background: var(--color-danger-soft); color: var(--color-danger); }
+    .ad-unmapped { border: 1px solid var(--color-warn); background: var(--color-warn-soft); border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 14px; }
+    .ad-unmapped-head { display: flex; align-items: center; gap: 8px; color: var(--color-warn); font-size: var(--text-sm); margin-bottom: 8px; }
+    .ad-unmapped-head mat-icon { font-size: var(--text-2xl); width: 20px; height: 20px; }
+    .ad-table-sm { background: var(--color-surface); }
+    .ad-table-sm th { position: static; background: var(--color-warn-soft); color: var(--color-warn); }
     .ad-link-cell { position: relative; }
-    .ad-link-search { width: 100%; min-width: 240px; padding: 6px 9px; border: 1.5px solid var(--color-line-strong); border-radius: 7px; font-size: 13px; }
-    .ad-link-search:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px #bfdbfe; }
-    .ad-link-opts { position: absolute; z-index: 5; left: 10px; right: 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 8px; box-shadow: 0 8px 20px rgba(15,23,42,.15); max-height: 180px; overflow: auto; }
-    .ad-link-opt { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--color-surface-2); padding: 7px 10px; font-size: 12.5px; cursor: pointer; color: var(--color-text); }
+    .ad-link-search { width: 100%; min-width: 240px; padding: 6px 9px; border: 1.5px solid var(--color-line-strong); border-radius: var(--radius-sm); font-size: var(--text-sm); background: var(--color-surface); color: var(--color-text); }
+    .ad-link-search:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-focus); }
+    .ad-link-opts { position: absolute; z-index: 5; left: 10px; right: 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-control); box-shadow: var(--shadow-md); max-height: 180px; overflow: auto; }
+    .ad-link-opt { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--color-surface-2); padding: 7px 10px; font-size: var(--text-xs); cursor: pointer; color: var(--color-text); }
     .ad-link-opt:hover { background: var(--color-primary-soft); }
-    .ad-link-opt .mono { font-family: ui-monospace, Consolas, monospace; font-weight: 700; margin-right: 6px; }
+    .ad-link-opt .mono { font-family: var(--font-mono); font-weight: 700; margin-right: 6px; }
     .ad-link-opt small { color: var(--color-text-3); margin-left: 6px; }
-    .ad-link-none { padding: 8px 10px; font-size: 12.5px; color: var(--color-text-3); }
-    .ad-empty { padding: 24px; text-align: center; color: var(--color-text-3); }
-    .ad-note { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-3); margin-top: 12px; }
-    .ad-note mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--color-primary); }
+    .ad-link-none { padding: 8px 10px; font-size: var(--text-xs); color: var(--color-text-3); }
+    .ad-note { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--color-text-3); margin-top: 12px; }
+    .ad-note mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-primary); }
   `]
 })
 export class ApproveDispatchDialog {
@@ -3976,7 +3938,7 @@ export class ApproveDispatchDialog {
   saving = false;
 
   private http = inject(HttpClient);
-  private snackBar = inject(MatSnackBar);
+  private toast = inject(ToastService);
 
   constructor(
     public dialogRef: MatDialogRef<ApproveDispatchDialog>,
@@ -4042,9 +4004,9 @@ export class ApproveDispatchDialog {
           this.lines.push({ commodityId: o.commodityId, code: o.code, name: o.name, planned: u.planned, qty: u.planned, onHand: o.onHand });
           this.lines.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
         }
-        this.snackBar.open(`Linked to ${o.code || o.name} — line will now deduct stock`, 'Close', { duration: 3500 });
+        this.toast.done(`Linked to ${o.code || o.name} — line will now deduct stock`);
       },
-      error: (e) => { u.linking = false; this.snackBar.open(e?.error?.message || 'Failed to link line', 'Close', { duration: 5000 }); }
+      error: (e) => { u.linking = false; this.toast.error(e?.error?.message || 'Failed to link line'); }
     });
   }
 
@@ -4070,9 +4032,9 @@ export class ApproveDispatchDialog {
         reason: l.qty > l.onHand ? this.negativeReason.trim() : null
       }))
     };
-    this.http.post(`${environment.apiUrl}/logistics/stock-movements/approve-dispatch`, payload).subscribe({
-      next: () => { this.snackBar.open(`Dispatch approved — stock deducted for ${this.data.load.loadNumber}`, 'Close', { duration: 4000 }); this.dialogRef.close(true); },
-      error: (e) => { this.saving = false; this.snackBar.open(e?.error?.message || 'Failed to approve dispatch', 'Close', { duration: 5000 }); }
+    this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/approve-dispatch`, payload).subscribe({
+      next: (r) => { this.toast.done(r?.message || `Dispatch approved — stock deducted for ${this.data.load.loadNumber}`); this.dialogRef.close(true); },
+      error: (e) => { this.saving = false; this.toast.error(e?.error?.message || 'Failed to approve dispatch'); }
     });
   }
 }
