@@ -45,6 +45,7 @@ namespace ProjectTracker.API.Services.Cortex
             new() { Key = "agent", Label = "AI agent", Layer = "ai", Icon = "psychology", Color = "#f0abfc", AttachedType = "context_scope", ZoomLevel = 2, SortOrder = 60, DefaultSource = "Welly agent registry" },
             new() { Key = "finding", Label = "Welly finding", Layer = "ai", Icon = "search_insights", Color = "#f472b6", ZoomLevel = 3, SortOrder = 61, DefaultSource = "Welly Analyse" },
             new() { Key = "suggestion", Label = "Welly suggestion", Layer = "ai", Icon = "lightbulb", Color = "#fbcfe8", ZoomLevel = 3, SortOrder = 62, DefaultSource = "Welly Suggest" },
+            new() { Key = "inference", Label = "Welly inference (to confirm)", Layer = "ai", Icon = "auto_awesome", Color = "#c4b5fd", ZoomLevel = 3, SortOrder = 64, DefaultSource = "FlowTasks history" },
             new() { Key = "ai_workflow", Label = "AI workflow", Layer = "ai", Icon = "bolt", Color = "#e879f9", ZoomLevel = 3, SortOrder = 63, DefaultSource = "Welly Fix" },
             new() { Key = "report", Label = "Report / dashboard", Layer = "data", Icon = "insights", Color = "#f5b942", ZoomLevel = 3, SortOrder = 70, DefaultSource = "Management" },
             new() { Key = "gap", Label = "Gap", Layer = "gaps", Icon = "report_problem", Color = "#f87171", ZoomLevel = 2, SortOrder = 80, DefaultSource = "derived" },
@@ -128,9 +129,10 @@ namespace ProjectTracker.API.Services.Cortex
                    string? route = null, string? perm = null, object? data = null, int? ownerUserId = null, string? ownerLabel = null, string? shortLabel = null)
                 => nodes.Add(new CortexNode { Key = key, Type = type, Label = Trunc(label, 200), Short = shortLabel, ParentKey = parent, Summary = Trunc(summary, 1000), Source = source, SourceId = sourceId,
                     Route = route, Permission = perm, DataJson = data == null ? null : JsonSerializer.Serialize(data, J), OwnerUserId = ownerUserId, OwnerLabel = ownerLabel, Provenance = CortexProvenance.Derived });
-            void E(string from, string to, string rel, string? label = null, string? handoff = null, string? codeRef = null, string? source = null, int? weight = null, object? data = null)
+            void E(string from, string to, string rel, string? label = null, string? handoff = null, string? codeRef = null, string? source = null, int? weight = null, object? data = null, StepMetrics? m = null)
                 => edges.Add(new CortexEdge { FromKey = from, ToKey = to, Relation = rel, Label = Trunc(label, 200), Handoff = handoff, CodeRef = codeRef, Source = source, Weight = weight,
-                    DataJson = data == null ? null : JsonSerializer.Serialize(data, J), Provenance = CortexProvenance.Derived });
+                    DataJson = data == null ? null : JsonSerializer.Serialize(data, J), Provenance = CortexProvenance.Derived,
+                    DwellAvgHours = m?.Avg, DwellMedianHours = m?.Median, DwellP90Hours = m?.P90, QueueSize = m?.Queue, MetricsAt = m == null ? null : now });
 
             // Core: group entities and Welly
             var companies = await _db.OperatingCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Name).ToListAsync(ct);
@@ -165,6 +167,20 @@ namespace ProjectTracker.API.Services.Cortex
             var flows = await _db.FlowDefinitions.AsNoTracking().Where(f => !f.IsTemplate).ToListAsync(ct);
             var runStats = await _db.FlowRuns.AsNoTracking().GroupBy(r => r.FlowDefinitionId)
                 .Select(g => new { Id = g.Key, Total = g.Count(), Active = g.Count(r => r.Status == Models.Flows.FlowRunStatus.Running || r.Status == Models.Flows.FlowRunStatus.Waiting), Last = (DateTime?)g.Max(r => r.StartedAt) }).ToDictionaryAsync(x => x.Id, ct);
+
+            // Hand-off metrics: how long a task sits at a step (created → completed) and how many are open there now. Last 180 days.
+            var since = now.AddDays(-180);
+            var taskRows = await _db.FlowTasks.AsNoTracking().Where(t => t.CreatedAt >= since)
+                .Select(t => new { t.Run.FlowDefinitionId, t.StepId, t.CreatedAt, t.CompletedAt, t.Status, t.CompletedByUserId, t.AssignedToUserId }).ToListAsync(ct);
+            var metrics = taskRows.GroupBy(t => (t.FlowDefinitionId, t.StepId)).ToDictionary(g => g.Key, g =>
+            {
+                var hrs = g.Where(t => t.CompletedAt != null).Select(t => (t.CompletedAt!.Value - t.CreatedAt).TotalHours).Where(h => h >= 0).OrderBy(h => h).ToList();
+                var open = g.Count(t => t.CompletedAt == null && t.Status != Models.Flows.FlowTaskStatus.Cancelled);
+                return new StepMetrics(hrs.Count == 0 ? null : Math.Round(hrs.Average(), 1), Pct(hrs, .5), Pct(hrs, .9), open, hrs.Count);
+            });
+            // who actually completes work at each process (for inference)
+            var doers = taskRows.Where(t => t.CompletedByUserId != null).GroupBy(t => (t.FlowDefinitionId, Uid: t.CompletedByUserId!.Value))
+                .ToDictionary(g => g.Key, g => (Count: g.Count(), Last: g.Max(t => t.CompletedAt!.Value)));
 
             string DeptKey(int id) => $"dept:{id}";
             var deptByName = depts.ToDictionary(d => Norm(d.Name), d => d);
@@ -245,20 +261,36 @@ namespace ProjectTracker.API.Services.Cortex
                 E(key, "flows", "uses", "Runs in Flows", source: "FlowDefinitions");
                 N($"{key}:workflow", "workflow", $"{f.Name} · workflow", key, f.Description, "FlowDefinitions", f.Id.ToString(), data: new { f.TriggerType, trigger = f.TriggerJson, blueprint = f.BlueprintJson != null });
 
-                // steps
-                var steps = ParseSteps(f.GraphJson);
-                string? prev = null;
+                // steps, linked the way the engine really walks them (nextStepId / branches), not in list order
+                var (startId, steps) = ParseGraph(f.GraphJson);
+                var stepById = steps.ToDictionary(s => s.Id);
+                var first = startId != null && stepById.ContainsKey(startId) ? startId : steps.FirstOrDefault()?.Id;
                 foreach (var s in steps)
                 {
                     var sk = $"{key}:step:{s.Id}";
                     var type = s.Type == "approval" ? "approval" : "step";
-                    N(sk, type, s.Name ?? s.Type, key, null, "FlowDefinitions.GraphJson", s.Id, data: new { s.Type, assign = s.Assign, system = s.System });
+                    metrics.TryGetValue((f.Id, s.Id), out var sm);
+                    N(sk, type, s.Name ?? s.Type, key, null, "FlowDefinitions.GraphJson", s.Id, data: new { s.Type, assign = s.Assign, system = s.System, dwellAvgHours = sm?.Avg, dwellMedianHours = sm?.Median, dwellP90Hours = sm?.P90, queue = sm?.Queue, samples = sm?.Samples, isStart = s.Id == first });
                     if (s.Assign?.DepartmentId is int did) E(sk, DeptKey(did), "assigned_to", "Step assigned to department", source: "FlowDefinitions.GraphJson");
                     else if (s.Assign?.DepartmentName != null && FindDept(s.Assign.DepartmentName) is { } ad) E(sk, DeptKey(ad.DepartmentId), "assigned_to", "Step assigned to department", source: "FlowDefinitions.GraphJson");
                     if (s.Assign?.UserId is int uid && personKeyByUser.TryGetValue(uid, out var upk)) E(sk, upk, "assigned_to", "Step assigned to person", source: "FlowDefinitions.GraphJson");
                     if (s.Assign?.Role != null) E(sk, $"role:{Slug(s.Assign.Role)}", "assigned_to", "Step assigned to role", source: "FlowDefinitions.GraphJson");
-                    if (prev != null) E(prev, sk, "handoff", "Next step", StepHandoff(s.Type), $"FlowEngine.cs", "FlowDefinitions.GraphJson");
-                    prev = sk;
+                    // the hand-off *into* a step carries that step's measured wait
+                    if (s.Id == first) E($"{key}:workflow", sk, "handoff", "Starts here", StepHandoff(s.Type), "FlowEngine.cs", "FlowDefinitions.GraphJson", m: sm);
+                    foreach (var (to, lbl) in s.Next.Where(x => stepById.ContainsKey(x.To)).DistinctBy(x => x.To))
+                    {
+                        var target = stepById[to]; metrics.TryGetValue((f.Id, to), out var tm);
+                        E(sk, $"{key}:step:{to}", "handoff", lbl, StepHandoff(target.Type), "FlowEngine.cs", "FlowDefinitions.GraphJson", m: tm);
+                    }
+                }
+                // Welly inference: people who complete this process's tasks but are not its owner and not on its department
+                foreach (var d in doers.Where(x => x.Key.FlowDefinitionId == f.Id && x.Value.Count >= 3))
+                {
+                    if (!personKeyByUser.TryGetValue(d.Key.Uid, out var pk2) || pk2 == ownerKey) continue;
+                    var u = users.FirstOrDefault(x => x.UserId == d.Key.Uid); if (u == null) continue;
+                    if (dept != null && u.DepartmentId == dept.DepartmentId) continue;
+                    N($"inf:works:{pk2}:{f.Id}", "inference", $"{u.Name} works on {f.Name}", pk2, $"Completed {d.Value.Count} tasks in this process in the last 180 days (last {d.Value.Last:dd MMM}), yet is not its owner and sits in a different department.",
+                      "inferred", f.Id.ToString(), ownerUserId: f.OwnerUserId, ownerLabel: f.OwnerName, data: new { kind = "works_on", process = key, person = pk2, count = d.Value.Count, last = d.Value.Last, confidence = Math.Min(0.95, 0.5 + d.Value.Count * 0.05) });
                 }
             }
 
@@ -287,6 +319,20 @@ namespace ProjectTracker.API.Services.Cortex
             foreach (var m in Modules.Where(m => m.Perm != null))
                 if (!users.Any(u => !IsAdmin(u.Role) && ModulesOf(u.Permissions, u.Role).Contains(m.Perm!)))
                     N($"gap:noowner:module:{m.Key}", "gap", $"No one works in {m.Label}", m.Key, "No non-admin user holds this module's permission, so it has no day-to-day owner.", "derived", data: new { kind = "no_owner", priority = 1 });
+            // slow hand-offs: a step whose median wait is over two working days, or with five or more tasks queued
+            foreach (var f in flows)
+                foreach (var s in ParseSteps(f.GraphJson))
+                    if (metrics.TryGetValue((f.Id, s.Id), out var sm) && ((sm.Median is double md && md > 16) || sm.Queue >= 5))
+                        N($"gap:slow:{f.Id}:{s.Id}", "gap", $"Slow hand-off: {f.Name} → {s.Name ?? s.Type}", $"flow:{f.Id}:step:{s.Id}",
+                          $"Median wait {sm.Median:0.#} h (p90 {sm.P90:0.#} h) over {sm.Samples} tasks; {sm.Queue} open now. Measured at the step, not the person.", "derived",
+                          ownerUserId: f.OwnerUserId, ownerLabel: f.OwnerName, data: new { kind = "slow_handoff", priority = sm.Queue >= 5 ? 3 : 2, sm.Median, sm.P90, sm.Queue, sm.Samples });
+            // data quality: a permissions string that was saved character-by-character, or departments that are one team under two names
+            foreach (var u in users.Where(u => u.Permissions != null && System.Text.RegularExpressions.Regex.IsMatch(u.Permissions, @"(^|,)[a-z](,[a-z_]){4,}")))
+                N($"gap:perms:{u.UserId}", "gap", "Permissions saved wrongly", personKeyByUser.TryGetValue(u.UserId, out var pk3) ? pk3 : "hr",
+                  "The permission list for this account was stored a second time split into single letters. Re-save it from Users so access checks stay reliable.", "derived", data: new { kind = "data_quality", priority = 2, field = "Users.Permissions", userId = u.UserId });
+            foreach (var g in depts.GroupBy(d => Norm(d.Name).Replace(" department", "")).Where(g => g.Count() > 1))
+                N($"gap:deptdup:{Slug(g.Key)}", "gap", $"{string.Join(" / ", g.Select(d => d.Name))} look like one team", DeptKey(g.OrderBy(d => d.DepartmentId).First().DepartmentId),
+                  "Two department records split the same people and processes. Merge them so the map, permissions and flows agree.", "derived", data: new { kind = "data_quality", priority = 2, departments = g.Select(d => d.DepartmentId).ToArray() });
 
             var result = await UpsertAsync(nodes, edges, now, ct);
             sw.Stop();
@@ -309,14 +355,16 @@ namespace ProjectTracker.API.Services.Cortex
             {
                 if (!existing.TryGetValue(n.Key, out var e))
                 {
-                    // attached knowledge nodes start as curated shells (empty until someone fills them in)
+                    // attached knowledge nodes start as curated shells (empty until someone fills them in); inferences wait for a person
                     if (n.Source == "curated") { n.Provenance = CortexProvenance.Curated; n.Source = null; }
+                    else if (n.Source == "inferred") { n.Provenance = CortexProvenance.Inferred; n.Status = "pending"; n.Source = "FlowTasks"; }
                     n.LastSeenAt = now; n.CreatedAt = now;
                     _db.CortexNodes.Add(n); created++; Log("node", n.Key, "created", newV: n.Label);
                     continue;
                 }
                 e.LastSeenAt = now;
                 if (!e.IsActive) { e.IsActive = true; reactivated++; Log("node", e.Key, "reactivated"); }
+                if (e.Provenance == CortexProvenance.Inferred && e.Status == "pending") { e.Summary = n.Summary; e.DataJson = n.DataJson; continue; } // evidence refreshes until someone decides
                 if (e.Provenance != CortexProvenance.Derived) continue; // never overwrite what a person wrote
                 var dirty = false;
                 dirty |= Set(e, "Label", e.Label, n.Label, v => e.Label = v, Log);
@@ -353,6 +401,7 @@ namespace ProjectTracker.API.Services.Cortex
                 if (e.Weight != x.Weight) { e.Weight = x.Weight; dirty = true; }
                 if (e.DataJson != x.DataJson) { e.DataJson = x.DataJson; dirty = true; }
                 if (e.Source != x.Source) { e.Source = x.Source; dirty = true; }
+                if (x.MetricsAt != null) { e.DwellAvgHours = x.DwellAvgHours; e.DwellMedianHours = x.DwellMedianHours; e.DwellP90Hours = x.DwellP90Hours; e.QueueSize = x.QueueSize; e.MetricsAt = x.MetricsAt; }
                 if (dirty) { e.UpdatedAt = now; updated++; }
             }
             foreach (var e in existingE.Values.Where(x => x.IsActive && x.Provenance == CortexProvenance.Derived && !wantedE.ContainsKey((x.FromKey, x.ToKey, x.Relation))))
@@ -375,22 +424,27 @@ namespace ProjectTracker.API.Services.Cortex
 
         // ── Helpers ───────────────────────────────────────────────────────────────
         private record StepAssign(int? DepartmentId, string? DepartmentName, int? UserId, string? Role);
-        private record StepInfo(string Id, string Type, string? Name, StepAssign? Assign, string? System);
+        private record StepInfo(string Id, string Type, string? Name, StepAssign? Assign, string? System, List<(string To, string Label)> Next);
 
-        private static List<StepInfo> ParseSteps(string? graphJson)
+        private static List<StepInfo> ParseSteps(string? graphJson) => ParseGraph(graphJson).Steps;
+
+        private static (string? Start, List<StepInfo> Steps) ParseGraph(string? graphJson)
         {
-            var list = new List<StepInfo>();
-            if (string.IsNullOrWhiteSpace(graphJson)) return list;
+            var list = new List<StepInfo>(); string? start = null;
+            if (string.IsNullOrWhiteSpace(graphJson)) return (start, list);
             try
             {
                 using var doc = JsonDocument.Parse(graphJson);
-                if (!doc.RootElement.TryGetProperty("steps", out var steps) || steps.ValueKind != JsonValueKind.Array) return list;
+                if (doc.RootElement.TryGetProperty("startStepId", out var st)) start = st.GetString();
+                if (!doc.RootElement.TryGetProperty("steps", out var steps) || steps.ValueKind != JsonValueKind.Array) return (start, list);
                 foreach (var s in steps.EnumerateArray())
                 {
                     var id = s.TryGetProperty("id", out var i) ? i.GetString() ?? "" : "";
                     var type = s.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
                     var name = s.TryGetProperty("name", out var n) ? n.GetString() : null;
                     StepAssign? assign = null; string? system = null;
+                    var next = new List<(string, string)>();
+                    if (s.TryGetProperty("nextStepId", out var nx) && nx.GetString() is { Length: > 0 } nxs) next.Add((nxs, "Next step"));
                     if (s.TryGetProperty("config", out var cfg) && cfg.ValueKind == JsonValueKind.Object)
                     {
                         if (cfg.TryGetProperty("assignTo", out var a) && a.ValueKind == JsonValueKind.Object)
@@ -400,12 +454,14 @@ namespace ProjectTracker.API.Services.Cortex
                                 a.TryGetProperty("userId", out var ui) && ui.ValueKind == JsonValueKind.Number ? ui.GetInt32() : null,
                                 a.TryGetProperty("role", out var r) ? r.GetString() : null);
                         if (cfg.TryGetProperty("action", out var act)) system = act.GetString();
+                        foreach (var (prop, label) in new[] { ("trueStepId", "If true"), ("falseStepId", "If false"), ("approvedStepId", "Approved"), ("rejectedStepId", "Rejected") })
+                            if (cfg.TryGetProperty(prop, out var b) && b.ValueKind == JsonValueKind.String && b.GetString() is { Length: > 0 } bs) next.Add((bs, label));
                     }
-                    if (id.Length > 0) list.Add(new StepInfo(id, type, name, assign, system));
+                    if (id.Length > 0) list.Add(new StepInfo(id, type, name, assign, system, next));
                 }
             }
             catch { /* malformed graph: no steps */ }
-            return list;
+            return (start, list);
         }
 
         /// <summary>Automatic when the engine moves on by itself; someone must act for tasks and approvals.</summary>
@@ -424,5 +480,8 @@ namespace ProjectTracker.API.Services.Cortex
         private static string NameKey(string s) { var w = Norm(s).Split(' ', StringSplitOptions.RemoveEmptyEntries); return w.Length > 1 ? $"{w[0]} {w[^1]}" : (w.Length == 1 ? w[0] : ""); }
         private static string Slug(string s) => System.Text.RegularExpressions.Regex.Replace(Norm(s), "[^a-z0-9]+", "-").Trim('-');
         private static string? Trunc(string? s, int n) => s == null ? null : (s.Length <= n ? s : s[..n]);
+        /// <summary>Dwell at a step, in hours, from FlowTasks (created → completed), plus how many sit open there now.</summary>
+        private sealed record StepMetrics(double? Avg, double? Median, double? P90, int Queue, int Samples);
+        private static double? Pct(List<double> sorted, double p) => sorted.Count == 0 ? null : Math.Round(sorted[Math.Min(sorted.Count - 1, (int)Math.Floor(p * (sorted.Count - 1)))], 1);
     }
 }

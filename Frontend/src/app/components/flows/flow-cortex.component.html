@@ -224,6 +224,58 @@
             </div>
           }
 
+          @if (editing(); as ed) {
+            <div class="cx-editor" [attr.data-m]="ed.mode">
+              <div class="h"><mat-icon>{{ ed.mode === 'reject' ? 'thumb_down' : 'edit_note' }}</mat-icon><b>{{ ed.mode === 'reject' ? 'Why is this wrong?' : ed.node.label }}</b><button class="x" (click)="closeEditor()" aria-label="Close"><mat-icon>close</mat-icon></button></div>
+              <textarea rows="5" [ngModel]="ed.text" (ngModelChange)="patchEditor({ text: $event })" [placeholder]="ed.mode === 'reject' ? 'Welly keeps the reason and will not suggest this again.' : 'Write what you know. Plain words; what, when, who else, what breaks if it is missed.'"></textarea>
+              @if (ed.mode === 'write') {
+                <div class="row">
+                  <label>Owner
+                    <select [ngModel]="ed.owner" (ngModelChange)="patchEditor({ owner: $event })">
+                      <option [ngValue]="null">Me</option>
+                      @for (u of catalog()?.users ?? []; track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }
+                    </select>
+                  </label>
+                  <label>Review in
+                    <select [ngModel]="ed.months" (ngModelChange)="patchEditor({ months: $event })">
+                      <option [ngValue]="3">3 months</option><option [ngValue]="6">6 months</option><option [ngValue]="12">12 months</option>
+                    </select>
+                  </label>
+                </div>
+                <small class="cx-muted">Stored with your name and date. Derived facts next to it are never overwritten by this.</small>
+              }
+              <div class="act"><button class="ghost" (click)="closeEditor()">Cancel</button><button class="go" (click)="saveEditor()" [disabled]="ed.busy || (ed.mode === 'reject' && !ed.text.trim())">{{ ed.mode === 'reject' ? 'Reject' : 'Save' }}</button></div>
+            </div>
+          }
+
+          @if (inferencesOf(n.key).length) {
+            <h4><mat-icon>auto_awesome</mat-icon>Welly thinks<small>confirm or reject · nothing is fact until someone says so</small></h4>
+            <div class="cx-attached">
+              @for (a of inferencesOf(n.key); track a.key) {
+                <div class="att" data-p="inferred" [class.decided]="a.status !== 'pending'">
+                  <div class="h"><mat-icon>auto_awesome</mat-icon><b>{{ a.label }}</b><span class="tag">{{ a.status === 'pending' ? 'To confirm' : a.status }}</span></div>
+                  @if (a.summary) { <p>{{ a.summary }}</p> }
+                  @if (a.rationale && a.status !== 'pending') { <p class="cx-muted">{{ a.rationale }}</p> }
+                  @if (a.status === 'pending') { <div class="meta"><button (click)="reviewAccept(a)">Confirm</button><button (click)="reviewReject(a)">Reject</button></div> }
+                </div>
+              }
+            </div>
+          }
+
+          @if (stepEdgesOf(n.key).length) {
+            <h4><mat-icon>timer</mat-icon>Measured waits<small>from tasks · last 180 days · at the step, not the person</small></h4>
+            <div class="cx-waits">
+              @for (w of stepEdgesOf(n.key); track w.edge.id) {
+                <div class="w" [class.slow]="(w.edge.dwellMedianHours ?? 0) > 16 || (w.edge.queueSize ?? 0) >= 5">
+                  <b>{{ w.step!.label }}</b>
+                  <span matTooltip="Median wait before someone completed it">{{ hrs(w.edge.dwellMedianHours) }}</span>
+                  <small matTooltip="90th percentile">p90 {{ hrs(w.edge.dwellP90Hours) }}</small>
+                  @if (w.edge.queueSize) { <em>{{ w.edge.queueSize }} open</em> }
+                </div>
+              }
+            </div>
+          }
+
           @for (g of apiGapsOf(n.key); track g.key) {
             <div class="cx-gap">
               <div class="h"><mat-icon>{{ g.unowned ? 'person_off' : 'build_circle' }}</mat-icon><b>{{ g.label }}</b></div>
@@ -319,6 +371,29 @@
       } @else {
         <div class="cx-panel-head idle"><span class="ic"><mat-icon>tips_and_updates</mat-icon></span><div><small>From tracing the code</small><h3>What the intranet needs</h3></div></div>
         <p class="cx-blurb">Gaps between how the company works and what the code does, plus data that keeps the map from being accurate. Click any module or department for detail.</p>
+        @if (pendingInferences().length) {
+          <h4><mat-icon>auto_awesome</mat-icon>Welly thinks · to confirm<small>{{ pendingInferences().length }} waiting</small></h4>
+          <div class="cx-attached">
+            @for (a of pendingInferences().slice(0, 6); track a.key) {
+              <div class="att" data-p="inferred">
+                <div class="h"><mat-icon>auto_awesome</mat-icon><b>{{ a.label }}</b></div>
+                @if (a.summary) { <p>{{ a.summary }}</p> }
+                <div class="meta">
+                  @if (inferenceTarget(a); as t) { <button class="ghost" (click)="selected.set(t)">Show</button> }
+                  <button (click)="reviewAccept(a)">Confirm</button><button (click)="reviewReject(a)">Reject</button>
+                </div>
+              </div>
+            }
+          </div>
+          @if (editing(); as ed) {
+            <div class="cx-editor" data-m="reject">
+              <div class="h"><mat-icon>thumb_down</mat-icon><b>Why is this wrong?</b><button class="x" (click)="closeEditor()" aria-label="Close"><mat-icon>close</mat-icon></button></div>
+              <small class="cx-muted">{{ ed.node.label }}</small>
+              <textarea rows="3" [ngModel]="ed.text" (ngModelChange)="patchEditor({ text: $event })" placeholder="Welly keeps the reason and will not suggest this again."></textarea>
+              <div class="act"><button class="ghost" (click)="closeEditor()">Cancel</button><button class="go" (click)="saveEditor()" [disabled]="ed.busy || !ed.text.trim()">Reject</button></div>
+            </div>
+          }
+        }
         <div class="cx-sugs">
           @for (s of suggestions(); track s.title) {
             <div class="cx-sug" [attr.data-t]="s.tone">

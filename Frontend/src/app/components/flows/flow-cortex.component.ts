@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -28,7 +29,7 @@ const DEPT_Y = 600;
 @Component({
   selector: 'app-flow-cortex',
   standalone: true,
-  imports: [CommonModule, RouterLink, MatIconModule, MatTooltipModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatTooltipModule],
   templateUrl: './flow-cortex.component.html',
   styleUrls: ['./flow-cortex.component.scss']
 })
@@ -100,7 +101,9 @@ export class FlowCortexComponent implements OnInit {
   apiKey(key: string | null | undefined) { return !key ? null : key.startsWith('d:') ? 'dept:' + key.slice(2) : key; }
   apiNode(key: string | null | undefined): CortexApiNode | null { const k = this.apiKey(key); return k ? this.apiByKey().get(k) ?? null : null; }
   /** Attached knowledge / responsibilities / workflow / authority nodes under a node, including empty ones (shown, not hidden). */
-  attached(key: string) { const k = this.apiKey(key); return k ? (this.graph()?.nodes ?? []).filter(n => n.parent === k && n.type !== 'gap' && n.type !== 'step') : []; }
+  attached(key: string) { const k = this.apiKey(key); return k ? (this.graph()?.nodes ?? []).filter(n => n.parent === k && n.type !== 'gap' && n.type !== 'step' && n.type !== 'approval' && n.type !== 'inference' && n.type !== 'process') : []; }
+  /** Welly inferences attached to this node (e.g. "X works on Y" for a person). */
+  inferencesOf(key: string) { const k = this.apiKey(key); return k ? (this.graph()?.nodes ?? []).filter(n => n.parent === k && n.type === 'inference') : []; }
   /** Server-derived gaps on a node (unowned modules, flows with no owner, departments without a head, …). */
   apiGapsOf(key: string) { const k = this.apiKey(key); return k ? this.apiGaps().filter(g => g.on === k) : []; }
   /** Where to land on this map for a server-graph key: same key for modules/sources, 'd:ID' for departments, else the parent. */
@@ -123,16 +126,42 @@ export class FlowCortexComponent implements OnInit {
       { key: 'gaps', icon: 'build_circle', label: 'Gaps', value: c.gaps, tip: 'Problems the graph found: no owner, no head, hand-off not built.' },
     ];
   });
-  reviewAccept(n: CortexApiNode) { this.api.cortexAccept(n.key).subscribe({ next: () => { this.snack.open('Confirmed', undefined, { duration: 2500 }); this.loadGraph(); } }); }
-  reviewReject(n: CortexApiNode) {
-    const reason = window.prompt('Why is this wrong? (Welly learns from the reason)'); if (!reason) return;
-    this.api.cortexReject(n.key, reason).subscribe({ next: () => { this.snack.open('Rejected', undefined, { duration: 2500 }); this.loadGraph(); } });
+  /** Inline editor: which node is being written/reviewed, and the draft. One at a time. */
+  editing = signal<{ node: CortexApiNode; mode: 'write' | 'reject'; text: string; owner: number | null; months: number; busy: boolean } | null>(null);
+  openEditor(n: CortexApiNode, mode: 'write' | 'reject' = 'write') { this.editing.set({ node: n, mode, text: mode === 'write' ? (n.summary ?? '') : '', owner: n.ownerUserId, months: 6, busy: false }); }
+  closeEditor() { this.editing.set(null); }
+  patchEditor(p: Partial<{ text: string; owner: number | null; months: number }>) { const ed = this.editing(); if (ed) this.editing.set({ ...ed, ...p }); }
+  private done(msg: string) { this.snack.open(msg, undefined, { duration: 2500 }); this.closeEditor(); this.loadGraph(); }
+  private fail(e: any, fallback: string) { const ed = this.editing(); if (ed) this.editing.set({ ...ed, busy: false }); this.snack.open(e?.error?.message ?? fallback, 'OK', { duration: 4000 }); }
+  saveEditor() {
+    const ed = this.editing(); if (!ed || ed.busy) return;
+    this.editing.set({ ...ed, busy: true });
+    if (ed.mode === 'reject') {
+      if (!ed.text.trim()) { this.fail(null, 'A reason is needed so Welly learns from it'); return; }
+      this.api.cortexReject(ed.node.key, ed.text.trim()).subscribe({ next: () => this.done('Rejected'), error: e => this.fail(e, 'Could not reject') });
+      return;
+    }
+    const owner = this.catalog()?.users.find(u => u.id === ed.owner);
+    const due = new Date(); due.setMonth(due.getMonth() + ed.months);
+    this.api.cortexCurate(ed.node.key, { summary: ed.text, ownerUserId: ed.owner, ownerLabel: owner?.name ?? null, reviewDueAt: due.toISOString() })
+      .subscribe({ next: () => this.done('Saved'), error: e => this.fail(e, 'Not allowed') });
   }
-  curate(n: CortexApiNode) {
-    const text = window.prompt(`${n.label}\n\nWrite what you know. It will be stored with your name and a review date six months out.`, n.summary ?? '');
-    if (text === null) return;
-    this.api.cortexCurate(n.key, { summary: text }).subscribe({ next: () => { this.snack.open('Saved', undefined, { duration: 2500 }); this.loadGraph(); }, error: e => this.snack.open(e?.error?.message ?? 'Not allowed', 'OK', { duration: 4000 }) });
+  reviewAccept(n: CortexApiNode) { this.api.cortexAccept(n.key).subscribe({ next: () => this.done('Confirmed'), error: e => this.fail(e, 'Could not confirm') }); }
+  reviewReject(n: CortexApiNode) { this.openEditor(n, 'reject'); }
+  curate(n: CortexApiNode) { this.openEditor(n, 'write'); }
+
+  /** Welly inferences waiting for a decision, newest evidence first. */
+  pendingInferences = computed(() => (this.graph()?.nodes ?? []).filter(n => n.provenance === 'inferred' && n.status === 'pending').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+  /** Measured wait on the hand-off into a step (from FlowTasks), if any. */
+  stepEdgesOf(key: string) {
+    const k = this.apiKey(key); if (!k) return [];
+    const g = this.graph(); if (!g) return [];
+    return g.edges.filter(e => e.relation === 'handoff' && e.metricsAt && (e.to.startsWith(k + ':step:') || e.from.startsWith(k + ':step:')))
+      .map(e => ({ edge: e, step: this.apiByKey().get(e.to) ?? null }))
+      .filter(x => x.step).sort((a, b) => (b.edge.dwellMedianHours ?? 0) - (a.edge.dwellMedianHours ?? 0)).slice(0, 6);
   }
+  hrs(h: number | null | undefined) { return h == null ? '–' : h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${h.toFixed(h < 10 ? 1 : 0)} h` : `${(h / 24).toFixed(1)} d`; }
+  inferenceTarget(n: CortexApiNode) { return this.mapKeyFor(n.parent); }
 
   // ── departments and people, from live data ────────────────────────────────
 
