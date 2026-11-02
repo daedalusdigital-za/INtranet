@@ -182,21 +182,6 @@ namespace ProjectTracker.API.Services.Flows
                 },
                 "IT · {{inputs.issue}}", 2),
 
-            // ── Marketing ─────────────────────────────────────────────────────────────
-            Def("Marketing Department", "Marketing · Campaign & announcement",
-                "How Marketing gets a campaign or internal announcement out: brief, manager approval, then it is published on the intranet.",
-                new object[] { Field("title", "Title", required: true), Field("message", "Message / brief", "textarea", true), Field("audience", "Audience", "select", false, new[] { "Everyone", "Customers", "Staff" }) },
-                "brief",
-                new object[]
-                {
-                    Task("brief", "Prepare content", 60, 60, "Prepare: {{inputs.title}}", "{{inputs.message}}\nAudience: {{inputs.audience}}", Dept("Marketing Department"), "approve", 48),
-                    Approval("approve", "Marketing manager approval", 380, 60, "Approve: {{inputs.title}}", "Prepared by {{steps.brief.completedBy}}.", DeptRole("Marketing Department", "Manager"), "publish", "brief", 24),
-                    new { id = "publish", type = "welly_action", name = "Publish announcement", x = 700, y = 60, nextStepId = "end",
-                          config = new { action = "CREATE_ANNOUNCEMENT", failOnError = false, payload = new { title = "{{inputs.title}}", content = "{{inputs.message}}" } } },
-                    End("end", "Published", 1020, 60, "published"),
-                },
-                "Campaign · {{inputs.title}}"),
-
             // ── Production ────────────────────────────────────────────────────────────
             Def("Production", "Production · Work order",
                 "How Production runs a work order: schedule, produce, QC inspection; rework loops back to QC until it passes, then Stock is told.",

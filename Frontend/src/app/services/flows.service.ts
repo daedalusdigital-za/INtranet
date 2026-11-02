@@ -87,7 +87,8 @@ export interface FlowRunDetail {
 
 export interface FlowCatalog {
   isDesigner: boolean;
-  users: { id: number; name: string; email: string; role: string; departmentId?: number | null }[];
+  /** `modules`: module keys the person can open ("all" for admins). Absent from older backends. */
+  users: { id: number; name: string; email: string; role: string; departmentId?: number | null; title?: string | null; modules?: string[] }[];
   departments: { id: number; name: string; manager?: string | null }[];
   /** Employee register (clocking system) — for pinning a human flow to a person. */
   employees?: { id: string; name: string; department?: string | null; jobTitle?: string | null }[];

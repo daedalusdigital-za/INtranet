@@ -1,11 +1,16 @@
 <div class="cx">
-  <!-- ═════ HUD: what the company looks like right now ═════ -->
+  <!-- ═════ HUD ═════ -->
   <header class="cx-hud">
     <div class="cx-title">
       <span class="cx-core-dot"></span>
       <div>
         <h2>Company cortex</h2>
-        <p>Every department, person, flow and agent on one live map. Click anything.</p>
+        <p>How work really moves through the intranet: modules, the hand-offs between them, and the departments and people doing it.</p>
+        <div class="cx-companies">
+          @for (c of companies; track c.code) {
+            <span [matTooltip]="c.name + (c.warehouse ? ' · ships from ' + c.warehouse : '') + (c.note ? ' · ' + c.note : '')"><b>{{ c.code }}</b>{{ c.name }}</span>
+          }
+        </div>
       </div>
     </div>
 
@@ -31,10 +36,10 @@
 
     <div class="cx-search">
       <mat-icon>search</mat-icon>
-      <input placeholder="Find a person, department or flow" [value]="query()" (input)="query.set($any($event.target).value)" (keydown.escape)="query.set('')" />
+      <input placeholder="Find a person, department, module or flow" [value]="query()" (input)="query.set($any($event.target).value)" (keydown.escape)="query.set('')" />
       @if (results().length) {
         <div class="cx-results">
-          @for (r of results(); track r.label + r.node) {
+          @for (r of results(); track r.label + r.node + r.sub) {
             <button (click)="pick(r)"><mat-icon>{{ r.icon }}</mat-icon><span><b>{{ r.label }}</b><small>{{ r.sub }}</small></span></button>
           }
         </div>
@@ -42,26 +47,23 @@
     </div>
   </header>
 
-  <!-- ═════ Value streams + layer switches ═════ -->
+  <!-- ═════ Streams + layers ═════ -->
   <div class="cx-bar">
-    <span class="cx-bar-label">Trace a value stream</span>
+    <span class="cx-bar-label">Follow a process</span>
     @for (s of streams; track s.key) {
-      <button class="cx-stream" [class.on]="stream() === s.key" [style.--c]="s.color" (click)="toggleStream(s.key)">
-        <mat-icon>{{ s.icon }}</mat-icon>{{ s.label }}<em>{{ streamPct(s.key) }}%</em>
+      <button class="cx-stream" [class.on]="stream() === s.key" [style.--c]="s.color" (click)="toggleStream(s.key)" [matTooltip]="s.blurb">
+        <mat-icon>{{ s.icon }}</mat-icon>{{ s.label }}<em [matTooltip]="'Steps the code does by itself'">{{ streamAuto(s) }}% auto</em>
       </button>
     }
     <span class="spacer"></span>
-    @for (l of layers; track l.key) {
-      @if (l.key === 'agent' || l.key === 'asset' || l.key === 'core') {
-        <button class="cx-layer" [class.off]="hidden().has(l.key)" (click)="toggleLayer(l.key)"><mat-icon>{{ hidden().has(l.key) ? 'visibility_off' : 'visibility' }}</mat-icon>{{ l.label }}</button>
-      }
-    }
+    <button class="cx-layer" [class.off]="hidden().has('source')" (click)="toggleLayer('source')"><mat-icon>{{ hidden().has('source') ? 'visibility_off' : 'visibility' }}</mat-icon>Sources</button>
+    <button class="cx-layer" [class.off]="hidden().has('dept')" (click)="toggleLayer('dept')"><mat-icon>{{ hidden().has('dept') ? 'visibility_off' : 'visibility' }}</mat-icon>Departments</button>
   </div>
 
   <div class="cx-main">
     <!-- ═════ The map ═════ -->
     <div class="cx-map" (click)="selected.set(null)">
-      <svg viewBox="0 0 1200 790" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Company operating map">
+      <svg viewBox="0 0 1200 690" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Company operating map">
         <defs>
           <filter id="cx-glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="5" result="b"></feGaussianBlur>
@@ -72,41 +74,37 @@
           </radialGradient>
           <linearGradient id="cx-core-band" x1="0" x2="1">
             <stop offset="0%" stop-color="#22d3ee" stop-opacity="0"></stop>
-            <stop offset="20%" stop-color="#22d3ee" stop-opacity=".16"></stop>
-            <stop offset="80%" stop-color="#a78bfa" stop-opacity=".16"></stop>
+            <stop offset="15%" stop-color="#22d3ee" stop-opacity=".10"></stop>
+            <stop offset="85%" stop-color="#a78bfa" stop-opacity=".10"></stop>
             <stop offset="100%" stop-color="#a78bfa" stop-opacity="0"></stop>
           </linearGradient>
         </defs>
 
-        <!-- layer bands -->
-        @for (l of layers; track l.key) {
-          @if (!hidden().has(l.key)) {
-            <g class="band" [attr.data-l]="l.key">
-              @if (l.key === 'core') {
-                <rect x="210" [attr.y]="l.y - 58" width="780" height="116" rx="58" fill="url(#cx-core-band)" class="core-band"></rect>
-                <text x="600" [attr.y]="l.y - 66" text-anchor="middle" class="core-label">THE CORTEX · ONE SHARED RECORD</text>
-              } @else {
-                <line x1="0" [attr.y1]="l.y" x2="1200" [attr.y2]="l.y" class="band-line"></line>
-              }
-              <text x="8" [attr.y]="l.y - (l.key === 'dept' ? 52 : 34)" class="band-label">{{ l.label | uppercase }}</text>
-            </g>
-          }
+        <!-- bands -->
+        @if (!hidden().has('source')) {
+          <line x1="0" y1="66" x2="1200" y2="66" class="band-line"></line>
+          <text x="8" y="28" class="band-label">WHERE WORK COMES FROM</text>
+        }
+        <rect x="30" y="170" width="1140" height="300" rx="40" fill="url(#cx-core-band)" class="core-band"></rect>
+        <text x="600" y="160" text-anchor="middle" class="core-label">THE INTRANET · ONE SHARED RECORD</text>
+        @if (!hidden().has('dept')) {
+          <line x1="0" y1="600" x2="1200" y2="600" class="band-line"></line>
+          <text x="8" y="548" class="band-label">DEPARTMENTS · FROM LIVE DATA</text>
         }
 
         <!-- connections -->
         @for (e of visibleEdges(); track trackEdge(e)) {
-          <path class="edge" [attr.d]="edgePath(e)" [attr.data-k]="e.kind" [attr.data-s]="edgeState(e)"
-                [attr.stroke]="e.kind === 'handoff' ? color(e.from) : null">
-            <title>{{ label(e.from) }} → {{ label(e.to) }}: {{ e.label }}</title>
+          <path class="edge" [attr.d]="edgePath(e)" [attr.data-k]="e.how" [attr.data-s]="edgeState(e)" [attr.stroke]="e.how === 'code' || e.how === 'manual' ? color(e.from) : null">
+            <title>{{ label(e.from) }} → {{ label(e.to) }}: {{ e.label }}{{ e.ref ? ' (' + e.ref + ')' : '' }}</title>
           </path>
-          @if (e.kind === 'handoff' && edgeState(e) !== 'dim') {
+          @if ((e.how === 'code' || e.how === 'manual') && edgeState(e) !== 'dim') {
             <circle r="2.6" class="spark" [attr.fill]="color(e.from)">
-              <animateMotion [attr.dur]="(edgeState(e) === 'lit' ? 1.6 : 4.5) + 's'" repeatCount="indefinite" [attr.path]="edgePath(e)"></animateMotion>
+              <animateMotion [attr.dur]="(edgeState(e) === 'lit' ? 1.6 : e.how === 'code' ? 3 : 5.5) + 's'" repeatCount="indefinite" [attr.path]="edgePath(e)"></animateMotion>
             </circle>
           }
         }
 
-        <!-- traced value stream -->
+        <!-- followed process -->
         @if (streamPath(); as sp) {
           <path class="stream-path" [attr.d]="sp.d" [attr.stroke]="sp.color" filter="url(#cx-glow)"></path>
           @for (i of [0, 1, 2]; track i) {
@@ -120,59 +118,57 @@
         @for (n of visibleNodes(); track n.key) {
           @let r = radius(n);
           @let runs = activeRuns(n.key);
+          @let nf = flowsOf(n.key).length;
+          @let gaps = gapsOf(n.key).length;
           <g class="node" [attr.data-l]="n.layer" [attr.data-s]="nodeState(n)" [class.sel]="selected() === n.key"
              [attr.transform]="'translate(' + n.x + ',' + n.y + ')'" [style.--c]="n.color"
              (mouseenter)="hovered.set(n.key)" (mouseleave)="hovered.set(null)" (click)="$event.stopPropagation(); select(n.key)"
              tabindex="0" role="button" [attr.aria-label]="n.label" (keydown.enter)="select(n.key)">
             @if (runs) { <circle class="pulse" [attr.r]="r + 4"></circle> }
             <circle class="halo" [attr.r]="r + 7"></circle>
-            @if (n.layer === 'core') {
-              <rect class="body" [attr.x]="-r - 22" [attr.y]="-r + 4" [attr.width]="(r + 22) * 2" [attr.height]="(r - 4) * 2" rx="16"></rect>
-            } @else if (n.layer === 'agent') {
+            @if (n.layer === 'dept') {
               <polygon class="body" [attr.points]="'0,' + (-r - 3) + ' ' + (r + 1) + ',' + (-r / 2) + ' ' + (r + 1) + ',' + (r / 2) + ' 0,' + (r + 3) + ' ' + (-r - 1) + ',' + (r / 2) + ' ' + (-r - 1) + ',' + (-r / 2)"></polygon>
-            } @else if (n.layer === 'asset') {
-              <rect class="body" [attr.x]="-r" [attr.y]="-r" [attr.width]="r * 2" [attr.height]="r * 2" rx="6"></rect>
+            } @else if (n.layer === 'source') {
+              <rect class="body" [attr.x]="-r" [attr.y]="-r" [attr.width]="r * 2" [attr.height]="r * 2" rx="7"></rect>
             } @else {
               <circle class="body" [attr.r]="r"></circle>
             }
-            <text class="ico" text-anchor="middle" dominant-baseline="central" [attr.font-size]="n.layer === 'agent' || n.layer === 'asset' ? 18 : 24">{{ n.icon }}</text>
-            <text class="lbl" text-anchor="middle" [attr.y]="r + (n.layer === 'core' ? 6 : 17)">{{ n.short ?? n.label }}</text>
-            @if (n.layer === 'dept' || n.layer === 'gov') {
-              @let ppl = people(n.key).length;
-              @if (ppl) {
-                <text class="meta" text-anchor="middle" [attr.y]="r + 30">{{ mapped(n.key) }}/{{ ppl }} mapped</text>
-              }
-              @if (humanFlows(n.key).length + processFlowsOf(n.key).length) {
-                <g class="badge" [attr.transform]="'translate(' + (r * 0.75) + ',' + (-r * 0.75) + ')'">
-                  <circle r="10"></circle><text text-anchor="middle" dominant-baseline="central">{{ humanFlows(n.key).length + processFlowsOf(n.key).length }}</text>
-                </g>
+            <text class="ico" text-anchor="middle" dominant-baseline="central" [attr.font-size]="n.layer === 'module' ? 24 : 19">{{ n.icon }}</text>
+            <text class="lbl" text-anchor="middle" [attr.y]="r + 16">{{ n.short ?? n.label }}</text>
+            @if (n.layer === 'dept') {
+              <text class="meta" text-anchor="middle" [attr.y]="r + 29">{{ mapped(n.key) }}/{{ people(n.key).length }} with a flow</text>
+            }
+            @if (n.layer !== 'source') {
+              @if (nf) {
+                <g class="badge" [attr.transform]="'translate(' + (r * 0.78) + ',' + (-r * 0.78) + ')'" ><circle r="10"></circle><text text-anchor="middle" dominant-baseline="central">{{ nf }}</text></g>
               } @else {
-                <g class="badge gap" [attr.transform]="'translate(' + (r * 0.75) + ',' + (-r * 0.75) + ')'">
-                  <circle r="9"></circle><text text-anchor="middle" dominant-baseline="central">!</text>
-                </g>
-              }
-              @if (runs) {
-                <g class="badge live" [attr.transform]="'translate(' + (-r * 0.8) + ',' + (-r * 0.75) + ')'">
-                  <circle r="10"></circle><text text-anchor="middle" dominant-baseline="central">{{ runs }}</text>
-                </g>
+                <g class="badge gap" [attr.transform]="'translate(' + (r * 0.78) + ',' + (-r * 0.78) + ')'"><circle r="9"></circle><text text-anchor="middle" dominant-baseline="central">0</text></g>
               }
             }
+            @if (gaps) {
+              <g class="badge warn" [attr.transform]="'translate(' + (-r * 0.8) + ',' + (r * 0.75) + ')'"><circle r="9"></circle><text text-anchor="middle" dominant-baseline="central">!</text></g>
+            }
+            @if (runs) {
+              <g class="badge live" [attr.transform]="'translate(' + (-r * 0.8) + ',' + (-r * 0.78) + ')'"><circle r="10"></circle><text text-anchor="middle" dominant-baseline="central">{{ runs }}</text></g>
+            }
             @if (streamIndex(n.key); as si) {
-              <g class="badge step" [attr.transform]="'translate(0,' + (-r - 14) + ')'" [style.--c]="activeStream()?.color">
-                <circle r="10"></circle><text text-anchor="middle" dominant-baseline="central">{{ si }}</text>
-              </g>
+              <g class="badge step" [attr.transform]="'translate(0,' + (-r - 14) + ')'" [style.--c]="activeStream()?.color"><circle r="10"></circle><text text-anchor="middle" dominant-baseline="central">{{ si }}</text></g>
             }
           </g>
         }
       </svg>
 
       <div class="cx-legend">
-        <span><i class="lg dot"></i>Department</span>
-        <span><i class="lg hex"></i>Welly agent</span>
-        <span><i class="lg sq"></i>Asset</span>
+        <span><i class="lg sq"></i>Source</span>
+        <span><i class="lg dot"></i>Module</span>
+        <span><i class="lg hex"></i>Department</span>
+        <span><i class="ln code"></i>Automatic</span>
+        <span><i class="ln manual"></i>Someone acts</span>
+        <span><i class="ln read"></i>Read only</span>
+        <span><i class="ln gap"></i>Not built</span>
         <span><i class="lg n">3</i>Flows</span>
         <span><i class="lg live">2</i>Runs live</span>
-        <span><i class="lg gap">!</i>No flow yet</span>
+        <span><i class="lg warn">!</i>Gap found</span>
       </div>
     </div>
 
@@ -181,87 +177,99 @@
       @if (node(); as n) {
         <div class="cx-panel-head" [style.--c]="n.color">
           <span class="ic"><mat-icon>{{ n.icon }}</mat-icon></span>
-          <div><small>{{ n.layer === 'gov' ? 'Governance' : n.layer === 'dept' ? 'Department' : n.layer === 'core' ? 'Cortex core' : n.layer === 'agent' ? 'AI agent' : n.layer === 'asset' ? 'Asset' : 'External' }}</small><h3>{{ n.label }}</h3></div>
+          <div><small>{{ layerName(n) }}</small><h3>{{ n.label }}</h3></div>
+          @if (n.route) { <a class="x" [routerLink]="n.route" matTooltip="Open module"><mat-icon>open_in_new</mat-icon></a> }
           <button class="x" (click)="selected.set(null)" aria-label="Close"><mat-icon>close</mat-icon></button>
         </div>
         <p class="cx-blurb">{{ n.blurb }}</p>
 
-        @if (n.layer === 'dept' || n.layer === 'gov') {
+        <!-- department -->
+        @if (dept(); as d) {
           <div class="cx-stats">
-            <div><b>{{ humanFlows(n.key).length }}</b><span>human flows</span></div>
-            <div><b>{{ processFlowsOf(n.key).length }}</b><span>process flows</span></div>
-            <div [class.live]="activeRuns(n.key)"><b>{{ activeRuns(n.key) }}</b><span>runs live</span></div>
-            <div><b>{{ mapped(n.key) }}/{{ people(n.key).length }}</b><span>people mapped</span></div>
+            <div><b>{{ d.people.length }}</b><span>people</span></div>
+            <div><b>{{ mapped(d.key) }}</b><span>with a flow</span></div>
+            <div><b>{{ flowsOf(d.key).length }}</b><span>flows</span></div>
+            <div [class.live]="activeRuns(d.key)"><b>{{ activeRuns(d.key) }}</b><span>runs live</span></div>
+          </div>
+
+          <h4><mat-icon>apps</mat-icon>Works in<small>{{ permsKnown() ? 'from people\'s module permissions' : 'guessed from the department name' }}</small></h4>
+          <div class="cx-links">
+            @for (w of works(d.key); track w.node.key) {
+              <button (click)="selected.set(w.node.key)" [style.--c]="w.node.color"><mat-icon>{{ w.node.icon }}</mat-icon><b>{{ w.node.label }}</b><small>{{ w.label }}</small></button>
+            } @empty { <p class="cx-muted">Nobody here has a module permission yet.</p> }
+            @if (admins(d.key)) { <p class="cx-muted">+ {{ admins(d.key) }} admin{{ admins(d.key) === 1 ? '' : 's' }} with access to everything</p> }
           </div>
 
           <h4><mat-icon>groups</mat-icon>People<small>lit = has a flow{{ isDesigner() ? ' · click a dim one to map their day' : '' }}</small></h4>
-          @if (people(n.key).length) {
-            <div class="cx-people">
-              @for (p of people(n.key); track p.key) {
-                <button class="cx-person" [class.on]="p.flows.length" (click)="personClick(n, p)"
-                        [matTooltip]="p.name + (p.title ? ' · ' + p.title : '') + (p.flows.length ? ' · ' + p.flows.length + ' flow(s)' : (isDesigner() && p.employeeId ? ' · click to create their flow' : ' · no flow yet'))">
-                  <span class="av">{{ initials(p.name) }}</span><span class="nm">{{ p.name }}</span>
-                </button>
-              }
-            </div>
-          } @else { <p class="cx-muted">Nobody from the employee register is placed in this department yet.</p> }
+          <div class="cx-people">
+            @for (p of d.people; track p.key) {
+              <button class="cx-person" [class.on]="p.flows.length" (click)="personClick(d, p)"
+                      [matTooltip]="p.name + (p.title ? ' · ' + p.title : '') + (p.flows.length ? ' · ' + p.flows.length + ' flow(s)' : (isDesigner() && p.employeeId ? ' · click to create their flow' : ' · no flow yet'))">
+                <span class="av">{{ initials(p.name) }}</span><span class="nm">{{ p.name }}</span>
+              </button>
+            }
+          </div>
 
           <h4><mat-icon>account_tree</mat-icon>Flows</h4>
-          @for (f of humanFlows(n.key).concat(processFlowsOf(n.key)); track f.id) {
+          @for (f of flowsOf(d.key); track f.id) {
             <div class="cx-flow" (click)="viewFlow.emit(f)">
               <span class="lv l{{ f.level }}">L{{ f.level }}</span>
               <span class="t"><b>{{ f.name }}</b><small>{{ f.ownerName ? f.ownerName + ' · ' : '' }}{{ f.runCount }} runs @if (f.activeRuns) { · <em>{{ f.activeRuns }} live</em> }</small></span>
               @if (f.canStart && f.triggerType === 'manual') { <button (click)="$event.stopPropagation(); startFlow.emit(f)" matTooltip="Start"><mat-icon>play_arrow</mat-icon></button> }
             </div>
-          } @empty {
-            <p class="cx-muted">No flows touch {{ n.label }} yet.</p>
-          }
-          @if (isDesigner()) {
-            <button class="cx-cta" (click)="newHumanFlow.emit({ dept: deptName(n) ?? n.label, owner: null })"><mat-icon>add</mat-icon>Human flow for {{ n.short ?? n.label }}</button>
-          }
+          } @empty { <p class="cx-muted">No flows involve {{ d.label }} yet.</p> }
+          @if (isDesigner()) { <button class="cx-cta" (click)="newHumanFlow.emit({ dept: d.deptName, owner: null })"><mat-icon>add</mat-icon>Human flow for {{ d.label }}</button> }
+        } @else {
+          <!-- module or source -->
+          @if (n.records?.length) { <h4><mat-icon>inventory</mat-icon>Records it owns</h4><div class="cx-chips">@for (x of n.records; track x) { <span>{{ x }}</span> }</div> }
 
-          <div class="cx-chips-grid">
-            @if (n.owns?.length) { <div><h5>Owns</h5><div class="cx-chips">@for (x of n.owns; track x) { <span>{{ x }}</span> }</div></div> }
-            @if (n.signsOff?.length) { <div><h5>Signs off</h5><div class="cx-chips">@for (x of n.signsOff; track x) { <span>{{ x }}</span> }</div></div> }
-            @if (n.kpis?.length) { <div><h5>KPIs</h5><div class="cx-chips kpi">@for (x of n.kpis; track x) { <span>{{ x }}</span> }</div></div> }
-            @if (n.roles?.length) { <div><h5>Key roles</h5><div class="cx-chips">@for (x of n.roles; track x) { <span>{{ x }}</span> }</div></div> }
+          <h4><mat-icon>swap_calls</mat-icon>Hand-offs<small>as the code does them</small></h4>
+          <div class="cx-handoffs">
+            @for (h of handoffs(n.key); track h.edge.label + h.other.key) {
+              <div class="ho" [attr.data-h]="h.edge.how">
+                <button class="who" (click)="selected.set(h.other.key)" [style.--c]="h.other.color"><mat-icon>{{ h.out ? 'arrow_forward' : 'arrow_back' }}</mat-icon>{{ h.other.short ?? h.other.label }}</button>
+                <p>{{ h.edge.label }}</p>
+                <div class="meta"><span class="how">{{ howLabel(h.edge.how) }}</span>@if (h.edge.who) { <span>{{ h.edge.who }}</span> }@if (h.edge.ref) { <code>{{ h.edge.ref }}</code> }</div>
+              </div>
+            } @empty { <p class="cx-muted">Nothing passes in or out of here in code.</p> }
           </div>
-          @if (n.modules?.length) {
-            <h4><mat-icon>apps</mat-icon>Works in</h4>
-            <div class="cx-mods">@for (m of n.modules; track m.route) { <a [routerLink]="m.route"><mat-icon>{{ m.icon }}</mat-icon>{{ m.label }}</a> }</div>
+
+          @if (n.layer === 'module') {
+            <h4><mat-icon>groups</mat-icon>Departments using it</h4>
+            <div class="cx-links">
+              @for (w of works(n.key); track w.node.key) {
+                <button (click)="selected.set(w.node.key)" [style.--c]="w.node.color"><mat-icon>groups</mat-icon><b>{{ w.node.label }}</b><small>{{ w.label }}</small></button>
+              } @empty { <p class="cx-muted">No department has people with this module yet.</p> }
+            </div>
+
+            <h4><mat-icon>account_tree</mat-icon>Flows</h4>
+            @for (f of flowsOf(n.key); track f.id) {
+              <div class="cx-flow" (click)="viewFlow.emit(f)"><span class="lv l{{ f.level }}">L{{ f.level }}</span><span class="t"><b>{{ f.name }}</b><small>{{ f.runCount }} runs @if (f.activeRuns) { · <em>{{ f.activeRuns }} live</em> }</small></span></div>
+            } @empty { <p class="cx-muted">No flow works in {{ n.label }} yet.</p> }
+
+            @if (n.sections?.length || n.route) {
+              <h4><mat-icon>open_in_new</mat-icon>Open</h4>
+              <div class="cx-mods">
+                @if (n.route) { <a [routerLink]="n.route"><mat-icon>{{ n.icon }}</mat-icon>{{ n.label }}</a> }
+                @for (m of n.sections; track m.route) { <a [routerLink]="m.route"><mat-icon>{{ m.icon }}</mat-icon>{{ m.label }}</a> }
+              </div>
+            }
           }
         }
 
-        @if (n.layer === 'agent') {
-          <dl class="cx-dl">
-            <dt>Reads</dt><dd>{{ n.reads?.join(', ') }}</dd>
-            <dt>Does</dt><dd>{{ n.does }}</dd>
-            <dt>Human checkpoint</dt><dd>{{ n.checkpoint }}</dd>
-            <dt>Owner</dt><dd>{{ n.owner }}</dd>
-          </dl>
-          <h4><mat-icon>psychology</mat-icon>Flows where Welly works here</h4>
-          @for (f of agentFlows(n); track f.id) {
-            <div class="cx-flow" (click)="viewFlow.emit(f)"><span class="lv l{{ f.level }}">L{{ f.level }}</span><span class="t"><b>{{ f.name }}</b><small>{{ f.runCount }} runs</small></span></div>
-          } @empty { <p class="cx-muted">No flow uses Welly here yet. Add a "Welly analyses" step to triage or draft the routine part.</p> }
+        @for (g of gapsOf(n.key); track g.key) {
+          <div class="cx-gap" [class.done]="gapCovered(g)">
+            <div class="h"><mat-icon>{{ gapCovered(g) ? 'task_alt' : 'build_circle' }}</mat-icon><b>{{ g.title }}</b></div>
+            <p>{{ g.detail }}</p>
+            <p class="fix"><b>What it needs:</b> {{ g.fix }}</p>
+            <div class="meta"><code>{{ g.ref }}</code>
+              @if (gapTemplate(g); as t) { @if (!gapCovered(g)) { <button (click)="isDesigner() ? useTemplate.emit(t) : viewFlow.emit(t)">{{ isDesigner() ? 'Use' : 'See' }} “{{ t.name }}”</button> } }
+            </div>
+          </div>
         }
-
-        @if (n.layer === 'core' || n.layer === 'asset') {
-          @if (n.holds?.length) { <h4><mat-icon>inventory</mat-icon>{{ n.layer === 'core' ? 'Holds' : 'Tracked as' }}</h4><div class="cx-chips">@for (x of n.holds; track x) { <span>{{ x }}</span> }</div> }
-          @if (n.systems?.length) { <h4><mat-icon>dns</mat-icon>System of record</h4><div class="cx-chips">@for (x of n.systems; track x) { <span>{{ x }}</span> }</div> }
-          @if (n.owner) { <h4><mat-icon>person_pin</mat-icon>Owner</h4><p class="cx-blurb">{{ n.owner }}</p> }
-        }
-
-        <h4><mat-icon>hub</mat-icon>Connections</h4>
-        <div class="cx-links">
-          @for (x of neighbours(n.key); track x.edge.from + x.edge.to) {
-            <button (click)="selected.set(x.other.key)" [style.--c]="x.other.color">
-              <mat-icon>{{ x.out ? 'arrow_forward' : 'arrow_back' }}</mat-icon><b>{{ x.other.short ?? x.other.label }}</b><small>{{ x.edge.label }}</small>
-            </button>
-          }
-        </div>
       } @else {
-        <div class="cx-panel-head idle"><span class="ic"><mat-icon>tips_and_updates</mat-icon></span><div><small>What to do next</small><h3>Suggestions</h3></div></div>
-        <p class="cx-blurb">Gaps the map found between how the company works and what Flows already covers.</p>
+        <div class="cx-panel-head idle"><span class="ic"><mat-icon>tips_and_updates</mat-icon></span><div><small>From tracing the code</small><h3>What the intranet needs</h3></div></div>
+        <p class="cx-blurb">Gaps between how the company works and what the code does, plus data that keeps the map from being accurate. Click any module or department for detail.</p>
         <div class="cx-sugs">
           @for (s of suggestions(); track s.title) {
             <div class="cx-sug" [attr.data-t]="s.tone">
@@ -269,61 +277,31 @@
               <div><b>{{ s.title }}</b><small>{{ s.detail }}</small></div>
               <button (click)="s.act()">{{ s.actLabel }}</button>
             </div>
-          } @empty { <p class="cx-muted">Everything on the map has a flow. Nice.</p> }
+          } @empty { <p class="cx-muted">Nothing outstanding.</p> }
         </div>
       }
     </aside>
   </div>
 
-  <!-- ═════ Traced stream: step by step ═════ -->
+  <!-- ═════ Followed process, step by step ═════ -->
   @if (activeStream(); as s) {
     <section class="cx-rail" [style.--c]="s.color">
       <div class="cx-rail-head">
         <mat-icon>{{ s.icon }}</mat-icon><b>{{ s.label }}</b><small>{{ s.blurb }}</small>
-        <span class="spacer"></span><em>{{ streamPct(s.key) }}% automated</em>
+        <span class="spacer"></span><em>{{ streamAuto(s) }}% happens automatically</em>
         <button class="x" (click)="stream.set(null)" aria-label="Close"><mat-icon>close</mat-icon></button>
       </div>
       <ol class="cx-steps">
-        @for (c of streamCoverage().get(s.key) ?? []; track $index) {
-          <li [attr.data-s]="c.state" [style.--d]="color(c.step.dept)">
+        @for (st of s.steps; track $index) {
+          <li [attr.data-s]="st.how" [style.--d]="color(st.node)">
             <span class="n">{{ $index + 1 }}</span>
-            <button class="dept" (click)="selected.set(c.step.dept)">{{ label(c.step.dept) }}</button>
-            <p>{{ c.step.text }}</p>
-            @if (c.state === 'live') {
-              @for (f of c.flows.slice(0, 2); track f.id) { <button class="lnk" (click)="viewFlow.emit(f)"><mat-icon>check_circle</mat-icon>{{ f.name }}</button> }
-            } @else if (c.template) {
-              <button class="lnk tpl" (click)="isDesigner() ? useTemplate.emit(c.template) : viewFlow.emit(c.template)"><mat-icon>auto_awesome</mat-icon>{{ isDesigner() ? 'Use' : 'See' }} “{{ c.template.name }}”</button>
-            } @else {
-              <span class="lnk gap"><mat-icon>radio_button_unchecked</mat-icon>No flow yet</span>
-              @if (isDesigner()) { <button class="lnk" (click)="designFlow.emit()"><mat-icon>add</mat-icon>Design one</button> }
-            }
-            @if (c.step.module; as m) { <a class="mod" [routerLink]="m.route"><mat-icon>{{ m.icon }}</mat-icon>{{ m.label }}</a> }
+            <button class="dept" (click)="selected.set(st.node)">{{ label(st.node) }}</button>
+            <p>{{ st.text }}</p>
+            <span class="how" [attr.data-h]="st.how">{{ howLabel(st.how) }}@if (st.who) { · {{ st.who }} }</span>
+            @if (st.ref) { <code>{{ st.ref }}</code> }
           </li>
         }
       </ol>
     </section>
   }
-
-  <!-- ═════ Approval matrix ═════ -->
-  <section class="cx-matrix">
-    <div class="cx-rail-head"><mat-icon>rule</mat-icon><b>Approval matrix</b><small>Who approves what, and when it escalates. Thresholds are placeholders until Management sets the final rand values.</small></div>
-    <div class="cx-table-wrap">
-      <table>
-        <thead><tr><th>Decision</th><th>Requested by</th><th>First approver</th><th>Escalates to</th><th>Trigger</th><th>Flow</th></tr></thead>
-        <tbody>
-          @for (a of approvals; track a.decision) {
-            @let st = approvalState(a);
-            <tr>
-              <td><b>{{ a.decision }}</b></td><td>{{ a.requestedBy }}</td><td>{{ a.first }}</td><td>{{ a.escalates }}</td><td>{{ a.trigger }}</td>
-              <td>
-                @if (st.state === 'live') { <button class="st live" (click)="viewFlow.emit(st.flows[0])"><mat-icon>check_circle</mat-icon>{{ st.flows[0].name }}</button> }
-                @else if (st.template) { <button class="st tpl" (click)="isDesigner() ? useTemplate.emit(st.template) : viewFlow.emit(st.template)"><mat-icon>auto_awesome</mat-icon>Template ready</button> }
-                @else { <span class="st gap"><mat-icon>radio_button_unchecked</mat-icon>Not yet</span> }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  </section>
 </div>

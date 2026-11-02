@@ -1,11 +1,15 @@
 /**
- * The company cortex: how ProMed Technologies / Access Medical / Rocket Freight fits together, in five layers
- * (Management steers, departments do the work, the cortex holds the shared record, AI agents assist, assets and
- * infrastructure carry it all). Static structure lives here; live numbers (flows, runs, people) are joined in by
- * the Cortex tab from the Flows API.
+ * The company cortex: how work actually moves through this intranet. Modules and sources are fixed (they are the
+ * code); departments and people are not listed here at all — the Cortex tab builds them from live data and links
+ * them to modules through each person's module permissions.
+ *
+ * Every hand-off and stream step names the code that performs it, so the map stays honest: when the code changes,
+ * change this file with it.
  */
 
-export type CortexLayer = 'gov' | 'dept' | 'core' | 'agent' | 'asset' | 'ext';
+export type CortexLayer = 'source' | 'module' | 'dept';
+/** How a hand-off happens: the code does it, someone opens a screen and acts, a screen only reads it, or it is not built. */
+export type CortexHow = 'code' | 'manual' | 'read' | 'gap';
 
 export interface CortexLink { label: string; route: string; icon: string; }
 
@@ -19,335 +23,235 @@ export interface CortexNode {
   x: number;
   y: number;
   blurb: string;
-  /** Department nodes: regexes that match department / employee-register department names to this node. */
-  match?: RegExp;
-  roles?: string[];
-  owns?: string[];
-  signsOff?: string[];
-  kpis?: string[];
-  receives?: string[];
-  handsTo?: string[];
-  modules?: CortexLink[];
-  /** Agent nodes */
-  reads?: string[];
-  does?: string;
-  checkpoint?: string;
-  owner?: string;
-  /** Core / asset nodes */
-  holds?: string[];
-  systems?: string[];
+  /** Module permission key (User.Permissions) — how departments are linked to this module. */
+  perm?: string;
+  route?: string;
+  records?: string[];
+  sections?: CortexLink[];
+  /** Words that, in a flow's name, category or description, mean the flow works in this module. */
+  flowWords?: RegExp;
 }
 
-export interface CortexEdge { from: string; to: string; label: string; kind: 'handoff' | 'approval' | 'data' | 'agent' | 'asset'; }
+export interface CortexEdge { from: string; to: string; label: string; how: CortexHow; ref?: string; who?: string; }
 
-export interface CortexStreamStep {
-  dept: string;
-  text: string;
-  /** Words that, found in a flow's name or description, mean this step is already covered by a flow. */
-  match: string[];
-  /** Template (by name) that covers the step if nobody has built it yet. */
-  template?: string;
-  module?: CortexLink;
-}
-
+export interface CortexStreamStep { node: string; text: string; how: CortexHow; ref?: string; who?: string; }
 export interface CortexStream { key: string; label: string; icon: string; color: string; blurb: string; steps: CortexStreamStep[]; }
 
-export interface CortexApproval { decision: string; requestedBy: string; first: string; escalates: string; trigger: string; template?: string; match: string[]; }
+export interface CortexGap { key: string; node: string; title: string; detail: string; ref: string; fix: string; template?: string; }
 
-const M = {
-  sales: { label: 'Sales', route: '/sales', icon: 'trending_up' },
-  stock: { label: 'Stock', route: '/stock-management', icon: 'inventory_2' },
-  warehouse: { label: 'Warehouse 3D', route: '/warehouse-3d', icon: 'view_in_ar' },
-  logistics: { label: 'Logistics', route: '/logistics', icon: 'local_shipping' },
-  finance: { label: 'Finance', route: '/finance', icon: 'account_balance' },
-  books: { label: 'Books', route: '/books', icon: 'menu_book' },
-  tenders: { label: 'Tenders', route: '/tenders', icon: 'gavel' },
-  people: { label: 'People', route: '/people', icon: 'badge' },
-  tickets: { label: 'Support tickets', route: '/support-ticket', icon: 'support_agent' },
-  assets: { label: 'Asset register', route: '/asset-register', icon: 'devices' },
-  documents: { label: 'Documents', route: '/documents', icon: 'folder' },
-  docs: { label: 'Docs', route: '/docs', icon: 'article' },
-  management: { label: 'Management', route: '/management', icon: 'insights' },
-  projects: { label: 'Company projects', route: '/company-projects', icon: 'rocket_launch' },
-  calendar: { label: 'Calendar', route: '/calendar', icon: 'calendar_month' },
-  messages: { label: 'Messages', route: '/messages', icon: 'forum' },
-  flows: { label: 'Flows', route: '/flows', icon: 'account_tree' },
-} satisfies Record<string, CortexLink>;
+export interface CortexCompany { code: string; name: string; warehouse?: string; note?: string; }
 
-/* Map coordinates: a 1200 × 780 board in five horizontal bands, customers on the left edge, suppliers on the right. */
-const Y = { gov: 70, dept: 250, core: 440, agent: 590, asset: 720 };
-const DX = (i: number) => 150 + i * 112.5;
+const Y = { source: 66, rowA: 236, rowB: 404, dept: 600 };
+
+export const CORTEX_COMPANIES: CortexCompany[] = [
+  { code: 'PMT', name: 'Promed Technologies', warehouse: 'WH-KZN' },
+  { code: 'ACM', name: 'Access Medical', warehouse: 'WH-GP' },
+  { code: 'PHT', name: 'Promed Pharmacare', warehouse: 'WH-CPT', note: 'Also labelled "Pharmatech" and "Promed Pharmatech" in places' },
+  { code: 'SBT', name: 'Sebenzani Trading', warehouse: 'WH-KZN' },
+  { code: 'SAW', name: 'SA Wellness', note: 'Back orders and staff assignment only' },
+  { code: 'RF', name: 'Rocket Freight', note: 'The logistics brand: RF- loads, the client portal and fleet reports' },
+];
 
 export const CORTEX_NODES: CortexNode[] = [
-  // ── Governance ─────────────────────────────────────────────────────────────
-  {
-    key: 'mgmt', label: 'Management', layer: 'gov', icon: 'account_balance', color: '#f5b942', x: 600, y: Y.gov,
-    blurb: 'Steers the company: strategy, targets, policy and the approvals that sit above department limits.',
-    match: /manage?ment|executive|director|\bceo\b|\bmd\b|owner/i,
-    roles: ['MD / CEO', 'Department heads'], owns: ['Strategy', 'Budgets (with Finance)', 'Policies'],
-    signsOff: ['Capex', 'New hires', 'Pricing policy', 'Large contracts', 'Approvals above matrix limits'],
-    kpis: ['Performance vs budget', 'Revenue outlook', 'Working capital', 'Operational risk'],
-    receives: ['KPIs from every department'], handsTo: ['Targets and budgets', 'Approvals'],
-    modules: [M.management, M.projects, M.tenders],
-  },
+  // ── Sources: what feeds the intranet from outside ─────────────────────────
+  { key: 'src-sage', label: 'Sage files', layer: 'source', icon: 'upload_file', color: '#94a3b8', x: 130, y: Y.source,
+    blurb: 'No live Sage link: sales reports, back orders and stock on hand arrive as exported files that someone uploads and commits.' },
+  { key: 'src-portal', label: 'RF client portal', short: 'Client portal', layer: 'source', icon: 'public', color: '#94a3b8', x: 290, y: Y.source,
+    blurb: 'Rocket Freight customers book collections and deliveries themselves and follow them by waybill.' },
+  { key: 'src-mail', label: 'Sales mailbox', layer: 'source', icon: 'mark_email_unread', color: '#94a3b8', x: 450, y: Y.source,
+    blurb: 'Order emails are watched over IMAP and cached for search on the Sales dashboard. They do not create any records.' },
+  { key: 'src-cartrack', label: 'CarTrack', layer: 'source', icon: 'satellite_alt', color: '#94a3b8', x: 610, y: Y.source,
+    blurb: 'Live vehicle positions; a 24/7 monitor logs speeding, curfew and geofence incidents for the Controller console.' },
+  { key: 'src-fuel', label: 'TFN & Puma', short: 'Fuel feeds', layer: 'source', icon: 'local_gas_station', color: '#94a3b8', x: 770, y: Y.source,
+    blurb: 'TFN syncs fuel transactions in the background (it keeps only 14 days, so the intranet keeps history); Puma garage orders are imported.' },
+  { key: 'src-clock', label: 'Clocking devices', layer: 'source', icon: 'fingerprint', color: '#94a3b8', x: 930, y: Y.source,
+    blurb: 'Biometric devices push clock-ins and clock-outs, keyed on the employee register number.' },
+  { key: 'src-apis', label: 'Project APIs', layer: 'source', icon: 'api', color: '#94a3b8', x: 1090, y: Y.source,
+    blurb: 'External APIs for the HbA1c kits project and the regional school-delivery programmes.' },
 
-  // ── Departments ────────────────────────────────────────────────────────────
-  {
-    key: 'mkt', label: 'Marketing', layer: 'dept', icon: 'campaign', color: '#f472b6', x: DX(0), y: Y.dept,
-    blurb: 'Brand, campaigns and lead generation for the medical and freight businesses.',
-    match: /marketing|brand|digital/i,
-    roles: ['Marketing manager', 'Content', 'Digital'], owns: ['Campaigns', 'Lead source data', 'Brand assets'],
-    signsOff: ['Campaign spend', 'Public content'], kpis: ['Leads by source', 'Cost per lead', 'Lead → customer rate'],
-    receives: ['Product & price info (Stock, Sales)', 'Budget (Finance)'], handsTo: ['Qualified leads → Sales', 'Insights → Management'],
-    modules: [M.documents, M.docs],
-  },
-  {
-    key: 'sales', label: 'Sales', layer: 'dept', icon: 'trending_up', color: '#38bdf8', x: DX(1), y: Y.dept,
-    blurb: 'Pipeline, quotes, tenders and orders for hospitals, clinics and freight customers.',
-    match: /sales|tender|account manager|\brep\b/i,
-    roles: ['Sales manager', 'Reps', 'Sales admin'], owns: ['Customer master', 'Quotes', 'Sales orders', 'Tenders'],
-    signsOff: ['Discounts within limit', 'Quote release'], kpis: ['Pipeline value', 'Win rate', 'Orders', 'Average order value'],
-    receives: ['Leads (Marketing)', 'Stock availability (Stock)', 'Credit status (Finance)'], handsTo: ['Orders → Stock & Logistics', 'Forecasts → Management'],
-    modules: [M.sales, M.tenders],
-  },
-  {
-    key: 'stock', label: 'Stock', layer: 'dept', icon: 'inventory_2', color: '#34d399', x: DX(2), y: Y.dept,
-    blurb: 'One stock ledger: levels, reordering, receiving, counts and valuation across the warehouses.',
-    match: /stock|warehouse|store|procure|buy(er|ing)|purchas|inventory/i,
-    roles: ['Stock controller', 'Storeman', 'Buyer'], owns: ['Item / SKU master', 'Stock movements', 'Purchase orders', 'GRNs'],
-    signsOff: ['Stock adjustments', 'Write-offs', 'POs within limit'], kpis: ['Stock value', 'Stock turns', 'Out-of-stock items', 'Count accuracy'],
-    receives: ['Sales orders (Sales)', 'Receipts (Logistics)', 'Budgets (Finance)'], handsTo: ['POs → Suppliers', 'Picking lists → Logistics', 'Valuations → Finance'],
-    modules: [M.stock, M.warehouse],
-  },
-  {
-    key: 'prod', label: 'Production', layer: 'dept', icon: 'precision_manufacturing', color: '#a3e635', x: DX(3), y: Y.dept,
-    blurb: 'Work orders: turns components from Stock into finished goods and books them back.',
-    match: /production|manufactur|factory|workshop|assembl|hba1|\bkits?\b/i,
-    roles: ['Production supervisor', 'Operators'], owns: ['Work orders', 'Bills of material'],
-    signsOff: ['Work order release', 'Scrap'], kpis: ['Work orders on time', 'Yield', 'Scrap rate'],
-    receives: ['Components (Stock)', 'Demand (Sales)'], handsTo: ['Finished goods → Stock'],
-    modules: [M.stock],
-  },
-  {
-    key: 'log', label: 'Logistics', layer: 'dept', icon: 'local_shipping', color: '#22d3ee', x: DX(4), y: Y.dept,
-    blurb: 'Rocket Freight: loads, trip sheets, drivers, delivery and proof of delivery.',
-    match: /logistic|dispatch|driver|transport|fleet|freight|deliver|courier/i,
-    roles: ['Logistics manager', 'Dispatch controller', 'Drivers'], owns: ['Loads & trip sheets', 'Routes', 'Proof of delivery'],
-    signsOff: ['Dispatch schedule', 'Carrier / subcontractor choice'], kpis: ['On-time delivery %', 'Cost per delivery', 'PODs outstanding', 'Failed deliveries'],
-    receives: ['Picking lists (Stock)', 'Delivery dates (Sales)'], handsTo: ['PODs → Accounts', 'Receipts → Stock', 'Deliveries → Customers'],
-    modules: [M.logistics],
-  },
-  {
-    key: 'fin', label: 'Accounts & Finance', short: 'Finance', layer: 'dept', icon: 'account_balance_wallet', color: '#facc15', x: DX(5), y: Y.dept,
-    blurb: 'Debtors, creditors, payroll, month-end and the numbers Management steers by.',
-    match: /account|financ|debtor|creditor|payroll|bookkeep/i,
-    roles: ['Financial manager', 'Accountant', 'Debtors clerks', 'Creditors clerks'], owns: ['Chart of accounts', 'Invoices', 'Payments', 'Credit limits'],
-    signsOff: ['Payments', 'Credit limits', 'Budget variances'], kpis: ['Cash position', 'Debtor days', 'Creditor days', 'Gross margin'],
-    receives: ['PODs (Logistics)', 'Supplier invoices (Stock)', 'Payroll inputs (HR)'], handsTo: ['Invoices → Customers', 'Payments → Suppliers', 'Reports → Management'],
-    modules: [M.finance, M.books],
-  },
-  {
-    key: 'hr', label: 'HR', layer: 'dept', icon: 'diversity_3', color: '#c084fc', x: DX(6), y: Y.dept,
-    blurb: 'Hire to retire: recruitment, onboarding, leave, performance and offboarding.',
-    match: /\bhr\b|human res|people|recruit|payroll admin|training/i,
-    roles: ['HR manager', 'HR officer'], owns: ['Employee records', 'Contracts', 'Leave'],
-    signsOff: ['Hiring offers', 'Leave exceptions', 'Disciplinary steps'], kpis: ['Headcount', 'Staff turnover', 'Open roles', 'Leave liability'],
-    receives: ['Hiring requests (all)', 'Approvals (Management)'], handsTo: ['New starters → IT', 'Payroll changes → Accounts'],
-    modules: [M.people, M.calendar],
-  },
-  {
-    key: 'it', label: 'IT', layer: 'dept', icon: 'memory', color: '#60a5fa', x: DX(7), y: Y.dept,
-    blurb: 'Runs the intranet, Sage, access, security, backups and the Welly agents.',
-    match: /\bit\b|information tech|systems|support desk|developer/i,
-    roles: ['IT manager', 'Systems admin', 'Support'], owns: ['User accounts', 'System config', 'Data platform'],
-    signsOff: ['Access requests', 'New software', 'Agent permissions'], kpis: ['System uptime', 'Open tickets', 'Security incidents', 'Agent actions logged'],
-    receives: ['Starters / leavers (HR)', 'System requests (all)'], handsTo: ['Working systems', 'Data platform', 'Dashboards'],
-    modules: [M.tickets, M.assets, M.flows],
-  },
-  {
-    key: 'rec', label: 'Reception', layer: 'dept', icon: 'concierge', color: '#fb923c', x: DX(8), y: Y.dept,
-    blurb: 'First contact: visitors, calls, couriers and walk-in deliveries.',
-    match: /reception|front desk|switchboard|office admin/i,
-    roles: ['Receptionist'], owns: ['Visitor log', 'Incoming parcels'],
-    signsOff: [], kpis: ['Calls routed', 'Parcels logged same day'],
-    receives: ['Visitors, calls, couriers'], handsTo: ['Deliveries → Stock', 'Enquiries → Sales'],
-    modules: [M.messages, M.calendar],
-  },
+  // ── Modules, row A: the operational chain ─────────────────────────────────
+  { key: 'tenders', label: 'Tenders', layer: 'module', icon: 'gavel', color: '#c084fc', x: 110, y: Y.rowA, perm: 'tenders', route: '/tenders',
+    blurb: 'Tender register, compliance vault, BOQ builder and analytics, per company code.',
+    records: ['Tenders', 'Compliance documents', 'BOQs', 'Contracts'],
+    flowWords: /tender|boq|compliance/i },
+  { key: 'sales', label: 'Sales', layer: 'module', icon: 'point_of_sale', color: '#38bdf8', x: 300, y: Y.rowA, perm: 'sales', route: '/sales',
+    blurb: 'The centre of the system: imported invoices from Sage drive trip sheets, stock dispatch, PODs, debtors and the management dashboards.',
+    records: ['Imported invoices', 'Sales history', 'Customers', 'Back orders', 'Order cancellations', 'Sales trip sheets'],
+    sections: [{ label: 'Invoices', route: '/sales/invoices', icon: 'receipt_long' }, { label: 'Back orders', route: '/sales/back-orders', icon: 'assignment_return' }, { label: 'Customers', route: '/sales/customers', icon: 'people' }],
+    flowWords: /sales|invoice|customer|order|quote|enquir|credit limit/i },
+  { key: 'logistics', label: 'Logistics', layer: 'module', icon: 'local_shipping', color: '#22d3ee', x: 520, y: Y.rowA, perm: 'logistics', route: '/logistics',
+    blurb: 'Rocket Freight operations: loads and trip sheets, drivers and vehicles, PODs, fleet, maintenance, fuel and requisitions.',
+    records: ['Loads / trip sheets (RF-)', 'Shipments & bookings', 'PODs', 'Vehicles & drivers', 'Requisitions', 'Fuel & maintenance'],
+    sections: [{ label: 'Loads', route: '/logistics/loads', icon: 'assignment' }, { label: 'Trip sheets', route: '/logistics/trip-sheets', icon: 'description' }, { label: 'PODs', route: '/logistics/pods', icon: 'verified' }, { label: 'Requisitions', route: '/logistics/requisitions', icon: 'receipt_long' }],
+    flowWords: /logistic|deliver|pod\b|trip|load|driver|fleet|shipment|dispatch|freight|exception/i },
+  { key: 'stock', label: 'Stock', layer: 'module', icon: 'inventory_2', color: '#34d399', x: 740, y: Y.rowA, perm: 'stock_management', route: '/stock-management',
+    blurb: 'One stock ledger per warehouse. Stock only leaves through load dispatch approval; stock takes come in from the SOH import.',
+    records: ['Warehouse inventory', 'Stock movements', 'Stock counts', 'Stock issues & exceptions'],
+    sections: [{ label: 'On hand', route: '/stock-management/on-hand', icon: 'inventory_2' }, { label: 'Dispatch', route: '/stock-management/dispatch', icon: 'local_shipping' }, { label: 'Counts', route: '/stock-management/counts', icon: 'fact_check' }],
+    flowWords: /stock|warehouse|write-off|inventory|goods receiv|grn/i },
+  { key: 'finance', label: 'Finance', layer: 'module', icon: 'account_balance', color: '#facc15', x: 950, y: Y.rowA, perm: 'finance', route: '/finance',
+    blurb: 'Debtors from imported invoices, creditors from Books and requisition invoices, petty-cash requisitions, budgets and commitments.',
+    records: ['Debtor payments', 'Requisition invoices', 'Budgets & expenses', 'Monthly commitments'],
+    sections: [{ label: 'Debtors', route: '/finance/debtors', icon: 'call_received' }, { label: 'Creditors', route: '/finance/creditors', icon: 'call_made' }, { label: 'Payments', route: '/finance/payments', icon: 'payment' }],
+    flowWords: /financ|account|creditor|debtor|payment|purchase|month-end|budget|credit|payroll/i },
+  { key: 'books', label: 'Books', layer: 'module', icon: 'menu_book', color: '#fde047', x: 1110, y: Y.rowA, perm: 'finance', route: '/books',
+    blurb: 'Supplier invoices captured as PDFs (with OCR), confirmed and sent to Finance for payment.',
+    records: ['Book invoices'], flowWords: /books?\b|supplier invoice/i },
 
-  // ── External ──────────────────────────────────────────────────────────────
-  { key: 'cust', label: 'Customers', layer: 'ext', icon: 'local_hospital', color: '#e2e8f0', x: 40, y: Y.dept,
-    blurb: 'Hospitals, clinics, pharmacies and freight clients. Every touchpoint lands in one customer record.' },
-  { key: 'supp', label: 'Suppliers', layer: 'ext', icon: 'factory', color: '#e2e8f0', x: 1160, y: Y.dept,
-    blurb: 'Manufacturers, carriers and service providers. Vetted by Stock, paid by Accounts, scored on price, time and quality.' },
-
-  // ── The cortex core ───────────────────────────────────────────────────────
-  { key: 'md', label: 'Master data', layer: 'core', icon: 'dataset', color: '#67e8f9', x: 330, y: Y.core,
-    blurb: 'One owner per record type. Sales owns customers, Stock owns items, HR owns employees; everyone else reads.',
-    holds: ['Customers', 'Suppliers', 'Products / SKUs', 'Employees', 'Assets', 'Chart of accounts'], systems: ['Sage 300', 'Intranet · People', 'Intranet · Stock'] },
-  { key: 'tx', label: 'Transactions', layer: 'core', icon: 'receipt_long', color: '#67e8f9', x: 510, y: Y.core,
-    blurb: 'Every hand-off between departments is a write here, so status is visible without chasing people.',
-    holds: ['Quotes & orders', 'Invoices', 'POs & GRNs', 'Stock movements', 'Loads & PODs', 'Tickets', 'Flow runs'], systems: ['Sage 300', 'Intranet · Logistics', 'Intranet · Stock ledger', 'Flows'] },
-  { key: 'docs', label: 'Documents & knowledge', short: 'Knowledge', layer: 'core', icon: 'library_books', color: '#67e8f9', x: 690, y: Y.core,
-    blurb: 'Policies, SOPs, contracts, price lists and lessons learned, so a fix is only figured out once.',
-    holds: ['Policies & SOPs', 'Contracts', 'Templates', 'Price lists', 'Meeting notes'], systems: ['Intranet · Documents', 'Docs', 'Welly knowledge base'] },
-  { key: 'dw', label: 'Data & reporting', short: 'Reporting', layer: 'core', icon: 'monitoring', color: '#67e8f9', x: 870, y: Y.core,
-    blurb: 'KPIs defined once and rolled up to the Management dashboard, so every screen calculates them the same way.',
-    holds: ['KPIs', 'Dashboards', 'Audit trail'], systems: ['Intranet · Management', 'Home widgets', 'Flow audit trail'] },
-
-  // ── AI agents (Welly) ─────────────────────────────────────────────────────
-  { key: 'a-kb', label: 'Knowledge assistant', short: 'Knowledge', layer: 'agent', icon: 'school', color: '#a78bfa', x: 210, y: Y.agent,
-    blurb: 'Welly answers staff questions with links to the source document.', reads: ['Policies, SOPs, past tickets'], does: 'Answers questions; flags gaps to document owners', checkpoint: 'None for answers', owner: 'IT (platform), all (content)' },
-  { key: 'a-sales', label: 'Sales assistant', short: 'Sales AI', layer: 'agent', icon: 'support_agent', color: '#a78bfa', x: 340, y: Y.agent,
-    blurb: 'Drafts quotes and follow-ups, keeps the pipeline current.', reads: ['Customers, price lists, stock, credit'], does: 'Drafts quotes and follow-up emails', checkpoint: 'Rep sends; manager approves discounts', owner: 'Sales' },
-  { key: 'a-stock', label: 'Reorder agent', short: 'Reorder AI', layer: 'agent', icon: 'autorenew', color: '#a78bfa', x: 470, y: Y.agent,
-    blurb: 'Proposes reorder quantities and draft POs from the stock ledger.', reads: ['Stock levels, sales history, lead times'], does: 'Proposes reorders and draft POs', checkpoint: 'Buyer approves each PO', owner: 'Stock' },
-  { key: 'a-fin', label: 'Finance agent', short: 'Finance AI', layer: 'agent', icon: 'calculate', color: '#a78bfa', x: 600, y: Y.agent,
-    blurb: 'Three-way matching and reminder drafts.', reads: ['Invoices, POs, GRNs, bank feeds'], does: 'Matches PO / GRN / invoice, flags mismatches, drafts reminders', checkpoint: 'Accounts approves payments and sends reminders', owner: 'Accounts & Finance' },
-  { key: 'a-log', label: 'Logistics planner', short: 'Route AI', layer: 'agent', icon: 'route', color: '#a78bfa', x: 730, y: Y.agent,
-    blurb: 'Triages delivery exceptions and proposes routes.', reads: ['Orders, addresses, vehicles, exceptions'], does: 'Classifies exceptions, proposes routes and schedules', checkpoint: 'Dispatch confirms', owner: 'Logistics' },
-  { key: 'a-hr', label: 'HR assistant', short: 'HR AI', layer: 'agent', icon: 'emoji_people', color: '#a78bfa', x: 860, y: Y.agent,
-    blurb: 'Policy answers and onboarding checklists.', reads: ['HR policies, leave balances, checklists'], does: 'Answers policy questions, runs onboarding checklists', checkpoint: 'HR approves offers and leave exceptions', owner: 'HR' },
-  { key: 'a-rep', label: 'Reporting agent', short: 'Report AI', layer: 'agent', icon: 'query_stats', color: '#a78bfa', x: 990, y: Y.agent,
-    blurb: 'Weekly KPI summaries and variance explanations.', reads: ['Data & reporting'], does: 'Builds KPI summaries, explains variances', checkpoint: 'Finance signs off numbers', owner: 'Finance / Management' },
-
-  // ── Assets & infrastructure ───────────────────────────────────────────────
-  { key: 'x-prem', label: 'Premises', layer: 'asset', icon: 'domain', color: '#94a3b8', x: 220, y: Y.asset,
-    blurb: 'Offices, warehouse and branches.', owner: 'Management', holds: ['Lease', 'Insurance', 'Maintenance log'] },
-  { key: 'x-fleet', label: 'Fleet', layer: 'asset', icon: 'airport_shuttle', color: '#94a3b8', x: 370, y: Y.asset,
-    blurb: 'Delivery vehicles and forklifts.', owner: 'Logistics', holds: ['Vehicle register', 'Services', 'Fuel', 'Licences'] },
-  { key: 'x-equip', label: 'Equipment', layer: 'asset', icon: 'construction', color: '#94a3b8', x: 520, y: Y.asset,
-    blurb: 'Racking, scanners and machinery.', owner: 'Stock / Production', holds: ['Asset register', 'Maintenance schedule'] },
-  { key: 'x-hw', label: 'IT hardware', layer: 'asset', icon: 'laptop_chromebook', color: '#94a3b8', x: 670, y: Y.asset,
-    blurb: 'Laptops, phones, printers and network. A new starter triggers a device issue; a leaver triggers its return.', owner: 'IT', holds: ['Device register linked to the employee'] },
-  { key: 'x-sys', label: 'Systems', layer: 'asset', icon: 'dns', color: '#94a3b8', x: 820, y: Y.asset,
-    blurb: 'Sage 300, this intranet, email, Welly.', owner: 'IT', holds: ['System inventory', 'Licences', 'Access register'] },
-  { key: 'x-data', label: 'Data platform', layer: 'asset', icon: 'cloud_sync', color: '#94a3b8', x: 970, y: Y.asset,
-    blurb: 'SQL Server, integrations and backups.', owner: 'IT', holds: ['Data catalogue', 'Backup log'] },
+  // ── Modules, row B: people, projects and the platform ─────────────────────
+  { key: 'hr', label: 'HR', layer: 'module', icon: 'badge', color: '#f472b6', x: 100, y: Y.rowB, perm: 'human_resource', route: '/people',
+    blurb: 'HR employee files, attendance from the clocking devices, leave and disciplinary records.',
+    records: ['HR employees', 'Attendance', 'Leave requests', 'Disciplinary'], flowWords: /\bhr\b|leave|onboard|leaver|staff|recruit|attendance|employee/i },
+  { key: 'projects', label: 'Projects', layer: 'module', icon: 'rocket_launch', color: '#a3e635', x: 245, y: Y.rowB, perm: 'company_projects', route: '/company-projects',
+    blurb: 'Distribution programmes: HbA1c kits, the condom project, sanitary pads and school deliveries.',
+    records: ['Condom delivery requests', 'HbA1c', 'School deliveries'], flowWords: /project|production|work order|condom|hba1c|school/i },
+  { key: 'assets', label: 'Asset register', short: 'Assets', layer: 'module', icon: 'devices', color: '#fb923c', x: 390, y: Y.rowB, route: '/asset-register',
+    blurb: 'Company equipment and who has it. Items can be matched to the Books invoice that bought them.',
+    records: ['Assets', 'Asset tags'], flowWords: /asset|device|laptop|equipment/i },
+  { key: 'paperless', label: 'Paperless', layer: 'module', icon: 'draw', color: '#fda4af', x: 535, y: Y.rowB,
+    blurb: 'Documents sent to chosen signers, approvers and viewers, with email bundles and in-app notifications. Opened from the navigation bar.',
+    records: ['Paperless documents', 'Signatures'], flowWords: /paperless|sign|signature/i },
+  { key: 'tickets', label: 'Support tickets', short: 'Tickets', layer: 'module', icon: 'support_agent', color: '#60a5fa', x: 680, y: Y.rowB, perm: 'support_tickets', route: '/support-ticket',
+    blurb: 'IT support requests. Welly can raise them; assignment is free text today.',
+    records: ['Support tickets'], flowWords: /support|ticket|issue|\bit\b/i },
+  { key: 'flows', label: 'Flows', layer: 'module', icon: 'account_tree', color: '#a78bfa', x: 825, y: Y.rowB, perm: 'flows', route: '/flows',
+    blurb: 'Processes with tasks, approvals and an audit trail. Shipment events start flows automatically; tasks also land on people\'s to-do lists.',
+    records: ['Flow runs', 'Flow tasks', 'To-dos'] },
+  { key: 'welly', label: 'Welly', layer: 'module', icon: 'smart_toy', color: '#e879f9', x: 970, y: Y.rowB, perm: 'ai',
+    blurb: 'The AI assistant. It answers questions and can act: create trip sheets, tickets, to-dos and meetings, and edit customers and employees.',
+    records: ['Knowledge base', 'Actions taken'] },
+  { key: 'mgmt', label: 'Management', layer: 'module', icon: 'insights', color: '#f5b942', x: 1110, y: Y.rowB, perm: 'management', route: '/management',
+    blurb: 'Read-only oversight across sales, tenders, logistics, stock, finance, paperless and HR.',
+    records: ['Dashboards (read-only)'] },
 ];
 
+/** Real hand-offs, as the code performs them. */
 export const CORTEX_EDGES: CortexEdge[] = [
-  // The operating loop
-  { from: 'cust', to: 'mkt', label: 'Enquiries & campaigns', kind: 'handoff' },
-  { from: 'mkt', to: 'sales', label: 'Qualified leads', kind: 'handoff' },
-  { from: 'sales', to: 'stock', label: 'Sales orders', kind: 'handoff' },
-  { from: 'stock', to: 'prod', label: 'Components', kind: 'handoff' },
-  { from: 'prod', to: 'stock', label: 'Finished goods', kind: 'handoff' },
-  { from: 'stock', to: 'log', label: 'Picking lists', kind: 'handoff' },
-  { from: 'log', to: 'cust', label: 'Deliveries + POD', kind: 'handoff' },
-  { from: 'log', to: 'fin', label: 'Proof of delivery', kind: 'handoff' },
-  { from: 'fin', to: 'cust', label: 'Invoices & statements', kind: 'handoff' },
-  { from: 'stock', to: 'supp', label: 'Purchase orders', kind: 'handoff' },
-  { from: 'supp', to: 'log', label: 'Inbound goods', kind: 'handoff' },
-  { from: 'fin', to: 'supp', label: 'Payments', kind: 'handoff' },
-  { from: 'hr', to: 'it', label: 'Starters & leavers', kind: 'handoff' },
-  { from: 'hr', to: 'fin', label: 'Payroll changes', kind: 'handoff' },
-  { from: 'rec', to: 'stock', label: 'Walk-in deliveries', kind: 'handoff' },
-  { from: 'sales', to: 'fin', label: 'Credit checks', kind: 'handoff' },
-  // Governance
-  ...['sales', 'stock', 'fin', 'hr', 'it', 'log'].map(k => ({ from: 'mgmt', to: k, label: 'Approvals & targets', kind: 'approval' as const })),
-  // Every department reads and writes the cortex
-  ...['mkt', 'sales', 'stock', 'prod', 'log', 'fin', 'hr', 'it', 'rec'].map(k => ({ from: k, to: 'tx', label: 'Writes back every step', kind: 'data' as const })),
-  { from: 'sales', to: 'md', label: 'Owns customers', kind: 'data' },
-  { from: 'stock', to: 'md', label: 'Owns items', kind: 'data' },
-  { from: 'hr', to: 'md', label: 'Owns employees', kind: 'data' },
-  { from: 'it', to: 'docs', label: 'Runs the knowledge base', kind: 'data' },
-  { from: 'md', to: 'dw', label: 'Rolls up', kind: 'data' },
-  { from: 'tx', to: 'dw', label: 'Rolls up', kind: 'data' },
-  { from: 'dw', to: 'mgmt', label: 'KPIs to the dashboard', kind: 'data' },
-  // Agents read the cortex and draft for an owning department
-  { from: 'a-kb', to: 'docs', label: 'Reads', kind: 'agent' },
-  { from: 'a-sales', to: 'sales', label: 'Drafts for approval', kind: 'agent' },
-  { from: 'a-stock', to: 'stock', label: 'Drafts POs', kind: 'agent' },
-  { from: 'a-fin', to: 'fin', label: 'Flags mismatches', kind: 'agent' },
-  { from: 'a-log', to: 'log', label: 'Triages exceptions', kind: 'agent' },
-  { from: 'a-hr', to: 'hr', label: 'Runs checklists', kind: 'agent' },
-  { from: 'a-rep', to: 'dw', label: 'Explains variances', kind: 'agent' },
-  // Assets carry the work
-  { from: 'x-fleet', to: 'log', label: 'Runs on', kind: 'asset' },
-  { from: 'x-equip', to: 'stock', label: 'Runs on', kind: 'asset' },
-  { from: 'x-equip', to: 'prod', label: 'Runs on', kind: 'asset' },
-  { from: 'x-hw', to: 'it', label: 'Issued by', kind: 'asset' },
-  { from: 'x-sys', to: 'tx', label: 'System of record', kind: 'asset' },
-  { from: 'x-data', to: 'dw', label: 'Feeds', kind: 'asset' },
-  { from: 'x-prem', to: 'mgmt', label: 'Owned by', kind: 'asset' },
+  { from: 'src-sage', to: 'sales', label: 'Sales report import → imported invoices + sales history', how: 'manual', ref: 'SalesImportController.cs:148', who: 'sales / logistics / finance users' },
+  { from: 'src-sage', to: 'sales', label: 'Back-order report import (replaces that company\'s rows)', how: 'manual', ref: 'BackordersController.cs:76' },
+  { from: 'src-sage', to: 'stock', label: 'SOH import → stock-take adjustments', how: 'manual', ref: 'StockOnHandImportService.cs:569' },
+  { from: 'src-portal', to: 'logistics', label: 'Client booking → shipments (BOOKED)', how: 'code', ref: 'PortalController.cs:252' },
+  { from: 'src-mail', to: 'sales', label: 'Order emails cached for search (no records created)', how: 'read', ref: 'SalesMailboxMonitorService.cs:11' },
+  { from: 'src-cartrack', to: 'logistics', label: 'Live positions + incident monitor', how: 'code', ref: 'IncidentMonitoringService.cs:9' },
+  { from: 'src-fuel', to: 'logistics', label: 'Fuel transactions & garage orders', how: 'code', ref: 'TfnSyncService.cs:47' },
+  { from: 'src-clock', to: 'hr', label: 'Clock-ins → attendance', how: 'code', ref: 'ClockingDeviceController.cs:120' },
+  { from: 'src-apis', to: 'projects', label: 'HbA1c and school-delivery data', how: 'code', ref: 'HBA1CApiService.cs:39' },
+
+  { from: 'sales', to: 'logistics', label: 'Invoices → trip sheet (RF- load); invoices Assigned', how: 'manual', ref: 'ImportedInvoicesController.cs:1149', who: 'Logistics, or Welly on request' },
+  { from: 'sales', to: 'logistics', label: 'Sales trip sheet approved → load (two-person rule)', how: 'manual', ref: 'SalesTripSheetsController.cs:316', who: 'a second sales agent' },
+  { from: 'logistics', to: 'stock', label: 'Approve dispatch → ledger deducts every linked line', how: 'manual', ref: 'StockMovementsController.cs:237', who: 'Manager or stock dispatch approver' },
+  { from: 'logistics', to: 'sales', label: 'POD → load + invoices Delivered', how: 'code', ref: 'LoadsController.cs:1416' },
+  { from: 'sales', to: 'finance', label: 'Imported invoices → debtors (net of collections)', how: 'read', ref: 'FinanceOverviewController.cs:275' },
+  { from: 'logistics', to: 'finance', label: 'Requisition → Finance requested / paid', how: 'manual', ref: 'FinanceOverviewController.cs:192', who: 'Finance' },
+  { from: 'books', to: 'finance', label: 'Supplier invoice → creditors / payment request', how: 'manual', ref: 'BooksController.cs:600' },
+  { from: 'books', to: 'assets', label: 'Invoice matched to the asset it bought', how: 'code', ref: 'AssetInvoiceMatchingService.cs:412' },
+  { from: 'logistics', to: 'projects', label: 'Trip sheet marks condom delivery requests Delivered', how: 'code', ref: 'TripSheetController.cs:382' },
+  { from: 'logistics', to: 'hr', label: 'Drivers imported into HR employee files', how: 'manual', ref: 'HrEmployeesController.cs:305', who: 'HR' },
+  { from: 'logistics', to: 'flows', label: 'Shipment events start flows', how: 'code', ref: 'FlowEvents.cs:29' },
+  { from: 'welly', to: 'logistics', label: 'Creates trip sheets on request', how: 'code', ref: 'AIActionService.cs:838' },
+  { from: 'welly', to: 'tickets', label: 'Raises support tickets', how: 'code', ref: 'AIActionService.cs:224' },
+  { from: 'flows', to: 'hr', label: 'Tasks → people\'s to-do lists', how: 'code', ref: 'FlowEngine.cs:590' },
+  { from: 'tenders', to: 'sales', label: 'Award → nothing downstream; tender pricing is a fixed file', how: 'gap', ref: 'TendersController.cs:317' },
+  ...['sales', 'tenders', 'logistics', 'stock', 'finance', 'paperless', 'hr'].map(k => ({ from: k, to: 'mgmt', label: 'Rolled up on the Management dashboard', how: 'read' as const, ref: 'ManagementController.cs:184' })),
 ];
 
+/** End-to-end chains that cross modules, step by step, as the code runs them today. */
 export const CORTEX_STREAMS: CortexStream[] = [
   {
-    key: 'l2c', label: 'Lead to cash', icon: 'paid', color: '#38bdf8',
-    blurb: 'From a hospital enquiry to money in the bank.',
+    key: 'invoice', label: 'Sage invoice to delivered', icon: 'receipt_long', color: '#38bdf8',
+    blurb: 'A Sage sale becomes a load, leaves stock, is delivered with a POD and lands in debtors.',
     steps: [
-      { dept: 'mkt', text: 'Capture the lead and qualify it', match: ['lead', 'campaign', 'enquiry'], module: M.sales },
-      { dept: 'sales', text: 'Quote, checking stock and credit', match: ['quote', 'enquiry to order', 'credit limit'], template: 'Customer credit limit request', module: M.sales },
-      { dept: 'sales', text: 'Convert the accepted quote to an order', match: ['sales order', 'enquiry to order', 'order capture'], module: M.sales },
-      { dept: 'stock', text: 'Allocate and issue the picking list', match: ['picking', 'allocate', 'reserve'], module: M.stock },
-      { dept: 'log', text: 'Pick, deliver and capture the POD', match: ['pod', 'delivery', 'deliver'], template: 'Missing POD chaser', module: M.logistics },
-      { dept: 'fin', text: 'Invoice on POD and collect', match: ['invoice', 'debtor', 'collect', 'payment'], module: M.finance },
-      { dept: 'mgmt', text: 'Revenue, margin and debtor days update', match: ['month-end', 'report', 'kpi'], module: M.management },
+      { node: 'src-sage', text: 'Sales report exported from Sage and uploaded', how: 'manual', ref: 'SalesImportController.cs:148' },
+      { node: 'sales', text: 'Import committed: imported invoices (Pending) + sales history', how: 'code', ref: 'SalesReportImportService.cs:1114' },
+      { node: 'logistics', text: 'Invoices picked into a trip sheet (RF- load); invoices Assigned', how: 'manual', ref: 'ImportedInvoicesController.cs:1149', who: 'Logistics or Welly' },
+      { node: 'logistics', text: 'Driver and vehicle assigned; load Scheduled', how: 'manual', ref: 'TripSheetController.cs:432' },
+      { node: 'stock', text: 'Dispatch approved; ledger deducts each linked line', how: 'manual', ref: 'StockMovementsController.cs:237', who: 'Manager / dispatch approver' },
+      { node: 'logistics', text: 'Delivered; POD captured by the driver or scanned by the office', how: 'manual', ref: 'PodDocumentsController.cs:375' },
+      { node: 'sales', text: 'Invoices marked Delivered', how: 'code', ref: 'LoadsController.cs:1416' },
+      { node: 'finance', text: 'Debtors: net sales minus collections — not tied to delivery', how: 'gap', ref: 'FinanceOverviewController.cs:275' },
     ],
   },
   {
-    key: 'p2p', label: 'Procure to pay', icon: 'shopping_cart_checkout', color: '#34d399',
-    blurb: 'From a requisition to a paid, scored supplier.',
+    key: 'rf', label: 'Rocket Freight booking', icon: 'local_shipping', color: '#22d3ee',
+    blurb: 'A client books on the portal and follows it to delivery.',
     steps: [
-      { dept: 'stock', text: 'Raise a purchase requisition', match: ['purchase request', 'requisition', 'purchase'], template: 'Purchase request approval', module: M.stock },
-      { dept: 'mgmt', text: 'Approve the PO by value (approval matrix)', match: ['purchase request', 'approval'], template: 'Purchase request approval' },
-      { dept: 'log', text: 'Receive the goods', match: ['receiving', 'inbound', 'goods receiv'], module: M.logistics },
-      { dept: 'stock', text: 'Book the GRN', match: ['grn', 'goods receiv'], module: M.stock },
-      { dept: 'fin', text: 'Match PO, GRN and invoice, then pay', match: ['creditor', 'supplier payment', 'match', 'invoice to payment'], module: M.finance },
-      { dept: 'stock', text: 'Update the supplier scorecard', match: ['scorecard', 'supplier rating'] },
+      { node: 'src-portal', text: 'Client books; shipments created as BOOKED', how: 'code', ref: 'BookingIntakeService.cs:32' },
+      { node: 'logistics', text: 'Ops confirms or rejects the booking', how: 'manual', ref: 'ClientBookingsController.cs:122' },
+      { node: 'logistics', text: 'Shipments planned onto a load (weight checked)', how: 'manual', ref: 'ShipmentsController.cs:127' },
+      { node: 'logistics', text: 'Driver scans collect and deliver, POD with signature', how: 'manual', ref: 'ShipmentDriverController.cs:84', who: 'the load\'s driver' },
+      { node: 'src-portal', text: 'Client gets SMS / email at each status', how: 'code', ref: 'ShipmentNotificationService.cs:68' },
+      { node: 'flows', text: 'Delivery failures start exception flows', how: 'code', ref: 'FlowEvents.cs:29' },
     ],
   },
   {
-    key: 'o2d', label: 'Order to delivery', icon: 'local_shipping', color: '#22d3ee',
-    blurb: 'Getting the right goods to the right ward on the promised day.',
+    key: 'creditor', label: 'Supplier invoice to paid', icon: 'payments', color: '#facc15',
+    blurb: 'Creditor invoices through the signed, multi-step approval.',
     steps: [
-      { dept: 'sales', text: 'Confirm the order with a delivery date', match: ['sales order', 'enquiry to order', 'delivery date'], module: M.sales },
-      { dept: 'stock', text: 'Reserve items; short → procure to pay', match: ['reserve', 'shortage', 'reorder'], module: M.stock },
-      { dept: 'log', text: 'Plan the route, dispatch, capture POD', match: ['delivery operations', 'dispatch', 'load', 'pod'], module: M.logistics },
-      { dept: 'log', text: 'Failed deliveries flow back to Stock and Sales', match: ['exception', 'failed', 'triage', 'return'], template: 'Delivery exception triage', module: M.logistics },
+      { node: 'books', text: 'Supplier invoice PDF captured (OCR)', how: 'manual', ref: 'BooksController.cs:503' },
+      { node: 'finance', text: 'Draft with Sage 300 reference → creditors clerk reconciles', how: 'manual', ref: 'RequisitionWorkflow.cs:12', who: 'creditors clerk' },
+      { node: 'finance', text: 'Accountant → payment schedule', how: 'manual', ref: 'RequisitionWorkflow.cs:12', who: 'accountant' },
+      { node: 'finance', text: 'Finance approver → Leona review → Duran approval', how: 'manual', ref: 'RequisitionInvoicesController.cs:213', who: 'named approvers' },
+      { node: 'finance', text: 'Nash pays; invoice Paid then Closed', how: 'manual', ref: 'RequisitionWorkflow.cs:12', who: 'Nash' },
+      { node: 'assets', text: 'If it bought equipment, matched to the asset', how: 'code', ref: 'AssetInvoiceMatchingService.cs:412' },
     ],
   },
   {
-    key: 'h2r', label: 'Hire to retire', icon: 'badge', color: '#c084fc',
-    blurb: 'A person’s whole journey, with IT and Accounts in step.',
+    key: 'petty', label: 'Requisition to paid', icon: 'request_quote', color: '#fb923c',
+    blurb: 'Petty cash, e-wallet and diesel requests from the fleet.',
     steps: [
-      { dept: 'mgmt', text: 'Department head requests a hire; approve if unbudgeted', match: ['hire', 'recruit', 'staff request'] },
-      { dept: 'hr', text: 'Recruit, contract, create the employee record', match: ['recruit', 'staff request', 'onboard'], module: M.people },
-      { dept: 'it', text: 'Issue accounts and devices', match: ['onboard', 'starter', 'access'], template: 'New starter onboarding', module: M.assets },
-      { dept: 'fin', text: 'Add to payroll', match: ['onboard', 'payroll'], template: 'New starter onboarding' },
-      { dept: 'hr', text: 'Reviews and leave', match: ['leave', 'review', 'performance'], module: M.people },
-      { dept: 'hr', text: 'Exit: close record, remove access, final pay', match: ['leaver', 'offboard', 'exit'], template: 'Leaver offboarding' },
+      { node: 'logistics', text: 'Requisition raised (RF number)', how: 'manual', ref: 'RequisitionsController.cs:155' },
+      { node: 'finance', text: 'Finance marks it requested, paid or rejected', how: 'manual', ref: 'FinanceOverviewController.cs:192' },
+      { node: 'logistics', text: 'Not linked to the vehicle, driver or load it was for', how: 'gap', ref: 'Requisition.cs:42' },
     ],
   },
   {
-    key: 'i2r', label: 'Issue to resolution', icon: 'build_circle', color: '#fb923c',
-    blurb: 'Log it once, route it to the owner, never solve it twice.',
+    key: 'people', label: 'Clock-in to HR', icon: 'fingerprint', color: '#f472b6',
+    blurb: 'From the clocking device to the HR file.',
     steps: [
-      { dept: 'rec', text: 'A customer, employee or system raises an issue', match: ['issue', 'complaint', 'support request', 'ticket'], template: 'Issue to resolution', module: M.tickets },
-      { dept: 'it', text: 'Logged once and routed to the owning department', match: ['issue to resolution', 'support request', 'triage'], template: 'Issue to resolution' },
-      { dept: 'log', text: 'The owner resolves it, pulling others in', match: ['issue to resolution', 'exception', 'resolve'] },
-      { dept: 'it', text: 'Repeatable fixes become an SOP / article', match: ['knowledge', 'sop', 'issue to resolution'], template: 'Issue to resolution', module: M.docs },
+      { node: 'src-clock', text: 'Device pushes clock-in / out', how: 'code', ref: 'ClockingDeviceController.cs:120' },
+      { node: 'hr', text: 'Register and drivers imported into HR employee files', how: 'manual', ref: 'HrEmployeesController.cs:305', who: 'HR' },
+      { node: 'hr', text: 'Leave requested, HR approves', how: 'manual', ref: 'LeaveRequestsController.cs:167' },
+      { node: 'hr', text: 'Leave does not feed attendance; payroll is not built', how: 'gap', ref: 'LeaveRequestsController.cs:25' },
+    ],
+  },
+  {
+    key: 'tender', label: 'Tender to award', icon: 'gavel', color: '#c084fc',
+    blurb: 'Bidding, and what an award should set off.',
+    steps: [
+      { node: 'tenders', text: 'Tender, compliance pack and BOQ prepared', how: 'manual', ref: 'TendersController.cs' },
+      { node: 'tenders', text: 'Awarded: date and value recorded', how: 'code', ref: 'TendersController.cs:317' },
+      { node: 'sales', text: 'Award does not reach Sales; tender prices are a fixed file', how: 'gap', ref: 'tender-pricing-data.ts:1' },
     ],
   },
 ];
 
-/** Approval matrix. Thresholds are the company's placeholders until Management sets the final rand values. */
-export const CORTEX_APPROVALS: CortexApproval[] = [
-  { decision: 'Purchase order', requestedBy: 'Stock / any department', first: 'Department head', escalates: 'Accounts → Management', trigger: '> R20 000 / > R50 000 or over budget', template: 'Purchase request approval', match: ['purchase'] },
-  { decision: 'Supplier payment', requestedBy: 'Creditors clerk', first: 'Financial manager', escalates: 'Management', trigger: 'Above set value, or new bank details', match: ['supplier payment', 'creditor'] },
-  { decision: 'Customer credit limit', requestedBy: 'Sales', first: 'Accounts', escalates: 'Management', trigger: 'New account or > R100 000', template: 'Customer credit limit request', match: ['credit limit'] },
-  { decision: 'Stock write-off / adjustment', requestedBy: 'Stock controller', first: 'Stock manager', escalates: 'Accounts → Management', trigger: '> R5 000 / > R25 000', template: 'Stock write-off approval', match: ['write-off', 'adjustment'] },
-  { decision: 'New hire', requestedBy: 'Department head', first: 'HR', escalates: 'Management', trigger: 'Any unbudgeted position', match: ['hire', 'staff request', 'recruit'] },
-  { decision: 'Leave', requestedBy: 'Employee', first: 'Line manager', escalates: 'Department head', trigger: 'Over policy limits', match: ['leave'] },
-  { decision: 'New software / access', requestedBy: 'Any employee', first: 'IT', escalates: 'Management', trigger: 'New cost, or financial / HR data', match: ['access request', 'software', 'support request'] },
-  { decision: 'AI agent action', requestedBy: 'Welly', first: 'Owning department', escalates: '—', trigger: 'Pays, sends externally, or changes master data', match: ['welly action', 'system action'] },
-];
-
-export const CORTEX_LAYERS: { key: CortexLayer; label: string; y: number }[] = [
-  { key: 'gov', label: 'Governance', y: Y.gov },
-  { key: 'dept', label: 'Departments', y: Y.dept },
-  { key: 'core', label: 'The cortex', y: Y.core },
-  { key: 'agent', label: 'AI agents · Welly', y: Y.agent },
-  { key: 'asset', label: 'Assets & infrastructure', y: Y.asset },
+/** What the code is missing, found by tracing the hand-offs. */
+export const CORTEX_GAPS: CortexGap[] = [
+  { key: 'debtors-pod', node: 'finance', title: 'Debtors ignore delivery', ref: 'FinanceOverviewController.cs:275',
+    detail: 'Receivables are net sales minus collections, so an undelivered or disputed invoice counts the same as one with a signed POD.',
+    fix: 'Age debtors from the POD date and flag invoices with no POD; the Missing POD chaser flow covers the chasing.', template: 'Missing POD chaser' },
+  { key: 'tender-award', node: 'tenders', title: 'A tender award sets nothing off', ref: 'TendersController.cs:317',
+    detail: 'Awarding records a date and value only. Sales tender prices live in a fixed file, and contracts hold the tender number as free text.',
+    fix: 'On award, load the BOQ prices into Sales tender pricing and open a contract; a flow can hand the award to Sales and Stock.' },
+  { key: 'ticket-routing', node: 'tickets', title: 'Tickets are not routed', ref: 'SupportTicketsController.cs:163',
+    detail: 'Assigned-to is free text and there is no department routing, so nothing tells the owner a ticket is theirs.',
+    fix: 'Use the Issue to resolution flow: Welly picks the owning department and it is tracked to an SOP.', template: 'Issue to resolution' },
+  { key: 'asset-owner', node: 'assets', title: 'Assets are not linked to people', ref: 'AssetRegisterController.cs:72',
+    detail: 'Assigned-to is free text, so a leaver\'s laptop and phone cannot be listed or recovered from their record.',
+    fix: 'Link assets to the HR employee; the Leaver offboarding flow then checks devices back in.', template: 'Leaver offboarding' },
+  { key: 'payroll', node: 'hr', title: 'No payroll, leave not in attendance', ref: 'LeaveRequestsController.cs:25',
+    detail: 'Approved leave does not reach attendance, and there is no payroll step anywhere in the code.',
+    fix: 'Feed approved leave into attendance, and send a monthly attendance + leave pack to Accounts.' },
+  { key: 'req-link', node: 'logistics', title: 'Requisitions float free', ref: 'Requisition.cs:42',
+    detail: 'Petty cash, e-wallet and diesel requisitions are not linked to a vehicle, driver or load; paid-to is free text.',
+    fix: 'Link requisitions to the vehicle and load so cost per vehicle and per trip can be reported next to fuel.' },
+  { key: 'order-mail', node: 'sales', title: 'Order emails create nothing', ref: 'SalesMailboxMonitorService.cs:11',
+    detail: 'Orders arrive by email but only become work once Sage has invoiced them and someone imports the report.',
+    fix: 'Let Welly read order emails and draft the order or flag it, so nothing waits on the next Sage export.' },
+  { key: 'handoff-notify', node: 'flows', title: 'Teams are not told when work arrives', ref: 'ImportedInvoicesController.cs:1149',
+    detail: 'Most hand-offs are a status change the next team only sees by opening a screen (an invoice Assigned, a load ready to dispatch).',
+    fix: 'Publish events for invoice imported, load ready for dispatch and POD received so flows can notify and escalate.' },
+  { key: 'company-labels', node: 'sales', title: 'One company, three names', ref: 'FinanceOverviewController.cs:216',
+    detail: 'PHT is shown as Pharmacare, Pharmatech and Promed Pharmatech in different screens.',
+    fix: 'Read company names from the OperatingCompanies table everywhere.' },
 ];
