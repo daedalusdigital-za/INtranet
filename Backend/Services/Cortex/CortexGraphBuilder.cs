@@ -334,6 +334,43 @@ namespace ProjectTracker.API.Services.Cortex
                 N($"gap:deptdup:{Slug(g.Key)}", "gap", $"{string.Join(" / ", g.Select(d => d.Name))} look like one team", DeptKey(g.OrderBy(d => d.DepartmentId).First().DepartmentId),
                   "Two department records split the same people and processes. Merge them so the map, permissions and flows agree.", "derived", data: new { kind = "data_quality", priority = 2, departments = g.Select(d => d.DepartmentId).ToArray() });
 
+            // ── Welly Analyse: findings with a proposed fix. Inferred, so a person must accept before anything changes. ──
+            void Finding(string key, string parent, string title, string evidence, string fix, string fixKind, object fixPayload, double confidence)
+            {
+                N($"finding:{key}", "finding", title, parent, evidence, "inferred", null, data: new { kind = "finding", confidence, agent = "analyse" });
+                N($"suggestion:{key}", "suggestion", fix, $"finding:{key}", null, "inferred", null, data: new { kind = fixKind, payload = fixPayload, confidence, agent = "suggest" });
+                E("agent:analyse", $"finding:{key}", "produces", "Raised by Welly Analyse", source: "Welly Analyse");
+                E("agent:suggest", $"suggestion:{key}", "produces", "Proposed by Welly Suggest", source: "Welly Suggest");
+            }
+            foreach (var f in flows)
+            {
+                var (_, fsteps) = ParseGraph(f.GraphJson);
+                foreach (var s in fsteps.Where(s => s.Type is "task" or "approval"))
+                {
+                    if (!metrics.TryGetValue((f.Id, s.Id), out var sm) || sm.Samples < 3) continue;
+                    var sk = $"flow:{f.Id}:step:{s.Id}";
+                    // slow approval/task: propose an escalation or a pool assignment
+                    if (sm.Median is double md && md > 16)
+                    {
+                        var toOnePerson = s.Assign?.UserId != null;
+                        Finding($"slow:{f.Id}:{s.Id}", sk, $"{s.Name ?? s.Type} waits {md:0.#} h on median",
+                            $"{sm.Samples} tasks in 180 days; p90 {sm.P90:0.#} h; {sm.Queue} open now. {(toOnePerson ? "Assigned to one named person, so it stalls when they are away." : "Assigned to a pool/role.")}",
+                            toOnePerson ? "Assign this step to the department pool and escalate to the manager after 24 h" : "Add an escalation to the department head after 24 h",
+                            "update_step", new { flowId = f.Id, stepId = s.Id, escalateAfterHours = 24, assignToDepartment = toOnePerson }, Math.Min(0.9, 0.5 + sm.Samples * 0.02));
+                    }
+                    // one person does everything here: single point of failure (team-level framing)
+                    var completers = taskRows.Where(t => t.FlowDefinitionId == f.Id && t.StepId == s.Id && t.CompletedByUserId != null).GroupBy(t => t.CompletedByUserId).ToList();
+                    if (completers.Count == 1 && completers[0].Count() >= 5 && s.Assign?.UserId == null)
+                        Finding($"spof:{f.Id}:{s.Id}", sk, $"One person clears every {s.Name ?? s.Type}",
+                            $"All {completers[0].Count()} completions in 180 days were by the same account although the step is assigned to a pool. Knowledge sits with one person.",
+                            "Write the procedure for this step and name a backup in the department", "curate_step", new { flowId = f.Id, stepId = s.Id, needs = new[] { "procedure", "backup" } }, 0.7);
+                }
+                // enabled process with runs but no owner
+                if (f.IsEnabled && f.OwnerUserId == null && f.OwnerEmployeeId == null && runStats.TryGetValue(f.Id, out var rs2) && rs2.Total > 0)
+                    Finding($"noowner:{f.Id}", $"flow:{f.Id}", $"{f.Name} runs without an owner", $"{rs2.Total} runs, {rs2.Active} live, nobody accountable for the process itself.",
+                        $"Name an owner for {f.Name}" + (FindDept(f.DepartmentName)?.ManagerName is string mn ? $" (suggest: {mn}, department head)" : ""), "set_owner", new { flowId = f.Id, suggestedOwner = FindDept(f.DepartmentName)?.ManagerName }, 0.8);
+            }
+
             var result = await UpsertAsync(nodes, edges, now, ct);
             sw.Stop();
             _log.LogInformation("Cortex rebuilt: {Nodes} nodes, {Edges} edges (+{Created} / ~{Updated} / -{Deactivated}) in {Ms} ms", result.Nodes, result.Edges, result.Created, result.Updated, result.Deactivated, sw.ElapsedMilliseconds);

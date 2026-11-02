@@ -64,6 +64,44 @@ export class FlowCortexComponent implements OnInit {
   stream = signal<string | null>(null);
   query = signal('');
   hidden = signal<Set<CortexLayer>>(new Set());
+  /** 1 = company (sources + modules), 2 = departments, 3 = people inside the selected department. */
+  zoom = signal<1 | 2 | 3>(2);
+  readonly zoomLevels: { z: 1 | 2 | 3; label: string; icon: string; tip: string }[] = [
+    { z: 1, label: 'Company', icon: 'apartment', tip: 'Sources, modules and the hand-offs between them' },
+    { z: 2, label: 'Departments', icon: 'groups', tip: 'Who works in which module' },
+    { z: 3, label: 'People', icon: 'person', tip: 'Pick a department to fan out its people and what they can reach' },
+  ];
+  setZoom(z: 1 | 2 | 3) {
+    this.zoom.set(z);
+    const s = new Set(this.hidden()); z === 1 ? s.add('dept') : s.delete('dept'); this.hidden.set(s);
+    if (z === 3 && !this.dept()) { const d = this.deptNodes()[0]; if (d) this.selected.set(d.key); }
+  }
+
+  /** People of the selected department as small nodes on an arc above its hexagon (People zoom only). */
+  personNodes = computed(() => {
+    const d = this.dept(); if (!d || this.zoom() !== 3) return [] as { key: string; p: CortexPerson; x: number; y: number; modules: string[] }[];
+    const list = d.people.slice(0, 28);
+    const n = list.length; if (!n) return [];
+    const byUser = new Map((this.catalog()?.users ?? []).map(u => [u.id, u]));
+    return list.map((p, i) => {
+      const row = i < 14 ? 0 : 1, idx = row ? i - 14 : i, cnt = row ? n - 14 : Math.min(n, 14);
+      const a = Math.PI + (cnt === 1 ? Math.PI / 2 : (Math.PI * (idx + 0.5)) / cnt);   // 180° → 360° : an arc over the top
+      const r = 78 + row * 34;
+      const mods = p.userId != null ? (byUser.get(p.userId)?.modules ?? []) : [];
+      return { key: 'p:' + p.key, p, x: Math.max(24, Math.min(1176, d.x + r * Math.cos(a))), y: d.y + r * Math.sin(a) * 0.72, modules: mods };
+    });
+  });
+  /** Person → module reach, for the person under the pointer (or all, dimmed). */
+  personEdges = computed(() => {
+    const out: { from: string; to: string; x1: number; y1: number; x2: number; y2: number; lit: boolean }[] = [];
+    const hov = this.hovered();
+    for (const pn of this.personNodes()) {
+      const mods = pn.modules.includes('all') ? [] : pn.modules;
+      for (const m of CORTEX_NODES.filter(n => n.layer === 'module' && n.perm && mods.includes(n.perm))) out.push({ from: pn.key, to: m.key, x1: pn.x, y1: pn.y, x2: m.x, y2: m.y, lit: hov === pn.key });
+    }
+    return hov ? out.filter(e => e.lit) : out.slice(0, 120);
+  });
+  personPath(e: { x1: number; y1: number; x2: number; y2: number }) { const my = (e.y1 + e.y2) / 2; return `M${e.x1},${e.y1} C${e.x1},${my} ${e.x2},${my} ${e.x2},${e.y2}`; }
 
   private live = computed(() => this.flows().filter(f => !f.isTemplate));
   private norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
@@ -101,9 +139,14 @@ export class FlowCortexComponent implements OnInit {
   apiKey(key: string | null | undefined) { return !key ? null : key.startsWith('d:') ? 'dept:' + key.slice(2) : key; }
   apiNode(key: string | null | undefined): CortexApiNode | null { const k = this.apiKey(key); return k ? this.apiByKey().get(k) ?? null : null; }
   /** Attached knowledge / responsibilities / workflow / authority nodes under a node, including empty ones (shown, not hidden). */
-  attached(key: string) { const k = this.apiKey(key); return k ? (this.graph()?.nodes ?? []).filter(n => n.parent === k && n.type !== 'gap' && n.type !== 'step' && n.type !== 'approval' && n.type !== 'inference' && n.type !== 'process') : []; }
-  /** Welly inferences attached to this node (e.g. "X works on Y" for a person). */
-  inferencesOf(key: string) { const k = this.apiKey(key); return k ? (this.graph()?.nodes ?? []).filter(n => n.parent === k && n.type === 'inference') : []; }
+  attached(key: string) { const k = this.apiKey(key); return k ? (this.graph()?.nodes ?? []).filter(n => n.parent === k && !['gap', 'step', 'approval', 'inference', 'finding', 'suggestion', 'process'].includes(n.type)) : []; }
+  /** Welly inferences and findings attached to this node or its workflow steps. */
+  inferencesOf(key: string) {
+    const k = this.apiKey(key); if (!k) return [];
+    return (this.graph()?.nodes ?? []).filter(n => (n.type === 'inference' || n.type === 'finding') && (n.parent === k || n.parent?.startsWith(k + ':step:')));
+  }
+  /** The proposed fix for a finding, if Welly Suggest attached one. */
+  fixFor(n: CortexApiNode) { return n.type === 'finding' ? (this.graph()?.nodes ?? []).find(s => s.type === 'suggestion' && s.parent === n.key) ?? null : null; }
   /** Server-derived gaps on a node (unowned modules, flows with no owner, departments without a head, …). */
   apiGapsOf(key: string) { const k = this.apiKey(key); return k ? this.apiGaps().filter(g => g.on === k) : []; }
   /** Where to land on this map for a server-graph key: same key for modules/sources, 'd:ID' for departments, else the parent. */
@@ -151,7 +194,7 @@ export class FlowCortexComponent implements OnInit {
   curate(n: CortexApiNode) { this.openEditor(n, 'write'); }
 
   /** Welly inferences waiting for a decision, newest evidence first. */
-  pendingInferences = computed(() => (this.graph()?.nodes ?? []).filter(n => n.provenance === 'inferred' && n.status === 'pending').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+  pendingInferences = computed(() => (this.graph()?.nodes ?? []).filter(n => n.provenance === 'inferred' && n.status === 'pending' && n.type !== 'suggestion').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
   /** Measured wait on the hand-off into a step (from FlowTasks), if any. */
   stepEdgesOf(key: string) {
     const k = this.apiKey(key); if (!k) return [];
@@ -455,7 +498,7 @@ export class FlowCortexComponent implements OnInit {
     return out.slice(0, 8);
   });
 
-  select(key: string | null) { this.selected.set(this.selected() === key ? null : key); }
+  select(key: string | null) { this.selected.set(this.selected() === key && this.zoom() !== 3 ? null : key); }
   pick(r: { node: string }) { this.selected.set(r.node); this.query.set(''); }
   toggleStream(key: string) { this.stream.set(this.stream() === key ? null : key); }
   toggleLayer(l: CortexLayer) { const s = new Set(this.hidden()); s.has(l) ? s.delete(l) : s.add(l); this.hidden.set(s); }
