@@ -49,6 +49,12 @@ namespace ProjectTracker.API.Controllers
             public string? Description { get; set; }
             public string? Category { get; set; }
             public string? DepartmentName { get; set; }
+            public string? OwnerEmployeeId { get; set; }
+            public string? OwnerName { get; set; }
+            public string? OwnerTitle { get; set; }
+            public int? OwnerUserId { get; set; }
+            public string? OwnerUserEmail { get; set; }
+            public JsonElement Blueprint { get; set; }
             public int Level { get; set; }
             public string TriggerType { get; set; } = "manual";
             public JsonElement Trigger { get; set; }
@@ -73,6 +79,11 @@ namespace ProjectTracker.API.Controllers
             public string? Description { get; set; }
             public string? Category { get; set; }
             public string? DepartmentName { get; set; }
+            public string? OwnerEmployeeId { get; set; }
+            public string? OwnerName { get; set; }
+            public string? OwnerTitle { get; set; }
+            public int? OwnerUserId { get; set; }
+            public JsonElement? Blueprint { get; set; }
             public int Level { get; set; } = 1;
             public string TriggerType { get; set; } = "manual";
             public JsonElement? Trigger { get; set; }
@@ -101,6 +112,9 @@ namespace ProjectTracker.API.Controllers
             return new FlowDefinitionDto
             {
                 Id = d.Id, Name = d.Name, Description = d.Description, Category = d.Category, DepartmentName = d.DepartmentName, Level = d.Level,
+                OwnerEmployeeId = d.OwnerEmployeeId, OwnerName = d.OwnerName, OwnerTitle = d.OwnerTitle, OwnerUserId = d.OwnerUserId,
+                OwnerUserEmail = d.OwnerUserId == null ? null : await _db.Users.AsNoTracking().Where(u => u.UserId == d.OwnerUserId).Select(u => u.Email).FirstOrDefaultAsync(),
+                Blueprint = Parse(d.BlueprintJson, "{}"),
                 TriggerType = d.TriggerType, Trigger = Parse(d.TriggerJson, "{}"), Graph = Parse(d.GraphJson, "{\"steps\":[]}"), Inputs = Parse(d.InputsJson, "[]"),
                 IsEnabled = d.IsEnabled, IsTemplate = d.IsTemplate, Version = d.Version, StartPermissions = d.StartPermissions,
                 LastScheduledRunAt = d.LastScheduledRunAt, CreatedAt = d.CreatedAt, CreatedBy = d.CreatedByUser == null ? (d.CreatedByUserId == null ? "System" : null) : d.CreatedByUser.Name + " " + d.CreatedByUser.Surname, UpdatedAt = d.UpdatedAt,
@@ -145,10 +159,15 @@ namespace ProjectTracker.API.Controllers
                 .Select(u => new { id = u.UserId, name = u.Name + " " + u.Surname, email = u.Email, role = u.Role, departmentId = u.DepartmentId }).ToListAsync();
             var departments = await _db.Departments.AsNoTracking().OrderBy(d => d.Name).Select(d => new { id = d.DepartmentId, name = d.Name, manager = d.ManagerName }).ToListAsync();
             var roles = users.Select(u => u.role).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct().OrderBy(r => r).ToList();
+            // Employee register (clocking system): lets a human flow be pinned to a specific person even when they never log in.
+            var employees = await _db.EmpRegistrations.AsNoTracking()
+                .Select(e => new { id = e.EmpId, name = ((e.Name ?? "") + " " + (e.LastName ?? "")).Trim(), department = e.Department, jobTitle = e.JobTitle })
+                .ToListAsync();
+            employees = employees.Where(e => e.name.Length > 0).OrderBy(e => e.name).ToList();
             return Ok(new
             {
                 isDesigner = designer,
-                users, departments, roles,
+                users, departments, roles, employees,
                 events = _events.KnownEvents.Select(e => new { key = e.Key, description = e.Description }),
                 dataSources = _sources.Catalog,
                 stepTypes = new[]
@@ -264,6 +283,7 @@ namespace ProjectTracker.API.Controllers
             {
                 Name = src.IsTemplate ? src.Name : src.Name + " (copy)",
                 Description = src.Description, Category = src.Category, DepartmentName = src.DepartmentName, Level = src.Level, TriggerType = src.TriggerType,
+                OwnerEmployeeId = src.OwnerEmployeeId, OwnerName = src.OwnerName, OwnerTitle = src.OwnerTitle, OwnerUserId = src.OwnerUserId, BlueprintJson = src.BlueprintJson,
                 TriggerJson = src.TriggerJson, GraphJson = src.GraphJson, InputsJson = src.InputsJson,
                 IsEnabled = src.TriggerType == FlowTriggerType.Manual, IsTemplate = false, StartPermissions = src.StartPermissions,
                 CreatedByUserId = Uid, CreatedAt = DateTime.UtcNow
@@ -351,6 +371,13 @@ namespace ProjectTracker.API.Controllers
             d.Description = req.Description;
             d.Category = req.Category;
             d.DepartmentName = string.IsNullOrWhiteSpace(req.DepartmentName) ? null : req.DepartmentName.Trim();
+            var hasOwner = d.DepartmentName != null && (!string.IsNullOrWhiteSpace(req.OwnerEmployeeId) || !string.IsNullOrWhiteSpace(req.OwnerName) || req.OwnerUserId != null);
+            d.OwnerEmployeeId = hasOwner && !string.IsNullOrWhiteSpace(req.OwnerEmployeeId) ? req.OwnerEmployeeId.Trim() : null;
+            d.OwnerName = hasOwner && !string.IsNullOrWhiteSpace(req.OwnerName) ? req.OwnerName.Trim() : null;
+            d.OwnerTitle = hasOwner && !string.IsNullOrWhiteSpace(req.OwnerTitle) ? req.OwnerTitle.Trim() : null;
+            d.OwnerUserId = hasOwner ? (req.OwnerUserId ?? d.OwnerUserId) : null;
+            if (req.Blueprint is { ValueKind: JsonValueKind.Object } bp) d.BlueprintJson = bp.GetRawText();
+            else if (req.Blueprint is { ValueKind: JsonValueKind.Null }) d.BlueprintJson = null;
             d.Level = req.Level;
             d.TriggerType = req.TriggerType;
             d.TriggerJson = req.Trigger?.GetRawText() ?? "{}";
@@ -358,6 +385,111 @@ namespace ProjectTracker.API.Controllers
             d.InputsJson = req.Inputs?.GetRawText() ?? "[]";
             d.IsEnabled = req.IsEnabled;
             d.StartPermissions = req.StartPermissions;
+        }
+
+        public class LinkOwnerRequest { public string? Email { get; set; } public bool CreateUser { get; set; } = true; }
+
+        /// <summary>
+        /// Link the human flow's owner (employee register) to an intranet user so tasks, emails and Home widgets reach
+        /// them. Finds the user by email; creates one (Employee role, must change password) when asked and none exists.
+        /// Also back-fills User.LinkedEmpId and the employee's department so the three records agree.
+        /// </summary>
+        [HttpPost("definitions/{id:int}/link-owner")]
+        [RequireModule("flows")]
+        public async Task<IActionResult> LinkOwner(int id, [FromBody] LinkOwnerRequest req)
+        {
+            if (!await IsDesignerAsync()) return Forbid();
+            var d = await _db.FlowDefinitions.FirstOrDefaultAsync(x => x.Id == id);
+            if (d == null) return NotFound();
+            if (string.IsNullOrWhiteSpace(d.OwnerEmployeeId) && string.IsNullOrWhiteSpace(d.OwnerName)) return BadRequest(new { message = "This flow has no employee owner yet." });
+
+            var email = (req.Email ?? "").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(email) || !email.Contains('@')) return BadRequest(new { message = "A work email is required." });
+
+            var emp = string.IsNullOrWhiteSpace(d.OwnerEmployeeId) ? null : await _db.EmpRegistrations.FirstOrDefaultAsync(e => e.EmpId == d.OwnerEmployeeId);
+            // Never create a login that already exists: exact email first, then an active account on the same domain
+            // whose name matches the owner (catches typo'd emails), then HR's file for the employee number / email.
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.IsActive && u.Email.ToLower() == email)
+                    ?? await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+            if (user == null && !string.IsNullOrWhiteSpace(d.OwnerName))
+            {
+                var first = d.OwnerName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[0].ToLowerInvariant();
+                var domain = email[email.IndexOf('@')..];
+                var byName = await _db.Users.Where(u => u.IsActive && u.Email.ToLower().EndsWith(domain) && u.Name.ToLower().StartsWith(first)).ToListAsync();
+                if (byName.Count == 1) user = byName[0];
+                else if (byName.Count > 1) return Conflict(new { message = $"Several active users on {domain} are called {d.OwnerName.Split(' ')[0]} — pick the exact email: {string.Join(", ", byName.Select(u => u.Email))}" });
+            }
+            var hr = await _db.HrEmployees.FirstOrDefaultAsync(h => h.Email != null && h.Email.ToLower() == email)
+                  ?? (d.OwnerEmployeeId == null ? null : await _db.HrEmployees.FirstOrDefaultAsync(h => h.EmployeeNumber == d.OwnerEmployeeId));
+            if (hr != null)
+            {
+                if (string.IsNullOrWhiteSpace(hr.Email)) hr.Email = email;
+                if (string.IsNullOrWhiteSpace(hr.EmployeeNumber) && d.OwnerEmployeeId != null) hr.EmployeeNumber = d.OwnerEmployeeId;
+                if ((string.IsNullOrWhiteSpace(hr.JobTitle) || hr.JobTitle == "Other") && !string.IsNullOrWhiteSpace(d.OwnerTitle)) hr.JobTitle = d.OwnerTitle;
+            }
+            var created = false; string? tempPassword = null;
+
+            if (user == null)
+            {
+                if (!req.CreateUser) return NotFound(new { message = $"No user with email {email}." });
+                var full = (d.OwnerName ?? (emp != null ? (emp.Name + " " + emp.LastName) : "")).Trim();
+                var parts = full.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                var dept = string.IsNullOrWhiteSpace(d.DepartmentName) ? null : await _db.Departments.FirstOrDefaultAsync(x => x.Name == d.DepartmentName);
+                tempPassword = "Welcome" + Random.Shared.Next(1000, 9999) + "!";
+                user = new Models.User
+                {
+                    Name = parts.Length > 0 ? parts[0] : "Employee", Surname = parts.Length > 1 ? parts[1] : "",
+                    Email = email, PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword), Role = "Employee",
+                    Title = d.OwnerTitle, DepartmentId = dept?.DepartmentId, LinkedEmpId = emp?.EmpId,
+                    Permissions = InferPermissions(d.DepartmentName), IsActive = true, CreatedAt = DateTime.UtcNow
+                };
+                _db.Users.Add(user);
+                created = true;
+            }
+            else
+            {
+                if (emp != null && string.IsNullOrWhiteSpace(user.LinkedEmpId)) user.LinkedEmpId = emp.EmpId;
+                if (!string.IsNullOrWhiteSpace(d.OwnerTitle) && (string.IsNullOrWhiteSpace(user.Title) || user.Title is "Finance" or "Accounts" or "Employee" or "Other")) user.Title = d.OwnerTitle;
+                var permList = (user.Permissions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                if (!permList.Contains("flows", StringComparer.OrdinalIgnoreCase)) { permList.Add("flows"); user.Permissions = string.Join(",", permList); }
+                if (user.DepartmentId == null && !string.IsNullOrWhiteSpace(d.DepartmentName))
+                    user.DepartmentId = await _db.Departments.Where(x => x.Name == d.DepartmentName).Select(x => (int?)x.DepartmentId).FirstOrDefaultAsync();
+                user.UpdatedAt = DateTime.UtcNow;
+            }
+            await _db.SaveChangesAsync();
+
+            // Employee register: fill in title/department when the clocking import left them as "Other".
+            if (emp != null)
+            {
+                if ((string.IsNullOrWhiteSpace(emp.JobTitle) || emp.JobTitle == "Other") && !string.IsNullOrWhiteSpace(d.OwnerTitle)) emp.JobTitle = d.OwnerTitle;
+                if ((string.IsNullOrWhiteSpace(emp.Department) || emp.Department == "Other") && !string.IsNullOrWhiteSpace(d.DepartmentName)) emp.Department = d.DepartmentName;
+            }
+
+            // Every flow owned by this employee gets the user link, not just the one clicked.
+            var ownerFlows = string.IsNullOrWhiteSpace(d.OwnerEmployeeId) ? new List<FlowDefinition> { d }
+                : await _db.FlowDefinitions.Where(f => f.OwnerEmployeeId == d.OwnerEmployeeId).ToListAsync();
+            foreach (var f in ownerFlows) { f.OwnerUserId = user.UserId; f.UpdatedAt = DateTime.UtcNow; f.UpdatedByUserId = Uid; }
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                userId = user.UserId, email = user.Email, name = (user.Name + " " + user.Surname).Trim(), created, tempPassword,
+                linkedEmployeeId = emp?.EmpId, flowsLinked = ownerFlows.Count,
+                message = created ? $"Created user {user.Email} and linked it to {ownerFlows.Count} flow(s)." : $"Linked existing user {user.Email} to {ownerFlows.Count} flow(s)."
+            });
+        }
+
+        /// <summary>Starter module permissions for a new user based on the department their flow belongs to.</summary>
+        private static string InferPermissions(string? department)
+        {
+            var dn = (department ?? "").ToLowerInvariant();
+            var mods = new List<string> { "flows" };
+            if (dn.Contains("finance") || dn.Contains("account")) mods.Add("finance");
+            if (dn.Contains("sales")) mods.Add("sales");
+            if (dn.Contains("logistic")) mods.Add("logistics");
+            if (dn.Contains("stock")) mods.Add("stock_management");
+            if (dn.Contains("hr") || dn.Contains("human")) mods.Add("human_resource");
+            return string.Join(",", mods);
         }
 
         // ── Runs ──────────────────────────────────────────────────────────────────────
@@ -443,8 +575,20 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("runs/{id:int}")]
         public async Task<IActionResult> Run(int id)
         {
+            if (!await _db.FlowRuns.AnyAsync(r => r.Id == id)) return NotFound();
+            if (!await CanViewRunAsync(id)) return Forbid();
             var detail = await RunDetailAsync(id);
             return detail == null ? NotFound() : Ok(detail);
+        }
+
+        /// <summary>Same visibility as the runs list: designers see everything; others see runs they started or have a task on (directly or via their role/department pool).</summary>
+        private async Task<bool> CanViewRunAsync(int id)
+        {
+            if (await IsDesignerAsync()) return true;
+            var uid = Uid;
+            var (role, _, deptId) = await MeAsync();
+            return await _db.FlowRuns.AnyAsync(r => r.Id == id && (r.StartedByUserId == uid || r.Tasks.Any(t => t.AssignedToUserId == uid || t.CompletedByUserId == uid
+                || (t.AssignedToUserId == null && (t.AssignedToDepartmentId == null || t.AssignedToDepartmentId == deptId) && (t.AssignedToRole == null || t.AssignedToRole == role)))));
         }
 
         private async Task<object?> RunDetailAsync(int id)
@@ -457,7 +601,7 @@ namespace ProjectTracker.API.Controllers
             {
                 summary = RunSummary(r),
                 context = Parse(r.ContextJson, "{}"),
-                graph = Parse(r.Definition.GraphJson, "{\"steps\":[]}"),
+                graph = Parse(r.GraphJson ?? r.Definition.GraphJson, "{\"steps\":[]}"),
                 tasks = r.Tasks.OrderBy(t => t.CreatedAt).Select(TaskDto),
                 events = events.Select(e => new { e.Id, e.StepId, e.Type, e.Message, e.UserName, e.OccurredAt, data = string.IsNullOrEmpty(e.DataJson) ? (JsonElement?)null : Parse(e.DataJson, "null") })
             };
@@ -556,6 +700,145 @@ namespace ProjectTracker.API.Controllers
                 .Select(g => new { name = g.Key, runs = g.Count(), active = g.Count(r => r.Status == FlowRunStatus.Running || r.Status == FlowRunStatus.Waiting), failed = g.Count(r => r.Status == FlowRunStatus.Failed) })
                 .OrderByDescending(x => x.runs).Take(10).ToListAsync();
             return Ok(new { myOpen, myOverdue, active, completed30, failed30, avgHours, enabled, byFlow });
+        }
+
+        // ── Widgets (shared Home widgets designed here) ───────────────────────────────
+
+        public class SaveWidgetRequest
+        {
+            public string Name { get; set; } = "";
+            public string? Description { get; set; }
+            public string? Icon { get; set; }
+            public string Type { get; set; } = "flow-kpi";
+            public string? Size { get; set; }
+            public JsonElement? Config { get; set; }
+            public string? Category { get; set; }
+            public string? DepartmentName { get; set; }
+            public bool? IsPublished { get; set; }
+            public bool? IsTemplate { get; set; }
+        }
+
+        private static readonly string[] WidgetTypes = { "flow-kpi", "flow-runs", "flow-start", "flow-tasks", "links", "note", "waiting", "tasks", "today", "announcements", "deliveries", "around", "payment-tracker", "currency", "sales-graph", "sales-vs-stock", "early-birds", "late-birds" };
+        private static readonly string[] WidgetSizes = { "sm", "md", "lg", "xl" };
+
+        private object WidgetDto(FlowWidget w)
+        {
+            JsonElement cfg;
+            try { using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(w.ConfigJson) ? "{}" : w.ConfigJson); cfg = doc.RootElement.Clone(); }
+            catch { using var doc = JsonDocument.Parse("{}"); cfg = doc.RootElement.Clone(); }
+            return new
+            {
+                w.Id, w.Name, w.Description, w.Icon, w.Type, w.Size, config = cfg, w.Category, w.DepartmentName,
+                w.IsTemplate, w.IsPublished, w.UseCount, w.CreatedAt, w.UpdatedAt,
+                createdBy = w.CreatedByUserId == null ? null : _db.Users.Where(u => u.UserId == w.CreatedByUserId).Select(u => u.Name).FirstOrDefault()
+            };
+        }
+
+        /// <summary>Widget library. Non-designers only see published widgets for everyone or their department.</summary>
+        [HttpGet("widgets")]
+        public async Task<IActionResult> Widgets([FromQuery] bool templates = false)
+        {
+            var designer = await IsDesignerAsync();
+            var q = _db.FlowWidgets.AsNoTracking().Where(w => w.IsTemplate == templates);
+            if (!designer)
+            {
+                var deptName = await _db.Users.Where(u => u.UserId == Uid).Select(u => u.Department != null ? u.Department.Name : null).FirstOrDefaultAsync();
+                q = q.Where(w => w.IsPublished && (w.DepartmentName == null || w.DepartmentName == deptName));
+            }
+            var list = await q.OrderBy(w => w.Category).ThenBy(w => w.Name).ToListAsync();
+            return Ok(list.Select(WidgetDto));
+        }
+
+        [HttpPost("widgets")]
+        public async Task<IActionResult> CreateWidget([FromBody] SaveWidgetRequest req)
+        {
+            if (!await IsDesignerAsync()) return Forbid();
+            var err = ValidateWidget(req); if (err != null) return BadRequest(new { message = err });
+            var w = new FlowWidget { CreatedByUserId = Uid };
+            Apply(w, req);
+            _db.FlowWidgets.Add(w);
+            await _db.SaveChangesAsync();
+            return Ok(WidgetDto(w));
+        }
+
+        [HttpPut("widgets/{id:int}")]
+        public async Task<IActionResult> UpdateWidget(int id, [FromBody] SaveWidgetRequest req)
+        {
+            if (!await IsDesignerAsync()) return Forbid();
+            var w = await _db.FlowWidgets.FindAsync(id); if (w == null) return NotFound();
+            var err = ValidateWidget(req); if (err != null) return BadRequest(new { message = err });
+            Apply(w, req);
+            w.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return Ok(WidgetDto(w));
+        }
+
+        [HttpDelete("widgets/{id:int}")]
+        public async Task<IActionResult> DeleteWidget(int id)
+        {
+            if (!await IsDesignerAsync()) return Forbid();
+            var w = await _db.FlowWidgets.FindAsync(id); if (w == null) return NotFound();
+            _db.FlowWidgets.Remove(w);
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        [HttpPost("widgets/{id:int}/toggle")]
+        public async Task<IActionResult> ToggleWidget(int id)
+        {
+            if (!await IsDesignerAsync()) return Forbid();
+            var w = await _db.FlowWidgets.FindAsync(id); if (w == null) return NotFound();
+            w.IsPublished = !w.IsPublished; w.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return Ok(new { w.Id, w.IsPublished });
+        }
+
+        /// <summary>Copy a template (or any widget) into a new, unpublished widget the designer can finish.</summary>
+        [HttpPost("widgets/{id:int}/clone")]
+        public async Task<IActionResult> CloneWidget(int id)
+        {
+            if (!await IsDesignerAsync()) return Forbid();
+            var src = await _db.FlowWidgets.AsNoTracking().FirstOrDefaultAsync(w => w.Id == id); if (src == null) return NotFound();
+            var w = new FlowWidget
+            {
+                Name = src.IsTemplate ? src.Name : src.Name + " (copy)", Description = src.Description, Icon = src.Icon, Type = src.Type, Size = src.Size,
+                ConfigJson = src.ConfigJson, Category = src.Category, DepartmentName = src.DepartmentName, IsTemplate = false, IsPublished = false, CreatedByUserId = Uid
+            };
+            _db.FlowWidgets.Add(w);
+            await _db.SaveChangesAsync();
+            return Ok(WidgetDto(w));
+        }
+
+        /// <summary>Counts how often a widget was added to a Home page (fire-and-forget from the front end).</summary>
+        [HttpPost("widgets/{id:int}/used")]
+        public async Task<IActionResult> WidgetUsed(int id)
+        {
+            var w = await _db.FlowWidgets.FindAsync(id); if (w == null) return NotFound();
+            w.UseCount++;
+            await _db.SaveChangesAsync();
+            return Ok(new { w.Id, w.UseCount });
+        }
+
+        private static string? ValidateWidget(SaveWidgetRequest req)
+        {
+            if (string.IsNullOrWhiteSpace(req.Name)) return "Give the widget a name.";
+            if (!WidgetTypes.Contains(req.Type)) return $"Unknown widget type '{req.Type}'.";
+            if (req.Size != null && !WidgetSizes.Contains(req.Size)) return "Size must be sm, md, lg or xl.";
+            return null;
+        }
+
+        private static void Apply(FlowWidget w, SaveWidgetRequest req)
+        {
+            w.Name = req.Name.Trim();
+            w.Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim();
+            w.Icon = string.IsNullOrWhiteSpace(req.Icon) ? "widgets" : req.Icon.Trim();
+            w.Type = req.Type;
+            w.Size = req.Size ?? w.Size;
+            w.ConfigJson = req.Config is { ValueKind: JsonValueKind.Object } c ? c.GetRawText() : "{}";
+            w.Category = string.IsNullOrWhiteSpace(req.Category) ? "General" : req.Category.Trim();
+            w.DepartmentName = string.IsNullOrWhiteSpace(req.DepartmentName) ? null : req.DepartmentName.Trim();
+            if (req.IsPublished.HasValue) w.IsPublished = req.IsPublished.Value;
+            if (req.IsTemplate.HasValue) w.IsTemplate = req.IsTemplate.Value;
         }
     }
 }

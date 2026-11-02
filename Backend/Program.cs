@@ -111,6 +111,75 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
             context.Database.Migrate();
             logger.LogInformation("Successfully applied {Count} pending migration(s).", pending.Count);
         }
+
+        // Human-flow owners that still need an intranet account (seeded flows carry the email in their blueprint).
+        // Idempotent: once OwnerUserId is set nothing happens. Uses BCrypt, which raw-SQL migrations cannot.
+        try
+        {
+            var unlinked = context.FlowDefinitions.Where(f => f.OwnerUserId == null && f.OwnerEmployeeId != null && f.BlueprintJson != null && f.BlueprintJson.Contains("\"email\"")).ToList();
+            foreach (var f in unlinked)
+            {
+                string? email = null;
+                try { using var bp = System.Text.Json.JsonDocument.Parse(f.BlueprintJson!); if (bp.RootElement.TryGetProperty("email", out var e)) email = e.GetString(); } catch { }
+                if (string.IsNullOrWhiteSpace(email)) continue;
+                email = email.Trim().ToLowerInvariant();
+                // Resolution order — never create what already exists:
+                //  1. an active intranet user with this email (exact, then a close typo variant by name + domain);
+                //  2. the HR employee file (by email, then employee number) — keep HR and the register in step;
+                //  3. only then create a login.
+                var user = context.Users.FirstOrDefault(u => u.IsActive && u.Email.ToLower() == email)
+                        ?? context.Users.FirstOrDefault(u => u.Email.ToLower() == email);
+                var emp = context.EmpRegistrations.FirstOrDefault(e => e.EmpId == f.OwnerEmployeeId);
+                if (user == null && !string.IsNullOrWhiteSpace(f.OwnerName))
+                {
+                    var first = f.OwnerName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[0].ToLowerInvariant();
+                    var domain = email.Contains('@') ? email[email.IndexOf('@')..] : "";
+                    var byName = context.Users.Where(u => u.IsActive && u.Email.ToLower().EndsWith(domain) && u.Name.ToLower().StartsWith(first)).ToList();
+                    if (byName.Count == 1) { user = byName[0]; logger.LogInformation("Human-flow owner {Owner}: matched existing user {Email} by name.", f.OwnerName, user.Email); }
+                }
+                var hr = context.HrEmployees.FirstOrDefault(h => h.Email != null && h.Email.ToLower() == email)
+                      ?? context.HrEmployees.FirstOrDefault(h => h.EmployeeNumber == f.OwnerEmployeeId);
+                if (hr != null)
+                {
+                    if (string.IsNullOrWhiteSpace(hr.Email)) hr.Email = email;
+                    if (string.IsNullOrWhiteSpace(hr.EmployeeNumber)) hr.EmployeeNumber = f.OwnerEmployeeId;
+                    if ((string.IsNullOrWhiteSpace(hr.JobTitle) || hr.JobTitle == "Other") && !string.IsNullOrWhiteSpace(f.OwnerTitle)) hr.JobTitle = f.OwnerTitle;
+                }
+                if (user == null)
+                {
+                    var parts = (f.OwnerName ?? "Employee").Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                    var deptId = context.Departments.Where(x => x.Name == f.DepartmentName).Select(x => (int?)x.DepartmentId).FirstOrDefault();
+                    var dn = (f.DepartmentName ?? "").ToLowerInvariant();
+                    var perms = "flows" + (dn.Contains("finance") || dn.Contains("account") ? ",finance" : "") + (dn.Contains("sales") ? ",sales" : "") + (dn.Contains("logistic") ? ",logistics" : "");
+                    user = new ProjectTracker.API.Models.User
+                    {
+                        Name = parts.Length > 0 ? parts[0] : "Employee", Surname = parts.Length > 1 ? parts[1] : "", Email = email,
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("Welcome123!"), Role = "Employee", Title = f.OwnerTitle,
+                        DepartmentId = deptId, LinkedEmpId = emp?.EmpId, Permissions = perms, IsActive = true, CreatedAt = DateTime.UtcNow
+                    };
+                    context.Users.Add(user);
+                    context.SaveChanges();
+                    logger.LogInformation("Created intranet user {Email} for human-flow owner {Owner} (emp {Emp}).", email, f.OwnerName, f.OwnerEmployeeId);
+                }
+                else
+                {
+                    if (emp != null && string.IsNullOrWhiteSpace(user.LinkedEmpId)) user.LinkedEmpId = emp.EmpId;
+                    // Existing account: give it a proper title if it only carries a department-ish placeholder, and make sure it can open Flows.
+                    if (!string.IsNullOrWhiteSpace(f.OwnerTitle) && (string.IsNullOrWhiteSpace(user.Title) || user.Title is "Finance" or "Accounts" or "Employee" or "Other")) user.Title = f.OwnerTitle;
+                    var permList = (user.Permissions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                    if (!permList.Contains("flows", StringComparer.OrdinalIgnoreCase)) { permList.Add("flows"); user.Permissions = string.Join(",", permList); }
+                }
+                if (emp != null)
+                {
+                    if ((string.IsNullOrWhiteSpace(emp.JobTitle) || emp.JobTitle == "Other") && !string.IsNullOrWhiteSpace(f.OwnerTitle)) emp.JobTitle = f.OwnerTitle;
+                    if ((string.IsNullOrWhiteSpace(emp.Department) || emp.Department == "Other") && !string.IsNullOrWhiteSpace(f.DepartmentName)) emp.Department = f.DepartmentName;
+                }
+                f.OwnerUserId = user.UserId;
+                context.SaveChanges();
+                logger.LogInformation("Linked human flow '{Flow}' to user {Email}.", f.Name, email);
+            }
+        }
+        catch (Exception ex) { logger.LogWarning(ex, "Could not link human-flow owners to users."); }
     }
     catch (Exception ex)
     {

@@ -69,6 +69,22 @@ namespace ProjectTracker.API.Services.Flows
             return Mustache.Replace(template, m => ResolveString(context, m.Groups[1].Value) ?? "");
         }
 
+        /// <summary>Like <see cref="Render(string?, JsonNode?)"/> but passes every substituted value through <paramref name="encode"/> (the template text itself is left alone).</summary>
+        public static string Render(string? template, JsonNode? context, Func<string, string> encode)
+        {
+            if (string.IsNullOrEmpty(template)) return template ?? "";
+            return Mustache.Replace(template, m => encode(ResolveString(context, m.Groups[1].Value) ?? ""));
+        }
+
+        /// <summary>Escape a value for use inside a JSON string literal. Brackets are escaped too so a value can never close or open an [ACTION] block.</summary>
+        public static string JsonStringEscape(string value)
+        {
+            var quoted = JsonSerializer.Serialize(value);
+            return quoted.Substring(1, quoted.Length - 2).Replace("[", "\\u005B").Replace("]", "\\u005D");
+        }
+
+        public static string HtmlEscape(string value) => System.Net.WebUtility.HtmlEncode(value);
+
         /// <summary>Evaluate a boolean expression. Returns false on any error (and sets error).</summary>
         public static bool Evaluate(string? expression, JsonNode? context, out string? error)
         {

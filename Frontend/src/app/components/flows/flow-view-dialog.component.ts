@@ -18,8 +18,8 @@ import { STEP_COLOR, assigneeLabel } from './flow-step-factory';
   imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, FlowCanvasComponent],
   template: `
     <h2 mat-dialog-title class="fv-title">
-      <mat-icon>{{ def.departmentName ? 'groups' : 'account_tree' }}</mat-icon>
-      <div class="fv-name"><b>{{ def.name }}</b><small>{{ def.departmentName ? def.departmentName + ' · human flow' : (def.category || 'General') }} · {{ triggerLabel() }} · v{{ def.version }}</small></div>
+      <mat-icon>{{ def.ownerName ? 'person' : def.departmentName ? 'groups' : 'account_tree' }}</mat-icon>
+      <div class="fv-name"><b>{{ def.name }}</b><small>{{ def.ownerName ? def.ownerName + (def.ownerTitle ? ' · ' + def.ownerTitle : '') + ' · ' + def.departmentName : def.departmentName ? def.departmentName + ' · human flow' : (def.category || 'General') }} · {{ triggerLabel() }} · v{{ def.version }}</small></div>
       <span class="lvl l{{ def.level }}">L{{ def.level }}</span>
       @if (!def.isEnabled) { <span class="fv-off">paused</span> }
       <span class="spacer"></span>

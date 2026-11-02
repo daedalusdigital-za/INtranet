@@ -21,6 +21,23 @@ namespace ProjectTracker.API.Models.Flows
         /// <summary>For operational (department) flows: the department whose day-to-day process this diagram describes. Null for ordinary process flows.</summary>
         [MaxLength(100)] public string? DepartmentName { get; set; }
 
+        /// <summary>
+        /// For employee-specific human flows: the person whose day-to-day work this diagram describes. Keyed to the
+        /// employee register (clocking system) rather than Users, because many staff never sign in to the intranet.
+        /// </summary>
+        [MaxLength(20)] public string? OwnerEmployeeId { get; set; }
+        [MaxLength(150)] public string? OwnerName { get; set; }
+        /// <summary>Job title shown under the owner, e.g. "Debtors Clerk &amp; Team Supervisor".</summary>
+        [MaxLength(200)] public string? OwnerTitle { get; set; }
+        public int? OwnerUserId { get; set; }
+
+        /// <summary>
+        /// Operational blueprint for human flows (JSON): purpose, responsibilities, KPIs, systems used, pain points and
+        /// handover notes. This is the "what this department / person actually does" record that survives staff
+        /// changes and is the raw material for automations and Home widgets.
+        /// </summary>
+        public string? BlueprintJson { get; set; }
+
         /// <summary>1 = manual, 2 = AI-assisted, 3 = automated (informational badge, derived from steps/trigger).</summary>
         public int Level { get; set; } = 1;
 
@@ -91,6 +108,9 @@ namespace ProjectTracker.API.Models.Flows
 
         /// <summary>JSON bag of variables: trigger payload, inputs, AI outputs, task decisions.</summary>
         public string ContextJson { get; set; } = "{}";
+
+        /// <summary>Copy of the definition's graph when the run started. Null on runs from before snapshots (use the live definition).</summary>
+        public string? GraphJson { get; set; }
 
         /// <summary>manual | event:<name> | schedule</summary>
         [MaxLength(80)] public string TriggerSource { get; set; } = string.Empty;

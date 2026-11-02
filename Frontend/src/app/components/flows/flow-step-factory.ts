@@ -65,16 +65,20 @@ export function relinkAll(steps: FlowStep[], oldId: string, newId: string | null
   }
 }
 
-export function assigneeLabel(a: FlowAssignee | undefined, catalog: FlowCatalog): string {
+export function assigneeLabel(a: FlowAssignee | string | undefined | null, catalog: FlowCatalog): string {
   if (!a) return '';
+  // Email/notify steps may store the recipient as a plain string ("{{inputs.customerEmail}}", "ops@…").
+  if (typeof a !== 'object') return String(a);
   if (a.starter) return 'Person who started it';
   if (a.starterManager) return "Starter's manager";
-  if ('userId' in a) return catalog.users.find(u => u.id === a.userId)?.name ?? 'Pick a person';
-  if ('expression' in a) return a.expression || 'From a variable';
+  if (a.userId !== undefined && a.userId !== null) return catalog.users.find(u => u.id === a.userId)?.name ?? 'Pick a person';
+  if (a.expression) return a.expression;
   const dept = a.departmentName || catalog.departments.find(d => d.id === a.departmentId)?.name;
   if (dept && a.role) return `${a.role} · ${dept}`;
   if (dept) return dept;
   if (a.role) return `Any ${a.role}`;
   if (a.email) return a.email;
+  if ('userId' in a) return 'Pick a person';
+  if ('expression' in a) return 'From a variable';
   return '';
 }

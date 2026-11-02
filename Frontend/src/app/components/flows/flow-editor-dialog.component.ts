@@ -35,7 +35,7 @@ type PaletteGroup = 'steps' | 'people' | 'departments' | 'roles' | 'actions' | '
   styleUrls: ['./flow-editor-dialog.component.scss']
 })
 export class FlowEditorDialogComponent implements AfterViewInit {
-  data = inject<{ def?: FlowDefinition; catalog: FlowCatalog; presetDepartment?: string | null }>(MAT_DIALOG_DATA);
+  data = inject<{ def?: FlowDefinition; catalog: FlowCatalog; presetDepartment?: string | null; presetOwner?: { employeeId: string; name: string; title?: string | null } | null }>(MAT_DIALOG_DATA);
   private ref = inject(MatDialogRef<FlowEditorDialogComponent>);
   private api = inject(FlowsService);
   private toast = inject(ToastService);
@@ -61,6 +61,16 @@ export class FlowEditorDialogComponent implements AfterViewInit {
   description = this.data.def?.description ?? '';
   category = this.data.def?.category ?? (this.data.presetDepartment ? 'Operations' : 'General');
   departmentName: string | null = this.data.def?.departmentName ?? this.data.presetDepartment ?? null;
+  /** Employee this human flow belongs to (employee register id), or null for a department-wide flow. */
+  ownerEmployeeId: string | null = this.data.def?.ownerEmployeeId ?? this.data.presetOwner?.employeeId ?? null;
+  ownerTitle = this.data.def?.ownerTitle ?? this.data.presetOwner?.title ?? '';
+  ownerFilter = '';
+  /** Role blueprint (operational record). Kept as parsed object + editable JSON text; email is pulled out for a friendlier field. */
+  blueprint: Record<string, any> = { ...((this.data.def?.blueprint as any) ?? {}) };
+  blueprintEmail: string = this.blueprint['email'] ?? '';
+  blueprintText = JSON.stringify((({ email, ...rest }) => rest)(this.blueprint), null, 2);
+  blueprintErr = '';
+  setBlueprint(text: string) { this.blueprintText = text; try { const o = JSON.parse(text || '{}'); this.blueprint = { ...o, email: this.blueprintEmail }; this.blueprintErr = ''; } catch { this.blueprintErr = 'Not valid JSON — fix before saving'; } }
   level: 1 | 2 | 3 = this.data.def?.level ?? 1;
   triggerType = this.data.def?.triggerType ?? 'manual';
   trigger = { ...(this.data.def?.trigger ?? {}) } as any;
@@ -175,8 +185,9 @@ export class FlowEditorDialogComponent implements AfterViewInit {
     this.onGraphChanged();
   }
 
-  private modeOf(a: FlowAssignee | undefined): AssigneeMode {
+  private modeOf(a: FlowAssignee | string | undefined | null): AssigneeMode {
     if (!a) return 'none';
+    if (typeof a !== 'object') return 'expression'; // email steps keep "to" as a plain string
     if (a.starter) return 'starter';
     if (a.starterManager) return 'starterManager';
     if ('userId' in a) return 'user';
@@ -248,6 +259,7 @@ export class FlowEditorDialogComponent implements AfterViewInit {
     try {
       const r = JSON.parse(this.jsonText) as SaveFlowRequest;
       this.name = r.name; this.description = r.description ?? ''; this.category = r.category ?? 'General'; this.departmentName = r.departmentName ?? null; this.level = (r.level as any) ?? 1;
+      this.ownerEmployeeId = r.ownerEmployeeId ?? null; this.ownerTitle = r.ownerTitle ?? '';
       this.triggerType = r.triggerType; this.trigger = r.trigger ?? {}; this.inputs = r.inputs ?? []; this.steps = r.graph?.steps ?? []; this.startStepId = r.graph?.startStepId ?? this.steps[0]?.id ?? null;
       this.isEnabled = r.isEnabled; this.startPermissions = r.startPermissions ?? '';
       for (const s of this.steps) this.initStepUi(s);
@@ -263,11 +275,24 @@ export class FlowEditorDialogComponent implements AfterViewInit {
       if (s.type === 'task' && cfg['form'] && cfg['form'].length === 0) delete cfg['form'];
       return { ...s, config: cfg };
     });
+    const owner = this.departmentName && this.ownerEmployeeId ? this.employees().find(e => e.id === this.ownerEmployeeId) : null;
     return {
       name: this.name.trim(), description: this.description, category: this.category, departmentName: this.departmentName || null, level: this.level, triggerType: this.triggerType,
+      ownerEmployeeId: owner?.id ?? null, ownerName: owner?.name ?? null, ownerTitle: owner ? (this.ownerTitle.trim() || owner.jobTitle || null) : null, ownerUserId: this.data.def?.ownerUserId ?? null,
+      blueprint: owner ? { ...this.blueprint, email: this.blueprintEmail.trim() || undefined } : null,
       trigger: trig, graph: { startStepId: this.startStepId, steps }, inputs: this.inputs, isEnabled: this.isEnabled, startPermissions: this.startPermissions || null
     };
   }
+
+  /** Employee register, department first when one is chosen; typed filter narrows by name/title. */
+  employees() {
+    const all = this.catalog.employees ?? [];
+    const q = this.ownerFilter.trim().toLowerCase();
+    const list = q ? all.filter(e => e.name.toLowerCase().includes(q) || (e.jobTitle ?? '').toLowerCase().includes(q) || e.id === q) : all;
+    const dept = (this.departmentName ?? '').toLowerCase().replace(' department', '');
+    return [...list].sort((a, b) => Number((b.department ?? '').toLowerCase().includes(dept)) - Number((a.department ?? '').toLowerCase().includes(dept)) || a.name.localeCompare(b.name));
+  }
+  ownerPicked() { const e = this.employees().find(x => x.id === this.ownerEmployeeId); if (e && !this.ownerTitle && e.jobTitle && e.jobTitle !== 'Other') this.ownerTitle = e.jobTitle; }
 
   validate() {
     if (this.jsonMode && !this.applyJson()) return;
@@ -281,6 +306,7 @@ export class FlowEditorDialogComponent implements AfterViewInit {
     if (this.jsonMode && !this.applyJson()) return;
     const req = this.buildRequest();
     if (!req.name) { this.toast.warn('Give the flow a name'); this.tab = 1; return; }
+    if (this.blueprintErr) { this.toast.warn('Role blueprint JSON is not valid'); this.tab = 1; return; }
     this.busy = true;
     const call = this.isNew ? this.api.create(req) : this.api.update(this.data.def!.id, req);
     call.subscribe({

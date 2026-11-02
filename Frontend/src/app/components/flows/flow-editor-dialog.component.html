@@ -247,6 +247,29 @@
             </mat-select>
             <mat-hint>Human flows appear on the Human flows tab as that department's "how we work" diagram.</mat-hint>
           </mat-form-field>
+          @if (departmentName) {
+            <div class="fe-grid-2">
+              <mat-form-field appearance="outline"><mat-label>Belongs to an employee (optional)</mat-label>
+                <mat-select [(ngModel)]="ownerEmployeeId" (selectionChange)="ownerPicked()" (openedChange)="$event || (ownerFilter = '')">
+                  <div class="fe-opt-filter" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+                    <mat-icon>search</mat-icon><input type="text" [(ngModel)]="ownerFilter" placeholder="Search name, title or employee no" />
+                  </div>
+                  <mat-option [value]="null">— whole department —</mat-option>
+                  @for (e of employees(); track e.id) { <mat-option [value]="e.id">{{ e.name }} <small class="fe-opt-sub">· #{{ e.id }}@if (e.department && e.department !== 'Other') { · {{ e.department }} }</small></mat-option> }
+                </mat-select>
+                <mat-hint>Lists the flow under that person inside the department (people without intranet logins included).</mat-hint>
+              </mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Their position / title</mat-label><input matInput [(ngModel)]="ownerTitle" [disabled]="!ownerEmployeeId" placeholder="e.g. Debtors Clerk & Team Supervisor" /></mat-form-field>
+            </div>
+            @if (ownerEmployeeId) {
+              <h4>Role blueprint <small>purpose, responsibilities, KPIs, systems, pain points, handover — the operational record of the role</small></h4>
+              <mat-form-field appearance="outline" class="fe-full"><mat-label>Work email (intranet account link)</mat-label><input matInput type="email" [(ngModel)]="blueprintEmail" placeholder="name@accessmedical.co.za" /><mat-hint>Used by "Link account" to find or create their intranet login.</mat-hint></mat-form-field>
+              <mat-form-field appearance="outline" class="fe-full"><mat-label>Blueprint (JSON)</mat-label>
+                <textarea matInput rows="12" [ngModel]="blueprintText" (ngModelChange)="setBlueprint($event)" spellcheck="false"></textarea>
+                <mat-hint>{{ blueprintErr || 'Keys: purpose, reportsTo, team, responsibilities[{area,items[]}], kpis[{name,target,source}], systems[], inputs[], outputs[], painPoints[{issue,idea}], handover' }}</mat-hint>
+              </mat-form-field>
+            }
+          }
           <h4>Level</h4>
           <div class="fe-levels">
             @for (l of [1,2,3]; track l) {

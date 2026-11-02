@@ -256,10 +256,16 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Flows.FlowRun> FlowRuns { get; set; }
         public DbSet<Models.Flows.FlowTask> FlowTasks { get; set; }
         public DbSet<Models.Flows.FlowAuditEvent> FlowAuditEvents { get; set; }
+        public DbSet<Models.Flows.FlowWidget> FlowWidgets { get; set; }
+
+        // Personal Home page layouts (widgets + shortcuts)
+        public DbSet<UserHomeLayout> UserHomeLayouts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<UserHomeLayout>(e => e.HasIndex(l => l.UserId).IsUnique());
 
             // Flows
             modelBuilder.Entity<Models.Flows.FlowDefinition>(e =>

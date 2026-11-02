@@ -32,8 +32,22 @@ export interface FlowInput {
   required?: boolean; options?: string[]; hint?: string;
 }
 
+/** Operational blueprint of a human flow: what the department / person is responsible for and how we'd know it is working. */
+export interface FlowBlueprint {
+  email?: string; purpose?: string; reportsTo?: string; team?: string;
+  company?: string; functionalArea?: string; positionLevel?: string;
+  responsibilities?: { area: string; items: string[] }[];
+  kpis?: { name: string; target?: string; source?: string }[];
+  systems?: string[]; inputs?: string[]; outputs?: string[];
+  painPoints?: { issue: string; idea?: string }[];
+  handover?: string; reviewedAt?: string;
+}
+
 export interface FlowDefinition {
   id: number; name: string; description?: string; category?: string; departmentName?: string | null; level: 1 | 2 | 3;
+  /** Employee-specific human flow: whose day-to-day work this describes (employee register id + display name/title). */
+  ownerEmployeeId?: string | null; ownerName?: string | null; ownerTitle?: string | null; ownerUserId?: number | null; ownerUserEmail?: string | null;
+  blueprint?: FlowBlueprint | null;
   triggerType: FlowTriggerType; trigger: FlowTrigger; graph: FlowGraph; inputs: FlowInput[];
   isEnabled: boolean; isTemplate: boolean; version: number; startPermissions?: string | null;
   lastScheduledRunAt?: string | null; createdAt: string; createdBy?: string | null; updatedAt?: string | null;
@@ -42,6 +56,8 @@ export interface FlowDefinition {
 
 export interface SaveFlowRequest {
   name: string; description?: string; category?: string; departmentName?: string | null; level: number; triggerType: FlowTriggerType;
+  ownerEmployeeId?: string | null; ownerName?: string | null; ownerTitle?: string | null; ownerUserId?: number | null;
+  blueprint?: FlowBlueprint | null;
   trigger: FlowTrigger; graph: FlowGraph; inputs: FlowInput[]; isEnabled: boolean; startPermissions?: string | null;
 }
 
@@ -73,6 +89,8 @@ export interface FlowCatalog {
   isDesigner: boolean;
   users: { id: number; name: string; email: string; role: string; departmentId?: number | null }[];
   departments: { id: number; name: string; manager?: string | null }[];
+  /** Employee register (clocking system) — for pinning a human flow to a person. */
+  employees?: { id: string; name: string; department?: string | null; jobTitle?: string | null }[];
   roles: string[];
   events: { key: string; description: string }[];
   dataSources: { key: string; name: string; description: string; entityType: string; params: string[]; fields: string[] }[];
@@ -85,10 +103,31 @@ export interface FlowStats {
   byFlow: { name: string; runs: number; active: number; failed: number }[];
 }
 
+/** A shared Home widget designed in Flows (see HomeLayoutService for the widget types). */
+export interface FlowWidget {
+  id: number; name: string; description?: string | null; icon: string; type: string; size: 'sm' | 'md' | 'lg' | 'xl';
+  config: Record<string, any>; category: string; departmentName?: string | null;
+  isTemplate: boolean; isPublished: boolean; useCount: number; createdAt: string; updatedAt?: string | null; createdBy?: string | null;
+}
+
+export interface SaveWidgetRequest {
+  name: string; description?: string | null; icon?: string; type: string; size?: string; config?: Record<string, any>;
+  category?: string; departmentName?: string | null; isPublished?: boolean; isTemplate?: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class FlowsService {
   private http = inject(HttpClient);
   private base = `${environment.apiUrl}/flows`;
+
+  // ── widgets ──
+  widgets(templates = false): Observable<FlowWidget[]> { return this.http.get<FlowWidget[]>(`${this.base}/widgets`, { params: { templates } }); }
+  createWidget(req: SaveWidgetRequest): Observable<FlowWidget> { return this.http.post<FlowWidget>(`${this.base}/widgets`, req); }
+  updateWidget(id: number, req: SaveWidgetRequest): Observable<FlowWidget> { return this.http.put<FlowWidget>(`${this.base}/widgets/${id}`, req); }
+  deleteWidget(id: number): Observable<any> { return this.http.delete(`${this.base}/widgets/${id}`); }
+  toggleWidget(id: number): Observable<{ id: number; isPublished: boolean }> { return this.http.post<{ id: number; isPublished: boolean }>(`${this.base}/widgets/${id}/toggle`, {}); }
+  cloneWidget(id: number): Observable<FlowWidget> { return this.http.post<FlowWidget>(`${this.base}/widgets/${id}/clone`, {}); }
+  widgetUsed(id: number): Observable<any> { return this.http.post(`${this.base}/widgets/${id}/used`, {}); }
 
   catalog(): Observable<FlowCatalog> { return this.http.get<FlowCatalog>(`${this.base}/catalog`); }
   stats(): Observable<FlowStats> { return this.http.get<FlowStats>(`${this.base}/stats`); }
@@ -100,6 +139,10 @@ export class FlowsService {
   toggle(id: number): Observable<{ id: number; isEnabled: boolean }> { return this.http.post<{ id: number; isEnabled: boolean }>(`${this.base}/definitions/${id}/toggle`, {}); }
   delete(id: number): Observable<any> { return this.http.delete(`${this.base}/definitions/${id}`); }
   clone(id: number): Observable<FlowDefinition> { return this.http.post<FlowDefinition>(`${this.base}/definitions/${id}/clone`, {}); }
+  /** Link a human flow's employee owner to an intranet user (created when missing). */
+  linkOwner(id: number, email: string, createUser = true): Observable<{ userId: number; email: string; name: string; created: boolean; tempPassword?: string | null; flowsLinked: number; message: string }> {
+    return this.http.post<any>(`${this.base}/definitions/${id}/link-owner`, { email, createUser });
+  }
   validate(req: SaveFlowRequest): Observable<{ ok: boolean; error?: string | null; warnings: string[] }> { return this.http.post<any>(`${this.base}/definitions/validate`, req); }
 
   start(id: number, inputs: Record<string, any>, title?: string, priority?: string): Observable<any> {

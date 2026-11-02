@@ -55,7 +55,8 @@ namespace ProjectTracker.API.Services.Flows
                 EntityKey = entityKey,
                 StartedByUserId = startedByUserId,
                 StartedAt = DateTime.UtcNow,
-                CurrentStepId = graph.StartStepId ?? graph.Steps.FirstOrDefault()?.Id
+                CurrentStepId = graph.StartStepId ?? graph.Steps.FirstOrDefault()?.Id,
+                GraphJson = def.GraphJson
             };
 
             // Run-level info available to templates
@@ -155,7 +156,7 @@ namespace ProjectTracker.API.Services.Flows
             // Resume the run from the step after the task
             if (task.Run.Status == FlowRunStatus.Waiting || task.Run.Status == FlowRunStatus.Running)
             {
-                var graph = ParseGraph(task.Run.Definition);
+                var graph = ParseGraph(task.Run);
                 var step = graph.Steps.FirstOrDefault(s => s.Id == task.StepId);
                 string? next = null;
                 if (step != null)
@@ -213,7 +214,7 @@ namespace ProjectTracker.API.Services.Flows
             {
                 run.ResumeAt = null;
                 run.Status = FlowRunStatus.Running;
-                var graph = ParseGraph(run.Definition);
+                var graph = ParseGraph(run);
                 var step = graph.Steps.FirstOrDefault(s => s.Id == run.CurrentStepId);
                 run.CurrentStepId = step?.NextStepId;
                 Audit(run, step?.Id, "step.completed", "Wait finished");
@@ -228,7 +229,7 @@ namespace ProjectTracker.API.Services.Flows
             foreach (var task in overdue)
             {
                 task.IsOverdue = true;
-                var graph = ParseGraph(task.Run.Definition);
+                var graph = ParseGraph(task.Run);
                 var step = graph.Steps.FirstOrDefault(s => s.Id == task.StepId);
                 var escalateTo = step == null ? null : FlowExpressions.GetElement(step.Config, "escalateTo");
                 var ctx = ParseContext(task.Run);
@@ -329,7 +330,7 @@ namespace ProjectTracker.API.Services.Flows
         private async Task AdvanceInternalAsync(FlowRun run, CancellationToken ct)
         {
             if (run.Definition == null) await _db.Entry(run).Reference(r => r.Definition).LoadAsync(ct);
-            var graph = ParseGraph(run.Definition);
+            var graph = ParseGraph(run);
             var ctx = ParseContext(run);
             var guard = 0;
 
@@ -481,7 +482,7 @@ namespace ProjectTracker.API.Services.Flows
                             to.AddRange(await _db.Users.Where(u => ids.Contains(u.UserId)).Select(u => u.Email).ToListAsync(ct));
                         }
                         var subject = FlowExpressions.Render(FlowExpressions.GetString(cfg, "subject") ?? run.Title, ctx);
-                        var body = FlowExpressions.Render(FlowExpressions.GetString(cfg, "body"), ctx);
+                        var body = FlowExpressions.Render(FlowExpressions.GetString(cfg, "body"), ctx, FlowExpressions.HtmlEscape);
                         to = to.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                         var sent = false;
                         foreach (var addr in to)
@@ -538,7 +539,7 @@ namespace ProjectTracker.API.Services.Flows
                         var actions = _sp.GetRequiredService<IAIActionService>();
                         var action = (FlowExpressions.GetString(cfg, "action") ?? "").ToUpperInvariant();
                         var payloadEl = FlowExpressions.GetElement(cfg, "payload");
-                        var payloadJson = payloadEl == null ? "{}" : FlowExpressions.Render(payloadEl.Value.GetRawText(), ctx);
+                        var payloadJson = payloadEl == null ? "{}" : FlowExpressions.Render(payloadEl.Value.GetRawText(), ctx, FlowExpressions.JsonStringEscape);
                         var actor = await SystemActorAsync(run, ct);
                         var results = await actions.ProcessActionsAsync($"[ACTION:{action}] {payloadJson} [/ACTION]", actor);
                         var r = results.FirstOrDefault();
@@ -629,14 +630,18 @@ namespace ProjectTracker.API.Services.Flows
             if (el.TryGetProperty("starter", out var st) && st.ValueKind == JsonValueKind.True)
                 return (FlowExpressions.Resolve(ctx, "run.startedByUserId") is JsonValue v && v.TryGetValue<int>(out var sid) ? sid : null, null, null);
             if (el.TryGetProperty("userId", out var u) && u.ValueKind == JsonValueKind.Number) return (u.GetInt32(), null, null);
-            if (el.TryGetProperty("departmentId", out var d) && d.ValueKind == JsonValueKind.Number) return (null, null, d.GetInt32());
-            if (el.TryGetProperty("role", out var r) && r.ValueKind == JsonValueKind.String) return (null, r.GetString(), null);
+            // A role may narrow a department ("Managers in Stock"), so read it alongside either department key.
+            var role = el.TryGetProperty("role", out var r) && r.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(r.GetString()) ? r.GetString() : null;
+            if (el.TryGetProperty("departmentId", out var d) && d.ValueKind == JsonValueKind.Number) return (null, role, d.GetInt32());
             if (el.TryGetProperty("departmentName", out var dn) && dn.ValueKind == JsonValueKind.String)
             {
-                var name = FlowExpressions.Render(dn.GetString(), ctx);
-                var dept = await _db.Departments.FirstOrDefaultAsync(x => x.Name.ToLower() == name.ToLower(), ct);
-                return (null, null, dept?.DepartmentId);
+                var name = FlowExpressions.Render(dn.GetString(), ctx).Trim();
+                var dept = name.Length == 0 ? null : await _db.Departments.FirstOrDefaultAsync(x => x.Name.ToLower() == name.ToLower(), ct);
+                if (dept != null) return (null, role, dept.DepartmentId);
+                if (role != null) return (null, role, null);
+                return (null, null, null);
             }
+            if (role != null) return (null, role, null);
             if (el.TryGetProperty("email", out var e) && e.ValueKind == JsonValueKind.String)
             {
                 var email = FlowExpressions.Render(e.GetString(), ctx).ToLower();
@@ -746,19 +751,28 @@ namespace ProjectTracker.API.Services.Flows
             catch (Exception ex) { _logger.LogWarning(ex, "Flow notify failed"); }
         }
 
+        /// <summary>
+        /// Who a system action runs as. Manual runs act as the person who started them. Event / schedule runs act as
+        /// whoever last saved the flow, so a flow can never do more than its designer could do themselves.
+        /// </summary>
         private async Task<ChatUserContext> SystemActorAsync(FlowRun run, CancellationToken ct)
         {
-            var u = run.StartedByUserId.HasValue ? await _db.Users.Include(x => x.Department).AsNoTracking().FirstOrDefaultAsync(x => x.UserId == run.StartedByUserId, ct) : null;
-            u ??= await _db.Users.Include(x => x.Department).AsNoTracking().Where(x => x.IsActive && (x.Role == "Super Admin" || x.Role == "Admin")).OrderBy(x => x.UserId).FirstOrDefaultAsync(ct);
+            if (run.Definition == null) await _db.Entry(run).Reference(r => r.Definition).LoadAsync(ct);
+            var actorId = run.StartedByUserId ?? run.Definition?.UpdatedByUserId ?? run.Definition?.CreatedByUserId;
+            var u = actorId.HasValue
+                ? await _db.Users.Include(x => x.Department).AsNoTracking().FirstOrDefaultAsync(x => x.UserId == actorId && x.IsActive, ct)
+                : null;
+            if (u == null)
+                throw new InvalidOperationException("No active user to run this action as. Open the flow and save it so it runs as you.");
             return new ChatUserContext
             {
-                UserId = u?.UserId ?? 0,
-                Name = u?.Name ?? "Flow",
-                Surname = u?.Surname ?? "Engine",
-                Email = u?.Email ?? "flows@system",
-                Role = u?.Role ?? "Manager",
-                Department = u?.Department?.Name ?? "",
-                DepartmentId = u?.DepartmentId
+                UserId = u.UserId,
+                Name = u.Name,
+                Surname = u.Surname,
+                Email = u.Email,
+                Role = u.Role,
+                Department = u.Department?.Name ?? "",
+                DepartmentId = u.DepartmentId
             };
         }
 
@@ -767,6 +781,14 @@ namespace ProjectTracker.API.Services.Flows
         public static FlowGraph ParseGraph(FlowDefinition def)
         {
             try { return JsonSerializer.Deserialize<FlowGraph>(def.GraphJson, FlowExpressions.JsonOpts) ?? new FlowGraph(); }
+            catch { return new FlowGraph(); }
+        }
+
+        /// <summary>The graph a run executes: its own snapshot, or the live definition for runs started before snapshots.</summary>
+        public static FlowGraph ParseGraph(FlowRun run)
+        {
+            if (run.GraphJson == null) return ParseGraph(run.Definition);
+            try { return JsonSerializer.Deserialize<FlowGraph>(run.GraphJson, FlowExpressions.JsonOpts) ?? new FlowGraph(); }
             catch { return new FlowGraph(); }
         }
 
