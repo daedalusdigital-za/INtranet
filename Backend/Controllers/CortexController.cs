@@ -20,10 +20,11 @@ namespace ProjectTracker.API.Controllers
     {
         private readonly ApplicationDbContext _db;
         private readonly CortexGraphBuilder _builder;
+        private readonly CortexFixService _fix;
         private readonly ILogger<CortexController> _log;
         private int Uid => User.GetUserId() ?? 0;
 
-        public CortexController(ApplicationDbContext db, CortexGraphBuilder builder, ILogger<CortexController> log) { _db = db; _builder = builder; _log = log; }
+        public CortexController(ApplicationDbContext db, CortexGraphBuilder builder, CortexFixService fix, ILogger<CortexController> log) { _db = db; _builder = builder; _fix = fix; _log = log; }
 
         // ── Read ──────────────────────────────────────────────────────────────────
 
@@ -264,6 +265,34 @@ namespace ProjectTracker.API.Controllers
         }
 
         public class HandoffRequest { public string Handoff { get; set; } = ""; public string? Reason { get; set; } }
+
+        public class ApplyRequest { public int? OwnerUserId { get; set; } }
+
+        /// <summary>
+        /// Welly Fix: carry out a suggestion (update a step's escalation/assignment, set a process owner). The caller is
+        /// recorded as the person who applied it. Snapshots the step's wait first; the maintenance service measures again
+        /// after 14 days and writes the result next to it. Designers, or whoever may curate the finding.
+        /// </summary>
+        [HttpPost("nodes/{key}/apply")]
+        public async Task<IActionResult> Apply(string key, [FromBody] ApplyRequest? req)
+        {
+            var n = await _db.CortexNodes.FirstOrDefaultAsync(x => x.Key == key);
+            if (n == null) return NotFound();
+            if (!await CanCurateAsync(n)) return Forbid();
+            var me = await _db.Users.AsNoTracking().Where(u => u.UserId == Uid).Select(u => u.Name + " " + u.Surname).FirstOrDefaultAsync() ?? "user";
+            var r = await _fix.ApplyAsync(n, Uid, me, req?.OwnerUserId);
+            if (!r.Ok) return BadRequest(new { message = r.Message });
+            // the to-do raised for the parent finding is done
+            var todoIds = await _db.CortexChanges.Where(c => c.Kind == "tasked" && (c.TargetKey == key || c.TargetKey == n.ParentKey) && c.NewValue != null).Select(c => c.NewValue!).ToListAsync();
+            var now = DateTime.UtcNow;
+            foreach (var tid in todoIds.Select(t => int.TryParse(t, out var i) ? i : 0).Where(i => i > 0))
+            {
+                var todo = await _db.TodoTasks.FindAsync(tid);
+                if (todo != null && !todo.IsCompleted) { todo.IsCompleted = true; todo.Status = "Completed"; todo.CompletedAt = now; todo.UpdatedAt = now; }
+            }
+            await _db.SaveChangesAsync();
+            return Ok(new { n.Key, n.Status, r.Message, before = r.Before, change = r.Change, data = n.DataJson });
+        }
 
         /// <summary>Set a hand-off class by hand. Allowed, but flagged as curated and logged; a rebuild will not overwrite it.</summary>
         [HttpPut("edges/{id:int}/handoff")]

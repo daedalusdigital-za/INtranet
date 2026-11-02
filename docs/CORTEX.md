@@ -1,6 +1,6 @@
 # Cortex — what it is, what's built, what's open
 
-_Last updated: 2 Nov 2026 · branch `stock/ledger-integrity` · commits dcf97f9 → 3854c48 → 54404ab_
+_Last updated: 2 Nov 2026 · branch `stock/ledger-integrity` · commits dcf97f9 → 3854c48 → 54404ab → ea2219a_
 
 ## 1. What Cortex is (one paragraph)
 
@@ -78,11 +78,32 @@ Three detectors produce a `finding` (evidence) with a `suggestion` child (fix + 
 2. **One person clears every X** — pool step, ≥5 completions, all by one account → write procedure, name backup. (Framed at the step, never as blame.)
 3. **Process without an owner** but with runs → name an owner (suggests the department head).
 
+### Step 6 — Hygiene, reminders, nightly rebuild (ea2219a)
+- **Departments**: `IsActive` + `MergedIntoDepartmentId` + computed `NameKey` with a filtered unique index. Create/rename rejects a clash (409) and treats "X" and "X Department" as the same name. Delete is a soft-deactivate, refused while users remain. Builder only reads active departments. Migration [20261102200000_DepartmentsSoftDeleteAndUniqueName.cs](../Backend/Migrations/20261102200000_DepartmentsSoftDeleteAndUniqueName.cs).
+- **Sales merged** 15 → 30 via [Database/MergeDepartmentsNov2026.sql](../Database/MergeDepartmentsNov2026.sql) (re-points 26 tables, carries manager). Finance and Marketing blocks are in the same script, commented, pending decision.
+- **Permissions**: users 46 and 84 repaired ([tools/repair_permissions.py](../tools/repair_permissions.py)); `PUT users/{id}` now validates every key (`^[a-z][a-z0-9_.\-]*$`, distinct, trimmed) → 400.
+- **Module owner** is derived from permission holders on each rebuild: one non-admin holder → that person; several → "Dept (n of m holders)". Granting a module changes the owner next rebuild.
+- **Coverage** ignores disabled processes (gap scan and the Cortex "live" counter).
+- [CortexMaintenanceService.cs](../Backend/Services/Cortex/CortexMaintenanceService.cs) (hosted, hourly tick):
+  - nightly rebuild after 02:15 local, logged as `CortexChanges` kind `rebuild`;
+  - review reminders: curated + owned nodes due within 14 days or overdue get a Flows to-do (Category "Cortex", link to the node), repeated weekly (`reminded`);
+  - findings → tasks: every pending finding/inference with an owner becomes a to-do due in 7 days, once (`tasked`). Marking the node reviewed completes the to-do.
+- JWT secret moved out of compose into the gitignored `.env` (`JWT_SECRET_KEY`) and rotated; `tools/mint_token.py` removed.
+
+### Step 7 — Welly Fix with before/after
+[CortexFixService.cs](../Backend/Services/Cortex/CortexFixService.cs) · `POST /api/cortex/nodes/{suggestionKey}/apply` · button **Let Welly fix it** on a finding (inspector and idle panel).
+- `update_step` — edits the step in `FlowDefinitions.GraphJson`: `dueInHours` ≤ 24, `escalateTo` = department manager if none, and `assignTo` = department pool when the finding was "one named person". Version bumped; existing runs keep their own graph copy.
+- `set_owner` — sets `OwnerUserId/OwnerName` on the process (suggested head resolved by exact name; otherwise the UI asks you to pick). The map node follows immediately.
+- `curate_step` — refused with a message: a person has to write the procedure.
+- Receipt on the suggestion node (`data.fix`): who / when / change / **before** (median, p90, avg, queue, samples over 180 d). Status `applied`, provenance curated, parent finding accepted, the to-do completed. `CortexChanges` kinds `applied` and `fixed`.
+- **After**: 14 days later the maintenance service measures the same step over tasks created since the change, writes `data.fix.after`, logs `measured`, and sends the owner a to-do with the verdict (better / worse / not enough tasks). Shown under the finding as "Median wait X h → Y h".
+- Nothing is applied on a schedule; the person who pressed the button is recorded.
+
 ---
 
 ## 3. Current numbers (after last rebuild)
 
-668 nodes · 815 edges · 501 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · 30 gaps · hand-offs: 142 manual / 104 automatic / 9 read / 3 not built.
+664 nodes · 818 edges · 497 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · 27 gaps · hand-offs: 142 manual / 104 automatic / 9 read / 3 not built.
 
 No Welly findings fire yet — there is almost no task history (flow 5 has 3 approvals, all cleared in 0 h). They will appear as real work passes through Flows.
 
@@ -92,15 +113,13 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 
 | # | Issue | Where it shows | Needs |
 |---|---|---|---|
-| 1 | **Duplicate departments**: Finance / Finance Department, Sales / Sales Department, Marketing / Marketing Department | gap `deptdup:*` | **Your decision** — which record survives. Then one SQL to re-point Users, EmpRegistrations, FlowDefinitions. |
-| 2 | **Two accounts have a corrupted Permissions string** (list saved a second time letter-by-letter, e.g. user 84) | gap `perms:*` | Re-save from Settings → Users, or one SQL fix. |
+| 1 | **Duplicate departments**: ~~Sales~~ (merged into 30) · Finance / Finance Department · Marketing / Marketing Department | gap `deptdup:*` | **Confirm** merge into the short names — the long records hold most links (Finance Department: 1 user / 7 employees / 8 flows / manager Robert Brown; Marketing Department: 1 flow / manager John Smith). Script ready. |
+| 2 | ~~Two accounts have a corrupted Permissions string~~ | — | Fixed (users 46, 84); save-time validation added; rescan clean. |
 | 3 | Marketing and Training have people but no process | gap `uncaptured:*` | Someone in those teams maps their day (New human flow). |
 | 4 | Nobody non-admin holds HR / Management / Tenders permission | gap `noowner:module:*` | Grant the module to the people who actually do that work. |
 | 5 | Three hand-offs not built in code: tenders → sales, finance → logistics (debtors don't wait for POD), hr → finance (leave → payroll) | gap `handoff:*` | Product decisions; each is a feature. |
-| 6 | 12 enabled processes have never run | gap `noevents:*` | Either start using them or disable them so coverage is honest. |
+| 6 | **17** enabled processes have never run: Accounts · Invoice to payment; Colene · Debtors day; Finance · Month-end close; Joulene · Creditors & payments; Mamo · Debtors control day; Mbali · PODs day; Nduduzo · Creditors cycle; Peggy · Debtors day; Sne · PODs & debtors day; HR · Staff request handling; IT · Support request; Logistics · Delivery operations; Marketing · Campaign & announcement; Production · Work order; Reception · Visitors & deliveries; Sales · Enquiry to order; Stock · Goods receiving | gap `noevents:*` | Say which to disable; disabled ones drop out of coverage immediately. |
 | 7 | 166 knowledge slots blank | Knowledge strip | People write. Start with department heads (16 "knowledge" slots) and role authority limits (3). |
-
-Not a Cortex problem but worth knowing: `tools/mint_token.py` mints a 15-minute JWT from the container secret so I could verify the API without your password. Delete it if you prefer.
 
 ---
 
@@ -108,15 +127,14 @@ Not a Cortex problem but worth knowing: `tools/mint_token.py` mints a 15-minute 
 
 | Item | Why it matters | Size |
 |---|---|---|
-| **Welly Fix** — apply an accepted suggestion (update step escalation, set owner) | Today accept only marks it curated; nothing changes in Flows | medium |
+| **Finance → Logistics hand-off** (debtors wait for POD) | POD scan / dispatch advances the matching Finance step and notifies the debtors clerk | S–M, ~1 day — **next** |
+| **HR → Finance hand-off** (leave / starter / leaver → payroll input with cut-off) | needs the payroll calendar defined | M, ~1.5 days |
+| **Tenders → Sales hand-off** (won tender starts Enquiry-to-order pre-filled) | tender lines → sales context mapping | M, ~1.5–2 days |
 | **Customers / suppliers / products / tenders layers** | Node types exist (commercial layer) but the builder doesn't derive them | medium |
 | **Time replay UI** (`asOf`) | API supports it; no slider on the map | small |
-| **Review reminders** — notify an owner when curated knowledge passes its review date | Overdue is counted and shown; nobody is told | small |
-| **Scheduled rebuild** (e.g. nightly) | Currently rebuilds on first load if empty, or on the button | small |
-| **Finding/suggestion → Flows task** | A finding should become someone's to-do, not just a card | small |
-| Department merge + permissions repair (§4 #1, #2) | Data hygiene; blocked on your choice | small |
+| Finance / Marketing merge (§4 #1) | Blocked on your confirmation | 2 min |
 
-Suggested order: §4 #1–2 (you decide, I run SQL) → review reminders → scheduled rebuild → Welly Fix → commercial layers.
+Agreed order: Finance → Logistics → HR → Finance → Tenders → Sales → commercial layers.
 
 ---
 
@@ -132,4 +150,5 @@ Suggested order: §4 #1–2 (you decide, I run SQL) → review reminders → sch
 
 - Frontend image copies a pre-built `dist`, so always: `cd Frontend; npm run build -- --configuration=production` **then** `docker compose build backend frontend; docker compose up -d --no-build backend frontend`.
 - Migration runs automatically on backend start (`Database:MigrateOnStartup`).
-- First graph build happens on first `GET /api/cortex/graph` if the table is empty, or `POST /api/cortex/rebuild`.
+- First graph build happens on first `GET /api/cortex/graph` if the table is empty, on `POST /api/cortex/rebuild`, or nightly after 02:15 by the maintenance service.
+- `JWT_SECRET_KEY` lives in `.env` (gitignored); rotating it signs everyone out.

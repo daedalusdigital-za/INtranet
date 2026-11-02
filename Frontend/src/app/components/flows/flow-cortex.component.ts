@@ -171,14 +171,15 @@ export class FlowCortexComponent implements OnInit {
     ];
   });
   /** Inline editor: which node is being written/reviewed, and the draft. One at a time. */
-  editing = signal<{ node: CortexApiNode; mode: 'write' | 'reject'; text: string; owner: number | null; months: number; busy: boolean } | null>(null);
-  openEditor(n: CortexApiNode, mode: 'write' | 'reject' = 'write') { this.editing.set({ node: n, mode, text: mode === 'write' ? (n.summary ?? '') : '', owner: n.ownerUserId, months: 6, busy: false }); }
+  editing = signal<{ node: CortexApiNode; mode: 'write' | 'reject' | 'owner'; text: string; owner: number | null; months: number; busy: boolean } | null>(null);
+  openEditor(n: CortexApiNode, mode: 'write' | 'reject' | 'owner' = 'write') { this.editing.set({ node: n, mode, text: mode === 'write' ? (n.summary ?? '') : '', owner: n.ownerUserId, months: 6, busy: false }); }
   closeEditor() { this.editing.set(null); }
   patchEditor(p: Partial<{ text: string; owner: number | null; months: number }>) { const ed = this.editing(); if (ed) this.editing.set({ ...ed, ...p }); }
   private done(msg: string) { this.snack.open(msg, undefined, { duration: 2500 }); this.closeEditor(); this.loadGraph(); }
   private fail(e: any, fallback: string) { const ed = this.editing(); if (ed) this.editing.set({ ...ed, busy: false }); this.snack.open(e?.error?.message ?? fallback, 'OK', { duration: 4000 }); }
   saveEditor() {
     const ed = this.editing(); if (!ed || ed.busy) return;
+    if (ed.mode === 'owner') { this.applyWithOwner(); return; }
     this.editing.set({ ...ed, busy: true });
     if (ed.mode === 'reject') {
       if (!ed.text.trim()) { this.fail(null, 'A reason is needed so Welly learns from it'); return; }
@@ -193,6 +194,45 @@ export class FlowCortexComponent implements OnInit {
   reviewAccept(n: CortexApiNode) { this.api.cortexAccept(n.key).subscribe({ next: () => this.done('Confirmed'), error: e => this.fail(e, 'Could not confirm') }); }
   reviewReject(n: CortexApiNode) { this.openEditor(n, 'reject'); }
   curate(n: CortexApiNode) { this.openEditor(n, 'write'); }
+
+  /** Welly Fix. Parsed suggestion data: kind, payload and (once applied) the fix receipt with before/after. */
+  fixData(s: CortexApiNode | null): { kind: string; payload: any; fix: { appliedAt: string; appliedBy: string; before: any; after: any; measureAfterAt: string | null; change: any } | null } | null {
+    if (!s?.data) return null;
+    try { const d = JSON.parse(s.data); return { kind: d.kind ?? '', payload: d.payload ?? {}, fix: d.fix ?? null }; } catch { return null; }
+  }
+  /** Whether Welly can carry this suggestion out by itself (others need a person). */
+  canApply(s: CortexApiNode | null) { const d = this.fixData(s); return !!d && s!.status !== 'applied' && s!.status !== 'rejected' && (d.kind === 'update_step' || d.kind === 'set_owner'); }
+  applyBusy = signal<string | null>(null);
+  applyFix(s: CortexApiNode) {
+    if (this.applyBusy()) return;
+    const d = this.fixData(s);
+    let owner: number | null = null;
+    if (d?.kind === 'set_owner') {
+      // the suggested name may not match one account; let the person pick from the catalog when needed
+      const name = (d.payload?.suggestedOwner ?? '') as string;
+      const hit = this.catalog()?.users.filter(u => u.name.toLowerCase() === name.toLowerCase()) ?? [];
+      owner = hit.length === 1 ? hit[0].id : null;
+      if (owner == null) { this.openEditor(s, 'owner'); return; }
+    }
+    this.applyBusy.set(s.key);
+    this.api.cortexApply(s.key, owner).subscribe({
+      next: r => { this.applyBusy.set(null); this.done(r?.message ?? 'Applied'); },
+      error: e => { this.applyBusy.set(null); this.fail(e, 'Could not apply'); }
+    });
+  }
+  applyWithOwner() {
+    const ed = this.editing(); if (!ed || ed.mode !== 'owner' || !ed.owner) return;
+    this.editing.set({ ...ed, busy: true });
+    this.api.cortexApply(ed.node.key, ed.owner).subscribe({ next: r => this.done(r?.message ?? 'Applied'), error: e => this.fail(e, 'Could not apply') });
+  }
+  /** Short before → after line for an applied step fix. */
+  fixVerdict(s: CortexApiNode | null) {
+    const f = this.fixData(s)?.fix; if (!f) return null;
+    const b = f.before?.median, a = f.after?.median;
+    if (!f.after) return f.measureAfterAt ? `Before: median ${this.hrs(b)} · p90 ${this.hrs(f.before?.p90)} · ${f.before?.queue ?? 0} open. Welly measures again on ${new Date(f.measureAfterAt).toLocaleDateString()}.` : `Applied by ${f.appliedBy}.`;
+    if (b == null || a == null) return `After ${14} days: not enough tasks to compare yet (${f.after?.samples ?? 0} completed).`;
+    return `Median wait ${this.hrs(b)} → ${this.hrs(a)} (${a < b ? 'better' : a > b ? 'worse' : 'no change'}) · p90 ${this.hrs(f.before?.p90)} → ${this.hrs(f.after?.p90)} · ${f.after?.samples} tasks since.`;
+  }
 
   /** Welly inferences waiting for a decision, newest evidence first. */
   pendingInferences = computed(() => (this.graph()?.nodes ?? []).filter(n => n.provenance === 'inferred' && n.status === 'pending' && n.type !== 'suggestion').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));

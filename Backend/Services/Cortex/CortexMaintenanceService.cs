@@ -57,6 +57,8 @@ namespace ProjectTracker.API.Services.Cortex
 
             await RemindReviewsAsync(db, notify, now, ct);
             await TaskFindingsAsync(db, notify, now, ct);
+            var measured = await scope.ServiceProvider.GetRequiredService<CortexFixService>().MeasureAppliedAsync(notify, now, ct);
+            if (measured > 0) _log.LogInformation("Cortex: {N} Welly Fix results measured", measured);
         }
 
         /// <summary>Curated knowledge due within 14 days or overdue: tell the owner, give them a to-do. Repeat weekly while overdue.</summary>

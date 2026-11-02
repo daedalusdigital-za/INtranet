@@ -115,7 +115,10 @@ svg .person { cursor: pointer; outline: 0;
   &.on .body { stroke: #34d399; fill: rgba(52, 211, 153, .12); } &.on .av { fill: #d1fae5; }
   &.hot .body { stroke: #67e8f9; stroke-width: 2; filter: drop-shadow(0 0 6px #22d3ee); } &:focus-visible .body { stroke: #fff; } }
 .att .fix { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: rgba(250, 204, 21, .08); border: 1px solid rgba(250, 204, 21, .3); color: #fde68a; font-size: 12px;
-  mat-icon { font-size: 15px; width: 15px; height: 15px; color: #facc15; margin-top: 1px; } }
+  mat-icon { font-size: 15px; width: 15px; height: 15px; color: #facc15; margin-top: 1px; }
+  .tag { margin-left: auto; background: rgba(74, 222, 128, .15); color: #86efac; border-color: rgba(74, 222, 128, .4); } }
+.att .fix-result { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; font-size: 11.5px;
+  mat-icon { font-size: 14px; width: 14px; height: 14px; color: #86efac; margin-top: 1px; } }
 
 /* ── Measured waits ── */
 .cx-waits { display: grid; gap: 4px;

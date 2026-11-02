@@ -246,8 +246,20 @@
 
           @if (editing(); as ed) {
             <div class="cx-editor" [attr.data-m]="ed.mode">
-              <div class="h"><mat-icon>{{ ed.mode === 'reject' ? 'thumb_down' : 'edit_note' }}</mat-icon><b>{{ ed.mode === 'reject' ? 'Why is this wrong?' : ed.node.label }}</b><button class="x" (click)="closeEditor()" aria-label="Close"><mat-icon>close</mat-icon></button></div>
+              <div class="h"><mat-icon>{{ ed.mode === 'reject' ? 'thumb_down' : ed.mode === 'owner' ? 'person_add' : 'edit_note' }}</mat-icon><b>{{ ed.mode === 'reject' ? 'Why is this wrong?' : ed.mode === 'owner' ? 'Who owns this process?' : ed.node.label }}</b><button class="x" (click)="closeEditor()" aria-label="Close"><mat-icon>close</mat-icon></button></div>
+              @if (ed.mode === 'owner') {
+                <div class="row">
+                  <label>Owner
+                    <select [ngModel]="ed.owner" (ngModelChange)="patchEditor({ owner: $event })">
+                      <option [ngValue]="null">Pick a person…</option>
+                      @for (u of catalog()?.users ?? []; track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }
+                    </select>
+                  </label>
+                </div>
+                <small class="cx-muted">{{ fixData(ed.node)?.payload?.suggestedOwner ? 'Welly suggested ' + fixData(ed.node)?.payload?.suggestedOwner + ' but found no single matching account.' : 'Welly Fix sets this person as the process owner in Flows.' }}</small>
+              } @else {
               <textarea rows="5" [ngModel]="ed.text" (ngModelChange)="patchEditor({ text: $event })" [placeholder]="ed.mode === 'reject' ? 'Welly keeps the reason and will not suggest this again.' : 'Write what you know. Plain words; what, when, who else, what breaks if it is missed.'"></textarea>
+              }
               @if (ed.mode === 'write') {
                 <div class="row">
                   <label>Owner
@@ -264,7 +276,7 @@
                 </div>
                 <small class="cx-muted">Stored with your name and date. Derived facts next to it are never overwritten by this.</small>
               }
-              <div class="act"><button class="ghost" (click)="closeEditor()">Cancel</button><button class="go" (click)="saveEditor()" [disabled]="ed.busy || (ed.mode === 'reject' && !ed.text.trim())">{{ ed.mode === 'reject' ? 'Reject' : 'Save' }}</button></div>
+              <div class="act"><button class="ghost" (click)="closeEditor()">Cancel</button><button class="go" (click)="saveEditor()" [disabled]="ed.busy || (ed.mode === 'reject' && !ed.text.trim()) || (ed.mode === 'owner' && !ed.owner)">{{ ed.mode === 'reject' ? 'Reject' : ed.mode === 'owner' ? 'Apply' : 'Save' }}</button></div>
             </div>
           }
 
@@ -275,9 +287,17 @@
                 <div class="att" data-p="inferred" [class.decided]="a.status !== 'pending'">
                   <div class="h"><mat-icon>{{ a.type === 'finding' ? 'search_insights' : 'auto_awesome' }}</mat-icon><b>{{ a.label }}</b><span class="tag">{{ a.status === 'pending' ? 'To confirm' : a.status }}</span></div>
                   @if (a.summary) { <p>{{ a.summary }}</p> }
-                  @if (fixFor(a); as fx) { <p class="fix"><mat-icon>lightbulb</mat-icon>{{ fx.label }}</p> }
+                  @if (fixFor(a); as fx) {
+                    <p class="fix"><mat-icon>lightbulb</mat-icon>{{ fx.label }}
+                      @if (fx.status === 'applied') { <span class="tag">Applied</span> }
+                    </p>
+                    @if (fixVerdict(fx); as v) { <p class="cx-muted fix-result"><mat-icon>monitoring</mat-icon>{{ v }}</p> }
+                  }
                   @if (a.rationale && a.status !== 'pending') { <p class="cx-muted">{{ a.rationale }}</p> }
-                  @if (a.status === 'pending') { <div class="meta"><button (click)="reviewAccept(a)">Confirm</button><button (click)="reviewReject(a)">Reject</button></div> }
+                  <div class="meta">
+                    @if (a.status === 'pending') { <button (click)="reviewAccept(a)">Confirm</button><button (click)="reviewReject(a)">Reject</button> }
+                    @if (fixFor(a); as fx) { @if (canApply(fx)) { <button class="go" (click)="applyFix(fx)" [disabled]="applyBusy() === fx.key" matTooltip="Welly Fix carries this out now, in your name, and measures the step again in 14 days">Let Welly fix it</button> } }
+                  </div>
                 </div>
               }
             </div>
@@ -403,6 +423,7 @@
                 <div class="meta">
                   @if (inferenceTarget(a); as t) { <button class="ghost" (click)="selected.set(t)">Show</button> }
                   <button (click)="reviewAccept(a)">Confirm</button><button (click)="reviewReject(a)">Reject</button>
+                  @if (fixFor(a); as fx) { @if (canApply(fx)) { <button class="go" (click)="applyFix(fx)" [disabled]="applyBusy() === fx.key">Let Welly fix it</button> } }
                 </div>
               </div>
             }

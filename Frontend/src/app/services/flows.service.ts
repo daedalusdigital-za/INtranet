@@ -164,6 +164,8 @@ export class FlowsService {
   cortexCurate(key: string, req: CortexCurateRequest): Observable<any> { return this.http.put(`${this.cortex}/nodes/${encodeURIComponent(key)}/curate`, req); }
   cortexAccept(key: string, reason?: string): Observable<any> { return this.http.post(`${this.cortex}/nodes/${encodeURIComponent(key)}/accept`, { reason }); }
   cortexReject(key: string, reason: string): Observable<any> { return this.http.post(`${this.cortex}/nodes/${encodeURIComponent(key)}/reject`, { reason }); }
+  /** Welly Fix: apply a suggestion (step escalation / assignment, process owner). Caller is recorded as the one who did it. */
+  cortexApply(key: string, ownerUserId?: number | null): Observable<any> { return this.http.post(`${this.cortex}/nodes/${encodeURIComponent(key)}/apply`, { ownerUserId: ownerUserId ?? null }); }
   cortexSetHandoff(edgeId: number, handoff: string, reason?: string): Observable<any> { return this.http.put(`${this.cortex}/edges/${edgeId}/handoff`, { handoff, reason }); }
 
   // ── widgets ──
