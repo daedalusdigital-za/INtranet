@@ -34,6 +34,60 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Stock on hand per warehouse for the products on undelivered invoices, keyed by the normalised
+        /// product code (CommodityCodeMatcher.Normalize). The Sales invoice list joins this to each line to
+        /// show whether it can be fulfilled and from which warehouse.
+        /// </summary>
+        [HttpGet("stock-check")]
+        public async Task<IActionResult> StockCheck()
+        {
+            var codes = await _context.ImportedInvoices.AsNoTracking()
+                .Where(i => i.Status != "Delivered" && i.Status != "Cancelled" && i.ProductCode != "")
+                .Select(i => i.ProductCode)
+                .Distinct()
+                .ToListAsync();
+
+            var map = await CommodityCodeMatcher.BuildAsync(_context, codes);
+            var commodityIds = map.Values.SelectMany(v => v.Select(c => c.Id)).Distinct().ToList();
+
+            var commodities = await _context.Commodities.AsNoTracking()
+                .Where(c => commodityIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.Name })
+                .ToDictionaryAsync(c => c.Id, c => c.Name);
+
+            var inventory = await _context.WarehouseInventory.AsNoTracking()
+                .Where(i => commodityIds.Contains(i.CommodityId))
+                .Select(i => new { i.CommodityId, i.WarehouseId, WarehouseName = i.Warehouse!.Name, i.QuantityOnHand })
+                .ToListAsync();
+
+            // One entry per code when a single company owns it; CODE@COMPANY entries when the same code is a
+            // different product under several companies (the Sales list looks up CODE@COMPANY first, then CODE).
+            var items = map.SelectMany(kv => kv.Value.Select(cand => new
+            {
+                code = kv.Value.Count == 1 ? kv.Key : $"{kv.Key}@{cand.Category}",
+                commodityId = cand.Id,
+                company = cand.Category
+            }))
+            .Select(x =>
+            {
+                var inv = inventory.Where(i => i.CommodityId == x.commodityId).ToList();
+                return new
+                {
+                    x.code,
+                    x.commodityId,
+                    x.company,
+                    commodityName = commodities.GetValueOrDefault(x.commodityId) ?? "",
+                    onHand = inv.Sum(i => i.QuantityOnHand),
+                    warehouses = inv.Where(i => i.QuantityOnHand != 0)
+                        .Select(i => new { i.WarehouseId, name = i.WarehouseName, qty = i.QuantityOnHand })
+                        .OrderByDescending(i => i.qty).ToList()
+                };
+            }).ToList();
+
+            return Ok(new { items });
+        }
+
+        /// <summary>
         /// Lightweight company performance summary for the Sales dashboard cards.
         /// Computes today vs last-business-day vs month-to-date daily average per company
         /// entirely server-side (only current-month rows are read), instead of shipping
@@ -65,10 +119,13 @@ namespace ProjectTracker.API.Controllers.Logistics
             var lastBiz = LastBusinessDay(currentBiz);
             var monthStart = new DateTime(today.Year, today.Month, 1);
 
-            // Only read the rows we need: current month up to the current business day.
+            // Only read the rows we need: current month up to the current business day,
+            // extended back to the last business day when it falls in the previous month
+            // (e.g. Monday 2 Nov -> Friday 30 Oct), otherwise "yesterday" is always 0 early in a month.
+            var rangeStart = lastBiz < monthStart ? lastBiz : monthStart;
             var rows = await _context.ImportedInvoices
                 .AsNoTracking()
-                .Where(i => i.TransactionDate >= monthStart && i.TransactionDate < currentBiz.AddDays(1))
+                .Where(i => i.TransactionDate >= rangeStart && i.TransactionDate < currentBiz.AddDays(1))
                 .Select(i => new { i.SourceCompany, i.TransactionDate, i.SalesAmount })
                 .ToListAsync();
 
@@ -90,8 +147,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 var todaySales = currentDayRows.Sum(r => r.SalesAmount);
                 var yesterdaySales = lastDayRows.Sum(r => r.SalesAmount);
 
-                // Daily totals across the month (weekdays with data)
-                var dailyTotals = companyRows
+                // Daily totals across the current month only (weekdays with data)
+                var monthRows = companyRows.Where(r => r.TransactionDate.Date >= monthStart).ToList();
+                var dailyTotals = monthRows
                     .GroupBy(r => r.TransactionDate.Date)
                     .Select(g => g.Sum(r => r.SalesAmount))
                     .Where(v => v > 0)
@@ -100,9 +158,9 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 // Trend uses today's sales, else latest day with data
                 var trendSales = todaySales;
-                if (trendSales == 0 && companyRows.Count > 0)
+                if (trendSales == 0 && monthRows.Count > 0)
                 {
-                    var latest = companyRows
+                    var latest = monthRows
                         .GroupBy(r => r.TransactionDate.Date)
                         .OrderByDescending(g => g.Key)
                         .FirstOrDefault();
@@ -424,6 +482,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
 
             await _context.SaveChangesAsync();
+
+            // Every invoiced product code must exist as a stock item, otherwise the tripsheet line it becomes
+            // can never deduct stock at dispatch approval.
+            try { await StopLineLinker.EnsureCommoditiesForInvoiceCodesAsync(_context); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Could not create stock items for newly imported invoice codes"); }
 
             // Update batch status
             importBatch.SuccessfulRecords = result.SuccessfulRecords;
@@ -1165,6 +1228,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     stop.Commodities.Add(new StopCommodity
                     {
                         CommodityId = CommodityCodeMatcher.Match(stockCodes, invoice.ProductCode),
+                        ProductCode = invoice.ProductCode,
                         Quantity = invoice.Quantity,
                         UnitPrice = invoice.SalesAmount / (invoice.Quantity != 0 ? invoice.Quantity : 1),
                         TotalPrice = invoice.NetSales,
