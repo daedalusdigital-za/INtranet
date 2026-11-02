@@ -268,6 +268,7 @@ namespace ProjectTracker.API.Extensions
             services.AddSingleton<Services.Logistics.MovementBackfillStatus>();
             services.AddScoped<Services.Logistics.IFuelAnalysisService, Services.Logistics.FuelAnalysisService>();
             services.AddHostedService<Services.Logistics.MovementHistoryBackgroundService>();
+            services.AddHostedService<Services.Logistics.VehicleBreadcrumbBackgroundService>();
 
             // Always-on (24/7) fleet incident monitor — speeding/curfew/geofence into Reports log
             services.AddHostedService<Services.Logistics.IncidentMonitoringService>();
@@ -284,6 +285,7 @@ namespace ProjectTracker.API.Extensions
 
             // Flows: automated business processes (engine, data sources, event bus, scheduler)
             services.AddScoped<Services.Flows.IFlowEngine, Services.Flows.FlowEngine>();
+            services.AddScoped<Services.Cortex.CortexGraphBuilder>();
             services.AddScoped<Services.Flows.IFlowDataSources, Services.Flows.FlowDataSources>();
             services.AddSingleton<Services.Flows.IFlowEventPublisher, Services.Flows.FlowEventPublisher>();
             services.AddHostedService<Services.Flows.FlowSchedulerService>();

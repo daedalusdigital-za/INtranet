@@ -116,10 +116,55 @@ export interface SaveWidgetRequest {
   category?: string; departmentName?: string | null; isPublished?: boolean; isTemplate?: boolean;
 }
 
+// ── Cortex: the company knowledge graph (server-side, derived from live data + curated by people) ──
+export type CortexProvenance = 'derived' | 'curated' | 'inferred';
+export interface CortexApiType { key: string; label: string; layer: string; icon: string | null; color: string | null; attachedType: string | null; zoomLevel: number; }
+export interface CortexApiNode {
+  key: string; type: string; layer: string; icon: string | null; color: string | null; zoom: number;
+  label: string; short: string | null; summary: string | null; parent: string | null; provenance: CortexProvenance; source: string | null; sourceId: string | null;
+  ownerUserId: number | null; ownerLabel: string | null; permission: string | null; reviewDueAt: string | null; overdue: boolean;
+  route: string | null; data: string | null; rationale: string | null; status: string; isActive: boolean; updatedAt: string; empty: boolean;
+}
+export interface CortexApiEdge {
+  id: number; from: string; to: string; relation: string; label: string | null; handoff: string | null; handoffCurated: boolean; codeRef: string | null;
+  provenance: CortexProvenance; source: string | null; weight: number; status: string;
+  dwellAvgHours: number | null; dwellMedianHours: number | null; dwellP90Hours: number | null; queueSize: number | null; metricsAt: string | null; data: string | null;
+}
+export interface CortexGraph {
+  generatedAt: string; asOf: string | null; types: CortexApiType[]; nodes: CortexApiNode[]; edges: CortexApiEdge[];
+  counts: { nodes: number; edges: number; derived: number; curated: number; curatedEmpty: number; inferred: number; overdue: number; gaps: number; handoffs: Record<string, number> };
+}
+export interface CortexApiGap {
+  key: string; label: string; detail: string | null; kind: string; priority: number; status: string;
+  owner: string | null; ownerUserId: number | null; unowned: boolean; on: string | null; onLabel: string | null; onType: string | null;
+  provenance: CortexProvenance; rationale: string | null; data: string | null; updatedAt: string;
+}
+export interface CortexNodeDetail {
+  node: CortexApiNode; children: CortexApiNode[]; edges: CortexApiEdge[]; neighbours: CortexApiNode[];
+  history: { kind: string; field: string | null; oldValue: string | null; newValue: string | null; changedBy: string; userName: string | null; occurredAt: string }[];
+}
+export interface CortexCurateRequest { summary?: string | null; dataJson?: string | null; ownerUserId?: number | null; ownerLabel?: string | null; reviewDueAt?: string | null; }
+
 @Injectable({ providedIn: 'root' })
 export class FlowsService {
   private http = inject(HttpClient);
   private base = `${environment.apiUrl}/flows`;
+  private cortex = `${environment.apiUrl}/cortex`;
+
+  // ── cortex ──
+  cortexGraph(opts?: { layers?: string; root?: string; asOf?: string }): Observable<CortexGraph> {
+    const params: Record<string, string> = {};
+    if (opts?.layers) params['layers'] = opts.layers; if (opts?.root) params['root'] = opts.root; if (opts?.asOf) params['asOf'] = opts.asOf;
+    return this.http.get<CortexGraph>(`${this.cortex}/graph`, { params });
+  }
+  cortexNode(key: string): Observable<CortexNodeDetail> { return this.http.get<CortexNodeDetail>(`${this.cortex}/nodes/${encodeURIComponent(key)}`); }
+  cortexGaps(status = 'open'): Observable<CortexApiGap[]> { return this.http.get<CortexApiGap[]>(`${this.cortex}/gaps`, { params: { status } }); }
+  cortexChanges(opts?: { since?: string; until?: string; key?: string; take?: number }): Observable<any[]> { return this.http.get<any[]>(`${this.cortex}/changes`, { params: { ...(opts as any ?? {}) } }); }
+  cortexRebuild(): Observable<{ nodes: number; edges: number; created: number; updated: number; deactivated: number; reactivated: number; tookMs: number }> { return this.http.post<any>(`${this.cortex}/rebuild`, {}); }
+  cortexCurate(key: string, req: CortexCurateRequest): Observable<any> { return this.http.put(`${this.cortex}/nodes/${encodeURIComponent(key)}/curate`, req); }
+  cortexAccept(key: string, reason?: string): Observable<any> { return this.http.post(`${this.cortex}/nodes/${encodeURIComponent(key)}/accept`, { reason }); }
+  cortexReject(key: string, reason: string): Observable<any> { return this.http.post(`${this.cortex}/nodes/${encodeURIComponent(key)}/reject`, { reason }); }
+  cortexSetHandoff(edgeId: number, handoff: string, reason?: string): Observable<any> { return this.http.put(`${this.cortex}/edges/${edgeId}/handoff`, { handoff, reason }); }
 
   // ── widgets ──
   widgets(templates = false): Observable<FlowWidget[]> { return this.http.get<FlowWidget[]>(`${this.base}/widgets`, { params: { templates } }); }

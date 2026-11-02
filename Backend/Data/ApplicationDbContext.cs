@@ -131,6 +131,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.PartDeliveryHistory> PartDeliveryHistories { get; set; }
         public DbSet<Models.Logistics.FuelTransaction> FuelTransactions { get; set; }
         public DbSet<Models.Logistics.VehicleMovementHistory> VehicleMovementHistory { get; set; }
+        public DbSet<Models.Logistics.VehiclePositionLog> VehiclePositionLogs { get; set; }
         public DbSet<Models.Logistics.OrderCancellation> OrderCancellations { get; set; }
         public DbSet<Models.Logistics.PodDocument> PodDocuments { get; set; }
         public DbSet<Models.Logistics.PodDocumentInvoiceLink> PodDocumentInvoiceLinks { get; set; }
@@ -258,6 +259,12 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Flows.FlowAuditEvent> FlowAuditEvents { get; set; }
         public DbSet<Models.Flows.FlowWidget> FlowWidgets { get; set; }
 
+        // Cortex: the company knowledge graph (nodes, edges, change history)
+        public DbSet<Models.Cortex.CortexNodeType> CortexNodeTypes { get; set; }
+        public DbSet<Models.Cortex.CortexNode> CortexNodes { get; set; }
+        public DbSet<Models.Cortex.CortexEdge> CortexEdges { get; set; }
+        public DbSet<Models.Cortex.CortexChange> CortexChanges { get; set; }
+
         // Personal Home page layouts (widgets + shortcuts)
         public DbSet<UserHomeLayout> UserHomeLayouts { get; set; }
 
@@ -266,6 +273,20 @@ namespace ProjectTracker.API.Data
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<UserHomeLayout>(e => e.HasIndex(l => l.UserId).IsUnique());
+
+            // Cortex
+            modelBuilder.Entity<Models.Cortex.CortexNode>(e =>
+            {
+                e.HasIndex(n => n.Key).IsUnique();
+                e.HasIndex(n => new { n.Type, n.IsActive });
+                e.HasIndex(n => n.ParentKey);
+            });
+            modelBuilder.Entity<Models.Cortex.CortexEdge>(e =>
+            {
+                e.HasIndex(x => new { x.FromKey, x.ToKey, x.Relation }).IsUnique();
+                e.HasIndex(x => x.ToKey);
+            });
+            modelBuilder.Entity<Models.Cortex.CortexChange>(e => e.HasIndex(c => new { c.TargetKey, c.OccurredAt }));
 
             // Flows
             modelBuilder.Entity<Models.Flows.FlowDefinition>(e =>
@@ -341,6 +362,12 @@ namespace ProjectTracker.API.Data
                 e.HasIndex(x => new { x.VehicleId, x.MovementDate });
                 e.HasIndex(x => new { x.RegistrationNumber, x.MovementDate });
                 e.HasIndex(x => x.CartrackTripId).IsUnique();
+            });
+            // GPS breadcrumbs: one row per distinct CarTrack fix per vehicle; queried by load or vehicle/time
+            modelBuilder.Entity<Models.Logistics.VehiclePositionLog>(e =>
+            {
+                e.HasIndex(x => new { x.VehicleId, x.RecordedAt }).IsUnique();
+                e.HasIndex(x => new { x.LoadId, x.RecordedAt });
             });
 
             // Requisition invoice workflow indexes + cascade of history rows

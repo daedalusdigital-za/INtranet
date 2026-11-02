@@ -1,9 +1,10 @@
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { FlowCatalog, FlowDefinition, FlowStats } from '../../services/flows.service';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { CortexApiGap, CortexApiNode, CortexGraph, FlowCatalog, FlowDefinition, FlowStats, FlowsService } from '../../services/flows.service';
 import { CORTEX_COMPANIES, CORTEX_EDGES, CORTEX_GAPS, CORTEX_NODES, CORTEX_STREAMS, CortexGap, CortexHow, CortexLayer, CortexNode, CortexStream } from './cortex-model';
 
 /** A person on the map: from the employee register, or an intranet user who is not on it. */
@@ -31,8 +32,10 @@ const DEPT_Y = 600;
   templateUrl: './flow-cortex.component.html',
   styleUrls: ['./flow-cortex.component.scss']
 })
-export class FlowCortexComponent {
+export class FlowCortexComponent implements OnInit {
   private router = inject(Router);
+  private api = inject(FlowsService);
+  private snack = inject(MatSnackBar);
   flows = input<FlowDefinition[]>([]);
   templates = input<FlowDefinition[]>([]);
   catalog = input<FlowCatalog | null>(null);
@@ -63,6 +66,73 @@ export class FlowCortexComponent {
 
   private live = computed(() => this.flows().filter(f => !f.isTemplate));
   private norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
+
+  // ── the knowledge graph, from the server ──────────────────────────────────────
+
+  graph = signal<CortexGraph | null>(null);
+  apiGaps = signal<CortexApiGap[]>([]);
+  graphBusy = signal(false);
+  graphError = signal<string | null>(null);
+
+  ngOnInit() { this.loadGraph(); }
+
+  loadGraph() {
+    this.graphBusy.set(true); this.graphError.set(null);
+    this.api.cortexGraph().subscribe({
+      next: g => { this.graph.set(g); this.graphBusy.set(false); },
+      error: e => { this.graphBusy.set(false); this.graphError.set(e?.error?.message ?? 'Could not load the knowledge graph'); }
+    });
+    this.api.cortexGaps().subscribe({ next: g => this.apiGaps.set(g), error: () => this.apiGaps.set([]) });
+  }
+
+  /** Designers only: re-derive the graph from live data. Curated knowledge is never overwritten. */
+  rebuildGraph() {
+    if (!this.isDesigner() || this.graphBusy()) return;
+    this.graphBusy.set(true);
+    this.api.cortexRebuild().subscribe({
+      next: r => { this.snack.open(`Cortex rebuilt: ${r.nodes} nodes, ${r.edges} edges · ${r.created} new, ${r.deactivated} gone · ${r.tookMs} ms`, 'OK', { duration: 6000 }); this.loadGraph(); },
+      error: e => { this.graphBusy.set(false); this.snack.open(e?.error?.message ?? 'Rebuild failed', 'OK', { duration: 5000 }); }
+    });
+  }
+
+  private apiByKey = computed(() => new Map((this.graph()?.nodes ?? []).map(n => [n.key, n])));
+  /** Map a node key on this map to its key in the server graph (departments are 'd:ID' here, 'dept:ID' there). */
+  apiKey(key: string | null | undefined) { return !key ? null : key.startsWith('d:') ? 'dept:' + key.slice(2) : key; }
+  apiNode(key: string | null | undefined): CortexApiNode | null { const k = this.apiKey(key); return k ? this.apiByKey().get(k) ?? null : null; }
+  /** Attached knowledge / responsibilities / workflow / authority nodes under a node, including empty ones (shown, not hidden). */
+  attached(key: string) { const k = this.apiKey(key); return k ? (this.graph()?.nodes ?? []).filter(n => n.parent === k && n.type !== 'gap' && n.type !== 'step') : []; }
+  /** Server-derived gaps on a node (unowned modules, flows with no owner, departments without a head, …). */
+  apiGapsOf(key: string) { const k = this.apiKey(key); return k ? this.apiGaps().filter(g => g.on === k) : []; }
+  /** Where to land on this map for a server-graph key: same key for modules/sources, 'd:ID' for departments, else the parent. */
+  private mapKeyFor(k: string | null): string | null {
+    if (!k) return null;
+    const local = k.startsWith('dept:') ? 'd:' + k.slice(5) : k;
+    if (this.byKey().has(local)) return local;
+    const n = this.apiByKey().get(k);
+    return n?.parent ? this.mapKeyFor(n.parent) : null;
+  }
+  provenanceLabel(p: string) { return p === 'derived' ? 'From live data' : p === 'curated' ? 'Written by a person' : 'Suggested by Welly'; }
+  knowledgeStrip = computed(() => {
+    const c = this.graph()?.counts; if (!c) return null;
+    return [
+      { key: 'derived', icon: 'memory', label: 'From data', value: c.derived, tip: 'Facts derived from live records. Rebuilt on demand; never edited by hand.' },
+      { key: 'curated', icon: 'edit_note', label: 'Written', value: c.curated, tip: 'Knowledge a person wrote down and owns. Expires for review.' },
+      { key: 'empty', icon: 'post_add', label: 'Still blank', value: c.curatedEmpty, tip: 'Slots waiting for someone to write what they know.' },
+      { key: 'inferred', icon: 'auto_awesome', label: 'To confirm', value: c.inferred, tip: 'Welly suggestions waiting for a person to accept or reject.' },
+      { key: 'overdue', icon: 'history', label: 'Overdue review', value: c.overdue, tip: 'Curated knowledge past its review date. Shown, not hidden.' },
+      { key: 'gaps', icon: 'build_circle', label: 'Gaps', value: c.gaps, tip: 'Problems the graph found: no owner, no head, hand-off not built.' },
+    ];
+  });
+  reviewAccept(n: CortexApiNode) { this.api.cortexAccept(n.key).subscribe({ next: () => { this.snack.open('Confirmed', undefined, { duration: 2500 }); this.loadGraph(); } }); }
+  reviewReject(n: CortexApiNode) {
+    const reason = window.prompt('Why is this wrong? (Welly learns from the reason)'); if (!reason) return;
+    this.api.cortexReject(n.key, reason).subscribe({ next: () => { this.snack.open('Rejected', undefined, { duration: 2500 }); this.loadGraph(); } });
+  }
+  curate(n: CortexApiNode) {
+    const text = window.prompt(`${n.label}\n\nWrite what you know. It will be stored with your name and a review date six months out.`, n.summary ?? '');
+    if (text === null) return;
+    this.api.cortexCurate(n.key, { summary: text }).subscribe({ next: () => { this.snack.open('Saved', undefined, { duration: 2500 }); this.loadGraph(); }, error: e => this.snack.open(e?.error?.message ?? 'Not allowed', 'OK', { duration: 4000 }) });
+  }
 
   // ── departments and people, from live data ────────────────────────────────
 
@@ -253,6 +323,12 @@ export class FlowCortexComponent {
       out.push({ icon: 'build_circle', tone: 'gap', weight: 100, title: g.title, detail: g.fix,
         actLabel: tpl && designer ? 'Use template' : 'Show', act: () => tpl && designer ? this.useTemplate.emit(tpl) : this.select(g.node) });
     }
+    for (const g of this.apiGaps()) {
+      const target = this.mapKeyFor(g.on);
+      out.push({ icon: g.kind === 'overdue' ? 'history' : g.unowned ? 'person_off' : 'build_circle', tone: g.kind === 'overdue' ? 'data' : 'gap', weight: 70 + g.priority * 10,
+        title: g.label, detail: `${g.detail ?? ''}${g.owner ? ` · Owner: ${g.owner}` : ' · No owner yet'}`,
+        actLabel: target ? 'Show' : 'OK', act: () => { if (target) this.selected.set(target); } });
+    }
     const lost = this.unplaced();
     if (lost.length) out.push({ icon: 'person_search', tone: 'data', weight: 90, title: `${lost.length} employees have no department`,
       detail: `Clock-in register says "Other" and there's no intranet account to place them by (e.g. ${lost.slice(0, 3).join(', ')}).`,
@@ -273,7 +349,7 @@ export class FlowCortexComponent {
           detail: `Start with ${missing.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}${missing.length > 3 ? '…' : ''}.`, actLabel: 'Show', act: () => this.select(d.key) });
       }
     }
-    return out.sort((a, b) => b.weight - a.weight).slice(0, 14);
+    return out.sort((a, b) => b.weight - a.weight).slice(0, 20);
   });
 
   // ── geometry and focus ────────────────────────────────────────────────────

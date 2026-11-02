@@ -34,6 +34,20 @@
       }
     </div>
 
+    @if (knowledgeStrip(); as ks) {
+      <div class="cx-knowledge" [class.busy]="graphBusy()">
+        <span class="cx-k-title" matTooltip="The knowledge graph behind this map: derived from live records, written by people, suggested by Welly."><mat-icon>hub</mat-icon>Knowledge</span>
+        @for (k of ks; track k.key) {
+          <span class="cx-k" [attr.data-k]="k.key" [matTooltip]="k.tip"><mat-icon>{{ k.icon }}</mat-icon><b>{{ k.value }}</b>{{ k.label }}</span>
+        }
+        <span class="spacer"></span>
+        @if (graph(); as g) { <small class="cx-muted">{{ g.counts.nodes }} nodes · {{ g.counts.edges }} links</small> }
+        @if (isDesigner()) { <button class="cx-k-btn" (click)="rebuildGraph()" [disabled]="graphBusy()" matTooltip="Re-derive from live data. Written knowledge is kept."><mat-icon>refresh</mat-icon>Rebuild</button> }
+      </div>
+    } @else if (graphError()) {
+      <div class="cx-knowledge err"><mat-icon>cloud_off</mat-icon><small>{{ graphError() }}</small><span class="spacer"></span><button class="cx-k-btn" (click)="loadGraph()">Retry</button></div>
+    }
+
     <div class="cx-search">
       <mat-icon>search</mat-icon>
       <input placeholder="Find a person, department, module or flow" [value]="query()" (input)="query.set($any($event.target).value)" (keydown.escape)="query.set('')" />
@@ -183,6 +197,41 @@
         </div>
         <p class="cx-blurb">{{ n.blurb }}</p>
 
+        @if (apiNode(n.key); as an) {
+          <div class="cx-prov" [attr.data-p]="an.provenance" [class.overdue]="an.overdue">
+            <span class="tag">{{ provenanceLabel(an.provenance) }}</span>
+            @if (an.ownerLabel) { <span><mat-icon>person</mat-icon>{{ an.ownerLabel }}</span> } @else { <span class="warn"><mat-icon>person_off</mat-icon>No owner</span> }
+            @if (an.reviewDueAt) { <span [class.warn]="an.overdue"><mat-icon>event</mat-icon>Review {{ an.reviewDueAt | date:'d MMM yyyy' }}</span> }
+            @if (an.summary) { <p>{{ an.summary }}</p> }
+          </div>
+
+          @if (attached(n.key).length) {
+            <h4><mat-icon>menu_book</mat-icon>What people know<small>blank slots are shown, not hidden</small></h4>
+            <div class="cx-attached">
+              @for (a of attached(n.key); track a.key) {
+                <div class="att" [attr.data-p]="a.provenance" [class.empty]="a.empty" [class.overdue]="a.overdue">
+                  <div class="h"><mat-icon>{{ a.icon ?? 'notes' }}</mat-icon><b>{{ a.label }}</b><span class="tag">{{ a.empty ? 'Nothing written yet' : provenanceLabel(a.provenance) }}</span></div>
+                  @if (a.summary) { <p>{{ a.summary }}</p> } @else if (a.empty) { <p class="cx-muted">Whoever owns this knows it. Nobody has written it down.</p> }
+                  <div class="meta">
+                    @if (a.ownerLabel) { <span>{{ a.ownerLabel }}</span> }
+                    @if (a.reviewDueAt) { <span [class.warn]="a.overdue">review {{ a.reviewDueAt | date:'MMM yyyy' }}</span> }
+                    @if (a.provenance === 'inferred' && a.status === 'pending') {
+                      <button (click)="reviewAccept(a)">Confirm</button><button (click)="reviewReject(a)">Reject</button>
+                    } @else { <button (click)="curate(a)">{{ a.empty ? 'Write it' : 'Update' }}</button> }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          @for (g of apiGapsOf(n.key); track g.key) {
+            <div class="cx-gap">
+              <div class="h"><mat-icon>{{ g.unowned ? 'person_off' : 'build_circle' }}</mat-icon><b>{{ g.label }}</b></div>
+              @if (g.detail) { <p>{{ g.detail }}</p> }
+              <div class="meta"><code>{{ g.kind }}</code>@if (g.owner) { <span>Owner: {{ g.owner }}</span> } @else { <span>No owner</span> }</div>
+            </div>
+          }
+        }
         <!-- department -->
         @if (dept(); as d) {
           <div class="cx-stats">
