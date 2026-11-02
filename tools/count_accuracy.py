@@ -14,7 +14,9 @@ def company_from(n):
     n = n.upper()
     for k in ('ACCESS', 'PROMED', 'SEBENZANI'):
         if k in n: return k
-    return 'PHARMACARE' if 'PHARMA' in n else None
+    # Pharmacare is written many ways on the sheets: PHARMACARE, pharmatech, PPH
+    if 'PHARMA' in n or re.search(r'\bPPH\b', n): return 'PHARMACARE'
+    return None
 def nc(c): return re.sub(r'[^A-Z0-9]', '', str(c).upper())
 def esc(s): return str(s).replace("'", "''")
 
@@ -31,11 +33,15 @@ dbprice = {} # (wh, ncode, company) -> unit price (None when blank)
 for ln in sql("SELECT wi.WarehouseId, ISNULL(c.Code,''), ISNULL(UPPER(c.Category),''), wi.QuantityOnHand, ISNULL(c.UnitOfMeasure,''), ISNULL(CAST(wi.UnitPrice AS NVARCHAR(30)),''), c.Name FROM WarehouseInventory wi JOIN Commodities c ON c.Id=wi.CommodityId").splitlines():
     p = ln.split('\t')
     if len(p) < 7 or not p[0].strip().isdigit(): continue
-    k = (int(p[0]), nc(p[1]), p[2].strip())
+    k = (int(p[0]), nc(p[1]) or ('~' + nc(p[6])), p[2].strip())   # uncoded items keyed by description
     db[k] = db.get(k, 0) + float(p[3]); dbname[k] = p[6].strip(); dbuom[k] = p[4].strip(); dbprice[k] = p[5].strip() or None
 bycode = collections.defaultdict(list)
 for (wh, code, cat), q in db.items():
-    if code: bycode[(wh, code)].append((cat, q))
+    if code and not code.startswith('~'): bycode[(wh, code)].append((cat, q))
+# description index for sheets that carry no code column (Pharmacare): (wh, company, ndesc) -> [(ncode, qty)]
+bydesc = collections.defaultdict(list)
+for (wh, code, cat), q in db.items():
+    bydesc[(wh, cat, nc(dbname[(wh, code, cat)]))].append((code, q))
 
 issues = []  # (wh, company, code, desc, type, detail)
 tot_rows = exact = qty_ok_label_off = qty_wrong = 0
@@ -51,16 +57,18 @@ for region, wh in WH.items():
             comp = company_from(ws.title) if len(wb.worksheets) > 1 else company_from(fname)
             if comp is None: continue
             rows = list(ws.iter_rows(values_only=True))
-            hi = next((i for i, r in enumerate(rows[:6]) if r and any(isinstance(c, str) and c.strip().upper() in ('CODE', 'ITEM CODE') for c in r)), None)
-            if hi is None: continue
+            hi = next((i for i, r in enumerate(rows[:6]) if r and any(isinstance(c, str) and c.strip().upper() in ('CODE', 'ITEM CODE', 'DESCRIPTION', 'ITEM DESCRIPTION') for c in r)), None)
+            if hi is None:
+                print(f'!! {region}/{fname} [{ws.title}] skipped: no header row found'); continue
             # header may be split over two rows (PE sheets): merge the next row's labels in
             hdr = [str(c).strip().upper() if c else '' for c in rows[hi]]
             nxt = [str(c).strip().upper() if c else '' for c in rows[hi + 1]] if hi + 1 < len(rows) else []
             if not any(h.startswith('CLOSING') for h in hdr) and any(h.startswith('CLOSING') for h in nxt):
                 hdr = [h or (nxt[j] if j < len(nxt) else '') for j, h in enumerate(hdr)] + nxt[len(hdr):]
                 hi += 1
-            ci = next(i for i, h in enumerate(hdr) if h in ('CODE', 'ITEM CODE'))
+            ci = next((i for i, h in enumerate(hdr) if h in ('CODE', 'ITEM CODE')), None)
             di = next(i for i, h in enumerate(hdr) if h in ('DESCRIPTION', 'ITEM DESCRIPTION'))
+            desc_only = ci is None
             cl = next((i for i, h in enumerate(hdr) if h.startswith('CLOSING') or h == 'QUANTITY'), len(hdr) - 1)
             ui = next((i for i, h in enumerate(hdr) if h in ('UOM', 'UNIT', 'UNIT OF MEASURE')), None)
             src = f'{region}/{fname} [{ws.title}]'
@@ -68,7 +76,7 @@ for region, wh in WH.items():
             lines = []
             for rn, r in enumerate(rows[hi + 1:], start=hi + 2):
                 if not r or len(r) <= cl: continue
-                code, desc, v = r[ci], r[di], r[cl]
+                code, desc, v = (r[ci] if ci is not None else None), r[di], r[cl]
                 if code is None and not desc: continue
                 if str(desc or '').strip().upper() in ('TOTAL', 'TOTALS'): continue
                 blank = v is None or (isinstance(v, str) and not v.strip())
@@ -86,7 +94,20 @@ for region, wh in WH.items():
                 if qv < 0:
                     issues.append((wh, comp, code, desc, 'Negative balance', f'{src} row {rn}: closing balance {qv:g}. Stock cannot be negative - check stock out entries.'))
                 if code is None:
+                    if desc_only:
+                        # no code column on this sheet: match by description within the same warehouse + company
+                        n += 1; sq += qv
+                        cands = bydesc.get((wh, comp, nc(desc)), [])
+                        total = sum(q for _, q in cands)
+                        if cands and abs(total - qv) < 0.01:
+                            ok += 1; mq += qv
+                            for c, _ in cands: sheet_seen[wh].add((c, comp))
+                        else:
+                            wrong += 1
+                            issues.append((wh, comp, None, desc, 'Quantity differs from sheet', f'{src} row {rn}: sheet {qv:g}, system {total if cands else "not found"} (matched by description - sheet has no code column).'))
+                        continue
                     k = (wh, '', comp)
+                    sheet_seen[wh].add(('~' + nc(desc), comp))
                     issues.append((wh, comp, None, desc, 'Missing item code', f'{src} row {rn}: "{desc}" has no code (qty {qv:g}). Loaded as an uncoded item - please add the Sage code.'))
                     continue
                 n += 1; sq += qv
@@ -121,7 +142,6 @@ not_on_sheet = []
 for (wh, code, cat), q in db.items():
     if q == 0 or cat == 'DAMAGED-EXPIRED' or wh not in WHN: continue
     if (code, cat) in sheet_seen[wh]: continue
-    if not code: continue  # uncoded items come from the sheets themselves
     not_on_sheet.append((wh, cat, code, dbname[(wh, code, cat)], q))
     issues.append((wh, cat, code, dbname[(wh, code, cat)], 'Item not on count sheet', f'System has {q:g} on hand but {WHN[wh]} {cat} did not count this item. Left as is - confirm or write off.'))
 
