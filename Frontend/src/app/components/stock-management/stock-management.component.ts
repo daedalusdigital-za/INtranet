@@ -345,7 +345,7 @@ interface ComprehensiveAnalysisResponse {
           @case ('counts') {
             <div class="stk-tab-body">
               <div class="stk-toolbar">
-                <span class="stk-count">Latest counts per warehouse</span>
+                <span class="stk-count">Latest counts per warehouse{{ companyFilter ? ' · ' + companyFilter : '' }}{{ whFilterName }}</span>
                 <span class="stk-spacer"></span>
                 <button mat-stroked-button (click)="exportValuation()"><mat-icon>file_download</mat-icon> Export</button>
                 <button mat-stroked-button (click)="requestApplyInvoicePrices()"
@@ -369,9 +369,9 @@ interface ComprehensiveAnalysisResponse {
                     <th class="num">In Stock</th><th class="num">Out of Stock</th><th>Last Count</th><th>Companies</th>
                   </tr></thead>
                   <tbody>
-                    @for (w of warehouses; track w.id) {
+                    @for (w of countRows; track w.id) {
                       <tr>
-                        <td><a class="stk-link" (click)="openWarehouseSheet(w)" matTooltip="View all stock on hand at this warehouse"><b>{{ w.name }}</b></a></td>
+                        <td><a class="stk-link" (click)="openWarehouseSheet(w, companyFilter)" matTooltip="View all stock on hand at this warehouse"><b>{{ w.name }}</b></a></td>
                         <td class="num">{{ w.totalItems | number }}</td>
                         <td class="num">{{ w.totalQuantityOnHand | number }}</td>
                         <td class="num">{{ formatValue(w.totalStockValue) }}</td>
@@ -495,130 +495,107 @@ interface ComprehensiveAnalysisResponse {
           @case ('movements') {
             <div class="stk-tab-body">
 
-              <!-- Ledger summary strip -->
-              <div class="mov-stats">
-                <div class="mov-stat ms-amber" [class.ms-zero]="pendingDispatchCount === 0">
-                  <mat-icon>pending_actions</mat-icon>
-                  <div><b>{{ pendingDispatchCount | number }}</b><span>Pending Dispatch Approvals</span></div>
-                </div>
-                <div class="mov-stat ms-red" [class.ms-zero]="deliveredNotDeductedCount === 0"
-                     matTooltip="Delivered to the customer but stock was never deducted — approve these first so stock on hand is right">
-                  <mat-icon>report</mat-icon>
-                  <div><b>{{ deliveredNotDeductedCount | number }}</b><span>Delivered, Not Deducted</span></div>
-                </div>
-                <div class="mov-stat ms-green">
-                  <mat-icon>south_west</mat-icon>
-                  <div><b>+{{ formatQty(movStockIn) }}</b><span>Units In (ledger)</span></div>
-                </div>
-                <div class="mov-stat ms-red">
-                  <mat-icon>north_east</mat-icon>
-                  <div><b>-{{ formatQty(movStockOut) }}</b><span>Units Out (ledger)</span></div>
-                </div>
-                <div class="mov-stat ms-blue">
-                  <mat-icon>today</mat-icon>
-                  <div><b>{{ movToday | number }}</b><span>Movements Today</span></div>
-                </div>
-              </div>
-
-              <!-- Pending dispatch approval queue -->
+              <!-- What needs doing first: approvals live in Dispatch, so point there -->
               @if (pendingDispatchCount > 0) {
-                <div class="mov-queue">
-                  <div class="mov-queue-head">
-                    <mat-icon>fact_check</mat-icon>
-                    <b>Awaiting Stock Deduction</b>
-                    <span class="mov-queue-sub">Tripsheets since the stock-count baseline that have not been approved against stock — review the picking slip and approve to deduct.</span>
-                    @if (canApprove) {
-                      <span class="stk-spacer"></span>
-                      <button mat-stroked-button (click)="requestBackfillStockLines()"
-                              matTooltip="Give older loads their missing stock lines and link unlinked lines by product code (PIN required)">
-                        <mat-icon>link</mat-icon> Link Stock Lines</button>
+                <div class="mv-alert" [class.mv-alert-red]="deliveredNotDeductedCount > 0">
+                  <mat-icon>{{ deliveredNotDeductedCount > 0 ? 'report' : 'pending_actions' }}</mat-icon>
+                  <div class="mv-alert-text">
+                    @if (deliveredNotDeductedCount > 0) {
+                      <b>{{ deliveredNotDeductedCount | number }} delivered {{ deliveredNotDeductedCount === 1 ? 'load has' : 'loads have' }} not had stock deducted yet.</b>
+                      <span>Stock on hand is too high until {{ deliveredNotDeductedCount === 1 ? 'it is' : 'they are' }} approved.
+                        @if (pendingDispatchCount > deliveredNotDeductedCount) { {{ pendingDispatchCount - deliveredNotDeductedCount | number }} more {{ pendingDispatchCount - deliveredNotDeductedCount === 1 ? 'load is' : 'loads are' }} on the way. }</span>
+                    } @else {
+                      <b>{{ pendingDispatchCount | number }} {{ pendingDispatchCount === 1 ? 'load is' : 'loads are' }} waiting for stock to be deducted.</b>
+                      <span>Check each picking slip and approve it in Dispatch.</span>
                     }
                   </div>
-                  @for (l of pendingDispatchLoads; track l.id) {
-                    <div class="mov-queue-row">
-                      <span class="mono mq-load">{{ l.loadNumber }}</span>
-                      <span class="mq-wh">{{ l.warehouseName || '—' }}</span>
-                      <span class="mq-cust">{{ l.customerName || '—' }}</span>
-                      <span class="mq-date">{{ (l.actualDeliveryDate || l.scheduledDeliveryDate || l.createdAt) | date:'dd MMM yyyy' }}</span>
-                      <app-status-chip [status]="l.status" [tone]="l.status === 'Delivered' || l.status === 'Completed' ? 'ok' : 'warn'"></app-status-chip>
-                      <span class="stk-spacer"></span>
-                      <button mat-stroked-button (click)="openLoadDoc(l, 'picking')" matTooltip="View picking slip"><mat-icon>checklist</mat-icon> Slip</button>
-                      @if (canApprove) {
-                        <button mat-raised-button color="primary" (click)="openApproveDispatch(l)"><mat-icon>inventory</mat-icon> Review & Approve</button>
-                      } @else {
-                        <span class="mq-noperm" matTooltip="Requires the Stock Dispatch Approver permission">Approver required</span>
-                      }
-                    </div>
+                  <span class="stk-spacer"></span>
+                  @if (canApprove) {
+                    <button mat-stroked-button (click)="requestBackfillStockLines()"
+                            matTooltip="Give older loads their missing stock lines and link unlinked lines by product code (PIN required)">
+                      <mat-icon>link</mat-icon> Link stock lines</button>
                   }
-                  @if (pendingDispatchCount > pendingDispatchLoads.length) {
-                    <div class="mov-queue-more">Showing {{ pendingDispatchLoads.length }} most recent of {{ pendingDispatchCount | number }} pending</div>
-                  }
+                  <button mat-flat-button color="primary" (click)="goToApprovals()">Review in Dispatch <mat-icon iconPositionEnd>arrow_forward</mat-icon></button>
                 </div>
               }
 
-              <div class="stk-toolbar">
-                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === ''" (click)="movTypeFilter = ''">All ({{ ledgerScoped.length }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Receive'" (click)="movTypeFilter = 'Receive'">
-                  <mat-icon>south_west</mat-icon> Receive ({{ movCount('Receive') }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Dispatch'" (click)="movTypeFilter = 'Dispatch'">
-                  <mat-icon>north_east</mat-icon> Dispatch ({{ movCount('Dispatch') }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Transfer'" (click)="movTypeFilter = 'Transfer'">
-                  <mat-icon>sync_alt</mat-icon> Transfer ({{ movCount('Transfer') }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Return'" (click)="movTypeFilter = 'Return'">
-                  <mat-icon>undo</mat-icon> Return ({{ movCount('Return') }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Adjustment'" (click)="movTypeFilter = 'Adjustment'">
-                  <mat-icon>tune</mat-icon> Adjust ({{ movCount('Adjustment') }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="movTypeFilter === 'Scrap'" (click)="movTypeFilter = 'Scrap'">
-                  <mat-icon>delete_sweep</mat-icon> Scrap ({{ movCount('Scrap') }})</button>
+              <div class="mv-head">
+                <p class="mv-intro">Every change to stock on hand, newest first. Rows are never edited: to undo one, reverse it.</p>
+                <span class="stk-spacer"></span>
+                <button mat-icon-button (click)="loadLedger()" matTooltip="Reload movements" aria-label="Reload movements"><mat-icon>refresh</mat-icon></button>
+                <button mat-icon-button (click)="exportMovements()" matTooltip="Export this view to Excel" aria-label="Export this view to Excel"><mat-icon>file_download</mat-icon></button>
+                <button mat-flat-button color="primary" [matMenuTriggerFor]="recordMenu"><mat-icon>add</mat-icon> Record a movement</button>
+                <mat-menu #recordMenu="matMenu" class="mv-menu">
+                  <button mat-menu-item (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon>
+                    <span class="mv-menu-item"><b>Receive stock</b><small>Goods arriving from a supplier</small></span></button>
+                  <button mat-menu-item (click)="openManualMovement('Return')"><mat-icon>keyboard_return</mat-icon>
+                    <span class="mv-menu-item"><b>Customer return</b><small>Goods coming back from a customer</small></span></button>
+                  <button mat-menu-item (click)="openTransferStock()"><mat-icon>sync_alt</mat-icon>
+                    <span class="mv-menu-item"><b>Transfer</b><small>Move stock from one warehouse to another</small></span></button>
+                  <button mat-menu-item (click)="openManualMovement('Adjustment')"><mat-icon>tune</mat-icon>
+                    <span class="mv-menu-item"><b>Adjust quantity</b><small>Correct a quantity up or down, with a reason</small></span></button>
+                  <button mat-menu-item (click)="openManualMovement('Scrap')"><mat-icon>delete_sweep</mat-icon>
+                    <span class="mv-menu-item"><b>Write off</b><small>Damaged or expired stock leaving the books</small></span></button>
+                </mat-menu>
+              </div>
+
+              <div class="mv-filters">
+                <div class="mv-seg" role="group" aria-label="Movement type">
+                  @for (k of movKinds; track k.key) {
+                    <button type="button" [class.on]="movTypeFilter === k.key" (click)="movTypeFilter = k.key" [matTooltip]="k.hint">
+                      <mat-icon>{{ k.icon }}</mat-icon>{{ k.label }}<span class="mv-n">{{ movKindCount(k.key) | number }}</span>
+                    </button>
+                  }
+                </div>
                 <mat-form-field appearance="outline" class="stk-search">
                   <mat-icon matPrefix>search</mat-icon>
-                  <input matInput [(ngModel)]="movSearch" placeholder="Code, description, reference, user...">
+                  <input matInput [(ngModel)]="movSearch" placeholder="Code, item, load, reason, person...">
                 </mat-form-field>
                 <span class="stk-spacer"></span>
-                <button mat-stroked-button (click)="loadLedger()" matTooltip="Reload movements"><mat-icon>refresh</mat-icon> Refresh</button>
-                <button mat-stroked-button (click)="exportMovements()"><mat-icon>file_download</mat-icon> Export</button>
-                <button mat-stroked-button (click)="openTransferStock()" matTooltip="Move stock between warehouses"><mat-icon>sync_alt</mat-icon> Transfer</button>
-                <button mat-stroked-button (click)="openManualMovement('Adjustment')" matTooltip="Correct a stock count (+/-) with a reason"><mat-icon>tune</mat-icon> Adjust</button>
-                <button mat-stroked-button (click)="openManualMovement('Return')" matTooltip="Customer return back into stock"><mat-icon>undo</mat-icon> Return</button>
-                <button mat-stroked-button (click)="openManualMovement('Scrap')" matTooltip="Write off damaged or expired stock" style="color:var(--color-danger);"><mat-icon>delete_sweep</mat-icon> Scrap</button>
-                <button mat-raised-button color="primary" (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon> Receive Stock</button>
+                @if (ledgerRows.length) {
+                  <span class="mv-sum">In <b class="mv-pos">+{{ formatQty(movViewIn) }}</b> · Out <b class="mv-neg">−{{ formatQty(movViewOut) }}</b></span>
+                }
               </div>
+
               @if (ledgerLoading) { <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows> }
               @else {
                 <div class="stk-table-wrap">
-                  <table class="app-table stk-table">
-                    <thead><tr><th>Date</th><th>Type</th><th>Warehouse</th><th>Code</th><th>Description</th>
-                      <th class="num">Qty</th><th class="num">Balance After</th><th>Reference</th><th>By</th><th style="text-align:right;">Actions</th></tr></thead>
+                  <table class="app-table stk-table mv-table">
+                    <thead><tr><th>When</th><th>What happened</th><th>Item</th><th>Warehouse</th>
+                      <th class="num">Change</th><th class="num">Balance after</th><th>Why</th><th>By</th><th></th></tr></thead>
                     <tbody>
                       @for (m of ledgerRows; track m.id) {
-                        <tr [class.stk-row-resolved]="m.reversedByMovementId">
-                          <td>{{ m.createdAt | date:'dd MMM HH:mm' }}</td>
-                          <td><app-status-chip [status]="m.movementType" [tone]="m.quantity > 0 ? 'ok' : (m.quantity < 0 ? 'danger' : 'neutral')"></app-status-chip></td>
+                        <tr [class.mv-reversed]="m.reversedByMovementId">
+                          <td class="mv-when">{{ m.createdAt | date:'dd MMM yyyy' }}<small>{{ m.createdAt | date:'HH:mm' }}</small></td>
+                          <td>
+                            <span class="mv-kind" [ngClass]="'mv-k-' + movKindOf(m)"><mat-icon>{{ movIcon(m) }}</mat-icon>{{ movLabel(m) }}</span>
+                            @if (m.reversedByMovementId) { <span class="stk-chip" matTooltip="Undone by movement #{{ m.reversedByMovementId }}">Reversed</span> }
+                            @if (m.reversesMovementId) { <span class="mv-sub">undoes #{{ m.reversesMovementId }}</span> }
+                          </td>
+                          <td><span class="ref">{{ m.commodityCode }}</span><span class="mv-sub">{{ m.commodityName }}</span></td>
                           <td>{{ m.warehouseName }}</td>
-                          <td class="ref">{{ m.commodityCode }}</td>
-                          <td class="desc">{{ m.commodityName }}</td>
-                          <td class="num"><b [style.color]="m.quantity < 0 ? 'var(--color-danger)' : 'var(--color-ok)'">{{ m.quantity > 0 ? '+' : '' }}{{ m.quantity | number }}</b></td>
-                          <td class="num" [style.color]="m.balanceAfter < 0 ? 'var(--color-danger)' : ''">{{ m.balanceAfter | number }}</td>
-                          <td class="ref" [matTooltip]="m.reason">{{ m.reference }}</td>
-                          <td>{{ m.createdBy }}</td>
-                          <td style="text-align:right;white-space:nowrap;">
+                          <td class="num"><b class="mv-change" [class.mv-pos]="m.quantity > 0" [class.mv-neg]="m.quantity < 0">{{ m.quantity > 0 ? '+' : (m.quantity < 0 ? '−' : '') }}{{ abs(m.quantity) | number }}</b></td>
+                          <td class="num" [class.mv-neg]="m.balanceAfter < 0">{{ m.balanceAfter | number }}</td>
+                          <td class="mv-why">
                             @if (m.loadId) {
-                              <button aria-label="View the linked tripsheet's picking slip" mat-icon-button matTooltip="View the linked tripsheet's picking slip" (click)="openLedgerLoadDoc(m)"><mat-icon>checklist</mat-icon></button>
-                            }
+                              <button class="mv-link" type="button" (click)="openLedgerLoadDoc(m)" matTooltip="Open this load's picking slip">{{ m.reference || ('Load #' + m.loadId) }}</button>
+                            } @else if (m.reference) { <span class="mv-ref">{{ m.reference }}</span> }
+                            @if (m.reason) { <span class="mv-reason" [matTooltip]="m.reason">{{ m.reason }}</span> }
+                          </td>
+                          <td>{{ m.createdBy }}</td>
+                          <td class="mv-act">
                             @if (canApprove && !m.reversedByMovementId && m.movementType !== 'Reversal') {
-                              <button aria-label="Reverse this movement (creates a counter-entry)" mat-icon-button matTooltip="Reverse this movement (creates a counter-entry)" (click)="reverseMovement(m)"><mat-icon>undo</mat-icon></button>
+                              <button aria-label="Undo this movement" mat-icon-button matTooltip="Undo this movement (posts the opposite change)" (click)="reverseMovement(m)"><mat-icon>undo</mat-icon></button>
                             }
-                            @if (m.reversedByMovementId) { <span class="stk-chip" matTooltip="Reversed by movement #{{ m.reversedByMovementId }}">Reversed</span> }
-                            @if (m.reversesMovementId) { <span class="stk-chip" matTooltip="Reversal of movement #{{ m.reversesMovementId }}">↩ #{{ m.reversesMovementId }}</span> }
                           </td>
                         </tr>
-                      } @empty { <tr><td colspan="10"><app-empty-state compact icon="swap_horiz" title="No stock movements" [message]="movSearch || movTypeFilter ? 'Nothing matches the current search or filter.' : 'Approve a dispatch or receive stock to start the ledger.'">
+                      } @empty { <tr><td colspan="9"><app-empty-state compact icon="swap_horiz" title="No stock movements" [message]="movSearch || movTypeFilter ? 'Nothing matches the current search or filter.' : 'Receive stock or approve a dispatch and it will show here.'">
                   @if (movSearch || movTypeFilter) { <button mat-stroked-button (click)="movSearch = ''; movTypeFilter = ''">Clear the filters</button> }
                 </app-empty-state></td></tr> }
                     </tbody>
                   </table>
                 </div>
-                <p class="stk-note"><mat-icon>info</mat-icon> Stock on hand = imported baseline + these approved movements. Rows are never edited — mistakes are fixed with reversals.</p>
+                @if (ledger.length >= 500) { <p class="stk-note"><mat-icon>info</mat-icon> Showing the latest 500 movements. Use search or a warehouse to narrow it down.</p> }
               }
             </div>
           }
@@ -634,17 +611,22 @@ interface ComprehensiveAnalysisResponse {
                 <button mat-stroked-button [class.stk-filter-on]="dispatchMode === 'invoices'" (click)="dispatchMode = 'invoices'">
                   <mat-icon>description</mat-icon> Invoices ({{ dispatchInvoiceRows.length }})</button>
                 <span class="stk-sep"></span>
-                <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'pending'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'pending' ? '' : 'pending'" matTooltip="Tripsheets since the stock baseline whose stock has not been deducted yet">
+                <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'pending'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'pending' ? '' : 'pending'" matTooltip="Loads whose stock still needs to come off: delivered ones first">
                   <mat-icon>pending_actions</mat-icon> Awaiting approval ({{ dispatchCount('pending') }})</button>
                 <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'done'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'done' ? '' : 'done'">
                   <mat-icon>inventory</mat-icon> Deducted ({{ dispatchCount('done') }})</button>
-                <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'baseline'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'baseline' ? '' : 'baseline'" matTooltip="Historical tripsheets already reflected in the imported stock count — cannot be approved again">
-                  <mat-icon>history</mat-icon> Pre-baseline ({{ dispatchCount('baseline') }})</button>
+                <button mat-stroked-button [class.stk-filter-on]="dispatchDeductFilter === 'baseline'" (click)="dispatchDeductFilter = dispatchDeductFilter === 'baseline' ? '' : 'baseline'" matTooltip="Loads that left before their items were counted: the count already took them off, so they can't be approved again">
+                  <mat-icon>history</mat-icon> Already counted ({{ dispatchCount('baseline') }})</button>
                 <mat-form-field appearance="outline" class="stk-search">
                   <mat-icon matPrefix>search</mat-icon>
                   <input matInput [(ngModel)]="dispatchSearch" placeholder="Load #, customer, driver, invoice...">
                 </mat-form-field>
                 <span class="stk-spacer"></span>
+                @if (canApprove) {
+                  <button mat-stroked-button (click)="requestBackfillStockLines()"
+                          matTooltip="Give older loads their missing stock lines and link unlinked lines by product code (PIN required)">
+                    <mat-icon>link</mat-icon> Link stock lines</button>
+                }
                 <button mat-stroked-button (click)="loadDashboardData()" matTooltip="Reload"><mat-icon>refresh</mat-icon> Refresh</button>
                 <button mat-stroked-button (click)="exportDispatch()"><mat-icon>file_download</mat-icon> Export</button>
               </div>
@@ -675,7 +657,7 @@ interface ComprehensiveAnalysisResponse {
                             <td>
                               @switch (loadStockState(l)) {
                                 @case ('deducted') { <app-status-chip status="Deducted" tone="ok"></app-status-chip> }
-                                @case ('baseline') { <span class="stk-chip" matTooltip="Dated before the warehouse stock count — already in the baseline">Baseline</span> }
+                                @case ('baseline') { <span class="stk-chip" matTooltip="Left before its items were counted, so the count already took it off">Already counted</span> }
                                 @default { <app-status-chip status="Awaiting" tone="warn"></app-status-chip> }
                               }
                             </td>
@@ -1362,28 +1344,51 @@ interface ComprehensiveAnalysisResponse {
     .stk-search ::ng-deep .mat-mdc-form-field-subscript-wrapper { display: none; }
 
     /* Movements tab */
-    .mov-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
-    @media (max-width: 1100px) { .mov-stats { grid-template-columns: repeat(2, 1fr); } }
-    .mov-stat { display: flex; align-items: center; gap: 12px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: 12px 16px; }
-    .mov-stat mat-icon { font-size: var(--text-3xl); width: 24px; height: 24px; }
-    .mov-stat b { display: block; font-size: var(--text-2xl); line-height: 1.1; color: var(--color-text); }
-    .mov-stat span { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.4px; }
-    .mov-stat.ms-amber mat-icon { color: var(--color-warn); } .mov-stat.ms-amber { border-color: var(--color-warn); background: var(--color-warn-soft); }
-    .mov-stat.ms-amber.ms-zero { border-color: var(--color-line); background: var(--color-surface); }
-    .mov-stat.ms-green mat-icon { color: var(--color-ok); } .mov-stat.ms-green b { color: var(--color-ok); }
-    .mov-stat.ms-red mat-icon { color: var(--color-danger); } .mov-stat.ms-red b { color: var(--color-danger); }
-    .mov-stat.ms-blue mat-icon { color: var(--color-primary); }
-    .mov-queue { background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-lg); padding: 12px 16px; margin-bottom: 16px; }
-    .mov-queue-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--color-warn); }
-    .mov-queue-head mat-icon { color: var(--color-warn); }
-    .mov-queue-sub { font-size: var(--text-xs); color: var(--color-warn); font-weight: 400; }
-    .mov-queue-row { display: flex; align-items: center; gap: 14px; padding: 8px 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-bottom: 6px; font-size: var(--text-sm); }
-    .mq-load { font-family: var(--font-mono); font-weight: 700; min-width: 110px; }
-    .mq-wh { min-width: 170px; color: var(--color-text-2); }
-    .mq-cust { flex: 1; color: var(--color-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .mq-date { color: var(--color-text-3); white-space: nowrap; }
-    .mq-noperm { font-size: var(--text-xs); color: var(--color-text-3); font-style: italic; }
-    .mov-queue-more { font-size: var(--text-xs); color: var(--color-warn); text-align: center; padding: 4px 0 0; }
+    .mv-alert { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; margin-bottom: 16px; border-radius: var(--radius-lg);
+      background: var(--color-warn-soft); border: 1px solid var(--color-warn); }
+    .mv-alert > mat-icon { color: var(--color-warn); }
+    .mv-alert.mv-alert-red { background: var(--color-danger-soft); border-color: var(--color-danger); }
+    .mv-alert.mv-alert-red > mat-icon { color: var(--color-danger); }
+    .mv-alert-text { display: flex; flex-direction: column; gap: 2px; min-width: 240px; }
+    .mv-alert-text b { color: var(--color-text); font-size: var(--text-md); }
+    .mv-alert-text span { color: var(--color-text-2); font-size: var(--text-sm); }
+    .mv-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .mv-intro { margin: 0; color: var(--color-text-2); font-size: var(--text-sm); }
+    .mv-menu-item { display: flex; flex-direction: column; line-height: 1.25; padding: 4px 0; }
+    .mv-menu-item small { color: var(--color-text-3); font-size: var(--text-xs); }
+    .mv-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    .mv-seg { display: inline-flex; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); overflow: hidden; background: var(--color-surface); }
+    .mv-seg button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: none; border-right: 1px solid var(--color-line);
+      background: transparent; color: var(--color-text-2); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+    .mv-seg button:last-child { border-right: none; }
+    .mv-seg button:hover { background: var(--color-surface-2); }
+    .mv-seg button.on { background: var(--color-primary-soft); color: var(--color-primary-hover); font-weight: 600; }
+    .mv-seg button mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .mv-seg button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+    .mv-n { font-size: var(--text-xs); color: var(--color-text-3); font-variant-numeric: tabular-nums; }
+    .mv-seg button.on .mv-n { color: inherit; }
+    .mv-sum { font-size: var(--text-sm); color: var(--color-text-2); white-space: nowrap; }
+    .mv-pos { color: var(--color-ok); }
+    .mv-neg { color: var(--color-danger); }
+    .mv-table td { vertical-align: top; }
+    .mv-when { white-space: nowrap; }
+    .mv-when small, .mv-sub { display: block; color: var(--color-text-3); font-size: var(--text-xs); }
+    .mv-kind { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+    .mv-kind mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .mv-k-in mat-icon { color: var(--color-ok); }
+    .mv-k-out mat-icon { color: var(--color-danger); }
+    .mv-k-transfer mat-icon { color: var(--color-primary); }
+    .mv-k-correction mat-icon { color: var(--color-warn); }
+    .mv-change { font-size: var(--text-md); font-variant-numeric: tabular-nums; }
+    .mv-why { max-width: 320px; }
+    .mv-ref { display: block; font-weight: 600; color: var(--color-text-2); }
+    .mv-link { display: block; padding: 0; border: none; background: none; font: inherit; font-weight: 600; color: var(--color-primary); cursor: pointer; text-align: left; }
+    .mv-link:hover { text-decoration: underline; }
+    .mv-reason { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--color-text-3); font-size: var(--text-xs); }
+    .mv-act { text-align: right; white-space: nowrap; }
+    .mv-reversed td { color: var(--color-text-3); }
+    .mv-reversed .mv-change { text-decoration: line-through; color: var(--color-text-3); }
+    @media (max-width: 720px) { .mv-seg { width: 100%; overflow-x: auto; } .mv-why { max-width: none; } }
     .stk-count { font-size: var(--text-xs); color: var(--color-text-3); font-weight: 600; }
     .stk-spacer { flex: 1; }
     .stk-sep { width: 1px; height: 26px; background: var(--color-line); margin: 0 4px; }
@@ -1428,7 +1433,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   sohSearch = '';
   excMode: 'out' | 'neg' | 'unpriced' = 'out';
 
-  private get kpiSet(): WarehouseSummary[] { return this.whFilterId ? this.warehouses.filter(w => w.id === this.whFilterId) : this.warehouses; }
+  private get kpiSet(): WarehouseSummary[] { return this.companyFilter ? this.countRows : (this.whFilterId ? this.warehouses.filter(w => w.id === this.whFilterId) : this.warehouses); }
   get kpiUnits(): number { return this.kpiSet.reduce((s, w) => s + (w.totalQuantityOnHand || 0), 0); }
   get kpiValue(): number { return this.kpiSet.reduce((s, w) => s + (w.totalStockValue || 0), 0); }
   get kpiCost(): number { return this.kpiSet.reduce((s, w) => s + (w.totalCostValue || 0), 0); }
@@ -1452,7 +1457,9 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     { key: 'ACCESS', shortName: 'Access', color: 'var(--color-cat-teal)', logo: 'logos/access-round.png?v=4' },
     { key: 'PHARMACARE', shortName: 'Pharmatech', color: 'var(--color-cat-pink)', logo: 'logos/pharmatech-round.png?v=4' },
     { key: 'SEBENZANI', shortName: 'Sebenzani', color: 'var(--color-cat-purple)', logo: 'logos/sebenzani-round.png?v=4' },
-    { key: 'KOG', shortName: 'KOG', color: 'var(--color-cat-amber)', logo: '' }
+    { key: 'KOG', shortName: 'KOG', color: 'var(--color-cat-amber)', logo: '' },
+    /** Internal holding "company" for write-offs: damaged, expired, short-dated and repack stock */
+    { key: 'DAMAGED-EXPIRED', shortName: 'Damaged / Expired', color: 'var(--color-danger, #c62828)', logo: '' }
   ];
 
   /** Inventory scoped to the selected warehouse + company filters */
@@ -1472,6 +1479,41 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
       (r.commodityCode || '').toLowerCase().includes(term) ||
       (r.commodityName || '').toLowerCase().includes(term) ||
       (r.category || '').toLowerCase().includes(term));
+  }
+
+  /**
+   * Stock Counts rows, built from the same scoped inventory as the Stock on Hand tab so the two
+   * always agree. Without a company filter this equals the server summary; with one it narrows to
+   * that company only (the server summary is company-agnostic).
+   */
+  get countRows(): WarehouseSummary[] {
+    const scoped = this.invScoped;
+    const whs = this.whFilterId ? this.warehouses.filter(w => w.id === this.whFilterId) : this.warehouses;
+    return whs.map(w => {
+      const rows = scoped.filter(r => r.warehouseId === w.id);
+      const byClient = new Map<string, ClientStockSummary>();
+      let units = 0, value = 0, inStock = 0, last: string | null = null;
+      for (const r of rows) {
+        const q = +(r.quantityOnHand || 0);
+        units += q; if (q > 0) inStock++;
+        value += +(r.lineValue || (r.unitPrice || 0) * q);
+        if (r.lastCountDate && (!last || r.lastCountDate > last)) last = r.lastCountDate;
+        const k = r.category || 'OTHER';
+        let c = byClient.get(k);
+        if (!c) { c = { client: k, items: 0, itemsInStock: 0, quantityOnHand: 0, stockValue: 0 } as ClientStockSummary; byClient.set(k, c); }
+        c.items++; if (q > 0) c.itemsInStock++; c.quantityOnHand += q; c.stockValue += +(r.lineValue || (r.unitPrice || 0) * q);
+      }
+      return {
+        ...w,
+        totalItems: rows.length,
+        totalQuantityOnHand: units,
+        totalStockValue: value,
+        itemsInStock: inStock,
+        itemsOutOfStock: rows.length - inStock,
+        lastCountDate: last ?? w.lastCountDate,
+        byClient: [...byClient.values()].sort((a, b) => b.quantityOnHand - a.quantityOnHand)
+      } as WarehouseSummary;
+    });
   }
 
   excCount(mode: 'out' | 'neg' | 'unpriced'): number {
@@ -1623,26 +1665,89 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   get ledgerScoped(): any[] {
     return this.whFilterId ? this.ledger.filter(m => m.warehouseId === this.whFilterId) : this.ledger;
   }
+  /** Movement types grouped the way people think about them */
+  readonly movKinds = [
+    { key: '', label: 'All', icon: 'list', hint: 'Every movement' },
+    { key: 'in', label: 'In', icon: 'south_west', hint: 'Received from suppliers and returned by customers' },
+    { key: 'out', label: 'Out', icon: 'north_east', hint: 'Dispatched on loads and written off' },
+    { key: 'transfer', label: 'Transfers', icon: 'sync_alt', hint: 'Moved between warehouses' },
+    { key: 'correction', label: 'Corrections', icon: 'tune', hint: 'Stock counts, adjustments and reversals' }
+  ];
+
+  movKindOf(m: any): 'in' | 'out' | 'transfer' | 'correction' {
+    switch (m.movementType) {
+      case 'Receive': case 'Return': return 'in';
+      case 'Dispatch': case 'Scrap': return 'out';
+      case 'Transfer': return 'transfer';
+      default: return 'correction';
+    }
+  }
+
+  /** What happened, in words */
+  movLabel(m: any): string {
+    const ref = String(m.reference || '');
+    switch (m.movementType) {
+      case 'Receive': return 'Received';
+      case 'Return': return ref.startsWith('SCRAP #') ? 'Write-off cancelled' : 'Customer return';
+      case 'Dispatch': return 'Dispatched';
+      case 'Scrap': return 'Written off';
+      case 'Transfer': return m.quantity < 0 ? 'Transferred out' : 'Transferred in';
+      case 'Reversal': return 'Reversal';
+      case 'Adjustment':
+        if (ref === 'OPENING') return 'Opening balance';
+        if (ref.startsWith('SOH-')) return 'Stock report count';
+        if (ref.startsWith('STK-') || String(m.reason || '').startsWith('Stock take')) return 'Stock count';
+        return 'Adjusted';
+      default: return m.movementType;
+    }
+  }
+
+  movIcon(m: any): string {
+    switch (m.movementType) {
+      case 'Receive': return 'south_west';
+      case 'Return': return 'keyboard_return';
+      case 'Dispatch': return 'local_shipping';
+      case 'Scrap': return 'delete_sweep';
+      case 'Transfer': return 'sync_alt';
+      case 'Reversal': return 'undo';
+      default: return this.movLabel(m).includes('count') ? 'fact_check' : 'tune';
+    }
+  }
+
+  /** Filters by kind; a raw type from an older link (?type=Receive) still works */
+  private movMatches(m: any, key: string): boolean {
+    return !key || this.movKindOf(m) === key || m.movementType === key;
+  }
+
   get ledgerRows(): any[] {
-    let rows = this.movTypeFilter ? this.ledgerScoped.filter(m => m.movementType === this.movTypeFilter) : this.ledgerScoped;
+    let rows = this.ledgerScoped.filter(m => this.movMatches(m, this.movTypeFilter));
     const t = this.movSearch.trim().toLowerCase();
     if (t) {
       rows = rows.filter(m =>
         (m.commodityCode || '').toLowerCase().includes(t) ||
         (m.commodityName || '').toLowerCase().includes(t) ||
         (m.reference || '').toLowerCase().includes(t) ||
+        (m.reason || '').toLowerCase().includes(t) ||
         (m.createdBy || '').toLowerCase().includes(t) ||
-        (m.warehouseName || '').toLowerCase().includes(t));
+        (m.warehouseName || '').toLowerCase().includes(t) ||
+        this.movLabel(m).toLowerCase().includes(t));
     }
     return rows;
   }
-  movCount(t: string): number { return this.ledgerScoped.filter(m => m.movementType === t).length; }
+  movKindCount(key: string): number { return this.ledgerScoped.filter(m => this.movMatches(m, key)).length; }
 
-  get movStockIn(): number { return this.ledgerScoped.filter(m => m.quantity > 0).reduce((s, m) => s + m.quantity, 0); }
-  get movStockOut(): number { return Math.abs(this.ledgerScoped.filter(m => m.quantity < 0).reduce((s, m) => s + m.quantity, 0)); }
-  get movToday(): number {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    return this.ledgerScoped.filter(m => new Date(m.createdAt) >= today).length;
+  /** Totals for what's on screen. Transfers and reversals are left out: they move stock, they don't add or remove it. */
+  get movViewIn(): number {
+    return this.ledgerRows.filter(m => m.quantity > 0 && m.movementType !== 'Transfer' && m.movementType !== 'Reversal').reduce((s, m) => s + m.quantity, 0);
+  }
+  get movViewOut(): number {
+    return Math.abs(this.ledgerRows.filter(m => m.quantity < 0 && m.movementType !== 'Transfer' && m.movementType !== 'Reversal').reduce((s, m) => s + m.quantity, 0));
+  }
+  abs(n: number): number { return Math.abs(n || 0); }
+
+  /** Approvals happen in Dispatch: open it on the loads still waiting */
+  goToApprovals(): void {
+    this.router.navigate(['/stock-management', 'dispatch'], { queryParams: { ...this.sharedQuery(), deducted: 'pending' } });
   }
 
   /** Loads whose stock has not yet been deducted — the approval work-queue (most recent first) */
@@ -1650,14 +1755,6 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     return this.loadsScoped.filter(l => this.isLoadAwaiting(l));
   }
   get pendingDispatchCount(): number { return this.pendingDispatchAll.length; }
-  get pendingDispatchLoads(): any[] {
-    // Delivered loads first (stock is already gone), then most recently dispatched
-    const delivered = (l: any) => l.status === 'Delivered' || l.status === 'Completed' ? 1 : 0;
-    return [...this.pendingDispatchAll]
-      .sort((a, b) => delivered(b) - delivered(a)
-                    || new Date(this.loadDispatchDate(b) || 0).getTime() - new Date(this.loadDispatchDate(a) || 0).getTime())
-      .slice(0, 15);
-  }
 
   loadLedger(): void {
     this.ledgerLoading = true;
@@ -1737,6 +1834,41 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   openApproveDispatch(load: any): void {
     const whId = load.warehouseId;
     if (!whId) { this.toast.warn('This load has no originating warehouse set'); return; }
+    // Auto re-link stop lines to stock items (by stored product code / invoice codes) before opening
+    this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/loads/${load.id}/relink-lines`, {}).subscribe({
+      next: r => {
+        const linked = r?.linesLinked ?? 0, created = r?.commoditiesCreated ?? 0;
+        if (linked > 0 || created > 0) {
+          this.toast.done(`${linked} line(s) linked to stock${created ? `, ${created} stock item(s) created` : ''}`);
+        }
+        this.refreshAndOpenApprove(load.id, whId, linked > 0 || created > 0);
+      },
+      error: () => this.openApproveDialog(load, whId)
+    });
+  }
+
+  private refreshAndOpenApprove(loadId: number, whId: number, refreshInventory: boolean): void {
+    const openWithLoads = (loads: any[]) => {
+      this.loads = loads || this.loads;
+      const fresh = this.loads.find(l => l.id === loadId);
+      if (!fresh) { this.toast.warn('Load no longer available'); return; }
+      this.openApproveDialog(fresh, whId);
+    };
+    const fetchLoads = () => this.http.get<any[]>(`${environment.apiUrl}/logistics/loads`).subscribe({
+      next: d => openWithLoads(d),
+      error: () => openWithLoads(this.loads)
+    });
+    if (refreshInventory) {
+      this.http.get<any[]>(`${environment.apiUrl}/warehouses/inventory`).subscribe({
+        next: d => { this.allInventory = d || this.allInventory; fetchLoads(); },
+        error: () => fetchLoads()
+      });
+    } else {
+      fetchLoads();
+    }
+  }
+
+  private openApproveDialog(load: any, whId: number): void {
     const ref = this.dialog.open(ApproveDispatchDialog, {
       width: '1100px', maxWidth: '96vw',
       data: { load, inventory: this.allInventory.filter(r => r.warehouseId === whId) }
@@ -1847,6 +1979,12 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   /** Tripsheets after deduction-state filter and free-text search */
   get dispatchRows(): any[] {
     let rows = this.loadsScoped.filter(l => this.matchesDeductFilter(l));
+    if (this.dispatchDeductFilter === 'pending') {
+      // Delivered loads first: their stock is already gone, so they matter most
+      const delivered = (l: any) => l.status === 'Delivered' || l.status === 'Completed' ? 1 : 0;
+      rows = [...rows].sort((a, b) => delivered(b) - delivered(a)
+        || new Date(this.loadDispatchDate(b) || 0).getTime() - new Date(this.loadDispatchDate(a) || 0).getTime());
+    }
     const t = this.dispatchSearch.trim().toLowerCase();
     if (t) {
       rows = rows.filter(l =>
@@ -2144,7 +2282,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   exportMovements(): void {
     const rows = this.ledgerRows.map(m => ({
       'Date': m.createdAt ? String(m.createdAt).replace('T', ' ').substring(0, 16) : '',
-      'Type': m.movementType, 'Warehouse': m.warehouseName, 'Code': m.commodityCode,
+      'What happened': this.movLabel(m), 'Type': m.movementType, 'Warehouse': m.warehouseName, 'Code': m.commodityCode,
       'Description': m.commodityName, 'Qty': m.quantity, 'Balance After': m.balanceAfter,
       'Reference': m.reference || '', 'Reason': m.reason || '', 'By': m.createdBy || '',
       'Reversed': m.reversedByMovementId ? 'Yes' : ''
@@ -2218,7 +2356,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
 
   /** Counts after the sub-page links, as the tabs had. */
   sectionCounts(): Partial<Record<StockSlug, number>> {
-    return { issues: this.openIssueCount, movements: this.pendingDispatchCount };
+    return { issues: this.openIssueCount, dispatch: this.pendingDispatchCount };
   }
 
   /** Filters change from many fields and buttons, so look for a change once per check and follow it in the address. */
