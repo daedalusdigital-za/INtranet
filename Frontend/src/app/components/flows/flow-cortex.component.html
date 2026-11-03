@@ -238,8 +238,9 @@
 
   <div class="cx-main">
     <!-- ═════ The map ═════ -->
-    <div class="cx-map" (click)="selected.set(null)">
-      <svg viewBox="0 0 1200 690" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Company operating map">
+    <div class="cx-map" [class.panning]="isPanning()" [class.grabbing]="dragging()" tabindex="0" (keydown)="onKey($event)">
+      <svg #cxsvg [attr.viewBox]="viewBox()" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Company operating map"
+           (wheel)="onWheel($event)" (pointerdown)="onPointerDown($event)" (pointermove)="onPointerMove($event)" (pointerup)="onPointerUp($event)" (pointercancel)="onPointerUp($event)" (dblclick)="fit()">
         <defs>
           <filter id="cx-glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur stdDeviation="5" result="b"></feGaussianBlur>
@@ -296,9 +297,10 @@
           @let runs = activeRuns(n.key);
           @let nf = flowsOf(n.key).length;
           @let gaps = gapsOf(n.key).length;
-          <g class="node" [attr.data-l]="n.layer" [attr.data-s]="nodeState(n)" [class.sel]="selected() === n.key"
+          <g class="node" [attr.data-l]="n.layer" [attr.data-s]="nodeState(n)" [class.sel]="selected() === n.key" [class.drag]="dragging() === n.key"
              [attr.transform]="'translate(' + n.x + ',' + n.y + ')'" [style.--c]="n.color"
-             (mouseenter)="hovered.set(n.key)" (mouseleave)="hovered.set(null)" (click)="$event.stopPropagation(); select(n.key)"
+             (mouseenter)="hovered.set(n.key)" (mouseleave)="hovered.set(null)"
+             (pointerdown)="onPointerDown($event, n.key)" (pointerup)="$event.stopPropagation(); onPointerUp($event, n.key)" (dblclick)="$event.stopPropagation(); dive(n.key)"
              tabindex="0" role="button" [attr.aria-label]="n.label" (keydown.enter)="select(n.key)">
             @if (runs) { <circle class="pulse" [attr.r]="r + 4"></circle> }
             <circle class="halo" [attr.r]="r + 7"></circle>
@@ -340,7 +342,7 @@
           }
           @for (pn of personNodes(); track pn.key) {
             <g class="person" [class.on]="pn.p.flows.length" [class.hot]="hovered() === pn.key" [attr.transform]="'translate(' + pn.x + ',' + pn.y + ')'"
-               (mouseenter)="hovered.set(pn.key)" (mouseleave)="hovered.set(null)" (click)="$event.stopPropagation(); personClick(dept()!, pn.p)" tabindex="0" role="button" [attr.aria-label]="pn.p.name">
+               (mouseenter)="hovered.set(pn.key)" (mouseleave)="hovered.set(null)" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); personClick(dept()!, pn.p)" tabindex="0" role="button" [attr.aria-label]="pn.p.name">
               <title>{{ pn.p.name }}{{ pn.p.title ? ' · ' + pn.p.title : '' }} · {{ pn.modules.includes('all') ? 'admin: everything' : pn.modules.length + ' module(s)' }}{{ pn.p.flows.length ? ' · ' + pn.p.flows.length + ' flow(s)' : ' · no flow yet' }}</title>
               <circle class="body" r="11"></circle>
               <text class="av" text-anchor="middle" dominant-baseline="central">{{ initials(pn.p.name) }}</text>
@@ -349,6 +351,16 @@
           }
         }
       </svg>
+
+      <div class="cx-cam">
+        <button (click)="zoomBy(1.3)" matTooltip="Zoom in (+)" aria-label="Zoom in"><mat-icon>add</mat-icon></button>
+        <span class="k">{{ (cam().k * 100) | number:'1.0-0' }}%</span>
+        <button (click)="zoomBy(1 / 1.3)" matTooltip="Zoom out (−)" aria-label="Zoom out"><mat-icon>remove</mat-icon></button>
+        <button (click)="fit()" matTooltip="Fit whole map (0)" aria-label="Fit"><mat-icon>fit_screen</mat-icon></button>
+        @if (selected()) { <button (click)="focusNode(selected()!)" matTooltip="Centre on the selected node" aria-label="Centre"><mat-icon>center_focus_strong</mat-icon></button> }
+        @if (hasCustomLayout()) { <button (click)="resetLayout()" matTooltip="You moved some nodes. Put them back." aria-label="Reset layout"><mat-icon>restart_alt</mat-icon></button> }
+      </div>
+      <div class="cx-hint"><mat-icon>touch_app</mat-icon>Scroll to zoom · drag the background to move · drag a node to rearrange · double-click a node to dive in · double-click empty space to fit</div>
 
       <div class="cx-legend">
         <span><i class="lg sq"></i>Source</span>

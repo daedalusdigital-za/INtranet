@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -77,6 +77,9 @@ export class FlowCortexComponent implements OnInit {
     this.zoom.set(z);
     const s = new Set(this.hidden()); z === 1 ? s.add('dept') : s.delete('dept'); this.hidden.set(s);
     if (z === 3 && !this.dept()) { const d = this.deptNodes()[0]; if (d) this.selected.set(d.key); }
+    if (z === 1) this.flyTo({ x: 0, y: -40, k: 1.25 });
+    else if (z === 2) this.fit();
+    else { const d = this.dept(); if (d) this.focusNode(d.key, 2.4); }
   }
 
   /** People of the selected department as small nodes on an arc above its hexagon (People zoom only). */
@@ -339,7 +342,7 @@ export class FlowCortexComponent implements OnInit {
   showOnMap(key: string | null | undefined) {
     const k = key && this.byKey().has(key) ? key : this.mapKeyFor(key ?? null);
     this.view.set('map');
-    if (k) { this.selected.set(k); if (k.startsWith('d:') && this.zoom() === 1) this.setZoom(2); }
+    if (k) { this.selected.set(k); if (k.startsWith('d:') && this.zoom() === 1) this.setZoom(2); setTimeout(() => this.focusNode(k, 1.8), 30); }
   }
   blankLimit = signal(40);
   apiByKeyPublic = computed(() => this.apiByKey());
@@ -435,10 +438,105 @@ export class FlowCortexComponent implements OnInit {
 
   // ── nodes, edges, flows ───────────────────────────────────────────────────
 
-  allNodes = computed<CortexNode[]>(() => [...CORTEX_NODES, ...this.deptNodes()]);
+  allNodes = computed<CortexNode[]>(() => [...CORTEX_NODES, ...this.deptNodes()].map(n => { const p = this.pos().get(n.key); return p ? { ...n, x: p.x, y: p.y } : n; }));
   private byKey = computed(() => new Map(this.allNodes().map(n => [n.key, n])));
   node = computed(() => this.byKey().get(this.selected() ?? '') ?? null);
-  dept = computed(() => this.deptNodes().find(d => d.key === this.selected()) ?? null);
+  dept = computed(() => { const d = this.deptNodes().find(d => d.key === this.selected()); if (!d) return null; const p = this.pos().get(d.key); return p ? { ...d, x: p.x, y: p.y } : d; });
+
+  // ── camera: pan, zoom, fly-to; node dragging ──────────────────────────────
+
+  static readonly W = 1200; static readonly H = 690;
+  /** Camera: top-left of the view in map units and zoom factor (1 = whole map). */
+  cam = signal<{ x: number; y: number; k: number }>({ x: 0, y: 0, k: 1 });
+  viewBox = computed(() => { const c = this.cam(); return `${c.x} ${c.y} ${FlowCortexComponent.W / c.k} ${FlowCortexComponent.H / c.k}`; });
+  /** Dragged node positions, remembered per browser. */
+  pos = signal<Map<string, { x: number; y: number }>>(this.loadPos());
+  private loadPos() { try { return new Map<string, { x: number; y: number }>(Object.entries(JSON.parse(localStorage.getItem('cortex.pos') ?? '{}'))); } catch { return new Map(); } }
+  private savePos() { localStorage.setItem('cortex.pos', JSON.stringify(Object.fromEntries(this.pos()))); }
+  resetLayout() { this.pos.set(new Map()); localStorage.removeItem('cortex.pos'); this.fit(); }
+  hasCustomLayout = computed(() => this.pos().size > 0);
+
+  private svgRef = viewChild<ElementRef<SVGSVGElement>>('cxsvg');
+  private svgEl: SVGSVGElement | null = null;
+  private _svgSync = effect(() => { this.svgEl = this.svgRef()?.nativeElement ?? null; });
+  private drag: { kind: 'pan' | 'node'; key?: string; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null = null;
+  private camAnim: number | null = null;
+
+  /** Client → map coordinates through the SVG's current transform. */
+  private toMap(ev: { clientX: number; clientY: number }) {
+    const svg = this.svgEl; if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const m = svg.getScreenCTM(); if (!m) return { x: 0, y: 0 };
+    const p = pt.matrixTransform(m.inverse()); return { x: p.x, y: p.y };
+  }
+  private clampCam(c: { x: number; y: number; k: number }) {
+    const k = Math.min(6, Math.max(0.6, c.k));
+    const w = FlowCortexComponent.W / k, h = FlowCortexComponent.H / k, pad = 200;
+    return { k, x: Math.min(FlowCortexComponent.W - w + pad, Math.max(-pad, c.x)), y: Math.min(FlowCortexComponent.H - h + pad, Math.max(-pad, c.y)) };
+  }
+  private stopAnim() { if (this.camAnim != null) { cancelAnimationFrame(this.camAnim); this.camAnim = null; } }
+  /** Ease the camera to a target over ~350 ms. */
+  private flyTo(target: { x: number; y: number; k: number }, ms = 350) {
+    this.stopAnim();
+    const from = this.cam(), to = this.clampCam(target), t0 = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - p, 3);
+      this.cam.set({ x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, k: from.k + (to.k - from.k) * e });
+      if (p < 1) this.camAnim = requestAnimationFrame(step); else this.camAnim = null;
+    };
+    this.camAnim = requestAnimationFrame(step);
+  }
+  fit() { this.flyTo({ x: 0, y: 0, k: 1 }); }
+  /** Zoom in/out keeping a map point fixed under the cursor (or the centre). */
+  zoomBy(factor: number, at?: { x: number; y: number }) {
+    const c = this.cam(); const k = Math.min(6, Math.max(0.6, c.k * factor));
+    const cx = at?.x ?? c.x + FlowCortexComponent.W / c.k / 2, cy = at?.y ?? c.y + FlowCortexComponent.H / c.k / 2;
+    const nx = cx - (cx - c.x) * (c.k / k), ny = cy - (cy - c.y) * (c.k / k);
+    at ? this.cam.set(this.clampCam({ x: nx, y: ny, k })) : this.flyTo({ x: nx, y: ny, k }, 200);
+  }
+  /** Centre a node and zoom in on it. */
+  focusNode(key: string, k = 2.2) {
+    const n = this.byKey().get(key); if (!n) return;
+    this.flyTo({ x: n.x - FlowCortexComponent.W / k / 2, y: n.y - FlowCortexComponent.H / k / 2 + (n.layer === 'dept' && this.zoom() === 3 ? 40 : 0), k });
+  }
+  onWheel(ev: WheelEvent) { ev.preventDefault(); this.stopAnim(); this.zoomBy(ev.deltaY < 0 ? 1.15 : 1 / 1.15, this.toMap(ev)); }
+  onPointerDown(ev: PointerEvent, nodeKey?: string) {
+    if (ev.button !== 0) return;
+    this.stopAnim();
+    const p = this.toMap(ev);
+    if (nodeKey) { const n = this.byKey().get(nodeKey); if (!n) return; this.drag = { kind: 'node', key: nodeKey, sx: p.x, sy: p.y, ox: n.x, oy: n.y, moved: false }; }
+    else { const c = this.cam(); this.drag = { kind: 'pan', sx: ev.clientX, sy: ev.clientY, ox: c.x, oy: c.y, moved: false }; }
+    (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+    ev.stopPropagation();
+  }
+  onPointerMove(ev: PointerEvent) {
+    const d = this.drag; if (!d) return;
+    if (d.kind === 'pan') {
+      const c = this.cam(); const svg = this.svgEl; if (!svg) return;
+      const r = svg.getBoundingClientRect(); const scale = Math.min(r.width / (FlowCortexComponent.W / c.k), r.height / (FlowCortexComponent.H / c.k));
+      const dx = (ev.clientX - d.sx) / scale, dy = (ev.clientY - d.sy) / scale;
+      if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+      this.cam.set(this.clampCam({ x: d.ox - dx, y: d.oy - dy, k: c.k }));
+    } else {
+      const p = this.toMap(ev); const dx = p.x - d.sx, dy = p.y - d.sy;
+      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+      if (!d.moved) return;
+      const m = new Map(this.pos()); m.set(d.key!, { x: Math.round(d.ox + dx), y: Math.round(d.oy + dy) }); this.pos.set(m);
+    }
+  }
+  onPointerUp(ev: PointerEvent, nodeKey?: string) {
+    const d = this.drag; this.drag = null;
+    if (!d) return;
+    if (d.kind === 'node') { if (d.moved) this.savePos(); else if (nodeKey) this.select(nodeKey); }
+    else if (!d.moved) this.selected.set(null);
+  }
+  dragging = () => this.drag?.kind === 'node' ? this.drag.key ?? null : null;
+  isPanning = () => this.drag?.kind === 'pan' && this.drag.moved;
+  onKey(ev: KeyboardEvent) {
+    if ((ev.target as HTMLElement)?.tagName === 'INPUT' || (ev.target as HTMLElement)?.tagName === 'TEXTAREA') return;
+    if (ev.key === '+' || ev.key === '=') this.zoomBy(1.3); else if (ev.key === '-') this.zoomBy(1 / 1.3); else if (ev.key === '0') this.fit();
+    else if (ev.key === 'Escape') { this.selected.set(null); this.stream.set(null); }
+  }
 
   /** Department → module links: from people's module permissions, else from department names. */
   private worksEdges = computed<MapEdge[]>(() => {
@@ -648,7 +746,12 @@ export class FlowCortexComponent implements OnInit {
   });
 
   select(key: string | null) { this.selected.set(this.selected() === key && this.zoom() !== 3 ? null : key); }
-  pick(r: { node: string }) { this.selected.set(r.node); this.query.set(''); }
+  /** Double-click: fly into the node; on a department also open its people. */
+  dive(key: string) {
+    this.selected.set(key);
+    if (key.startsWith('d:')) { if (this.zoom() !== 3) this.setZoom(3); this.focusNode(key, 2.4); } else this.focusNode(key, 2.2);
+  }
+  pick(r: { node: string }) { this.selected.set(r.node); this.query.set(''); this.focusNode(r.node, 1.8); }
   toggleStream(key: string) { this.stream.set(this.stream() === key ? null : key); }
   toggleLayer(l: CortexLayer) { const s = new Set(this.hidden()); s.has(l) ? s.delete(l) : s.add(l); this.hidden.set(s); }
 
