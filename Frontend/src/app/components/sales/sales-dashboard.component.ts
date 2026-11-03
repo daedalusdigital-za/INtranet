@@ -528,7 +528,7 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
   wellyPodLinking = false;
   wellyPodBatchMode = false;            // true when scanning all unlinked
   wellyPodBatchQueue: any[] = [];
-  wellyPodBatchResults: { pod: any; linked: number; found: number }[] = [];
+  wellyPodBatchResults: { pod: any; linked: number; found: number; error?: string }[] = [];
   private wellyPodActivityId: number | null = null;
 
   // Selected items
@@ -4806,7 +4806,7 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
 
   /** Scan every currently-listed unlinked POD, auto-linking high-confidence exact reads. */
   async wellyScanAllUnlinked(): Promise<void> {
-    const queue = this.podDocuments.filter(p => !p.loadId && !p.invoiceId &&
+    const queue = this.podDocuments.filter(p => !p.loadId && !p.invoiceId && !(p.invoiceLinks?.length) &&
       ((p.contentType || '').includes('image') || (p.contentType || '').includes('pdf') ||
        /\.(pdf|jpe?g|png)$/i.test(p.fileName || '')));
     if (queue.length === 0) {
@@ -4827,6 +4827,7 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
     this.wellyPodActivityId = this.wellyActivity.start(`Welly: scanning ${queue.length} PODs`);
 
     let totalLinked = 0;
+    let failed = 0;
     for (let i = 0; i < queue.length; i++) {
       const pod = queue[i];
       this.wellyPodCurrent = pod;
@@ -4868,9 +4869,11 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
           totalLinked += linked;
         }
         this.wellyPodBatchResults.push({ pod, linked, found });
-      } catch (err) {
+      } catch (err: any) {
         console.error('Batch scan error for POD', pod.id, err);
-        this.wellyPodBatchResults.push({ pod, linked: 0, found: 0 });
+        const msg = err?.error?.error || err?.error?.message || err?.message || 'scan failed';
+        this.wellyPodBatchResults.push({ pod, linked: 0, found: 0, error: msg });
+        failed++;
       }
     }
 
@@ -4878,8 +4881,8 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
     this.finishWellyPodActivity();
     this.loadPodDocuments();
     this.loadPodSummary();
-    this.wellyPodStatus = `Done — auto-linked ${totalLinked} invoice(s) across ${queue.length} POD(s).`;
-    this.toast.done(this.wellyPodStatus);
+    this.wellyPodStatus = `Done — auto-linked ${totalLinked} invoice(s) across ${queue.length} POD(s).` + (failed ? ` ${failed} could not be read.` : '');
+    if (failed && totalLinked === 0) this.toast.warn(this.wellyPodStatus); else this.toast.done(this.wellyPodStatus);
   }
 
   private finishWellyPodActivity(): void {

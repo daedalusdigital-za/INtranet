@@ -1421,6 +1421,116 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Welly — scan unlinked PODs on the server. For each POD that covers nothing yet, run server OCR,
+        /// pull the invoice numbers off the page and link the ones that were read verbatim and exist.
+        /// Invoice numbers that only matched after OCR correction are returned as suggestions, never linked.
+        /// Works in batches of <see cref="WellyScanUnlinkedRequest.Limit"/>; the response says how many are left.
+        /// </summary>
+        [HttpPost("welly-scan-unlinked")]
+        public async Task<IActionResult> WellyScanUnlinked([FromBody] WellyScanUnlinkedRequest? req, [FromServices] ServerOcrService ocr)
+        {
+            req ??= new WellyScanUnlinkedRequest();
+            if (!ServerOcrService.IsAvailable)
+                return StatusCode(503, new { error = "Server OCR engine (tesseract) is not installed in this environment." });
+
+            var limit = Math.Clamp(req.Limit, 1, 50);
+
+            var q = _context.PodDocuments
+                .Where(p => p.LoadId == null && p.InvoiceId == null)
+                .Where(p => !_context.PodDocumentInvoiceLinks.Any(l => l.PodDocumentId == p.Id));
+            if (req.Ids != null && req.Ids.Count > 0) q = q.Where(p => req.Ids.Contains(p.Id));
+            if (req.ExcludeIds != null && req.ExcludeIds.Count > 0) q = q.Where(p => !req.ExcludeIds.Contains(p.Id));
+            if (!string.IsNullOrWhiteSpace(req.Region)) q = q.Where(p => p.Region == req.Region);
+            if (!string.IsNullOrWhiteSpace(req.DriverName)) q = q.Where(p => p.DriverName == req.DriverName);
+
+            var all = await q.OrderByDescending(p => p.DeliveryDate).ThenByDescending(p => p.Id).ToListAsync();
+            bool Scannable(PodDocument p)
+            {
+                var ct = (p.ContentType ?? "").ToLowerInvariant();
+                var fn = (p.FileName ?? "").ToLowerInvariant();
+                return ct.Contains("pdf") || ct.StartsWith("image/") || fn.EndsWith(".pdf") || fn.EndsWith(".jpg") || fn.EndsWith(".jpeg") || fn.EndsWith(".png") || fn.EndsWith(".tif") || fn.EndsWith(".tiff");
+            }
+            var scannable = all.Where(Scannable).ToList();
+            var batch = scannable.Take(limit).ToList();
+
+            var results = new List<object>();
+            int totalLinked = 0;
+            var userId = CurrentUserId();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            foreach (var pod in batch)
+            {
+                var label = pod.PodNumber ?? $"POD-{pod.Id}";
+                if (!System.IO.File.Exists(pod.FilePath))
+                {
+                    results.Add(new { podId = pod.Id, podNumber = label, fileName = pod.OriginalFileName ?? pod.FileName, pod.DriverName, pod.DeliveryDate, found = 0, linked = 0, linkedNumbers = Array.Empty<string>(), suggested = Array.Empty<string>(), unmatched = Array.Empty<string>(), error = "File missing on server" });
+                    continue;
+                }
+
+                try
+                {
+                    var ocrResult = await ocr.ExtractInvoiceCandidatesAsync(pod.FilePath, pod.ContentType);
+                    var (matches, unmatched) = await BuildInvoiceMatchesAsync(ocrResult.Candidates);
+
+                    var exactIds = new List<int>();
+                    var exactNums = new List<string>();
+                    var suggested = new List<string>();
+                    foreach (var m in matches)
+                    {
+                        var t = m.GetType();
+                        var id = (int)t.GetProperty("Id")!.GetValue(m)!;
+                        var num = (string)t.GetProperty("TransactionNumber")!.GetValue(m)!;
+                        var exact = (bool)t.GetProperty("ReadExactly")!.GetValue(m)!;
+                        var already = (bool)t.GetProperty("AlreadyLinked")!.GetValue(m)!;
+                        if (already) continue;
+                        if (exact) { exactIds.Add(id); exactNums.Add(num); }
+                        else suggested.Add(num);
+                    }
+
+                    int linked = 0;
+                    string? linkMessage = null;
+                    if (req.AutoLink && exactIds.Count > 0)
+                    {
+                        var linkRes = await LinkToInvoices(pod.Id, new LinkPodInvoicesRequest { InvoiceIds = exactIds });
+                        if (linkRes is OkObjectResult ok)
+                        {
+                            linked = exactIds.Count;
+                            totalLinked += linked;
+                            linkMessage = ok.Value?.GetType().GetProperty("message")?.GetValue(ok.Value) as string;
+                        }
+                    }
+
+                    results.Add(new
+                    {
+                        podId = pod.Id, podNumber = label, fileName = pod.OriginalFileName ?? pod.FileName, pod.DriverName, pod.DeliveryDate,
+                        pages = ocrResult.PageCount,
+                        found = ocrResult.Candidates.Count,
+                        linked, linkedNumbers = exactNums, suggested, unmatched = unmatched.Take(12).ToList(),
+                        message = linkMessage,
+                        error = (string?)null
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Welly batch scan failed for POD {Id}", pod.Id);
+                    results.Add(new { podId = pod.Id, podNumber = label, fileName = pod.OriginalFileName ?? pod.FileName, pod.DriverName, pod.DeliveryDate, found = 0, linked = 0, linkedNumbers = Array.Empty<string>(), suggested = Array.Empty<string>(), unmatched = Array.Empty<string>(), error = ex.Message });
+                }
+            }
+
+            _logger.LogInformation("Welly scanned {N} unlinked PODs in {Ms} ms, linked {L} invoices (user {U})", batch.Count, sw.ElapsedMilliseconds, totalLinked, userId);
+
+            return Ok(new
+            {
+                scanned = batch.Count,
+                linked = totalLinked,
+                remaining = Math.Max(0, scannable.Count - batch.Count),
+                skippedNotScannable = all.Count - scannable.Count,
+                elapsedMs = sw.ElapsedMilliseconds,
+                results
+            });
+        }
+
+        /// <summary>
         /// Detect invoice numbers from an uploaded file BEFORE it is saved as a POD.
         /// Used by the multi-POD Tools uploader so the user can auto-fill the invoice-number
         /// field (Welly reads the scan, auto-rotating upside-down pages) and edit before upload.
@@ -1705,6 +1815,21 @@ namespace ProjectTracker.API.Controllers.Logistics
     {
         /// <summary>Raw invoice-number tokens extracted from a POD image via OCR.</summary>
         public List<string> Candidates { get; set; } = new();
+    }
+
+    public class WellyScanUnlinkedRequest
+    {
+        /// <summary>Only scan these POD ids (optional). When empty, every unlinked POD is a candidate.</summary>
+        public List<int>? Ids { get; set; }
+        /// <summary>PODs already scanned in this session (so ones that didn't link aren't scanned again).</summary>
+        public List<int>? ExcludeIds { get; set; }
+        /// <summary>Max PODs to scan in this call (the UI loops until <c>remaining</c> is 0).</summary>
+        public int Limit { get; set; } = 10;
+        /// <summary>Link invoices whose numbers were read verbatim. False = report only.</summary>
+        public bool AutoLink { get; set; } = true;
+        /// <summary>Optional filters mirroring the register.</summary>
+        public string? Region { get; set; }
+        public string? DriverName { get; set; }
     }
 
     public class CheckDuplicatesRequest

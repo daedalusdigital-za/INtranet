@@ -89,6 +89,11 @@ interface PodSummary {
         }
       </select>
       <span class="fp-spacer"></span>
+      <button mat-stroked-button class="fp-welly" (click)="wellyScanUnlinked()" [disabled]="wellyRunning()"
+              matTooltip="Welly reads every unlinked POD, finds the invoice numbers on the page and links the ones it reads exactly">
+        <mat-icon>{{ wellyRunning() ? 'hourglass_top' : 'auto_awesome' }}</mat-icon>
+        {{ wellyRunning() ? 'Welly scanning…' : 'Welly: scan unlinked' }}
+      </button>
       <button mat-stroked-button (click)="reconcile()" matTooltip="Match PODs to tripsheets and invoices by number">
         <mat-icon>sync</mat-icon> Reconcile
       </button>
@@ -96,6 +101,49 @@ interface PodSummary {
         <mat-icon>upload_file</mat-icon> Upload PODs
       </button>
     </div>
+
+    <!-- Welly scan panel -->
+    @if (wellyRunning() || wellyResults().length) {
+      <div class="fp-welly-panel">
+        <div class="head">
+          <mat-icon>auto_awesome</mat-icon>
+          <div class="txt">
+            <b>{{ wellyRunning() ? 'Welly is reading the unlinked PODs' : 'Welly finished' }}</b>
+            <small>{{ wellyStatus() }}</small>
+          </div>
+          @if (wellyRunning()) {
+            <button mat-stroked-button (click)="wellyStop = true">Stop after this batch</button>
+          } @else {
+            <button aria-label="Close" mat-icon-button (click)="wellyResults.set([])"><mat-icon>close</mat-icon></button>
+          }
+        </div>
+        @if (wellyRunning()) { <div class="bar"><div class="fill" [style.width.%]="wellyProgress()"></div></div> }
+        @if (wellyResults().length) {
+          <table class="app-table fp-welly-table">
+            <thead><tr><th>POD</th><th>Driver</th><th>Linked</th><th>Needs a look</th><th>Not an invoice we know</th></tr></thead>
+            <tbody>
+              @for (r of wellyResults(); track r.podId) {
+                <tr [class.ok]="r.linked > 0" [class.err]="!!r.error">
+                  <td><span class="ref">{{ r.podNumber }}</span><small>{{ r.fileName }}</small></td>
+                  <td>{{ r.driverName || '—' }}</td>
+                  <td>
+                    @if (r.linked > 0) { <div class="fp-chips">@for (n of r.linkedNumbers; track n) { <span class="fp-chip ok">{{ n }}</span> }</div> }
+                    @else if (r.error) { <span class="badge warn">{{ r.error }}</span> }
+                    @else { <span class="muted">nothing read exactly</span> }
+                  </td>
+                  <td>
+                    @if (r.suggested?.length) {
+                      <div class="fp-chips">@for (n of r.suggested; track n) { <button class="fp-chip sug" (click)="linkSuggested(r, n)" matTooltip="Read with OCR corrections — click to link if it's right">{{ n }} <mat-icon>add_link</mat-icon></button> }</div>
+                    } @else { <span class="muted">—</span> }
+                  </td>
+                  <td><small class="muted">{{ (r.unmatched || []).slice(0, 4).join(', ') || '—' }}</small></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    }
 
     <!-- Table -->
     <div class="fp-table-wrap">
@@ -193,6 +241,18 @@ interface PodSummary {
       &:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
     }
     .fp-spacer { flex: 1; }
+    .fp-welly mat-icon { color: var(--color-cat-purple, #8b5cf6); }
+    .fp-welly-panel { margin-bottom: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-surface); border: 1px solid var(--color-line); border-left: 4px solid var(--color-cat-purple, #8b5cf6); border-radius: var(--radius-md);
+      .head { display: flex; align-items: center; gap: var(--space-3); mat-icon { color: var(--color-cat-purple, #8b5cf6); } .txt { flex: 1; display: flex; flex-direction: column; } small { color: var(--color-text-3); } }
+      .bar { height: 6px; margin-top: var(--space-2); border-radius: 999px; background: var(--color-surface-2); overflow: hidden; .fill { height: 100%; background: var(--color-cat-purple, #8b5cf6); transition: width .3s; } }
+      .fp-welly-table { width: 100%; margin-top: var(--space-3); border-collapse: collapse;
+        th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); padding: 6px var(--space-2); border-bottom: 1px solid var(--color-line); }
+        td { padding: 6px var(--space-2); border-bottom: 1px solid var(--color-line); font-size: var(--text-sm); vertical-align: top; small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } }
+        tr.ok td:first-child { box-shadow: inset 3px 0 0 var(--color-ok); }
+        tr.err td:first-child { box-shadow: inset 3px 0 0 var(--color-warn); } }
+      .fp-chip.ok { background: var(--color-ok-soft); color: var(--color-ok); }
+      .fp-chip.sug { border: 1px dashed var(--color-warn); background: var(--color-warn-soft); color: var(--color-warn); cursor: pointer; font: inherit; font-family: var(--font-mono); font-size: var(--text-xs); display: inline-flex; align-items: center; gap: 2px; mat-icon { font-size: 14px; width: 14px; height: 14px; } }
+    }
     .fp-table-wrap { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); overflow: hidden; }
     .fp-table { width: 100%; border-collapse: collapse;
       th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); padding: 10px var(--space-3); background: var(--color-surface-2); border-bottom: 1px solid var(--color-line); }
@@ -303,6 +363,79 @@ export class FinancePodsComponent implements OnInit {
     this.http.post<any>(`${this.api}/PodDocuments/reconcile-tripsheets`, {}).subscribe({
       next: r => { this.toast.done(r?.message || `Reconciled: ${r?.podsLinked ?? 0} POD(s) linked`); this.loadSummary(); this.reload(); },
       error: () => this.toast.error("Reconcile failed. Try again.")
+    });
+  }
+
+  // ── Welly: scan unlinked PODs on the server and link the invoice numbers it reads exactly ──
+  wellyRunning = signal(false);
+  wellyStatus = signal('');
+  wellyProgress = signal(0);
+  wellyResults = signal<any[]>([]);
+  wellyStop = false;
+
+  async wellyScanUnlinked(): Promise<void> {
+    const unlinked = this.summary()?.unlinked ?? 0;
+    if (unlinked === 0) { this.toast.info('There are no unlinked PODs to scan.'); return; }
+    const scoped = !!(this.region() || this.driver());
+    if (!window.confirm(`Welly will read ${scoped ? 'the unlinked PODs in the current region/driver filter' : `all ${unlinked} unlinked POD(s)`}, find the invoice numbers on each page and link the ones it reads exactly.\n\nNumbers it had to guess at are shown for you to confirm. Continue?`)) return;
+
+    this.wellyRunning.set(true);
+    this.wellyStop = false;
+    this.wellyResults.set([]);
+    this.wellyProgress.set(0);
+    this.wellyStatus.set('Starting…');
+
+    const excludeIds: number[] = [];
+    let done = 0, linked = 0, remaining = unlinked;
+    try {
+      while (!this.wellyStop) {
+        const body: any = { limit: 5, autoLink: true, excludeIds };
+        if (this.region()) body.region = this.region();
+        if (this.driver()) body.driverName = this.driver();
+        const r: any = await this.http.post(`${this.api}/PodDocuments/welly-scan-unlinked`, body).toPromise();
+        const results: any[] = r?.results ?? [];
+        if (results.length === 0) break;
+        for (const x of results) excludeIds.push(x.podId);
+        done += results.length;
+        linked += r?.linked ?? 0;
+        remaining = r?.remaining ?? 0;
+        this.wellyResults.set([...this.wellyResults(), ...results]);
+        const total = done + remaining;
+        this.wellyProgress.set(total ? Math.round((done / total) * 100) : 100);
+        this.wellyStatus.set(`${done} POD(s) read · ${linked} invoice(s) linked · ${remaining} to go`);
+        if (remaining === 0) break;
+      }
+      this.wellyStatus.set(`${done} POD(s) read · ${linked} invoice(s) linked` + (this.wellyStop && remaining > 0 ? ` · stopped with ${remaining} left` : ''));
+      this.toast.done(`Welly linked ${linked} invoice(s) across ${done} POD(s)`);
+    } catch (e: any) {
+      const msg = e?.error?.error || e?.error?.message || e?.message || 'unknown error';
+      this.wellyStatus.set('Welly stopped: ' + msg);
+      this.toast.error('Welly could not scan: ' + msg);
+    } finally {
+      this.wellyRunning.set(false);
+      this.loadSummary(); this.reload();
+    }
+  }
+
+  /** Link one OCR-corrected suggestion after the user confirms it. */
+  linkSuggested(r: any, invoiceNumber: string): void {
+    this.http.post<{ matches: { id: number; transactionNumber?: string }[] }>(`${this.api}/PodDocuments/match-invoice-numbers`, { candidates: [invoiceNumber] }).subscribe({
+      next: m => {
+        const id = m.matches?.[0]?.id;
+        if (!id) { this.toast.warn(`Invoice ${invoiceNumber} not found`); return; }
+        this.http.put(`${this.api}/PodDocuments/${r.podId}/link-invoices`, { invoiceIds: [id] }).subscribe({
+          next: () => {
+            r.linked = (r.linked || 0) + 1;
+            r.linkedNumbers = [...(r.linkedNumbers || []), invoiceNumber];
+            r.suggested = (r.suggested || []).filter((n: string) => n !== invoiceNumber);
+            this.wellyResults.set([...this.wellyResults()]);
+            this.toast.done(`Linked ${invoiceNumber} to ${r.podNumber}`);
+            this.loadSummary(); this.reload();
+          },
+          error: (e) => this.toast.error(e?.error?.message || e?.error || "Couldn't link the invoice.")
+        });
+      },
+      error: () => this.toast.error("Couldn't look up that invoice number.")
     });
   }
 

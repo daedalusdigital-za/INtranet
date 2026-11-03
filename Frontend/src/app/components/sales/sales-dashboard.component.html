@@ -2729,11 +2729,12 @@
                 <div class="welly-pod-batch-list">
                   @for (r of wellyPodBatchResults; track r.pod.id) {
                     <div class="welly-batch-row" [class.linked]="r.linked > 0">
-                      <mat-icon>{{ r.linked > 0 ? 'check_circle' : (r.found > 0 ? 'help' : 'remove_circle_outline') }}</mat-icon>
+                      <mat-icon>{{ r.linked > 0 ? 'check_circle' : (r.error ? 'error_outline' : (r.found > 0 ? 'help' : 'remove_circle_outline')) }}</mat-icon>
                       <span class="wb-driver">{{ r.pod.driverName }}</span>
                       <span class="wb-date">{{ r.pod.deliveryDate | date:'dd MMM' }}</span>
                       <span class="wb-result">
                         @if (r.linked > 0) { Linked {{ r.linked }} }
+                        @else if (r.error) { {{ r.error }} }
                         @else if (r.found > 0) { {{ r.found }} found (needs review) }
                         @else { No match }
                       </span>
