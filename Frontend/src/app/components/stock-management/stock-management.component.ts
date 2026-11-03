@@ -20,6 +20,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { WellyActivityService } from '../../services/welly-activity.service';
+import { WellySuggestionsDialogComponent, WellySuggestionsAction, WellyLane, WellyLaneItem } from '../sales/welly-suggestions-dialog.component';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { SubNavComponent } from '../../ui/sub-nav/sub-nav.component';
@@ -151,6 +152,10 @@ interface ComprehensiveAnalysisResponse {
             <mat-icon>auto_awesome</mat-icon>Ask Welly to analyse
           </button>
         }
+        <button mat-stroked-button class="welly-suggest-btn" (click)="openWellySuggestions()"
+                matTooltip="Welly checks open invoices against stock on hand: what can be invoiced out now, which internal movements would complete more, and inter-company transfers">
+          <mat-icon>lightbulb</mat-icon>Welly suggests
+        </button>
         <app-sub-nav tabs [pages]="sections" base="/stock-management" [active]="section()" [queries]="linkQueries()"
                      [counts]="sectionCounts()" [panel]="stockPanel" label="Stock sections"></app-sub-nav>
       </app-page-header>
@@ -524,6 +529,7 @@ interface ComprehensiveAnalysisResponse {
                 <span class="stk-spacer"></span>
                 <button mat-icon-button (click)="loadLedger()" matTooltip="Reload movements" aria-label="Reload movements"><mat-icon>refresh</mat-icon></button>
                 <button mat-icon-button (click)="exportMovements()" matTooltip="Export this view to Excel" aria-label="Export this view to Excel"><mat-icon>file_download</mat-icon></button>
+                <button mat-stroked-button class="welly-suggest-btn" (click)="openWellySuggestions()" matTooltip="Which transfers between warehouses would complete open invoices"><mat-icon>lightbulb</mat-icon> Welly suggests</button>
                 <button mat-flat-button color="primary" [matMenuTriggerFor]="recordMenu"><mat-icon>add</mat-icon> Record a movement</button>
                 <mat-menu #recordMenu="matMenu" class="mv-menu">
                   <button mat-menu-item (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon>
@@ -1045,6 +1051,7 @@ interface ComprehensiveAnalysisResponse {
     }
 
     /* Welly Stock Analysis Styles */
+    .welly-suggest-btn mat-icon { color: var(--color-cat-purple, #8b5cf6); }
     .welly-panel-overlay {
       position: fixed;
       top: 0;
@@ -1815,13 +1822,72 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } });
   }
 
-  openTransferStock(): void {
-    const from = this.whFilterId ? this.warehouses.find(w => w.id === this.whFilterId) : this.warehouses[0];
+  openTransferStock(prefill?: { fromWarehouseId?: number; toWarehouseId?: number; code?: string; quantity?: number; reference?: string }): void {
+    const from = prefill?.fromWarehouseId ? this.warehouses.find(w => w.id === prefill.fromWarehouseId)
+      : this.whFilterId ? this.warehouses.find(w => w.id === this.whFilterId) : this.warehouses[0];
     const ref = this.dialog.open(TransferStockDialog, {
       width: '680px', maxWidth: '95vw',
-      data: { warehouses: this.warehouses, fromWarehouseId: from?.id, inventory: this.allInventory }
+      data: { warehouses: this.warehouses, fromWarehouseId: from?.id, inventory: this.allInventory,
+              toWarehouseId: prefill?.toWarehouseId, preselectCode: prefill?.code, quantity: prefill?.quantity, reference: prefill?.reference }
     });
     ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } });
+  }
+
+  // ── Welly suggests: open invoices vs stock on hand → fulfilments, internal movements, inter-company ──
+  openWellySuggestions(): void {
+    const ref = this.dialog.open(WellySuggestionsDialogComponent, {
+      width: '1180px', maxWidth: '96vw', maxHeight: '92vh', panelClass: 'welly-suggestions-panel', autoFocus: false,
+      data: { mode: 'stock' }
+    });
+    ref.afterClosed().subscribe((a: WellySuggestionsAction | undefined) => {
+      if (!a) return;
+      if (a.action === 'transfer') {
+        this.openTransferStock({ fromWarehouseId: a.lane.fromWarehouseId, toWarehouseId: a.lane.toWarehouseId, code: a.item.code, quantity: a.item.qty,
+          reference: 'Welly · ' + a.item.invoices.slice(0, 3).join(', ') });
+      } else if (a.action === 'transfer-lane') {
+        this.recordWellyLane(a.lane);
+      } else if (a.action === 'ic-transfer') {
+        // Donor code moves from the warehouse where it sits to the one that needs it ("KZN→GP" chips).
+        const cross = a.item.warehouses.find(w => w.includes('→'));
+        const [fromCode, toCode] = (cross || '').split('→').map(s => s.trim());
+        const byCode = (c: string) => this.warehouses.find((w: any) => (w.code || '').toUpperCase() === c.toUpperCase() || (w.name || '').toUpperCase().startsWith(c.toUpperCase()));
+        const from = byCode(fromCode), to = byCode(toCode);
+        if (!from || !to) { this.toast.warn(`Couldn't work out the warehouses for ${cross || 'this line'} — record it from the Transfer form.`); this.openTransferStock({ code: a.item.fromCode, quantity: a.item.qty }); return; }
+        this.openTransferStock({ fromWarehouseId: from.id, toWarehouseId: to.id, code: a.item.fromCode, quantity: a.item.qty,
+          reference: `Welly inter-company ${a.lane.from}→${a.lane.to} · ` + a.item.invoices.slice(0, 3).join(', ') });
+      }
+    });
+  }
+
+  /** Record every line of a suggested lane as a warehouse transfer, one ledger pair per line. */
+  private async recordWellyLane(lane: WellyLane): Promise<void> {
+    const rows: { item: WellyLaneItem; inv: any }[] = [];
+    const missing: string[] = [];
+    for (const it of lane.items) {
+      const inv = (this.allInventory || []).find((r: any) => r.warehouseId === lane.fromWarehouseId && (r.commodityCode || '').toUpperCase() === it.code.toUpperCase());
+      if (inv) rows.push({ item: it, inv }); else missing.push(it.code);
+    }
+    if (!rows.length) { this.toast.warn(`None of these codes have a stock record at ${lane.from}.`); return; }
+    const ok = await this.confirm.ask({
+      title: `Record ${rows.length} transfer(s) ${lane.from} → ${lane.to}?`,
+      message: `${rows.reduce((n, r) => n + r.item.qty, 0).toLocaleString()} units across ${rows.length} line(s) will be written to the ledger as transfers (two entries each).`
+        + (missing.length ? ` ${missing.length} code(s) have no stock record at ${lane.from} and will be skipped: ${missing.slice(0, 5).join(', ')}.` : ''),
+      confirmText: 'Record transfers'
+    });
+    if (!ok) return;
+    let done = 0; const failed: string[] = [];
+    for (const r of rows) {
+      try {
+        await this.http.post(`${environment.apiUrl}/logistics/stock-movements/transfer`, {
+          fromWarehouseId: lane.fromWarehouseId, toWarehouseId: lane.toWarehouseId, commodityId: r.inv.commodityId, quantity: r.item.qty,
+          reference: 'Welly · ' + r.item.invoices.slice(0, 3).join(', '), reason: `Suggested by Welly to complete ${r.item.invoices.length} invoice(s)`
+        }).toPromise();
+        done++;
+      } catch (e: any) { failed.push(`${r.item.code}: ${e?.error?.message || 'failed'}`); }
+    }
+    if (failed.length) this.toast.warn(`${done} transfer(s) recorded, ${failed.length} failed — ${failed.slice(0, 3).join('; ')}`);
+    else this.toast.done(`${done} transfer(s) recorded ${lane.from} → ${lane.to}`);
+    this.loadLedger(); this.loadDashboardData(); this.loadWarehouses();
   }
 
   /** Open the picking slip for the load linked to a ledger row */
@@ -3879,6 +3945,14 @@ export class TransferStockDialog {
     @Inject(MAT_DIALOG_DATA) public data: any
   ) {
     this.fromId = data.fromWarehouseId ?? data.warehouses?.[0]?.id ?? null;
+    this.toId = data.toWarehouseId ?? null;
+    if (data.quantity) this.quantity = data.quantity;
+    if (data.reference) this.reference = data.reference;
+    if (data.preselectCode) {
+      const code = String(data.preselectCode).toUpperCase();
+      this.selected = (data.inventory || []).find((r: any) => r.warehouseId === this.fromId && (r.commodityCode || '').toUpperCase() === code) ?? null;
+      if (!this.selected) this.search = data.preselectCode;
+    }
   }
 
   matches(): any[] {

@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -57,6 +57,14 @@ interface WellyResult {
 
 interface ThinkStep { icon: string; text: string; state: 'pending' | 'active' | 'done'; detail?: string; }
 
+/** Opened from Sales (read-only) or Stock (`mode: 'stock'` adds "Record" buttons that hand a lane/item back to the caller). */
+export interface WellySuggestionsDialogData { mode?: 'sales' | 'stock'; }
+export type WellySuggestionsAction =
+  | { action: 'transfer'; lane: WellyLane; item: WellyLaneItem }
+  | { action: 'transfer-lane'; lane: WellyLane }
+  | { action: 'ic-transfer'; lane: WellyTransferLane; item: WellyTransferItem };
+export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
+
 @Component({
   selector: 'app-welly-suggestions-dialog',
   standalone: true,
@@ -68,7 +76,7 @@ interface ThinkStep { icon: string; text: string; state: 'pending' | 'active' | 
         <span class="welly-avatar" [class.thinking]="phase() === 'thinking'"><img [src]="wellyFace()" alt="Welly"></span>
         <span class="title-text">
           Welly suggestions
-          <small>{{ phase() === 'thinking' ? 'Analysing invoices, stock and fleet…' : 'What can we fulfil, and what should move' }}</small>
+          <small>{{ phase() === 'thinking' ? 'Analysing invoices, stock and fleet…' : (stockMode ? 'What can be invoiced out of stock, and which movements would complete more' : 'What can we fulfil, and what should move') }}</small>
         </span>
         <span class="spacer"></span>
         @if (phase() === 'ready') {
@@ -284,11 +292,19 @@ interface ThinkStep { icon: string; text: string; state: 'pending' | 'active' | 
                         </mat-panel-description>
                       </mat-expansion-panel-header>
 
+                      @if (stockMode) {
+                        <div class="lane-actions">
+                          <mat-icon>edit_note</mat-icon>
+                          <span>Record these as transfers in the stock ledger ({{ lane.from }} → {{ lane.to }}). Each line becomes two ledger entries; nothing moves physically until Logistics does.</span>
+                          <button mat-flat-button color="primary" (click)="pick({ action: 'transfer-lane', lane })"><mat-icon>playlist_add_check</mat-icon>Record all {{ lane.items.length }}</button>
+                        </div>
+                      }
+
                       <div class="lane-body">
                         <div class="lane-col">
                           <h4><mat-icon>inventory</mat-icon>Items to move</h4>
                           <table class="line-table">
-                            <thead><tr><th>Code</th><th>Item</th><th class="num">Move</th><th class="num">Left at {{ lane.from }}</th><th>For invoices</th></tr></thead>
+                            <thead><tr><th>Code</th><th>Item</th><th class="num">Move</th><th class="num">Left at {{ lane.from }}</th><th>For invoices</th>@if (stockMode) { <th></th> }</tr></thead>
                             <tbody>
                               @for (it of lane.items; track it.code) {
                                 <tr>
@@ -297,6 +313,7 @@ interface ThinkStep { icon: string; text: string; state: 'pending' | 'active' | 
                                   <td class="num"><b>{{ it.qty | number }}</b></td>
                                   <td class="num" [class.low]="it.donorRemaining < it.qty">{{ it.donorRemaining | number }}</td>
                                   <td class="inv-chips">@for (n of it.invoices.slice(0, 4); track n) { <span class="chip">{{ n }}</span> } @if (it.invoices.length > 4) { <span class="chip more">+{{ it.invoices.length - 4 }}</span> }</td>
+                                  @if (stockMode) { <td class="act"><button mat-stroked-button class="rec-btn" (click)="pick({ action: 'transfer', lane, item: it })" matTooltip="Open the transfer form pre-filled with this line"><mat-icon>sync_alt</mat-icon>Record</button></td> }
                                 </tr>
                               }
                             </tbody>
@@ -378,7 +395,7 @@ interface ThinkStep { icon: string; text: string; state: 'pending' | 'active' | 
                         <div class="lane-col">
                           <h4><mat-icon>inventory</mat-icon>Items to transfer</h4>
                           <table class="line-table">
-                            <thead><tr><th>Item</th><th>From code<br><small>{{ lane.from }}</small></th><th>To code<br><small>{{ lane.to }}</small></th><th class="num">Qty</th><th>Where</th><th>For invoices</th></tr></thead>
+                            <thead><tr><th>Item</th><th>From code<br><small>{{ lane.from }}</small></th><th>To code<br><small>{{ lane.to }}</small></th><th class="num">Qty</th><th>Where</th><th>For invoices</th>@if (stockMode) { <th></th> }</tr></thead>
                             <tbody>
                               @for (it of lane.items; track it.fromCode + it.toCode) {
                                 <tr>
@@ -388,6 +405,15 @@ interface ThinkStep { icon: string; text: string; state: 'pending' | 'active' | 
                                   <td class="num"><b>{{ it.qty | number }}</b><br><small class="muted-sm">{{ it.donorRemaining | number }} left</small></td>
                                   <td>@for (w of it.warehouses; track w) { <span class="chip" [class.cross]="w.includes('→')">{{ w }}</span> }</td>
                                   <td class="inv-chips">@for (n of it.invoices.slice(0, 4); track n) { <span class="chip">{{ n }}</span> } @if (it.invoices.length > 4) { <span class="chip more">+{{ it.invoices.length - 4 }}</span> }</td>
+                                  @if (stockMode) {
+                                    <td class="act">
+                                      @if (it.sameWarehouse) {
+                                        <span class="tag xfer" matTooltip="Donor stock is already in the right warehouse — this is an inter-company invoice between {{ lane.from }} and {{ lane.to }}, no stock moves">paperwork only</span>
+                                      } @else {
+                                        <button mat-stroked-button class="rec-btn" (click)="pick({ action: 'ic-transfer', lane, item: it })" matTooltip="Open the transfer form for the donor code, source → destination warehouse"><mat-icon>sync_alt</mat-icon>Record move</button>
+                                      }
+                                    </td>
+                                  }
                                 </tr>
                               }
                             </tbody>
@@ -626,6 +652,12 @@ interface ThinkStep { icon: string; text: string; state: 'pending' | 'active' | 
 
     /* ---- lanes ---- */
     .lane { margin-bottom: 10px; }
+    .lane-actions { display: flex; align-items: center; gap: 10px; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; font-size: .84rem; color: #4c1d95; }
+    .lane-actions mat-icon { color: #7c3aed; flex-shrink: 0; }
+    .lane-actions span { flex: 1; }
+    .line-table td.act { text-align: right; white-space: nowrap; }
+    .rec-btn { height: 30px; line-height: 30px; font-size: .78rem; padding: 0 10px; }
+    .rec-btn mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; }
     .lane-route { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
     .lane-route mat-icon { font-size: 18px; width: 18px; height: 18px; color: #6b7280; }
     .wh-pill { font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #f3f4f6; color: #374151; }
@@ -669,6 +701,11 @@ export class WellySuggestionsDialogComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private ref = inject(MatDialogRef<WellySuggestionsDialogComponent>);
   private apiUrl = environment.apiUrl;
+  private dlgData = inject<WellySuggestionsDialogData | null>(MAT_DIALOG_DATA, { optional: true });
+  readonly stockMode = this.dlgData?.mode === 'stock';
+
+  /** Hand a suggestion back to the caller (Stock) so it can record it. */
+  pick(a: WellySuggestionsAction): void { this.ref.close(a); }
 
   phase = signal<'thinking' | 'ready' | 'error'>('thinking');
   error = signal('');
