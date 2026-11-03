@@ -292,6 +292,7 @@ namespace ProjectTracker.API.Extensions
             services.AddSingleton<Services.Flows.IFlowEventPublisher, Services.Flows.FlowEventPublisher>();
             services.AddSingleton<Services.Flows.IPodHandoff, Services.Flows.PodHandoffService>();
             services.AddSingleton<Services.Flows.IPayrollHandoff, Services.Flows.PayrollHandoffService>();
+            services.AddSingleton<Services.Flows.ITenderHandoff, Services.Flows.TenderHandoffService>();
             services.AddHostedService<Services.Flows.FlowSchedulerService>();
             return services;
         }

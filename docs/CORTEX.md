@@ -1,6 +1,6 @@
 # Cortex — what it is, what's built, what's open
 
-_Last updated: 3 Nov 2026 · branch `stock/ledger-integrity` · commits dcf97f9 → 3854c48 → 54404ab → ea2219a → 83cdb2e → a1433a9 → (payroll hand-off)_
+_Last updated: 3 Nov 2026 · branch `stock/ledger-integrity` · commits dcf97f9 → 3854c48 → 54404ab → ea2219a → 83cdb2e → a1433a9 → a35b92c → 449a97f → cf16a15 → (tender hand-off)_
 
 ## 1. What Cortex is (one paragraph)
 
@@ -116,11 +116,21 @@ Three detectors produce a `finding` (evidence) with a `suggestion` child (fix + 
 - Verified end-to-end: submitted + approved a leave request → to-do "Payroll input: Leave · … · Annual 10 Nov–12 Nov (3 d)" due Fri 20 Nov, assigned to Finance (fallback chain, no `Payroll.UserId` set yet). Test data removed.
 - Also fixed on the way: `POST leave-requests` 500'd (`DBNull` passed to `ExecuteSqlRawAsync` has no EF type mapping) — the leave-request form never worked; now uses explicit `SqlParameter`s. Cortex: `hr → finance` hand-off is now Automatic; only `tenders → sales` remains not built.
 
+### Step 10 — Work view (cf16a15)
+The map only showed detail when you clicked the right node. **Map | Work** toggle in the bar: Work lays everything out as lists — gaps grouped by kind (expandable, "never ran" collapsed), every module hand-off with how it is carried + code file + measured wait, Welly to-confirm and "Fixed by Welly" with before → after, all blank knowledge slots (department heads first), and the `CortexChanges` feed. Each row jumps back to the node on the map.
+
+### Step 11 — Tenders → Sales hand-off
+[TenderHandoffService.cs](../Backend/Services/Flows/TenderHandoffService.cs) · fire-and-forget on `PUT Tenders/{id}/status` when status becomes **Awarded** (first time only).
+- Starts the Sales process (`SystemSettings Tenders.SalesFlowId`, default: first enabled flow named `Sales…`) with `inputs` pre-filled from the tender: `customer` = issuing department, `customerEmail` / `contactPerson` / `contactPhone`, `enquiry` = tender number, title, awarded value, award date, BOQ lines, award notes; plus a full `tender` object (lines as JSON) for later steps. Run is pinned `entityType=tender`, title "<customer> · tender <no>". One run per tender (cancelled runs don't count).
+- Writes a `HandedToSales` tender activity with the run id, notifies the Sales department, publishes `tender.awarded`.
+- Verified: awarding W11573 → run FL-000007 "Department of Water and Sanitation · tender W11573", task "Quote for Department of Water and Sanitation" open with Sales. Test reverted.
+- Cortex: `tenders → sales` now Automatic. **All three planned hand-offs are built.**
+
 ---
 
 ## 3. Current numbers (after last rebuild)
 
-663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · **23 gaps** (17 no-events, 3 no-owner, 1 uncaptured, 1 data-quality, 1 not-built) · hand-offs: 142 manual / 106 automatic / 9 read / **1 not built**.
+663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · **19 gaps** (17 no-events, 1 uncaptured, 1 data-quality) · hand-offs: 142 manual / 107 automatic / 9 read / **0 not built**.
 
 No Welly findings fire yet — there is almost no task history (flow 5 has 3 approvals, all cleared in 0 h). They will appear as real work passes through Flows.
 
@@ -133,8 +143,8 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 | 1 | **Duplicate departments**: ~~Sales~~ (merged into 30) · ~~Marketing / Marketing Department~~ (both folded into IT, 3 Nov) · Finance / Finance Department | gap `deptdup:*` | **Confirm** Finance merge into the short name — Finance Department(17) holds most links (1 user / 7 employees / 8 flows / manager Robert Brown). Script ready. |
 | 2 | ~~Two accounts have a corrupted Permissions string~~ | — | Fixed (users 46, 84); save-time validation added; rescan clean. |
 | 3 | Training has people but no process (~~Marketing~~ now under IT, which has flows) | gap `uncaptured:*` | Someone in that team maps their day (New human flow). |
-| 4 | Nobody non-admin holds HR / Management / Tenders permission | gap `noowner:module:*` | Grant the module to the people who actually do that work. |
-| 5 | Hand-offs not built in code: tenders → sales. ~~finance → logistics~~ built (Step 8); ~~hr → finance~~ built (Step 9). | gap `handoff:*` | Product decisions; each is a feature. |
+| 4 | ~~Nobody non-admin holds HR / Management / Tenders permission~~ | — | Resolved: Duran Govender now holds HR and Tenders; owners derived on rebuild. |
+| 5 | ~~Hand-offs not built in code~~ — all three built: finance → logistics (Step 8), hr → finance (Step 9), tenders → sales (Step 11). | — | — |
 | 6 | **17** enabled processes have never run: Accounts · Invoice to payment; Colene · Debtors day; Finance · Month-end close; Joulene · Creditors & payments; Mamo · Debtors control day; Mbali · PODs day; Nduduzo · Creditors cycle; Peggy · Debtors day; Sne · PODs & debtors day; HR · Staff request handling; IT · Support request; Logistics · Delivery operations; Marketing · Campaign & announcement; Production · Work order; Reception · Visitors & deliveries; Sales · Enquiry to order; Stock · Goods receiving | gap `noevents:*` | Say which to disable; disabled ones drop out of coverage immediately. |
 | 7 | 166 knowledge slots blank | Knowledge strip | People write. Start with department heads (16 "knowledge" slots) and role authority limits (3). |
 
@@ -144,19 +154,18 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 
 | Item | Why it matters | Size |
 |---|---|---|
-| **Tenders → Sales hand-off** (won tender starts Enquiry-to-order pre-filled) | tender lines → sales context mapping | M, ~1.5–2 days — **next** |
+| **Customers / suppliers / products / tenders layers** | Node types exist (commercial layer) but the builder doesn't derive them | medium — **next** |
 | Payroll settings UI (cut-off day, payroll person) | API exists (`/api/payroll/settings`); no screen yet — set via API or SystemSettings | S, ~0.5 day |
-| **Customers / suppliers / products / tenders layers** | Node types exist (commercial layer) but the builder doesn't derive them | medium |
 | **Time replay UI** (`asOf`) | API supports it; no slider on the map | small |
 | Finance merge (§4 #1) | Blocked on your confirmation | 2 min |
 
-Agreed order: ~~HR → Finance~~ → Tenders → Sales → commercial layers.
+Agreed order: ~~HR → Finance~~ → ~~Tenders → Sales~~ → commercial layers.
 
 ---
 
 ## 6. How to use it today
 
-1. Open `/flows` → **Cortex** tab. Press **Rebuild** (designers) if numbers look stale.
+1. Open `/flows` → **Cortex** tab. Press **Work** to see everything as lists; **Map** for the picture. Press **Rebuild** (designers) if numbers look stale.
 2. Zoom **Departments**, click a department → right panel. Click **Write it** on its knowledge slot and type what the team actually does. Pick an owner and a review period. Save.
 3. Zoom **People**, hover people to see their reach; click a dim person to create their flow.
 4. Idle panel → **Welly thinks** → Confirm or Reject (with reason).

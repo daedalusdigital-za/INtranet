@@ -18,13 +18,15 @@ namespace ProjectTracker.API.Controllers
         private readonly IWebHostEnvironment _env;
         private readonly IConfiguration _configuration;
         private readonly ILogger<TendersController> _logger;
+        private readonly Services.Flows.ITenderHandoff? _handoff;
 
-        public TendersController(ApplicationDbContext context, IWebHostEnvironment env, IConfiguration configuration, ILogger<TendersController> logger)
+        public TendersController(ApplicationDbContext context, IWebHostEnvironment env, IConfiguration configuration, ILogger<TendersController> logger, Services.Flows.ITenderHandoff? handoff = null)
         {
             _context = context;
             _env = env;
             _configuration = configuration;
             _logger = logger;
+            _handoff = handoff;
         }
 
         // GET: api/Tenders
@@ -356,6 +358,9 @@ namespace ProjectTracker.API.Controllers
             });
 
             await _context.SaveChangesAsync();
+
+            // Tenders → Sales: a won tender starts the Sales process pre-filled, once
+            if (request.Status == "Awarded" && oldStatus != "Awarded") _handoff?.Awarded(id, request.UserId);
 
             return NoContent();
         }

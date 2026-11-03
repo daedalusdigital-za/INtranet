@@ -36,6 +36,7 @@ namespace ProjectTracker.API.Services.Flows
             ("shipment.cancelled", "Shipment cancelled"),
             ("pod.received", "Proof of delivery arrived in Logistics (invoiceNumbers[], loadNumber, podNumber, customer)"),
             ("hr.payroll_input", "HR change that affects pay: approved leave, new starter, notice/termination (kind, employee, cutoff)"),
+            ("tender.awarded", "Tender marked Awarded; Sales process started pre-filled (tenderId, tenderNumber, customer, awardedValue, flowRunId)"),
             ("flow.manual", "Started by a person from the Flows screen"),
         };
 

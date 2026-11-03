@@ -96,7 +96,7 @@ namespace ProjectTracker.API.Services.Cortex
             ("welly", "logistics", "Creates trip sheets on request", CortexHandoff.Automatic, "AIActionService.cs:838"),
             ("welly", "tickets", "Raises support tickets", CortexHandoff.Automatic, "AIActionService.cs:224"),
             ("flows", "hr", "Tasks → people's to-do lists", CortexHandoff.Automatic, "FlowEngine.cs:590"),
-            ("tenders", "sales", "Award → nothing downstream; tender pricing is a fixed file", CortexHandoff.NotBuilt, "TendersController.cs:317"),
+            ("tenders", "sales", "Awarded tender → Sales · Enquiry to order started pre-filled (customer, contact, value, BOQ), pinned to the tender, tender.awarded event", CortexHandoff.Automatic, "TenderHandoffService.cs"),
             ("logistics", "finance", "POD arrives → debtors' POD-wait tasks told / closed, pod.received event", CortexHandoff.Automatic, "PodHandoffService.cs"),
             ("hr", "finance", "Approved leave / starter / leaver → payroll to-do due at the cut-off, hr.payroll_input event", CortexHandoff.Automatic, "PayrollHandoffService.cs"),
         };
