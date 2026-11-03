@@ -19,14 +19,18 @@ namespace ProjectTracker.API.Controllers.Logistics
         private readonly ApplicationDbContext _context;
         private readonly ILogger<LoadsController> _logger;
         private readonly string _nasBasePath;
+        private readonly ProjectTracker.API.Services.Flows.IPodHandoff? _podHandoff;
 
-        public LoadsController(ApplicationDbContext context, ILogger<LoadsController> logger, IConfiguration configuration)
+        public LoadsController(ApplicationDbContext context, ILogger<LoadsController> logger, IConfiguration configuration, ProjectTracker.API.Services.Flows.IPodHandoff? podHandoff = null)
         {
             _context = context;
             _logger = logger;
+            _podHandoff = podHandoff;
             // Get NAS path from configuration, fallback to local path
             _nasBasePath = configuration.GetValue<string>("DocumentsPath") ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
         }
+
+        private int? CurrentUserId() => int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : null;
 
         /// <summary>
         /// Generates a unique load number in the format RF-XXXXXX
@@ -312,6 +316,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         {
                             LoadStopId = stop.Id,
                             CommodityId = commodityDto.CommodityId ?? CommodityCodeMatcher.Match(stockCodes, commodityDto.CommodityCode),
+                            ProductCode = commodityDto.CommodityCode,
                             ContractId = commodityDto.ContractId,
                             Quantity = commodityDto.Quantity,
                             UnitOfMeasure = commodityDto.UnitOfMeasure,
@@ -572,6 +577,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                             {
                                 LoadStopId = stop.Id,
                                 CommodityId = stockItemId,  // Nullable - imported invoices don't have Commodity FK
+                                ProductCode = commDto.CommodityCode,
                                 Quantity = commDto.Quantity,
                                 UnitPrice = commDto.UnitPrice,
                                 TotalPrice = commDto.TotalPrice.HasValue
@@ -1456,6 +1462,9 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             await _context.SaveChangesAsync();
 
+            // Finance is waiting on this: tell the debtors' flows (fire-and-forget)
+            _podHandoff?.PodReceived("load", linkedInvoices.Select(i => i.TransactionNumber), linkedInvoices.Select(i => i.CustomerName).FirstOrDefault(), load.LoadNumber, null, CurrentUserId());
+
             return Ok(pod);
         }
 
@@ -1538,6 +1547,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }
 
                 await _context.SaveChangesAsync();
+
+                var invs = await _context.ImportedInvoices.AsNoTracking().Where(i => i.LoadId == loadId).Select(i => new { i.TransactionNumber, i.CustomerName }).ToListAsync();
+                _podHandoff?.PodReceived("load", invs.Select(i => i.TransactionNumber), invs.Select(i => i.CustomerName).FirstOrDefault(), load.LoadNumber, null, CurrentUserId());
 
                 return Ok(new { message = "POD uploaded successfully", fileName });
             }
@@ -1687,8 +1699,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                     {
                         Id = sc.Id,
                         CommodityId = sc.CommodityId,
-                        CommodityName = sc.Commodity?.Name ?? "",
-                        CommodityCode = sc.Commodity?.Code,
+                        CommodityName = sc.Commodity?.Name ?? sc.Comment ?? "",
+                        CommodityCode = sc.Commodity?.Code ?? sc.ProductCode,
                         ContractId = sc.ContractId,
                         ContractName = sc.Contract?.ContractName,
                         Quantity = sc.Quantity,

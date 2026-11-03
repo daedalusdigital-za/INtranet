@@ -34,6 +34,7 @@ namespace ProjectTracker.API.Services.Flows
             ("shipment.collection_failed", "Driver logged a failed collection"),
             ("shipment.booked", "New client booking created"),
             ("shipment.cancelled", "Shipment cancelled"),
+            ("pod.received", "Proof of delivery arrived in Logistics (invoiceNumbers[], loadNumber, podNumber, customer)"),
             ("flow.manual", "Started by a person from the Flows screen"),
         };
 

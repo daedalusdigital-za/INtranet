@@ -15,18 +15,23 @@ namespace ProjectTracker.API.Controllers.Logistics
         private readonly ApplicationDbContext _context;
         private readonly ILogger<PodDocumentsController> _logger;
         private readonly string _storagePath;
+        private readonly ProjectTracker.API.Services.Flows.IPodHandoff? _podHandoff;
 
         public PodDocumentsController(
             ApplicationDbContext context,
             ILogger<PodDocumentsController> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            ProjectTracker.API.Services.Flows.IPodHandoff? podHandoff = null)
         {
             _context = context;
             _logger = logger;
+            _podHandoff = podHandoff;
             var basePath = configuration.GetValue<string>("DocumentsPath")
                 ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
             _storagePath = Path.Combine(basePath, "Logistics", "POD-Documents");
         }
+
+        private int? CurrentUserId() => int.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var id) ? id : null;
 
         /// <summary>
         /// Get all POD documents with filtering
@@ -519,6 +524,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 if (links.Count > 0 || matchedInvoices.Count > 0)
                     await _context.SaveChangesAsync();
 
+                // Finance is waiting on this: tell the debtors' flows (fire-and-forget). Unmatched numbers go too - the clerk knows them.
+                _podHandoff?.PodReceived("scan", matchedInvoices.Select(i => i.TransactionNumber).Concat(unmatched), matchedInvoices.Select(i => i.CustomerName).FirstOrDefault(), loadNumber, pod.PodNumber, CurrentUserId());
+
                 return Ok(new
                 {
                     message = $"POD uploaded and linked to {matchedInvoices.Count} invoice(s)"
@@ -922,6 +930,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             await _context.SaveChangesAsync();
 
             var invoiceNumbers = invoicesOnLoad.Select(i => i.TransactionNumber).Distinct().OrderBy(x => x).ToList();
+            if (newLinks.Count > 0) _podHandoff?.PodReceived("scan", newLinks.Select(l => l.InvoiceNumber ?? ""), invoicesOnLoad.Select(i => i.CustomerName).FirstOrDefault(), load.LoadNumber, pod.PodNumber, CurrentUserId());
             return Ok(new
             {
                 message = "POD linked to tripsheet" + (invoiceNumbers.Count > 0 ? $" and linked to {invoiceNumbers.Count} invoice(s)" : ""),
@@ -1031,14 +1040,14 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Select(l => new
                 {
                     l.Id,
-                    Texts = l.Stops.Select(s => s.InvoiceNumber)
-                        .Concat(l.Stops.SelectMany(s => s.Commodities.Select(c => c.InvoiceNumber))).ToList()
+                    StopTexts = l.Stops.Select(s => s.InvoiceNumber).ToList(),
+                    LineTexts = l.Stops.SelectMany(s => s.Commodities.Select(c => c.InvoiceNumber)).ToList()
                 })
                 .Take(10)
                 .ToListAsync();
             var seps = new[] { ',', ';', '/', '\n', '\r', '|' };
             foreach (var c in candidates)
-                if (c.Texts.Any(t => t != null && t.Split(seps, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                if (c.StopTexts.Concat(c.LineTexts).Any(t => t != null && t.Split(seps, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                         .Any(tok => string.Equals(tok, num, StringComparison.OrdinalIgnoreCase))))
                     return c.Id;
             return null;
@@ -1164,6 +1173,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             pod.InvoiceId = primaryInvoiceId;
 
             await _context.SaveChangesAsync();
+
+            if (newLinks.Count > 0) _podHandoff?.PodReceived("scan", newLinks.Select(l => l.InvoiceNumber ?? ""), invoices.Select(i => i.CustomerName).FirstOrDefault(), loadNumber, pod.PodNumber, CurrentUserId());
 
             var linkedInvoiceNumbers = await _context.PodDocumentInvoiceLinks
                 .Where(l => l.PodDocumentId == pod.Id)

@@ -99,11 +99,19 @@ Three detectors produce a `finding` (evidence) with a `suggestion` child (fix + 
 - **After**: 14 days later the maintenance service measures the same step over tasks created since the change, writes `data.fix.after`, logs `measured`, and sends the owner a to-do with the verdict (better / worse / not enough tasks). Shown under the finding as "Median wait X h → Y h".
 - Nothing is applied on a schedule; the person who pressed the button is recorded.
 
+### Step 8 — Logistics → Finance hand-off (PODs)
+[PodHandoffService.cs](../Backend/Services/Flows/PodHandoffService.cs) · fire-and-forget, hooked into every place a POD lands: tripsheet POD (`POST loads/{id}/proof-of-delivery`, `POST loads/{id}/pod`), scanned POD (`POST PodDocuments/upload-with-invoices`), later linking (`PUT PodDocuments/{id}/link`, `/link-invoices`).
+- Finds every open Flows task that is **waiting on a POD**: `config.awaits = "pod"`, or by convention a human step about PODs that is assigned to or escalates to Logistics (which is how all the debtors' flows and *Accounts · Invoice to payment* are written).
+- Writes the POD (invoice numbers, load, POD number, customer, who, when) into the run context (`pods[]`, `lastPod`) + audit line `pod.received`, and notifies the assignees with the invoice numbers.
+- If the run is pinned to those invoices (`inputs.invoiceNo`, `invoiceNumbers`, entity `invoice`) and the POD covers them all, the task is **closed automatically** and the run advances. Verified end-to-end: IN146545 → "POD needed for invoice IN146545" closed by Logistics, run moved on.
+- Publishes the `pod.received` flow event (listed in the designer) so anyone can trigger a flow on it.
+- Cortex: `logistics → finance` now has two edges (requisitions manual, PODs automatic); hand-off gap closed. Also fixed on the way: `FindLoadIdByInvoiceTextAsync` EF translation error that made `link-invoices` 500 for invoices without a tripsheet; cancelled runs no longer count as process usage; pending Welly items whose evidence disappears are retired on rebuild.
+
 ---
 
 ## 3. Current numbers (after last rebuild)
 
-664 nodes · 818 edges · 497 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · 27 gaps · hand-offs: 142 manual / 104 automatic / 9 read / 3 not built.
+663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · 26 gaps · hand-offs: 142 manual / 105 automatic / 9 read / 2 not built.
 
 No Welly findings fire yet — there is almost no task history (flow 5 has 3 approvals, all cleared in 0 h). They will appear as real work passes through Flows.
 
@@ -117,7 +125,7 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 | 2 | ~~Two accounts have a corrupted Permissions string~~ | — | Fixed (users 46, 84); save-time validation added; rescan clean. |
 | 3 | Marketing and Training have people but no process | gap `uncaptured:*` | Someone in those teams maps their day (New human flow). |
 | 4 | Nobody non-admin holds HR / Management / Tenders permission | gap `noowner:module:*` | Grant the module to the people who actually do that work. |
-| 5 | Three hand-offs not built in code: tenders → sales, finance → logistics (debtors don't wait for POD), hr → finance (leave → payroll) | gap `handoff:*` | Product decisions; each is a feature. |
+| 5 | Hand-offs not built in code: tenders → sales, hr → finance (leave → payroll). ~~finance → logistics~~ built (Step 8). | gap `handoff:*` | Product decisions; each is a feature. |
 | 6 | **17** enabled processes have never run: Accounts · Invoice to payment; Colene · Debtors day; Finance · Month-end close; Joulene · Creditors & payments; Mamo · Debtors control day; Mbali · PODs day; Nduduzo · Creditors cycle; Peggy · Debtors day; Sne · PODs & debtors day; HR · Staff request handling; IT · Support request; Logistics · Delivery operations; Marketing · Campaign & announcement; Production · Work order; Reception · Visitors & deliveries; Sales · Enquiry to order; Stock · Goods receiving | gap `noevents:*` | Say which to disable; disabled ones drop out of coverage immediately. |
 | 7 | 166 knowledge slots blank | Knowledge strip | People write. Start with department heads (16 "knowledge" slots) and role authority limits (3). |
 
@@ -127,14 +135,13 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 
 | Item | Why it matters | Size |
 |---|---|---|
-| **Finance → Logistics hand-off** (debtors wait for POD) | POD scan / dispatch advances the matching Finance step and notifies the debtors clerk | S–M, ~1 day — **next** |
-| **HR → Finance hand-off** (leave / starter / leaver → payroll input with cut-off) | needs the payroll calendar defined | M, ~1.5 days |
+| **HR → Finance hand-off** (leave / starter / leaver → payroll input with cut-off) | needs the payroll calendar defined | M, ~1.5 days — **next** |
 | **Tenders → Sales hand-off** (won tender starts Enquiry-to-order pre-filled) | tender lines → sales context mapping | M, ~1.5–2 days |
 | **Customers / suppliers / products / tenders layers** | Node types exist (commercial layer) but the builder doesn't derive them | medium |
 | **Time replay UI** (`asOf`) | API supports it; no slider on the map | small |
 | Finance / Marketing merge (§4 #1) | Blocked on your confirmation | 2 min |
 
-Agreed order: Finance → Logistics → HR → Finance → Tenders → Sales → commercial layers.
+Agreed order: HR → Finance → Tenders → Sales → commercial layers.
 
 ---
 

@@ -95,7 +95,7 @@ namespace ProjectTracker.API.Controllers
                     inferred = nodes.Count(n => n.Provenance == CortexProvenance.Inferred && n.Status == "pending"),
                     overdue = nodes.Count(n => n.ReviewDueAt != null && n.ReviewDueAt < now),
                     gaps = nodes.Count(n => n.Type == "gap" && n.Status != "closed"),
-                    handoffs = edges.Where(e => e.Relation == "handoff").GroupBy(e => e.Handoff ?? "?").ToDictionary(g => g.Key, g => g.Count())
+                    handoffs = edges.Where(e => e.Relation.StartsWith("handoff")).GroupBy(e => e.Handoff ?? "?").ToDictionary(g => g.Key, g => g.Count())
                 }
             });
         }

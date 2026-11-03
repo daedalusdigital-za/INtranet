@@ -97,7 +97,7 @@ namespace ProjectTracker.API.Services.Cortex
             ("welly", "tickets", "Raises support tickets", CortexHandoff.Automatic, "AIActionService.cs:224"),
             ("flows", "hr", "Tasks → people's to-do lists", CortexHandoff.Automatic, "FlowEngine.cs:590"),
             ("tenders", "sales", "Award → nothing downstream; tender pricing is a fixed file", CortexHandoff.NotBuilt, "TendersController.cs:317"),
-            ("finance", "logistics", "Debtors do not wait for a POD", CortexHandoff.NotBuilt, "FinanceOverviewController.cs:275"),
+            ("logistics", "finance", "POD arrives → debtors' POD-wait tasks told / closed, pod.received event", CortexHandoff.Automatic, "PodHandoffService.cs"),
             ("hr", "finance", "Approved leave → attendance / payroll", CortexHandoff.NotBuilt, "LeaveRequestsController.cs:25"),
         };
         private static readonly (string Key, string Label, string Purpose, string[] Reads, string[] Actions)[] Agents =
@@ -157,7 +157,12 @@ namespace ProjectTracker.API.Services.Cortex
             // Technology: sources and modules (positions/blurbs live in cortex-model.ts)
             foreach (var s in Sources) N(s.Key, "source", s.Label, "group", null, "code:cortex-model.ts");
             // modules are added after users are loaded, so each one can carry its day-to-day owner (see below)
-            foreach (var h in Handoffs) E(h.From, h.To, "handoff", h.Label, h.How, h.Ref, "code");
+            // several hand-offs may run between the same two modules (e.g. logistics → finance: requisitions by hand, PODs automatic); keep each one
+            foreach (var g in Handoffs.GroupBy(h => (h.From, h.To)))
+            {
+                var i = 0;
+                foreach (var h in g) E(h.From, h.To, i++ == 0 ? "handoff" : $"handoff#{i}", h.Label, h.How, h.Ref, "code");
+            }
             foreach (var k in new[] { "sales", "tenders", "logistics", "stock", "finance", "paperless", "hr" }) E(k, "mgmt", "handoff", "Rolled up on the Management dashboard", CortexHandoff.ReadOnly, "ManagementController.cs:184", "code");
 
             // Organisation: departments, roles, people
@@ -165,7 +170,8 @@ namespace ProjectTracker.API.Services.Cortex
             var users = await _db.Users.AsNoTracking().Where(u => u.IsActive).Select(u => new { u.UserId, Name = u.Name + " " + u.Surname, u.Email, u.Role, u.Title, u.DepartmentId, u.Permissions, u.LinkedEmpId }).ToListAsync(ct);
             var emps = await _db.EmpRegistrations.AsNoTracking().Select(e => new { e.EmpId, Name = ((e.Name ?? "") + " " + (e.LastName ?? "")).Trim(), e.Department, e.JobTitle }).ToListAsync(ct);
             var flows = await _db.FlowDefinitions.AsNoTracking().Where(f => !f.IsTemplate).ToListAsync(ct);
-            var runStats = await _db.FlowRuns.AsNoTracking().GroupBy(r => r.FlowDefinitionId)
+            // cancelled runs are not evidence that a process is in use
+            var runStats = await _db.FlowRuns.AsNoTracking().Where(r => r.Status != Models.Flows.FlowRunStatus.Cancelled).GroupBy(r => r.FlowDefinitionId)
                 .Select(g => new { Id = g.Key, Total = g.Count(), Active = g.Count(r => r.Status == Models.Flows.FlowRunStatus.Running || r.Status == Models.Flows.FlowRunStatus.Waiting), Last = (DateTime?)g.Max(r => r.StartedAt) }).ToDictionaryAsync(x => x.Id, ct);
 
             // Modules, each with a day-to-day owner derived from who holds its permission: a single non-admin holder owns
@@ -404,7 +410,7 @@ namespace ProjectTracker.API.Services.Cortex
 
             // nodes
             var wanted = nodes.GroupBy(n => n.Key).Select(g => g.First()).ToDictionary(n => n.Key);
-            var existing = await _db.CortexNodes.Where(n => n.Provenance == CortexProvenance.Derived || wanted.Keys.Contains(n.Key)).ToDictionaryAsync(n => n.Key, ct);
+            var existing = await _db.CortexNodes.Where(n => n.Provenance == CortexProvenance.Derived || (n.Provenance == CortexProvenance.Inferred && n.Status == "pending") || wanted.Keys.Contains(n.Key)).ToDictionaryAsync(n => n.Key, ct);
             foreach (var n in wanted.Values)
             {
                 if (!existing.TryGetValue(n.Key, out var e))
@@ -434,7 +440,8 @@ namespace ProjectTracker.API.Services.Cortex
                 if (e.Source != n.Source && n.Source != "curated") { e.Source = n.Source; e.SourceId = n.SourceId; dirty = true; }
                 if (dirty) { e.UpdatedAt = now; updated++; }
             }
-            foreach (var e in existing.Values.Where(x => x.IsActive && x.Provenance == CortexProvenance.Derived && !wanted.ContainsKey(x.Key)))
+            // derived facts that vanished, and pending Welly items whose evidence vanished, are retired (decided items stay as history)
+            foreach (var e in existing.Values.Where(x => x.IsActive && (x.Provenance == CortexProvenance.Derived || (x.Provenance == CortexProvenance.Inferred && x.Status == "pending")) && !wanted.ContainsKey(x.Key)))
             { e.IsActive = false; e.UpdatedAt = now; deactivated++; Log("node", e.Key, "deactivated"); }
 
             // edges

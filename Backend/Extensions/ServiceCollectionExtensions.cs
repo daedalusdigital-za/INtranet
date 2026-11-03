@@ -290,6 +290,7 @@ namespace ProjectTracker.API.Extensions
             services.AddHostedService<Services.Cortex.CortexMaintenanceService>();
             services.AddScoped<Services.Flows.IFlowDataSources, Services.Flows.FlowDataSources>();
             services.AddSingleton<Services.Flows.IFlowEventPublisher, Services.Flows.FlowEventPublisher>();
+            services.AddSingleton<Services.Flows.IPodHandoff, Services.Flows.PodHandoffService>();
             services.AddHostedService<Services.Flows.FlowSchedulerService>();
             return services;
         }
