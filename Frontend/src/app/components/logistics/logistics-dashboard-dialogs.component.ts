@@ -16760,15 +16760,13 @@ export class AssignDriverDialogComponent implements OnInit {
             <mat-hint>{{ availableItems.length }} unlinked vehicles available</mat-hint>
           </mat-form-field>
 
-          @if (data.type === 'cartrack') {
-            <div class="manual-entry">
-              <span>Or enter CarTrack ID manually:</span>
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>CarTrack ID</mat-label>
-                <input matInput [(ngModel)]="manualId" name="manualId" placeholder="e.g., 339321264">
-              </mat-form-field>
-            </div>
-          }
+          <div class="manual-entry">
+            <span>Or enter the {{ data.type === 'cartrack' ? 'CarTrack ID' : 'TFN registration' }} manually:</span>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>{{ data.type === 'cartrack' ? 'CarTrack ID' : 'TFN registration' }}</mat-label>
+              <input matInput [(ngModel)]="manualId" name="manualId" [placeholder]="data.type === 'cartrack' ? 'e.g., 339321264' : 'e.g., ' + data.vehicle.registrationNumber">
+            </mat-form-field>
+          </div>
         }
       </div>
     </mat-dialog-content>
@@ -16820,7 +16818,8 @@ export class LinkVehicleDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<LinkVehicleDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { vehicle: Vehicle, type: 'cartrack' | 'tfn' },
-    private http: HttpClient
+    private http: HttpClient,
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -16835,12 +16834,18 @@ export class LinkVehicleDialogComponent implements OnInit {
 
     this.http.get<any[]>(endpoint).subscribe({
       next: (items) => {
-        this.availableItems = items;
+        this.availableItems = items || [];
         this.loading = false;
+        if (this.availableItems.length === 0) {
+          this.toast.info(this.data.type === 'tfn'
+            ? 'Every TFN vehicle is already linked. You can still type the TFN registration below.'
+            : 'Every CarTrack unit is already linked. You can still enter the CarTrack ID below.');
+        }
       },
-      error: () => {
+      error: (err) => {
         this.availableItems = [];
         this.loading = false;
+        this.toast.error((this.data.type === 'tfn' ? 'TFN' : 'CarTrack') + ' list unavailable: ' + (err?.error?.message || err?.message || 'unknown error'));
       }
     });
   }
@@ -16857,9 +16862,12 @@ export class LinkVehicleDialogComponent implements OnInit {
       ? `${apiUrl}/fleet/vehicles/${this.data.vehicle.id}/link-cartrack`
       : `${apiUrl}/fleet/vehicles/${this.data.vehicle.id}/link-tfn`;
 
-    this.http.post(endpoint, { externalId }).subscribe({
-      next: () => this.dialogRef.close(true),
-      error: (err) => console.error('Error linking vehicle:', err)
+    this.http.post<any>(endpoint, { externalId }).subscribe({
+      next: (res) => { this.toast.done(res?.message || 'Vehicle linked'); this.dialogRef.close(true); },
+      error: (err) => {
+        console.error('Error linking vehicle:', err);
+        this.toast.error('Could not link: ' + (err?.error?.message || err?.message || 'unknown error'));
+      }
     });
   }
 }

@@ -1083,6 +1083,71 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         /// <summary>
+        /// Link a fleet vehicle to TruckFuelNet by TFN registration. Pulls fleet number / tank size when TFN is reachable.
+        /// </summary>
+        [HttpPost("vehicles/{id}/link-tfn")]
+        public async Task<IActionResult> LinkTfn(int id, [FromBody] LinkExternalVehicleDto dto,
+            [FromServices] ProjectTracker.API.Services.TFN.Clients.TfnVehiclesClient vehiclesClient)
+        {
+            var vehicle = await _context.Vehicles.FindAsync(id);
+            if (vehicle == null) return NotFound();
+            if (string.IsNullOrWhiteSpace(dto.ExternalId))
+                return BadRequest(new { message = "TFN registration is required" });
+
+            var reg = dto.ExternalId.Trim();
+            var regNorm = reg.Replace("-", "").Replace(" ", "").ToUpperInvariant();
+
+            var clash = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id != id && v.TfnVehicleId != null &&
+                v.TfnVehicleId.Replace("-", "").Replace(" ", "").ToUpper() == regNorm);
+            if (clash != null)
+                return Conflict(new { message = $"TFN vehicle {reg} is already linked to {clash.RegistrationNumber}. Unlink it there first." });
+
+            try
+            {
+                var tfnVehicles = await vehiclesClient.GetVehiclesAsync();
+                var match = tfnVehicles?.FirstOrDefault(t => t.NormalizedRegistration == regNorm);
+                if (match != null)
+                {
+                    reg = match.Registration;
+                    vehicle.TfnFleetNumber = match.FleetNumber;
+                    vehicle.TfnExternalNumber = match.ExternalNumber;
+                    vehicle.TfnStatus = match.Status;
+                    if (match.TankSize.HasValue) vehicle.TankSize = match.TankSize;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "TFN lookup failed while linking {Reg}; linking by registration only", reg);
+            }
+
+            vehicle.TfnVehicleId = reg;
+            vehicle.IsLinkedToTfn = true;
+            vehicle.TfnLastSyncedAt = DateTime.UtcNow;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Vehicle {Id} ({Reg}) linked to TFN {Tfn}", id, vehicle.RegistrationNumber, reg);
+            return Ok(new { success = true, tfnVehicleId = vehicle.TfnVehicleId, message = $"{vehicle.RegistrationNumber} linked to TFN {reg}" });
+        }
+
+        [HttpPost("vehicles/{id}/unlink-tfn")]
+        public async Task<IActionResult> UnlinkTfn(int id)
+        {
+            var vehicle = await _context.Vehicles.FindAsync(id);
+            if (vehicle == null) return NotFound();
+
+            _logger.LogInformation("Vehicle {Id} ({Reg}) unlinked from TFN {Tfn}", id, vehicle.RegistrationNumber, vehicle.TfnVehicleId);
+            vehicle.TfnVehicleId = null;
+            vehicle.TfnFleetNumber = null;
+            vehicle.TfnExternalNumber = null;
+            vehicle.TfnStatus = null;
+            vehicle.IsLinkedToTfn = false;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true });
+        }
+
+        /// <summary>
         /// Remove a vehicle. If it has history (loads, maintenance, fuel) it is retired instead: status "Sold",
         /// driver and trackers detached, hidden from every list, history kept. Otherwise the row is deleted.
         /// </summary>

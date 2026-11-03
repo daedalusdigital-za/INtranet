@@ -195,6 +195,52 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        // GET: api/logistics/tfn/vehicles/unlinked
+        // TFN vehicles (by registration) not yet linked to one of our vehicles. Used by the "Link to TFN" dialog.
+        [HttpGet("vehicles/unlinked")]
+        public async Task<ActionResult> GetUnlinkedTfnVehicles([FromServices] ProjectTracker.API.Services.TFN.Clients.TfnVehiclesClient vehiclesClient)
+        {
+            try
+            {
+                var tfnVehicles = await vehiclesClient.GetVehiclesAsync();
+                if (tfnVehicles == null)
+                    return StatusCode(502, new { error = "TFN did not return a vehicle list", message = "Could not reach TruckFuelNet. Check the TFN credentials in settings and try again." });
+
+                var linked = await _context.Vehicles
+                    .Where(v => v.TfnVehicleId != null && v.TfnVehicleId != "")
+                    .Select(v => v.TfnVehicleId!)
+                    .ToListAsync();
+                var linkedSet = new HashSet<string>(linked.Select(Norm), StringComparer.OrdinalIgnoreCase);
+
+                var items = tfnVehicles
+                    .Where(t => !string.IsNullOrWhiteSpace(t.Registration) && !linkedSet.Contains(t.NormalizedRegistration))
+                    .GroupBy(t => t.NormalizedRegistration)
+                    .Select(g => g.First())
+                    .Select(t => new
+                    {
+                        id = t.Registration,
+                        name = t.Registration,
+                        registrationNumber = t.Registration,
+                        description = string.Join(" · ", new[] {
+                            string.IsNullOrWhiteSpace(t.FleetNumber) ? null : "Fleet " + t.FleetNumber,
+                            t.TankSize.HasValue ? $"{t.TankSize:0} L tank" : null,
+                            string.IsNullOrWhiteSpace(t.Status) ? null : t.Status
+                        }.Where(s => s != null))
+                    })
+                    .OrderBy(v => v.name)
+                    .ToList();
+
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error listing unlinked TFN vehicles");
+                return StatusCode(500, new { error = "Failed to list TFN vehicles", message = ex.Message });
+            }
+
+            static string Norm(string s) => s.Replace("-", "").Replace(" ", "").ToUpperInvariant();
+        }
+
         // GET: api/logistics/tfn/vehicles
         [HttpGet("vehicles")]
         public async Task<ActionResult> GetVehiclesWithTfnData()

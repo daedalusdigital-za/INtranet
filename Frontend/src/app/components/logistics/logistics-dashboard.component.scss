@@ -1501,6 +1501,22 @@
         color: var(--color-text-muted);
         border: 1px dashed var(--color-border);
       }
+      &.corner {
+        margin-left: 8px;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        mat-icon { font-size: 14px; width: 14px; height: 14px; }
+      }
+    }
+
+    .vehicle-card-actions {
+      display: flex;
+      align-items: center;
+      .spacer { flex: 1; }
     }
 
     .date-range-field { min-width: 240px; }

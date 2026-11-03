@@ -354,15 +354,6 @@
                           </mat-card-subtitle>
                           <!-- Integration badges -->
                           <div class="integration-badges">
-                            @if (vehicle.province) {
-                              <span class="badge province-badge clickable" [matTooltip]="'Branch: ' + vehicle.province + ' — click to move'" (click)="reassignProvince(vehicle); $event.stopPropagation()">
-                                <mat-icon>place</mat-icon> {{ getProvinceAbbreviation(vehicle.province) }}
-                              </span>
-                            } @else {
-                              <span class="badge province-badge unset clickable" matTooltip="No branch set — click to choose GP / KZN / CPT / PE" (click)="reassignProvince(vehicle); $event.stopPropagation()">
-                                <mat-icon>place</mat-icon> ?
-                              </span>
-                            }
                             @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
                               <span class="badge cartrack-badge" matTooltip="Linked to CarTrack">
                                 <mat-icon>gps_fixed</mat-icon> CT
@@ -504,7 +495,17 @@
                             }
                           </div>
                         </mat-card-content>
-                        <mat-card-actions>
+                        <mat-card-actions class="vehicle-card-actions">
+                          @if (vehicle.province) {
+                            <span class="badge province-badge corner clickable" [matTooltip]="'Branch: ' + vehicle.province + ' — click to move'" (click)="reassignProvince(vehicle); $event.stopPropagation()">
+                              <mat-icon>place</mat-icon> {{ getProvinceAbbreviation(vehicle.province) }}
+                            </span>
+                          } @else {
+                            <span class="badge province-badge corner unset clickable" matTooltip="No branch set — click to choose GP / KZN / CPT / PE" (click)="reassignProvince(vehicle); $event.stopPropagation()">
+                              <mat-icon>place</mat-icon> ?
+                            </span>
+                          }
+                          <span class="spacer"></span>
                           <button mat-button color="primary" (click)="viewVehicleDetails(vehicle)">
                             <mat-icon>visibility</mat-icon> Details
                           </button>
