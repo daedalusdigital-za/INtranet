@@ -71,7 +71,8 @@
     }
     <span class="spacer"></span>
     <div class="cx-zoom cx-view" role="radiogroup" aria-label="View">
-      <button [class.on]="view() === 'map'" (click)="setView('map')" role="radio" [attr.aria-checked]="view() === 'map'" matTooltip="The picture: modules, departments, people"><mat-icon>hub</mat-icon>Map</button>
+      <button [class.on]="view() === 'brain'" (click)="setView('brain')" role="radio" [attr.aria-checked]="view() === 'brain'" matTooltip="Welly at the centre, the company around it. Drag to turn, scroll to zoom."><mat-icon>psychology</mat-icon>Brain</button>
+      <button [class.on]="view() === 'map'" (click)="setView('map')" role="radio" [attr.aria-checked]="view() === 'map'" matTooltip="The flat picture: modules, departments, people"><mat-icon>hub</mat-icon>Flat</button>
       <button [class.on]="view() === 'work'" (click)="setView('work')" role="radio" [attr.aria-checked]="view() === 'work'" matTooltip="Everything the graph found, as lists: gaps, hand-offs, Welly, what changed"><mat-icon>checklist</mat-icon>Work@if (apiGaps().length) { <em>{{ apiGaps().length }}</em> }</button>
     </div>
     @if (view() === 'map') {
@@ -237,6 +238,23 @@
   } @else {
 
   <div class="cx-main">
+    @if (view() === 'brain') {
+    <div class="cx-map cx-brain">
+      <app-cortex-brain [nodes]="brainNodes()" [edges]="brainEdges()" [selected]="selected()" [stream]="brainStream()" (select)="brainSelect($event)" (dive)="brainDive($event)"></app-cortex-brain>
+      <div class="cx-legend">
+        <span><i class="lg welly"></i>Welly</span>
+        <span><i class="lg dot"></i>Module</span>
+        <span><i class="lg hex"></i>Department</span>
+        <span><i class="lg sq"></i>Source</span>
+        <span><i class="lg dust"></i>People (bright = has a flow)</span>
+        <span><i class="ln code"></i>Automatic · light travels</span>
+        <span><i class="ln manual"></i>Someone acts</span>
+        <span><i class="ln read"></i>Read only</span>
+        <span><i class="ln gap"></i>Not built</span>
+        <span><i class="lg live"></i>Ring = runs live</span>
+      </div>
+    </div>
+    } @else {
     <!-- ═════ The map ═════ -->
     <div class="cx-map" [class.panning]="isPanning()" [class.grabbing]="dragging()" tabindex="0" (keydown)="onKey($event)">
       <svg #cxsvg [attr.viewBox]="viewBox()" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Company operating map"
@@ -375,6 +393,7 @@
         <span><i class="lg warn">!</i>Gap found</span>
       </div>
     </div>
+    }
 
     <!-- ═════ Inspector ═════ -->
     <aside class="cx-panel">

@@ -7,6 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CortexApiGap, CortexApiNode, CortexGraph, FlowCatalog, FlowDefinition, FlowStats, FlowsService } from '../../services/flows.service';
 import { CORTEX_COMPANIES, CORTEX_EDGES, CORTEX_GAPS, CORTEX_NODES, CORTEX_STREAMS, CortexGap, CortexHow, CortexLayer, CortexNode, CortexStream } from './cortex-model';
+import { BrainEdge, BrainNode, CortexBrainComponent } from './cortex-brain.component';
 
 /** A person on the map: from the employee register, or an intranet user who is not on it. */
 interface CortexPerson { key: string; name: string; title: string | null; employeeId: string | null; userId: number | null; flows: FlowDefinition[]; }
@@ -29,7 +30,7 @@ const DEPT_Y = 600;
 @Component({
   selector: 'app-flow-cortex',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatTooltipModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatTooltipModule, CortexBrainComponent],
   templateUrl: './flow-cortex.component.html',
   styleUrls: ['./flow-cortex.component.scss']
 })
@@ -244,14 +245,26 @@ export class FlowCortexComponent implements OnInit {
 
   // ── Work view: everything the graph knows, as plain lists ─────────────────────
 
-  /** 'map' = the picture; 'work' = gaps, hand-offs, Welly items and the change feed laid out in full. */
-  view = signal<'map' | 'work'>('map');
+  /** 'brain' = Welly at the centre in 3D; 'map' = the flat picture; 'work' = gaps, hand-offs, Welly items and the change feed as lists. */
+  view = signal<'brain' | 'map' | 'work'>((localStorage.getItem('cortex.view') as any) || 'brain');
   changes = signal<any[]>([]);
   changesBusy = signal(false);
-  setView(v: 'map' | 'work') {
-    this.view.set(v);
+  setView(v: 'brain' | 'map' | 'work') {
+    this.view.set(v); if (v !== 'work') localStorage.setItem('cortex.view', v);
     if (v === 'work' && !this.changes().length) this.loadChanges();
   }
+
+  // ── Brain view: what the 3D scene is fed ──────────────────────────────────
+
+  brainNodes = computed<BrainNode[]>(() => this.allNodes().map(n => {
+    const d = n.layer === 'dept' ? this.deptNodes().find(x => x.key === n.key) : null;
+    return { ...n, people: d?.people.length, mapped: d ? d.people.filter(p => p.flows.length).length : undefined, flows: this.flowsOf(n.key).length, runs: this.activeRuns(n.key), gaps: this.apiGapsOf(n.key).length + this.gapsOf(n.key).filter(g => !this.gapCovered(g)).length };
+  }));
+  brainEdges = computed<BrainEdge[]>(() => this.edges().map(e => ({ from: e.from, to: e.to, label: e.label, how: e.how })));
+  brainStream = computed<string[] | null>(() => this.streamPath()?.order ?? null);
+  /** Selection from the 3D scene: same inspector as the flat map. */
+  brainSelect(k: string | null) { this.selected.set(k); }
+  brainDive(k: string) { this.selected.set(k); if (k.startsWith('d:')) this.zoom.set(3); }
   loadChanges() {
     this.changesBusy.set(true);
     this.api.cortexChanges({ take: 60 }).subscribe({ next: c => { this.changes.set(c ?? []); this.changesBusy.set(false); }, error: () => this.changesBusy.set(false) });
@@ -341,8 +354,8 @@ export class FlowCortexComponent implements OnInit {
   /** Jump from the Work view to the node on the map. Accepts a server key or a map key. */
   showOnMap(key: string | null | undefined) {
     const k = key && this.byKey().has(key) ? key : this.mapKeyFor(key ?? null);
-    this.view.set('map');
-    if (k) { this.selected.set(k); if (k.startsWith('d:') && this.zoom() === 1) this.setZoom(2); setTimeout(() => this.focusNode(k, 1.8), 30); }
+    if (this.view() === 'work') this.view.set(localStorage.getItem('cortex.view') === 'map' ? 'map' : 'brain');
+    if (k) { this.selected.set(k); if (this.view() === 'map') { if (k.startsWith('d:') && this.zoom() === 1) this.setZoom(2); setTimeout(() => this.focusNode(k, 1.8), 30); } }
   }
   blankLimit = signal(40);
   apiByKeyPublic = computed(() => this.apiByKey());

@@ -241,6 +241,8 @@ svg .person { cursor: pointer; outline: 0;
 
 /* ── map + panel ── */
 .cx-main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; position: relative; z-index: 1; }
+.cx-brain { cursor: default; padding: 0; overflow: hidden; border-color: rgba(245, 185, 66, .25); box-shadow: 0 0 60px -20px rgba(245, 185, 66, .35) inset;
+  .cx-legend { padding: 8px 12px 6px; } }
 @media (max-width: 1200px) { .cx-main { grid-template-columns: minmax(0, 1fr); } }
 .cx-map { position: relative; border-radius: 14px; border: 1px solid var(--cx-line); background: rgba(5, 10, 25, .55); padding: 6px; min-width: 0;
   svg { display: block; width: 100%; height: auto; max-height: 76vh; } }
@@ -292,6 +294,8 @@ svg .person { cursor: pointer; outline: 0;
     &.hex { border-color: #a78bfa; border-radius: 3px; transform: rotate(45deg) scale(.85); }
     &.sq { border-color: #94a3b8; border-radius: 3px; }
     &.live { border-color: #34d399; color: #6ee7b7; }
+    &.welly { border-color: #f5b942; background: radial-gradient(circle, #ffe7b0 0%, #f5b942 55%, transparent 70%); box-shadow: 0 0 8px rgba(245,185,66,.8); }
+    &.dust { border: 0; background: radial-gradient(circle, #dbe4ff 0 2px, transparent 2.5px) 2px 2px / 6px 6px; width: 16px; }
     &.gap { border-color: #fb923c; color: #fb923c; }
     &.warn { border-color: #fb923c; color: #fdba74; } }
   .ln { display: inline-block; width: 22px; height: 0; border-top: 2px solid #22d3ee;
