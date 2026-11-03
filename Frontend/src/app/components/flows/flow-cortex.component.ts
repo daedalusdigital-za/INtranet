@@ -175,7 +175,7 @@ export class FlowCortexComponent implements OnInit {
   openEditor(n: CortexApiNode, mode: 'write' | 'reject' | 'owner' = 'write') { this.editing.set({ node: n, mode, text: mode === 'write' ? (n.summary ?? '') : '', owner: n.ownerUserId, months: 6, busy: false }); }
   closeEditor() { this.editing.set(null); }
   patchEditor(p: Partial<{ text: string; owner: number | null; months: number }>) { const ed = this.editing(); if (ed) this.editing.set({ ...ed, ...p }); }
-  private done(msg: string) { this.snack.open(msg, undefined, { duration: 2500 }); this.closeEditor(); this.loadGraph(); }
+  private done(msg: string) { this.snack.open(msg, undefined, { duration: 2500 }); this.closeEditor(); this.loadGraph(); if (this.view() === 'work') this.loadChanges(); }
   private fail(e: any, fallback: string) { const ed = this.editing(); if (ed) this.editing.set({ ...ed, busy: false }); this.snack.open(e?.error?.message ?? fallback, 'OK', { duration: 4000 }); }
   saveEditor() {
     const ed = this.editing(); if (!ed || ed.busy) return;
@@ -236,6 +236,68 @@ export class FlowCortexComponent implements OnInit {
 
   /** Welly inferences waiting for a decision, newest evidence first. */
   pendingInferences = computed(() => (this.graph()?.nodes ?? []).filter(n => n.provenance === 'inferred' && n.status === 'pending' && n.type !== 'suggestion').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+
+  // ── Work view: everything the graph knows, as plain lists ─────────────────────
+
+  /** 'map' = the picture; 'work' = gaps, hand-offs, Welly items and the change feed laid out in full. */
+  view = signal<'map' | 'work'>('map');
+  changes = signal<any[]>([]);
+  changesBusy = signal(false);
+  setView(v: 'map' | 'work') {
+    this.view.set(v);
+    if (v === 'work' && !this.changes().length) this.loadChanges();
+  }
+  loadChanges() {
+    this.changesBusy.set(true);
+    this.api.cortexChanges({ take: 60 }).subscribe({ next: c => { this.changes.set(c ?? []); this.changesBusy.set(false); }, error: () => this.changesBusy.set(false) });
+  }
+  readonly gapKinds: Record<string, { label: string; icon: string; blurb: string }> = {
+    not_built:   { label: 'Hand-off not built',        icon: 'link_off',      blurb: 'Two modules pass work between them, but no code carries it. Someone re-types it.' },
+    no_owner:    { label: 'Nobody owns it',            icon: 'person_off',    blurb: 'A module, process or department with no accountable person.' },
+    uncaptured:  { label: 'Work not captured',         icon: 'visibility_off',blurb: 'A team exists but none of its work is on the map.' },
+    data_quality:{ label: 'Data needs cleaning',       icon: 'cleaning_services', blurb: 'Duplicates or broken records that make the map lie.' },
+    no_events:   { label: 'Process never ran',         icon: 'play_disabled', blurb: 'Enabled in Flows, but nothing has ever passed through it. Real, or clutter?' },
+    overdue:     { label: 'Review overdue',            icon: 'history',       blurb: 'Written knowledge past its review date.' },
+  };
+  gapGroups = computed(() => {
+    const by = new Map<string, CortexApiGap[]>();
+    for (const g of this.apiGaps()) { const k = g.kind || 'other'; if (!by.has(k)) by.set(k, []); by.get(k)!.push(g); }
+    const order = ['not_built', 'data_quality', 'no_owner', 'uncaptured', 'overdue', 'no_events'];
+    return [...by.entries()].sort((a, b) => (order.indexOf(a[0]) + 99) % 99 - (order.indexOf(b[0]) + 99) % 99)
+      .map(([kind, gaps]) => ({ kind, meta: this.gapKinds[kind] ?? { label: kind, icon: 'build_circle', blurb: '' }, gaps: gaps.sort((x, y) => x.priority - y.priority || x.label.localeCompare(y.label)) }));
+  });
+  /** Every module-to-module hand-off the server graph knows, with how it is carried. */
+  handoffRows = computed(() => {
+    const g = this.graph(); if (!g) return [];
+    const byKey = this.apiByKey();
+    return g.edges.filter(e => e.relation === 'handoff' || e.relation.startsWith('handoff#'))
+      .map(e => ({ e, from: byKey.get(e.from), to: byKey.get(e.to), how: e.handoff ?? 'manual' }))
+      .filter(r => r.from && r.to)
+      .sort((a, b) => ['gap', 'manual', 'read', 'automatic'].indexOf(a.how) - ['gap', 'manual', 'read', 'automatic'].indexOf(b.how) || a.from!.label.localeCompare(b.from!.label));
+  });
+  handoffCounts = computed(() => this.graph()?.counts.handoffs ?? {});
+  hoCount(k: string): number { return (this.handoffCounts() as Record<string, number | undefined>)[k] ?? 0; }
+  /** Applied Welly fixes, newest first. */
+  appliedFixes = computed(() => (this.graph()?.nodes ?? []).filter(n => n.type === 'suggestion' && n.status === 'applied').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+  /** Blank knowledge slots grouped by what they are attached to, department heads first. */
+  blankSlots = computed(() => {
+    const nodes = this.graph()?.nodes ?? []; const byKey = this.apiByKey();
+    const rows = nodes.filter(n => n.empty && n.provenance === 'curated').map(n => ({ n, on: n.parent ? byKey.get(n.parent) : undefined }));
+    const rank = (t?: string) => t === 'department' ? 0 : t === 'role' ? 1 : t === 'process' ? 2 : t === 'module' ? 3 : 4;
+    return rows.sort((a, b) => rank(a.on?.type) - rank(b.on?.type) || (a.on?.label ?? '').localeCompare(b.on?.label ?? ''));
+  });
+  changeKindLabel(k: string) {
+    return ({ create: 'added', update: 'updated', deactivate: 'retired', reactivate: 'back', curate: 'written', accept: 'confirmed', reject: 'rejected', rebuild: 'rebuilt', reminded: 'reminder sent', tasked: 'to-do raised', applied: 'Welly fixed', fixed: 'fix applied', measured: 'measured after' } as Record<string, string>)[k] ?? k;
+  }
+  /** Jump from the Work view to the node on the map. Accepts a server key or a map key. */
+  showOnMap(key: string | null | undefined) {
+    const k = key && this.byKey().has(key) ? key : this.mapKeyFor(key ?? null);
+    this.view.set('map');
+    if (k) { this.selected.set(k); if (k.startsWith('d:') && this.zoom() === 1) this.setZoom(2); }
+  }
+  blankLimit = signal(40);
+  apiByKeyPublic = computed(() => this.apiByKey());
+  howLabelAny(h: string) { return h === 'automatic' || h === 'code' ? 'Automatic' : h === 'manual' ? 'Someone acts' : h === 'read' ? 'Read only' : h === 'gap' ? 'Not built' : h; }
   /** Measured wait on the hand-off into a step (from FlowTasks), if any. */
   stepEdgesOf(key: string) {
     const k = this.apiKey(key); if (!k) return [];

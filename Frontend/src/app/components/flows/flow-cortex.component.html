@@ -70,13 +70,146 @@
       </button>
     }
     <span class="spacer"></span>
+    <div class="cx-zoom cx-view" role="radiogroup" aria-label="View">
+      <button [class.on]="view() === 'map'" (click)="setView('map')" role="radio" [attr.aria-checked]="view() === 'map'" matTooltip="The picture: modules, departments, people"><mat-icon>hub</mat-icon>Map</button>
+      <button [class.on]="view() === 'work'" (click)="setView('work')" role="radio" [attr.aria-checked]="view() === 'work'" matTooltip="Everything the graph found, as lists: gaps, hand-offs, Welly, what changed"><mat-icon>checklist</mat-icon>Work@if (apiGaps().length) { <em>{{ apiGaps().length }}</em> }</button>
+    </div>
+    @if (view() === 'map') {
     <div class="cx-zoom" role="radiogroup" aria-label="Zoom level">
       @for (z of zoomLevels; track z.z) {
         <button [class.on]="zoom() === z.z" (click)="setZoom(z.z)" [matTooltip]="z.tip" role="radio" [attr.aria-checked]="zoom() === z.z"><mat-icon>{{ z.icon }}</mat-icon>{{ z.label }}</button>
       }
     </div>
     <button class="cx-layer" [class.off]="hidden().has('source')" (click)="toggleLayer('source')"><mat-icon>{{ hidden().has('source') ? 'visibility_off' : 'visibility' }}</mat-icon>Sources</button>
+    }
   </div>
+
+  @if (view() === 'work') {
+  <!-- ═════ Work view: what the graph knows, in full ═════ -->
+  <section class="cx-work">
+    @if (!graph()) {
+      <p class="cx-muted">{{ graphBusy() ? 'Loading the knowledge graph…' : (graphError() ?? 'No graph yet. Press Rebuild.') }}</p>
+    } @else {
+    <div class="cx-work-col">
+      <!-- Gaps -->
+      <div class="cx-card">
+        <div class="cx-card-head"><mat-icon>build_circle</mat-icon><h3>Gaps<small>{{ apiGaps().length }} open · the to-do list for how the company runs</small></h3></div>
+        @for (grp of gapGroups(); track grp.kind) {
+          <details class="cx-grp" [open]="grp.kind !== 'no_events'">
+            <summary><mat-icon>{{ grp.meta.icon }}</mat-icon><b>{{ grp.meta.label }}</b><em>{{ grp.gaps.length }}</em><small>{{ grp.meta.blurb }}</small></summary>
+            <ul>
+              @for (g of grp.gaps; track g.key) {
+                <li [class.p1]="g.priority <= 1">
+                  <div class="t"><b>{{ g.label }}</b>@if (g.detail) { <p>{{ g.detail }}</p> }</div>
+                  <div class="m">
+                    @if (g.onLabel) { <button class="lnk" (click)="showOnMap(g.on)"><mat-icon>my_location</mat-icon>{{ g.onLabel }}</button> }
+                    <span [class.warn]="g.unowned">{{ g.owner ?? 'no owner' }}</span>
+                  </div>
+                </li>
+              }
+            </ul>
+          </details>
+        } @empty { <p class="cx-muted">No open gaps. That is rare — press Rebuild to be sure.</p> }
+      </div>
+
+      <!-- Hand-offs -->
+      <div class="cx-card">
+        <div class="cx-card-head"><mat-icon>swap_calls</mat-icon><h3>Hand-offs between modules<small>
+          {{ hoCount('automatic') }} automatic · {{ hoCount('manual') }} someone acts · {{ hoCount('read') }} read · {{ hoCount('gap') }} not built</small></h3></div>
+        <ul class="cx-ho-list">
+          @for (r of handoffRows(); track r.e.id) {
+            <li [attr.data-h]="r.how">
+              <span class="how">{{ howLabelAny(r.how) }}</span>
+              <button class="lnk" (click)="showOnMap(r.from!.key)">{{ r.from!.short ?? r.from!.label }}</button>
+              <mat-icon class="arr">arrow_forward</mat-icon>
+              <button class="lnk" (click)="showOnMap(r.to!.key)">{{ r.to!.short ?? r.to!.label }}</button>
+              <p>{{ r.e.label }}</p>
+              @if (r.e.codeRef) { <code>{{ r.e.codeRef }}</code> }
+              @if (r.e.dwellMedianHours != null) { <small matTooltip="Median wait at the receiving step, last 180 days">{{ hrs(r.e.dwellMedianHours) }} wait</small> }
+            </li>
+          }
+        </ul>
+      </div>
+    </div>
+
+    <div class="cx-work-col">
+      <!-- Welly -->
+      <div class="cx-card">
+        <div class="cx-card-head"><mat-icon>auto_awesome</mat-icon><h3>Welly<small>{{ pendingInferences().length }} to confirm · {{ appliedFixes().length }} fixed</small></h3></div>
+        @if (pendingInferences().length) {
+          <div class="cx-attached">
+            @for (a of pendingInferences(); track a.key) {
+              <div class="att" data-p="inferred">
+                <div class="h"><mat-icon>{{ a.type === 'finding' ? 'search_insights' : 'auto_awesome' }}</mat-icon><b>{{ a.label }}</b></div>
+                @if (a.summary) { <p>{{ a.summary }}</p> }
+                @if (fixFor(a); as fx) { <p class="fix"><mat-icon>lightbulb</mat-icon>{{ fx.label }}</p> }
+                <div class="meta">
+                  @if (inferenceTarget(a); as t) { <button class="ghost" (click)="showOnMap(t)">Show</button> }
+                  <button (click)="reviewAccept(a)">Confirm</button><button (click)="reviewReject(a)">Reject</button>
+                  @if (fixFor(a); as fx) { @if (canApply(fx)) { <button class="go" (click)="applyFix(fx)" [disabled]="applyBusy() === fx.key">Let Welly fix it</button> } }
+                </div>
+              </div>
+            }
+          </div>
+          @if (editing(); as ed) {
+            <div class="cx-editor" [attr.data-m]="ed.mode">
+              <div class="h"><mat-icon>{{ ed.mode === 'owner' ? 'person_add' : 'thumb_down' }}</mat-icon><b>{{ ed.mode === 'owner' ? 'Who owns this process?' : 'Why is this wrong?' }}</b><button class="x" (click)="closeEditor()" aria-label="Close"><mat-icon>close</mat-icon></button></div>
+              <small class="cx-muted">{{ ed.node.label }}</small>
+              @if (ed.mode === 'owner') {
+                <div class="row"><label>Owner<select [ngModel]="ed.owner" (ngModelChange)="patchEditor({ owner: $event })"><option [ngValue]="null">Pick a person…</option>@for (u of catalog()?.users ?? []; track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></label></div>
+              } @else {
+                <textarea rows="3" [ngModel]="ed.text" (ngModelChange)="patchEditor({ text: $event })" placeholder="Welly keeps the reason and will not suggest this again."></textarea>
+              }
+              <div class="act"><button class="ghost" (click)="closeEditor()">Cancel</button><button class="go" (click)="saveEditor()" [disabled]="ed.busy || (ed.mode === 'reject' && !ed.text.trim()) || (ed.mode === 'owner' && !ed.owner)">{{ ed.mode === 'owner' ? 'Apply' : 'Reject' }}</button></div>
+            </div>
+          }
+        } @else {
+          <p class="cx-muted">Nothing to confirm. Welly watches task history: slow steps (median wait over 16 h), one person clearing every task at a pool step, and processes that run without an owner. Findings appear here as real work passes through Flows.</p>
+        }
+        @if (appliedFixes().length) {
+          <h4><mat-icon>task_alt</mat-icon>Fixed by Welly<small>before → after, measured 14 days later</small></h4>
+          <div class="cx-attached">
+            @for (fx of appliedFixes(); track fx.key) {
+              <div class="att" data-p="curated">
+                <div class="h"><mat-icon>lightbulb</mat-icon><b>{{ fx.label }}</b><span class="tag">Applied</span></div>
+                @if (fixVerdict(fx); as v) { <p class="cx-muted fix-result"><mat-icon>monitoring</mat-icon>{{ v }}</p> }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Blank knowledge -->
+      <div class="cx-card">
+        <div class="cx-card-head"><mat-icon>post_add</mat-icon><h3>Still blank<small>{{ blankSlots().length }} slots nobody has written · shown, not hidden</small></h3></div>
+        <ul class="cx-blank">
+          @for (b of blankSlots().slice(0, blankLimit()); track b.n.key) {
+            <li><button class="lnk" (click)="showOnMap(b.on?.key)"><mat-icon>{{ b.n.icon ?? 'notes' }}</mat-icon><b>{{ b.on?.label ?? '—' }}</b><small>{{ b.n.label }}</small></button></li>
+          }
+        </ul>
+        @if (blankSlots().length > blankLimit()) { <button class="cx-k-btn" (click)="blankLimit.set(blankLimit() + 40)">Show {{ blankSlots().length - blankLimit() }} more</button> }
+      </div>
+
+      <!-- Changes -->
+      <div class="cx-card">
+        <div class="cx-card-head"><mat-icon>history</mat-icon><h3>What changed<small>the graph's own log · rebuilds, writes, decisions, fixes, reminders</small></h3><span class="spacer"></span><button class="cx-k-btn" (click)="loadChanges()" [disabled]="changesBusy()"><mat-icon>refresh</mat-icon></button></div>
+        <ul class="cx-feed">
+          @for (c of changes(); track c.id) {
+            <li [attr.data-k]="c.kind">
+              <time>{{ c.occurredAt | date:'d MMM HH:mm' }}</time>
+              <span class="k">{{ changeKindLabel(c.kind) }}</span>
+              <b>{{ apiByKeyPublic().get(c.targetKey)?.label ?? c.targetKey }}</b>
+              @if (c.field && c.kind === 'update') { <small>{{ c.field }}</small> }
+              @if (c.kind === 'rebuild' && c.newValue) { <small>{{ c.newValue }}</small> }
+              <em>{{ c.userName ?? c.changedBy }}</em>
+            </li>
+          } @empty { <li class="cx-muted">{{ changesBusy() ? 'Loading…' : 'No changes logged yet.' }}</li> }
+        </ul>
+      </div>
+    </div>
+    }
+  </section>
+  } @else {
 
   <div class="cx-main">
     <!-- ═════ The map ═════ -->
@@ -449,6 +582,7 @@
       }
     </aside>
   </div>
+  }
 
   <!-- ═════ Followed process, step by step ═════ -->
   @if (activeStream(); as s) {
