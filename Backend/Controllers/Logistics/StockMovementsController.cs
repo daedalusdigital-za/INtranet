@@ -380,6 +380,35 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(new { updated, commodityId = commodity.Id, code = commodity.Code, name = commodity.Name });
         }
 
+        // ═══ POST: auto-link a load's unlinked lines (stored code → invoice code → description), creating stock
+        //     items for invoice codes that have none. Called when the Approve Dispatch dialog opens. ═══
+        [HttpPost("loads/{loadId:int}/relink-lines")]
+        public async Task<ActionResult<object>> RelinkLoadLines(int loadId)
+        {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+            if (!await _context.Loads.AnyAsync(l => l.Id == loadId)) return NotFound(new { message = "Load not found" });
+
+            var r = await StopLineLinker.LinkAsync(_context, loadId);
+            if (r.LinesLinked > 0 || r.CommoditiesCreated > 0)
+                _logger.LogInformation("Relinked load {LoadId}: {Linked}/{Considered} lines linked, {Created} stock items created by {User}",
+                    loadId, r.LinesLinked, r.LinesConsidered, r.CommoditiesCreated, CurrentUserName);
+            return Ok(new { loadId, r.CommoditiesCreated, r.LinesConsidered, r.LinesLinked, r.StillUnlinked });
+        }
+
+        // ═══ POST: make every invoiced product code a stock item, then link all unlinked lines everywhere ═══
+        [HttpPost("loads/relink-all")]
+        public async Task<ActionResult<object>> RelinkAllLines()
+        {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+            var created = await StopLineLinker.EnsureCommoditiesForInvoiceCodesAsync(_context);
+            var r = await StopLineLinker.LinkAsync(_context, null, createMissingCommodities: false);
+            _logger.LogInformation("Relink-all by {User}: {Created} stock items created, {Linked}/{Considered} lines linked",
+                CurrentUserName, created, r.LinesLinked, r.LinesConsidered);
+            return Ok(new { commoditiesCreated = created, r.LinesConsidered, r.LinesLinked, r.StillUnlinked });
+        }
+
         // ═══ POST: one-off repair of loads created before stock lines were linked automatically ═══
         // 1) Loads made from sales invoices that got no stock lines at all get one line per invoice.
         // 2) Unlinked lines are linked by product code, taken from the line's invoice (when that settles
@@ -419,6 +448,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     {
                         LoadStopId = stop.Id,
                         CommodityId = commodityId,
+                        ProductCode = inv.ProductCode,
                         Quantity = inv.Quantity,
                         UnitPrice = inv.SalesAmount / (inv.Quantity != 0 ? inv.Quantity : 1),
                         TotalPrice = inv.NetSales,

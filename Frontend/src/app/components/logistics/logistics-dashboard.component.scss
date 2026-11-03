@@ -1493,6 +1493,23 @@
       background: var(--color-cat-amber-soft);
       color: var(--color-cat-amber);
       font-weight: 700;
+
+      &.clickable { cursor: pointer; }
+      &.clickable:hover { filter: brightness(1.1); }
+      &.unset {
+        background: var(--color-surface-3);
+        color: var(--color-text-muted);
+        border: 1px dashed var(--color-border);
+      }
+    }
+
+    .date-range-field { min-width: 240px; }
+    .maint-quick-range {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      button { min-width: 0; padding: 0 10px; line-height: 30px; }
     }
 
     .fleet-toolbar {

@@ -182,6 +182,9 @@ export class LogisticsDashboardComponent implements OnInit, OnDestroy {
   maintenanceStatusFilter = 'all';
   maintenanceTypeFilter = 'all';
   maintenanceAssignedToFilter = 'all';
+  /** Date window for the maintenance list (defaults to the last 7 months; set either end to widen or narrow). */
+  maintenanceFromDate: Date | null = (() => { const d = new Date(); d.setMonth(d.getMonth() - 7); d.setHours(0, 0, 0, 0); return d; })();
+  maintenanceToDate: Date | null = null;
   maintenanceColumns = ['vehicleReg', 'maintenanceType', 'description', 'scheduledDate', 'cost', 'priority', 'status', 'assignedTo', 'files', 'actions'];
 
   // Maintenance attachments
@@ -871,8 +874,23 @@ export class LogisticsDashboardComponent implements OnInit, OnDestroy {
   }
 
   // Maintenance Methods
+  private maintenanceDateParams(): string[] {
+    const p: string[] = [];
+    if (this.maintenanceFromDate) p.push(`from=${encodeURIComponent(this.toIsoDate(this.maintenanceFromDate))}`);
+    if (this.maintenanceToDate) p.push(`to=${encodeURIComponent(this.toIsoDate(this.maintenanceToDate))}`);
+    return p;
+  }
+  private toIsoDate(d: Date): string { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); }
+  /** Quick ranges for the maintenance window. */
+  setMaintenanceRange(months: number | null): void {
+    if (months == null) { this.maintenanceFromDate = null; this.maintenanceToDate = null; }
+    else { const d = new Date(); d.setMonth(d.getMonth() - months); d.setHours(0, 0, 0, 0); this.maintenanceFromDate = d; this.maintenanceToDate = null; }
+    this.loadMaintenanceRecords();
+  }
+
   loadMaintenanceRecords(): void {
-    this.http.get<any[]>(`${this.apiUrl}/logistics/maintenance`).subscribe({
+    const qp = this.maintenanceDateParams();
+    this.http.get<any[]>(`${this.apiUrl}/logistics/maintenance${qp.length ? '?' + qp.join('&') : ''}`).subscribe({
       next: (records) => {
         // Map API field names to our interface and normalize status
         const mapped = records.map(r => ({
@@ -927,7 +945,7 @@ export class LogisticsDashboardComponent implements OnInit, OnDestroy {
   }
 
   private downloadMaintenanceExcel(scope: 'all' | 'filtered'): void {
-    const params: string[] = [];
+    const params: string[] = [...this.maintenanceDateParams()];
 
     if (scope === 'filtered') {
       // Map the UI status filter to the backend status vocabulary where sensible.
@@ -1415,6 +1433,7 @@ Notes: ${record.notes || 'No notes'}
     this.maintenanceStatusFilter = 'all';
     this.maintenanceTypeFilter = 'all';
     this.maintenanceAssignedToFilter = 'all';
+    this.setMaintenanceRange(7);
     this.filterChanged();
   }
 
@@ -1608,6 +1627,8 @@ Notes: ${record.notes || 'No notes'}
           vinNumber: v.vinNumber,
           currentOdometer: v.currentOdometer,
           status: v.status,
+          province: v.province,
+          tankSizeRaw: v.tankSize,
           currentDriver: v.currentDriverName || '',
           currentDriverId: v.currentDriverId,
           currentDriverName: v.currentDriverName,
@@ -2106,13 +2127,13 @@ Notes: ${record.notes || 'No notes'}
       if (result?.province) {
         this.http.put(`${this.apiUrl}/fleet/vehicles/${vehicle.id}/province`, { province: result.province })
           .subscribe({
-            next: () => {
-              this.toast.done(`Province updated to ${result.province}`);
+            next: (r: any) => {
+              this.toast.done(`${vehicle.registrationNumber} now in ${this.getProvinceAbbreviation(r?.province || result.province)}`);
               this.loadVehiclesFromDatabase();
             },
             error: (err) => {
               console.error('Error updating province:', err);
-              this.toast.error('Failed to update province');
+              this.toast.error(err?.error?.message || 'Failed to update province');
             }
           });
       }
@@ -2124,9 +2145,24 @@ Notes: ${record.notes || 'No notes'}
       'Gauteng': 'GP',
       'KwaZulu-Natal': 'KZN',
       'Western Cape': 'CPT',
-      'Eastern Cape': 'EC'
+      'Eastern Cape': 'PE'
     };
     return abbreviations[province] || province;
+  }
+
+  /** Remove a vehicle from the fleet. Vehicles with history are marked Sold and hidden; others are deleted. */
+  async deleteVehicle(vehicle: Vehicle): Promise<void> {
+    const ok = await this.confirmDialog.ask({
+      title: `Remove ${vehicle.registrationNumber} from the fleet?`,
+      message: 'If this vehicle has trips, fuel or maintenance on record it is marked Sold and kept for history; otherwise it is deleted. Either way it disappears from the fleet, maps and reports.',
+      confirmText: 'Remove vehicle',
+      danger: true
+    });
+    if (!ok) return;
+    this.http.delete<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}`).subscribe({
+      next: (r) => { this.toast.done(r?.message || `${vehicle.registrationNumber} removed`); this.loadVehiclesFromDatabase(); },
+      error: (err) => { console.error('Error removing vehicle:', err); this.toast.error(err?.error?.message || 'Could not remove the vehicle'); }
+    });
   }
 
   linkCarTrack(vehicle: Vehicle): void {
@@ -2197,22 +2233,6 @@ Notes: ${record.notes || 'No notes'}
       panelClass: 'today-history-dialog-panel',
       data: { vehicle, apiUrl: environment.apiUrl }
     });
-  }
-
-  async deleteVehicle(vehicle: Vehicle): Promise<void> {
-    if (await this.confirmDialog.ask({
-      title: `Delete vehicle ${vehicle.registrationNumber}?`,
-      message: 'The vehicle will be removed from the fleet. This can\'t be undone.',
-      confirmText: 'Delete vehicle',
-      danger: true
-    })) {
-      this.http.delete<any>(`${this.apiUrl}/fleet/vehicles/${vehicle.id}`).subscribe({
-        next: () => {
-          this.loadVehiclesFromDatabase();
-        },
-        error: (err) => console.error('Error deleting vehicle:', err)
-      });
-    }
   }
 
   openVehicleDialog(vehicle?: Vehicle, mode: 'view' | 'edit' | 'add' = 'add'): void {

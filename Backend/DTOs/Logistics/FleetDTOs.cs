@@ -83,6 +83,18 @@ namespace ProjectTracker.API.DTOs.Logistics
         public decimal? CurrentOdometer { get; set; }
         public DateTime? LastServiceDate { get; set; }
         public decimal? NextServiceOdometer { get; set; }
+        /// <summary>Warehouse province: Gauteng / KwaZulu-Natal / Western Cape / Eastern Cape (GP / KZN / CPT / PE also accepted).</summary>
+        public string? Province { get; set; }
+        public decimal? TankSize { get; set; }
+        public string? FuelType { get; set; }
+        /// <summary>True = take the current driver off this vehicle (null CurrentDriverId alone cannot express that).</summary>
+        public bool? ClearDriver { get; set; }
+    }
+
+    public class AssignDriverDto
+    {
+        /// <summary>Null = unassign.</summary>
+        public int? DriverId { get; set; }
     }
 
     public class UpdateProvinceDto

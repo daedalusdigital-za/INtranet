@@ -355,8 +355,12 @@
                           <!-- Integration badges -->
                           <div class="integration-badges">
                             @if (vehicle.province) {
-                              <span class="badge province-badge" [matTooltip]="'Province: ' + vehicle.province">
+                              <span class="badge province-badge clickable" [matTooltip]="'Branch: ' + vehicle.province + ' — click to move'" (click)="reassignProvince(vehicle); $event.stopPropagation()">
                                 <mat-icon>place</mat-icon> {{ getProvinceAbbreviation(vehicle.province) }}
+                              </span>
+                            } @else {
+                              <span class="badge province-badge unset clickable" matTooltip="No branch set — click to choose GP / KZN / CPT / PE" (click)="reassignProvince(vehicle); $event.stopPropagation()">
+                                <mat-icon>place</mat-icon> ?
                               </span>
                             }
                             @if (vehicle.carTrackId || vehicle.isLinkedToCarTrack) {
@@ -390,7 +394,7 @@
                             </button>
                             <button mat-menu-item class="modern-menu-item" (click)="reassignProvince(vehicle)">
                               <mat-icon class="menu-icon-purple">place</mat-icon>
-                              <span>Reassign Province</span>
+                              <span>Move to branch (GP / KZN / CPT / PE)</span>
                             </button>
                             <div class="menu-divider"></div>
                             <div class="menu-section-header">Integrations</div>
@@ -437,7 +441,7 @@
                             <div class="menu-divider"></div>
                             <button mat-menu-item class="modern-menu-item delete-action" (click)="deleteVehicle(vehicle)">
                               <mat-icon class="menu-icon-red">delete</mat-icon>
-                              <span>Delete Vehicle</span>
+                              <span>Remove vehicle (sold / scrapped)</span>
                             </button>
                           </mat-menu>
                         </mat-card-header>
@@ -617,6 +621,22 @@
                         }
                       </mat-select>
                     </mat-form-field>
+                    <mat-form-field appearance="outline" class="filter-field date-range-field">
+                      <mat-label>Date range</mat-label>
+                      <mat-date-range-input [rangePicker]="mPicker">
+                        <input matStartDate [(ngModel)]="maintenanceFromDate" placeholder="From" (dateChange)="loadMaintenanceRecords()">
+                        <input matEndDate [(ngModel)]="maintenanceToDate" placeholder="To" (dateChange)="loadMaintenanceRecords()">
+                      </mat-date-range-input>
+                      <mat-datepicker-toggle matIconSuffix [for]="mPicker"></mat-datepicker-toggle>
+                      <mat-date-range-picker #mPicker></mat-date-range-picker>
+                      <mat-hint>Default: last 7 months</mat-hint>
+                    </mat-form-field>
+                    <div class="maint-quick-range">
+                      <button mat-stroked-button (click)="setMaintenanceRange(1)">1 m</button>
+                      <button mat-stroked-button (click)="setMaintenanceRange(3)">3 m</button>
+                      <button mat-stroked-button (click)="setMaintenanceRange(7)">7 m</button>
+                      <button mat-stroked-button (click)="setMaintenanceRange(null)">All time</button>
+                    </div>
                   </div>
                   <div class="maintenance-actions">
                     <button mat-raised-button color="primary" (click)="openAddMaintenanceDialog()">

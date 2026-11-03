@@ -25,6 +25,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         public async Task<ActionResult<IEnumerable<DriverDto>>> GetDrivers()
         {
             var drivers = await _context.Drivers
+                .Where(d => d.Status != "Deleted")
                 .Select(d => new DriverDto
                 {
                     Id = d.Id,
@@ -151,6 +152,10 @@ namespace ProjectTracker.API.Controllers.Logistics
             return NoContent();
         }
 
+        /// <summary>
+        /// Remove a driver. Taken off any vehicle first. If they have trips on record they are retired
+        /// (status "Deleted", hidden everywhere) so history keeps its names; otherwise the row is deleted.
+        /// </summary>
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteDriver(int id)
         {
@@ -158,9 +163,19 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (driver == null)
                 return NotFound();
 
+            var vehicles = await _context.Vehicles.Where(v => v.CurrentDriverId == id).ToListAsync();
+            foreach (var v in vehicles) { v.CurrentDriverId = null; v.UpdatedAt = DateTime.UtcNow; }
+            var hasHistory = await _context.Loads.AnyAsync(l => l.DriverId == id);
+            if (hasHistory)
+            {
+                driver.Status = "Deleted"; driver.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Driver {Id} {Name} retired (has trip history)", id, $"{driver.FirstName} {driver.LastName}");
+                return Ok(new { success = true, retired = true, message = $"{driver.FirstName} {driver.LastName} removed. Past trips stay on record." });
+            }
             _context.Drivers.Remove(driver);
             await _context.SaveChangesAsync();
-            return NoContent();
+            return Ok(new { success = true, retired = false, message = $"{driver.FirstName} {driver.LastName} deleted." });
         }
 
         /// <summary>
@@ -171,8 +186,8 @@ namespace ProjectTracker.API.Controllers.Logistics
         {
             try
             {
-                // Get all drivers
-                var drivers = await _context.Drivers.ToListAsync();
+                // Get all drivers (retired ones are hidden)
+                var drivers = await _context.Drivers.Where(d => d.Status != "Deleted").ToListAsync();
 
                 // Get statistics for all drivers from delivered loads only
                 var deliveredLoadStats = await _context.Loads

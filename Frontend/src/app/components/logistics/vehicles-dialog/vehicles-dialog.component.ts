@@ -915,7 +915,8 @@ export class VehiclesDialogComponent implements OnInit {
     if (this.editForm.model) payload.model = this.editForm.model;
     if (this.editForm.year) payload.year = this.editForm.year;
     if (this.editForm.status) payload.status = this.editForm.status;
-    payload.currentDriverId = this.editForm.currentDriverId;
+    if (this.editForm.currentDriverId) payload.currentDriverId = this.editForm.currentDriverId;
+    else payload.clearDriver = true;
 
     this.http.put(`${this.apiUrl}/fleet/vehicles/${this.editingVehicle.id}`, payload).subscribe({
       next: () => {
@@ -926,7 +927,7 @@ export class VehiclesDialogComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to update vehicle:', err);
-        this.toast.error('Failed to update vehicle');
+        this.toast.error('Failed to update vehicle: ' + (err?.error?.message || err?.message || ''));
         this.isSaving.set(false);
       }
     });
@@ -949,9 +950,9 @@ export class VehiclesDialogComponent implements OnInit {
     if (!this.assigningDriverTo) return;
 
     this.isSaving.set(true);
-    const payload = { currentDriverId: this.selectedDriverId };
+    const payload = { driverId: this.selectedDriverId };
 
-    this.http.put(`${this.apiUrl}/fleet/vehicles/${this.assigningDriverTo.id}`, payload).subscribe({
+    this.http.post(`${this.apiUrl}/fleet/vehicles/${this.assigningDriverTo.id}/assign-driver`, payload).subscribe({
       next: () => {
         const driverName = this.selectedDriverId 
           ? this.drivers().find(d => d.id === this.selectedDriverId)
@@ -966,7 +967,7 @@ export class VehiclesDialogComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to assign driver:', err);
-        this.toast.error('Failed to assign driver');
+        this.toast.error('Failed to assign driver: ' + (err?.error?.message || err?.message || ''));
         this.isSaving.set(false);
       }
     });
@@ -1021,16 +1022,16 @@ export class VehiclesDialogComponent implements OnInit {
     if (!this.deletingVehicle) return;
 
     this.isSaving.set(true);
-    this.http.delete(`${this.apiUrl}/fleet/vehicles/${this.deletingVehicle.id}`).subscribe({
-      next: () => {
-        this.toast.done(`Vehicle ${this.deletingVehicle!.registrationNumber} deleted`);
+    this.http.delete<any>(`${this.apiUrl}/fleet/vehicles/${this.deletingVehicle.id}`).subscribe({
+      next: (res) => {
+        this.toast.done(res?.message || `Vehicle ${this.deletingVehicle!.registrationNumber} removed`);
         this.cancelDelete();
         this.loadVehicles();
         this.isSaving.set(false);
       },
       error: (err) => {
         console.error('Failed to delete vehicle:', err);
-        this.toast.error('Failed to delete vehicle');
+        this.toast.error('Failed to remove vehicle: ' + (err?.error?.message || err?.message || ''));
         this.isSaving.set(false);
       }
     });

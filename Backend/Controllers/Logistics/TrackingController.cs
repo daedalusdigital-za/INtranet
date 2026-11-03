@@ -251,6 +251,171 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(activeLoads);
         }
 
+        // ═══ GET: the route a load's vehicle ACTUALLY drove, to compare against the planned trip sheet ═══
+        // Sources: (1) our own GPS breadcrumbs (VehiclePositionLogs, captured every ~90s while the load is live),
+        // (2) CarTrack trip segments (VehicleMovementHistory) — every ignition-on→off leg with start/end points,
+        // which tells us where the vehicle actually stopped. Each planned stop is checked for a visit.
+        [HttpGet("load/{loadId}/actual-route")]
+        public async Task<ActionResult<object>> GetActualRoute(int loadId, [FromQuery] double visitRadiusKm = 0.6)
+        {
+            var load = await _context.Loads.AsNoTracking()
+                .Include(l => l.Vehicle)
+                .Include(l => l.Warehouse)
+                .Include(l => l.Stops.OrderBy(s => s.StopSequence))
+                .FirstOrDefaultAsync(l => l.Id == loadId);
+            if (load == null) return NotFound(new { message = "Load not found" });
+            if (load.VehicleId == null) return Ok(new { loadId, hasData = false, message = "No vehicle assigned to this load" });
+
+            // Window (SAST days): from the earlier of creation / scheduled pickup, to the later of delivery / today.
+            var sast = TimeSpan.FromHours(2);
+            var todayLocal = DateTime.UtcNow.Add(sast).Date;
+            var createdLocal = load.CreatedAt.Add(sast).Date;
+            var pickupLocal = load.ScheduledPickupDate?.Date ?? createdLocal;
+            var startLocal = createdLocal < pickupLocal ? createdLocal : pickupLocal;
+            var endCandidate = (load.ActualDeliveryDate ?? load.ScheduledDeliveryDate ?? load.ScheduledPickupDate)?.Date ?? todayLocal;
+            var endLocal = (endCandidate > todayLocal ? todayLocal : endCandidate);
+            if (endLocal < startLocal) endLocal = startLocal;
+            endLocal = endLocal.AddDays(1);
+            var fromUtc = startLocal - sast;
+            var toUtc = endLocal - sast;
+
+            var crumbs = await _context.VehiclePositionLogs.AsNoTracking()
+                .Where(p => p.VehicleId == load.VehicleId && (p.LoadId == loadId || (p.RecordedAt >= fromUtc && p.RecordedAt < toUtc)))
+                .OrderBy(p => p.RecordedAt)
+                .Select(p => new { t = p.RecordedAt, lat = p.Latitude, lng = p.Longitude, speed = p.Speed, address = p.Address })
+                .ToListAsync();
+
+            var reg = load.Vehicle?.RegistrationNumber ?? "";
+            // Trip legs only from the scheduled pickup day (driving the day before is other work, not this load)
+            var segStart = pickupLocal > endLocal.AddDays(-1) ? endLocal : pickupLocal;
+            var days = Enumerable.Range(0, Math.Max(0, (int)(endLocal - segStart).TotalDays)).Select(i => segStart.AddDays(i)).ToList();
+            var segments = await _context.VehicleMovementHistory.AsNoTracking()
+                .Where(m => (m.VehicleId == load.VehicleId || m.RegistrationNumber == reg) && days.Contains(m.MovementDate))
+                .OrderBy(m => m.StartTimestamp)
+                .Select(m => new
+                {
+                    m.CartrackTripId,
+                    start = m.StartTimestamp, end = m.EndTimestamp,
+                    startLat = m.StartLatitude, startLng = m.StartLongitude, startLocation = m.StartLocation,
+                    endLat = m.EndLatitude, endLng = m.EndLongitude, endLocation = m.EndLocation,
+                    distanceKm = Math.Round(m.TripDistance / 1000.0, 1),
+                    durationSec = m.TripDurationSeconds, maxSpeed = m.MaxSpeed,
+                    harsh = m.HarshBrakingEvents + m.HarshCorneringEvents + m.HarshAccelerationEvents,
+                    idleSec = m.IdleTimeSeconds
+                })
+                .ToListAsync();
+            segments = segments.Where(s => !(s.startLat == 0 && s.startLng == 0)).ToList();
+
+            // Every point we know the vehicle was at, in time order
+            var actualPoints = new List<(DateTime t, double lat, double lng, string src)>();
+            foreach (var c in crumbs) actualPoints.Add((c.t, c.lat, c.lng, "gps"));
+            foreach (var s in segments)
+            {
+                if (TryParseCt(s.start, out var st)) actualPoints.Add((st, s.startLat, s.startLng, "trip-start"));
+                if (TryParseCt(s.end, out var en) && !(s.endLat == 0 && s.endLng == 0)) actualPoints.Add((en, s.endLat, s.endLng, "trip-end"));
+            }
+            actualPoints = actualPoints.OrderBy(p => p.t).ToList();
+
+            // Planned stops: were they visited?  (closest actual point within the radius)
+            var stops = load.Stops.Where(s => s.StopType != "Pickup").OrderBy(s => s.StopSequence).ToList();
+            var stopResults = new List<object>();
+            var visitedCount = 0;
+            var visitOrder = new List<(int seq, DateTime at)>();
+            foreach (var s in stops)
+            {
+                if (s.Latitude == null || s.Longitude == null)
+                {
+                    stopResults.Add(new { s.Id, s.StopSequence, name = s.CompanyName ?? s.LocationName, s.Address, s.City, s.Latitude, s.Longitude, visited = (bool?)null, reason = "Stop has no coordinates" });
+                    continue;
+                }
+                var lat = (double)s.Latitude.Value; var lng = (double)s.Longitude.Value;
+                (DateTime t, double km, string src)? best = null;
+                foreach (var p in actualPoints)
+                {
+                    var km = CalculateDistance(lat, lng, p.lat, p.lng);
+                    if (best == null || km < best.Value.km) best = (p.t, km, p.src);
+                }
+                // Dwell: how long the vehicle stayed within the radius around the closest pass
+                int? dwellMin = null;
+                if (best != null && best.Value.km <= visitRadiusKm)
+                {
+                    var near = actualPoints.Where(p => CalculateDistance(lat, lng, p.lat, p.lng) <= visitRadiusKm).Select(p => p.t).ToList();
+                    if (near.Count > 1) dwellMin = (int)Math.Round((near.Max() - near.Min()).TotalMinutes);
+                    visitOrder.Add((s.StopSequence, near.Min()));
+                    visitedCount++;
+                }
+                stopResults.Add(new
+                {
+                    s.Id, s.StopSequence, name = s.CompanyName ?? s.LocationName, s.Address, s.City, s.Latitude, s.Longitude, s.Status, s.ActualArrival,
+                    visited = best != null && best.Value.km <= visitRadiusKm,
+                    closestKm = best == null ? (double?)null : Math.Round(best.Value.km, 2),
+                    closestAt = best?.t,
+                    dwellMinutes = dwellMin,
+                    reason = best == null ? "No tracking data yet" : best.Value.km <= visitRadiusKm ? null : $"Closest pass was {best.Value.km:0.0} km away"
+                });
+            }
+
+            // Sequence check — did they visit in the planned order?
+            var actualSeq = visitOrder.OrderBy(v => v.at).Select(v => v.seq).ToList();
+            var plannedSeq = stops.Select(s => s.StopSequence).Where(seq => actualSeq.Contains(seq)).ToList();
+            var outOfOrder = !actualSeq.SequenceEqual(plannedSeq);
+
+            // Unplanned stops: trip-segment end points (vehicle switched off) that aren't near any planned stop or a depot.
+            // Depot = the warehouse pin, plus wherever the vehicle began its day (warehouse pins are approximate).
+            var depots = new List<(double lat, double lng)>();
+            if (load.Warehouse?.Latitude != null && load.Warehouse?.Longitude != null) depots.Add(((double)load.Warehouse.Latitude.Value, (double)load.Warehouse.Longitude.Value));
+            var firstSeg = segments.FirstOrDefault();
+            if (firstSeg != null) depots.Add((firstSeg.startLat, firstSeg.startLng));
+            var depotRadius = Math.Max(visitRadiusKm, 1.0);
+            var unplanned = segments
+                .Where(s => !(s.endLat == 0 && s.endLng == 0))
+                .Where(s => s.distanceKm > 0.2 || s.durationSec > 120) // ignore 30-second ignition blips at the same spot
+                .Where(s => !stops.Any(st => st.Latitude != null && CalculateDistance((double)st.Latitude!.Value, (double)st.Longitude!.Value, s.endLat, s.endLng) <= visitRadiusKm))
+                .Where(s => !depots.Any(d => CalculateDistance(d.lat, d.lng, s.endLat, s.endLng) <= depotRadius))
+                .Select(s => new { at = s.end, lat = s.endLat, lng = s.endLng, location = s.endLocation })
+                .ToList();
+
+            var actualKm = segments.Sum(s => s.distanceKm);
+            var plannedKm = load.EstimatedDistance;
+
+            return Ok(new
+            {
+                loadId, load.LoadNumber, vehicleId = load.VehicleId, registration = reg,
+                hasData = actualPoints.Count > 0,
+                window = new { fromUtc, toUtc },
+                breadcrumbs = crumbs,
+                segments,
+                stops = stopResults,
+                summary = new
+                {
+                    plannedStops = stops.Count,
+                    visitedStops = visitedCount,
+                    outOfOrder,
+                    actualSequence = actualSeq,
+                    unplannedStops = unplanned,
+                    actualDistanceKm = Math.Round(actualKm, 1),
+                    plannedDistanceKm = plannedKm,
+                    distanceVarianceKm = plannedKm == null ? (double?)null : Math.Round(actualKm - (double)plannedKm.Value, 1),
+                    harshEvents = segments.Sum(s => s.harsh),
+                    maxSpeed = segments.Count == 0 ? 0 : segments.Max(s => s.maxSpeed),
+                    idleMinutes = (int)Math.Round(segments.Sum(s => s.idleSec) / 60.0),
+                    breadcrumbCount = crumbs.Count,
+                    segmentCount = segments.Count,
+                    visitRadiusKm
+                }
+            });
+        }
+
+        /// <summary>CarTrack timestamps look like "2026-11-02 05:21:19+02".</summary>
+        private static bool TryParseCt(string? s, out DateTime utc)
+        {
+            utc = default;
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            if (DateTimeOffset.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var dto))
+            { utc = dto.UtcDateTime; return true; }
+            return false;
+        }
+
         // Haversine formula to calculate distance between two GPS coordinates
         private double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
         {

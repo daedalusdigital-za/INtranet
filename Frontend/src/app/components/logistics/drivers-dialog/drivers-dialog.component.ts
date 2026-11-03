@@ -14,6 +14,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { ConfirmService } from '../../../ui/confirm.service';
+import { ToastService } from '../../../ui/toast.service';
 import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
 import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
 import { StatusChipComponent, ChipTone } from '../../../ui/status-chip/status-chip.component';
@@ -793,6 +794,7 @@ export class DriversDialogComponent implements OnInit {
   private fb = inject(FormBuilder);
   private dialogRef = inject(MatDialogRef<DriversDialogComponent>);
   private readonly confirmDialog = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
 
   drivers: Driver[] = [];
   displayedColumns = ['rank', 'name', 'licenseNumber', 'licenseType', 'totalTrips', 'totalKm', 'status', 'actions'];
@@ -933,9 +935,11 @@ export class DriversDialogComponent implements OnInit {
           this.driverForm.reset();
           this.showAddForm = false;
           this.isLoading = false;
+          this.toast.done('Driver added');
         },
         error: (error) => {
           console.error('Error adding driver:', error);
+          this.toast.error('Could not add driver: ' + (error?.error?.message || error?.error?.title || error?.message || ''));
           this.isLoading = false;
         }
       });
@@ -979,9 +983,11 @@ export class DriversDialogComponent implements OnInit {
           this.isLoading = false;
           // Reload to get updated stats
           this.loadDrivers();
+          this.toast.done('Driver updated');
         },
         error: (error) => {
           console.error('Error updating driver:', error);
+          this.toast.error('Could not update driver: ' + (error?.error?.message || error?.error?.title || error?.message || ''));
           this.isLoading = false;
         }
       });
@@ -990,19 +996,21 @@ export class DriversDialogComponent implements OnInit {
 
   async deleteDriver(driver: Driver) {
     if (await this.confirmDialog.ask({
-      title: `Delete driver ${driver.firstName}?`,
-      message: 'The driver is deleted and removed from this list.',
-      confirmText: 'Delete driver',
+      title: `Remove driver ${driver.firstName}?`,
+      message: 'The driver is removed from the list and unassigned from any vehicle. Drivers with load history are kept for records but hidden.',
+      confirmText: 'Remove driver',
       danger: true
     })) {
       this.isLoading = true;
-      this.http.delete(`${environment.apiUrl}/logistics/drivers/${driver.id}`).subscribe({
-        next: () => {
+      this.http.delete<any>(`${environment.apiUrl}/logistics/drivers/${driver.id}`).subscribe({
+        next: (res) => {
           this.drivers = this.drivers.filter(d => d.id !== driver.id);
           this.isLoading = false;
+          this.toast.done(res?.message || 'Driver removed');
         },
         error: (error) => {
           console.error('Error deleting driver:', error);
+          this.toast.error('Could not remove driver: ' + (error?.error?.message || error?.message || ''));
           this.isLoading = false;
         }
       });

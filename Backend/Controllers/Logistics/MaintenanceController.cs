@@ -22,10 +22,17 @@ namespace ProjectTracker.API.Controllers.Logistics
             _logger = logger;
         }
 
+        /// <summary>
+        /// Maintenance records. <paramref name="from"/> / <paramref name="to"/> filter on the record's date
+        /// (completed date when done, else scheduled date). Both optional; the UI defaults to the last 7 months.
+        /// </summary>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<VehicleMaintenanceDto>>> GetMaintenanceRecords(
             [FromQuery] int? vehicleId,
-            [FromQuery] string? status)
+            [FromQuery] string? status,
+            [FromQuery] string? vehicleReg,
+            [FromQuery] DateTime? from,
+            [FromQuery] DateTime? to)
         {
             var query = _context.VehicleMaintenance
                 .Include(m => m.Vehicle)
@@ -35,6 +42,20 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (vehicleId.HasValue)
             {
                 query = query.Where(m => m.VehicleId == vehicleId.Value);
+            }
+            if (!string.IsNullOrWhiteSpace(vehicleReg))
+            {
+                query = query.Where(m => m.Vehicle.RegistrationNumber == vehicleReg);
+            }
+            if (from.HasValue)
+            {
+                var f = from.Value.Date;
+                query = query.Where(m => (m.CompletedDate ?? m.ScheduledDate) >= f);
+            }
+            if (to.HasValue)
+            {
+                var t = to.Value.Date.AddDays(1);
+                query = query.Where(m => (m.CompletedDate ?? m.ScheduledDate) < t);
             }
 
             if (!string.IsNullOrEmpty(status))
@@ -379,12 +400,17 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] string? vehicleReg,
             [FromQuery] string? assignedTo,
             [FromQuery] string? maintenanceType,
+            [FromQuery] DateTime? from,
+            [FromQuery] DateTime? to,
             [FromQuery] bool openOnly = true)
         {
             var query = _context.VehicleMaintenance
                 .Include(m => m.Vehicle)
                     .ThenInclude(v => v.VehicleType)
                 .AsQueryable();
+
+            if (from.HasValue) { var f = from.Value.Date; query = query.Where(m => (m.CompletedDate ?? m.ScheduledDate) >= f); }
+            if (to.HasValue) { var t = to.Value.Date.AddDays(1); query = query.Where(m => (m.CompletedDate ?? m.ScheduledDate) < t); }
 
             if (openOnly)
                 query = query.Where(m => m.Status != "Completed" && m.Status != "Cancelled");

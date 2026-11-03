@@ -359,6 +359,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         {
                             LoadStopId = stop.Id,
                             CommodityId = CommodityCodeMatcher.Match(stockCodes, invoice.ProductCode),
+                            ProductCode = invoice.ProductCode,
                             Quantity = invoice.Quantity,
                             UnitPrice = invoice.SalesAmount / (invoice.Quantity != 0 ? invoice.Quantity : 1),
                             TotalPrice = invoice.NetSales,

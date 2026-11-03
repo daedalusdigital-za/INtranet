@@ -28,16 +28,32 @@ public class StockFulfillmentController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>Stock on hand per normalised product code, summed across warehouses.</summary>
-    private async Task<Dictionary<string, decimal>> OnHandByCodeAsync()
+    /// <summary>
+    /// Stock on hand per normalised product code and company, summed across warehouses. The same code can be a
+    /// different product under another company, so quantities are never pooled across companies for such codes.
+    /// </summary>
+    private async Task<Dictionary<(string Code, string Company), decimal>> OnHandByCodeAsync()
     {
         var rows = await _context.WarehouseInventory.AsNoTracking()
             .Where(i => i.Commodity.Code != null && i.Commodity.Code != "")
-            .Select(i => new { i.Commodity.Code, i.QuantityOnHand })
+            .Select(i => new { i.Commodity.Code, i.Commodity.Category, i.QuantityOnHand })
             .ToListAsync();
         return rows
-            .GroupBy(r => CommodityCodeMatcher.Normalize(r.Code))
+            .GroupBy(r => (Code: CommodityCodeMatcher.Normalize(r.Code), Company: CommodityCodeMatcher.NormalizeCompany(r.Category)))
             .ToDictionary(g => g.Key, g => g.Sum(r => r.QuantityOnHand));
+    }
+
+    /// <summary>On hand for a code as seen by <paramref name="company"/>: its own stock if the code is shared, otherwise the single owner's stock.</summary>
+    private static bool TryOnHand(Dictionary<(string Code, string Company), decimal> map, string? code, string? company, out decimal onHand)
+    {
+        var key = CommodityCodeMatcher.Normalize(code);
+        var co = CommodityCodeMatcher.NormalizeCompany(company);
+        if (co.Length > 0 && map.TryGetValue((key, co), out onHand)) return true;
+        var owners = map.Where(kv => kv.Key.Code == key).ToList();
+        if (owners.Count == 1) { onHand = owners[0].Value; return true; }          // single owner: everyone sees it
+        if (owners.Count > 1 && co.Length == 0) { onHand = owners.Sum(o => o.Value); return true; } // no company known: legacy pooled view
+        onHand = 0;
+        return false;                                                              // shared code, company has no stock record for it
     }
 
     // ---------------------------------------------------------------------
@@ -45,13 +61,14 @@ public class StockFulfillmentController : ControllerBase
     // ---------------------------------------------------------------------
     // GET: api/stock-fulfillment/availability/{itemCode}
     [HttpGet("availability/{itemCode}")]
-    public async Task<ActionResult<StockAvailabilityDto>> GetAvailability(string itemCode)
+    public async Task<ActionResult<StockAvailabilityDto>> GetAvailability(string itemCode, [FromQuery] string? company = null)
     {
         itemCode = (itemCode ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(itemCode))
             return BadRequest("Item code is required.");
 
         var key = CommodityCodeMatcher.Normalize(itemCode);
+        var co = CommodityCodeMatcher.NormalizeCompany(company);
         var rows = (await _context.WarehouseInventory.AsNoTracking()
                 .Where(i => i.Commodity.Code != null && i.Commodity.Code != "")
                 .Select(i => new
@@ -60,12 +77,16 @@ public class StockFulfillmentController : ControllerBase
                     WarehouseName = i.Warehouse.Name,
                     i.Commodity.Code,
                     i.Commodity.Name,
+                    i.Commodity.Category,
                     i.Commodity.UnitOfMeasure,
                     i.QuantityOnHand
                 })
                 .ToListAsync())
             .Where(r => CommodityCodeMatcher.Normalize(r.Code) == key)
             .ToList();
+        // A shared code: only show the requesting company's product
+        if (co.Length > 0 && rows.Select(r => CommodityCodeMatcher.NormalizeCompany(r.Category)).Distinct().Count() > 1)
+            rows = rows.Where(r => CommodityCodeMatcher.NormalizeCompany(r.Category) == co).ToList();
 
         if (rows.Count == 0)
             return NotFound(new { itemCode, message = "No stock found for this item code." });
@@ -110,10 +131,11 @@ public class StockFulfillmentController : ControllerBase
             demandQuery = demandQuery.Where(inv => inv.Status == status);
 
         var demand = await demandQuery
-            .GroupBy(inv => inv.ProductCode)
+            .GroupBy(inv => new { inv.ProductCode, inv.SourceCompany })
             .Select(g => new
             {
-                ProductCode = g.Key,
+                ProductCode = g.Key.ProductCode,
+                Company = g.Key.SourceCompany,
                 ProductDescription = g.Max(x => x.ProductDescription),
                 DemandQty = g.Sum(x => x.Quantity),
                 OrderLines = g.Count(),
@@ -127,7 +149,7 @@ public class StockFulfillmentController : ControllerBase
         var lines = new List<FulfillmentLineDto>();
         foreach (var d in demand)
         {
-            var hasStockRecord = stockMap.TryGetValue(CommodityCodeMatcher.Normalize(d.ProductCode), out var onHand);
+            var hasStockRecord = TryOnHand(stockMap, d.ProductCode, d.Company, out var onHand);
             var available = hasStockRecord ? onHand : 0m;
 
             if (onlyMatched && !hasStockRecord)
@@ -191,7 +213,8 @@ public class StockFulfillmentController : ControllerBase
     [HttpGet("invoices/{itemCode}")]
     public async Task<ActionResult<ProductInvoicesDto>> GetInvoicesForProduct(
         string itemCode,
-        [FromQuery] string status = "Pending")
+        [FromQuery] string status = "Pending",
+        [FromQuery] string? company = null)
     {
         itemCode = (itemCode ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(itemCode))
@@ -202,6 +225,8 @@ public class StockFulfillmentController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(status) && !status.Equals("all", StringComparison.OrdinalIgnoreCase))
             query = query.Where(inv => inv.Status == status);
+        if (!string.IsNullOrWhiteSpace(company))
+            query = query.Where(inv => inv.SourceCompany == company);
 
         var invoices = await query
             .OrderBy(inv => inv.TransactionDate)
@@ -218,8 +243,8 @@ public class StockFulfillmentController : ControllerBase
             })
             .ToListAsync();
 
-        // total available stock for this code
-        var available = (await OnHandByCodeAsync()).GetValueOrDefault(CommodityCodeMatcher.Normalize(itemCode));
+        // total available stock for this code (for this company if the code is shared)
+        TryOnHand(await OnHandByCodeAsync(), itemCode, company, out var available);
 
         // allocate available across invoices oldest-first
         var remaining = available;

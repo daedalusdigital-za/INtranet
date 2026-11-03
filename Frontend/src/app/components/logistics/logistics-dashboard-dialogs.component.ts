@@ -16431,15 +16431,29 @@ export class AddMaintenanceDialog implements OnInit {
           </mat-form-field>
         </div>
 
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Status</mat-label>
-          <mat-select [(ngModel)]="formData.status" name="status" [disabled]="data.mode === 'view'">
-            <mat-option value="Available">Available</mat-option>
-            <mat-option value="In Use">In Use</mat-option>
-            <mat-option value="Maintenance">Maintenance</mat-option>
-            <mat-option value="Inactive">Inactive</mat-option>
-          </mat-select>
-        </mat-form-field>
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Status</mat-label>
+            <mat-select [(ngModel)]="formData.status" name="status" [disabled]="data.mode === 'view'">
+              <mat-option value="Available">Available</mat-option>
+              <mat-option value="In Use">In Use</mat-option>
+              <mat-option value="Maintenance">Maintenance</mat-option>
+              <mat-option value="Inactive">Inactive</mat-option>
+              <mat-option value="Sold">Sold (hidden from fleet)</mat-option>
+              <mat-option value="Decommissioned">Decommissioned (hidden)</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Branch / Province</mat-label>
+            <mat-select [(ngModel)]="formData.province" name="province" [disabled]="data.mode === 'view'">
+              <mat-option [value]="null">Not set</mat-option>
+              <mat-option value="Gauteng">GP — Gauteng</mat-option>
+              <mat-option value="KwaZulu-Natal">KZN — KwaZulu-Natal</mat-option>
+              <mat-option value="Western Cape">CPT — Western Cape</mat-option>
+              <mat-option value="Eastern Cape">PE — Eastern Cape</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
 
         @if (data.mode === 'view' && data.vehicle) {
           <mat-divider></mat-divider>
@@ -16530,12 +16544,18 @@ export class VehicleDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<VehicleDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { vehicle?: Vehicle, mode: 'view' | 'edit' | 'add' },
-    private http: HttpClient
+    private http: HttpClient,
+    private toast: ToastService
   ) {
     if (data.vehicle) {
       this.formData = { ...data.vehicle };
+      // Normalise short codes so the select shows the right option
+      const map: Record<string, string> = { GP: 'Gauteng', KZN: 'KwaZulu-Natal', CPT: 'Western Cape', PE: 'Eastern Cape', EC: 'Eastern Cape' };
+      if (this.formData.province && map[String(this.formData.province).toUpperCase()]) {
+        this.formData.province = map[String(this.formData.province).toUpperCase()];
+      }
     } else {
-      this.formData = { status: 'Available', vehicleTypeId: 1 };
+      this.formData = { status: 'Available', vehicleTypeId: 1, province: null };
     }
     this.loadVehicleTypes();
   }
@@ -16566,15 +16586,21 @@ export class VehicleDialogComponent {
   onSubmit(): void {
     if (this.isValid()) {
       const apiUrl = environment.apiUrl;
+      const payload: any = { ...this.formData };
+      if (payload.tankSize === '' || payload.tankSize === undefined) payload.tankSize = null;
+      const fail = (verb: string) => (err: any) => {
+        console.error(`Error ${verb} vehicle:`, err);
+        this.toast.error(`Could not ${verb} vehicle: ` + (err?.error?.message || err?.error?.title || err?.message || 'unknown error'));
+      };
       if (this.data.mode === 'add') {
-        this.http.post(`${apiUrl}/fleet/vehicles`, this.formData).subscribe({
-          next: () => this.dialogRef.close(true),
-          error: (err) => console.error('Error adding vehicle:', err)
+        this.http.post(`${apiUrl}/fleet/vehicles`, payload).subscribe({
+          next: () => { this.toast.done('Vehicle added'); this.dialogRef.close(true); },
+          error: fail('add')
         });
       } else {
-        this.http.put(`${apiUrl}/fleet/vehicles/${this.formData.id}`, this.formData).subscribe({
-          next: () => this.dialogRef.close(true),
-          error: (err) => console.error('Error updating vehicle:', err)
+        this.http.put(`${apiUrl}/fleet/vehicles/${payload.id}`, payload).subscribe({
+          next: () => { this.toast.done('Vehicle updated'); this.dialogRef.close(true); },
+          error: fail('update')
         });
       }
     }
@@ -16655,7 +16681,8 @@ export class AssignDriverDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<AssignDriverDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { vehicle: Vehicle },
-    private http: HttpClient
+    private http: HttpClient,
+    private toast: ToastService
   ) {
     if (data.vehicle.currentDriverId) {
       this.selectedDriverId = data.vehicle.currentDriverId;
@@ -16683,8 +16710,14 @@ export class AssignDriverDialogComponent implements OnInit {
     this.http.post(`${apiUrl}/fleet/vehicles/${this.data.vehicle.id}/assign-driver`, {
       driverId: this.selectedDriverId
     }).subscribe({
-      next: () => this.dialogRef.close(true),
-      error: (err) => console.error('Error assigning driver:', err)
+      next: () => {
+        this.toast.done(this.selectedDriverId ? 'Driver assigned' : 'Driver unassigned');
+        this.dialogRef.close(true);
+      },
+      error: (err) => {
+        console.error('Error assigning driver:', err);
+        this.toast.error('Could not assign driver: ' + (err?.error?.message || err?.message || 'unknown error'));
+      }
     });
   }
 }
@@ -20470,7 +20503,7 @@ interface LivestreamResponse {
           <mat-option value="Gauteng">Gauteng (GP)</mat-option>
           <mat-option value="KwaZulu-Natal">KwaZulu-Natal (KZN)</mat-option>
           <mat-option value="Western Cape">Western Cape (CPT)</mat-option>
-          <mat-option value="Eastern Cape">Eastern Cape (EC)</mat-option>
+          <mat-option value="Eastern Cape">Eastern Cape (PE)</mat-option>
         </mat-select>
         <mat-hint>Current: {{ data.vehicle.province || 'Not Set' }}</mat-hint>
       </mat-form-field>

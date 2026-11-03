@@ -42,11 +42,12 @@ namespace ProjectTracker.API.Controllers.Logistics
 
         // Vehicle Endpoints
         [HttpGet("vehicles")]
-        public async Task<ActionResult<IEnumerable<VehicleDto>>> GetVehicles()
+        public async Task<ActionResult<IEnumerable<VehicleDto>>> GetVehicles([FromQuery] bool includeRetired = false)
         {
             var vehicles = await _context.Vehicles
                 .Include(v => v.VehicleType)
                 .Include(v => v.CurrentDriver)
+                .Where(v => includeRetired || (v.Status != "Decommissioned" && v.Status != "Sold"))
                 .Select(v => new VehicleDto
                 {
                     Id = v.Id,
@@ -101,10 +102,11 @@ namespace ProjectTracker.API.Controllers.Logistics
         {
             try
             {
-                // Get all vehicles from database
+                // Get all vehicles from database (sold / decommissioned ones are kept for history but not shown)
                 var vehicles = await _context.Vehicles
                     .Include(v => v.VehicleType)
                     .Include(v => v.CurrentDriver)
+                    .Where(v => v.Status != "Decommissioned" && v.Status != "Sold")
                     .ToListAsync();
 
                 // Get live locations from CarTrack
@@ -940,11 +942,15 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (dto.Year.HasValue) vehicle.Year = dto.Year;
             if (dto.Color != null) vehicle.Color = dto.Color;
             if (dto.VehicleTypeId.HasValue) vehicle.VehicleTypeId = dto.VehicleTypeId.Value;
-            if (dto.CurrentDriverId.HasValue) vehicle.CurrentDriverId = dto.CurrentDriverId;
+            if (dto.ClearDriver == true) vehicle.CurrentDriverId = null;
+            else if (dto.CurrentDriverId.HasValue) vehicle.CurrentDriverId = dto.CurrentDriverId;
             if (dto.CarTrackId != null) vehicle.CarTrackId = dto.CarTrackId;
             if (dto.CarTrackName != null) vehicle.CarTrackName = dto.CarTrackName;
             if (dto.Status != null) vehicle.Status = dto.Status;
             if (dto.FuelCapacity.HasValue) vehicle.FuelCapacity = dto.FuelCapacity;
+            if (dto.TankSize.HasValue) vehicle.TankSize = dto.TankSize;
+            if (dto.FuelType != null) vehicle.FuelType = dto.FuelType;
+            if (dto.Province != null) vehicle.Province = NormalizeProvince(dto.Province);
             if (dto.CurrentOdometer.HasValue) vehicle.CurrentOdometer = dto.CurrentOdometer;
             if (dto.LastServiceDate.HasValue) vehicle.LastServiceDate = dto.LastServiceDate;
             if (dto.NextServiceOdometer.HasValue) vehicle.NextServiceOdometer = dto.NextServiceOdometer;
@@ -955,6 +961,21 @@ namespace ProjectTracker.API.Controllers.Logistics
             return NoContent();
         }
 
+        /// <summary>Full province names are stored; the branch codes people type (GP / KZN / CPT / PE / EC) map onto them.</summary>
+        private static string? NormalizeProvince(string? raw)
+        {
+            var s = raw?.Trim();
+            if (string.IsNullOrEmpty(s)) return null;
+            switch (s.ToUpperInvariant().Replace(" ", "").Replace("-", ""))
+            {
+                case "GP": case "GAUTENG": case "JHB": case "JOHANNESBURG": return "Gauteng";
+                case "KZN": case "KWAZULUNATAL": case "DBN": case "DURBAN": return "KwaZulu-Natal";
+                case "CPT": case "WC": case "WESTERNCAPE": case "CAPETOWN": return "Western Cape";
+                case "PE": case "EC": case "EASTERNCAPE": case "GQEBERHA": case "PORTELIZABETH": return "Eastern Cape";
+                default: return s;
+            }
+        }
+
         [HttpPut("vehicles/{id}/province")]
         public async Task<IActionResult> UpdateVehicleProvince(int id, [FromBody] UpdateProvinceDto dto)
         {
@@ -962,11 +983,32 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (vehicle == null)
                 return NotFound();
 
-            vehicle.Province = dto.Province;
+            vehicle.Province = NormalizeProvince(dto.Province);
             vehicle.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Vehicle {Reg} moved to province {Province}", vehicle.RegistrationNumber, vehicle.Province);
             return Ok(new { success = true, province = vehicle.Province });
+        }
+
+        /// <summary>Put a driver on a vehicle, or take the driver off (driverId null). A driver can only be on one vehicle at a time.</summary>
+        [HttpPost("vehicles/{id}/assign-driver")]
+        public async Task<IActionResult> AssignDriver(int id, [FromBody] AssignDriverDto dto)
+        {
+            var vehicle = await _context.Vehicles.FindAsync(id);
+            if (vehicle == null) return NotFound();
+            if (dto.DriverId.HasValue)
+            {
+                var driver = await _context.Drivers.FindAsync(dto.DriverId.Value);
+                if (driver == null || driver.Status == "Deleted") return BadRequest(new { message = "That driver no longer exists" });
+                // move the driver off any other vehicle so one person isn't shown on two trucks
+                var others = await _context.Vehicles.Where(v => v.CurrentDriverId == dto.DriverId && v.Id != id).ToListAsync();
+                foreach (var o in others) { o.CurrentDriverId = null; o.UpdatedAt = DateTime.UtcNow; }
+            }
+            vehicle.CurrentDriverId = dto.DriverId;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true, currentDriverId = vehicle.CurrentDriverId });
         }
 
         /// <summary>
@@ -1034,16 +1076,36 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(new { success = true });
         }
 
+        /// <summary>
+        /// Remove a vehicle. If it has history (loads, maintenance, fuel) it is retired instead: status "Sold",
+        /// driver and trackers detached, hidden from every list, history kept. Otherwise the row is deleted.
+        /// </summary>
         [HttpDelete("vehicles/{id}")]
-        public async Task<IActionResult> DeleteVehicle(int id)
+        public async Task<IActionResult> DeleteVehicle(int id, [FromQuery] string? reason = null)
         {
             var vehicle = await _context.Vehicles.FindAsync(id);
             if (vehicle == null)
                 return NotFound();
 
+            var hasHistory = await _context.Loads.AnyAsync(l => l.VehicleId == id)
+                          || await _context.VehicleMaintenance.AnyAsync(m => m.VehicleId == id)
+                          || await _context.FuelTransactions.AnyAsync(f => f.VehicleId == id);
+
+            if (hasHistory)
+            {
+                vehicle.Status = string.Equals(reason, "decommissioned", StringComparison.OrdinalIgnoreCase) ? "Decommissioned" : "Sold";
+                vehicle.CurrentDriverId = null;
+                vehicle.CarTrackId = null; vehicle.CarTrackName = null;
+                vehicle.TfnVehicleId = null;
+                vehicle.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Vehicle {Reg} retired as {Status} (has history)", vehicle.RegistrationNumber, vehicle.Status);
+                return Ok(new { success = true, retired = true, status = vehicle.Status, message = $"{vehicle.RegistrationNumber} marked {vehicle.Status} and removed from the fleet. Its trip, fuel and maintenance history is kept." });
+            }
+
             _context.Vehicles.Remove(vehicle);
             await _context.SaveChangesAsync();
-            return NoContent();
+            return Ok(new { success = true, retired = false, message = $"{vehicle.RegistrationNumber} deleted." });
         }
 
         // Driver Endpoints
@@ -1051,6 +1113,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         public async Task<ActionResult<IEnumerable<DriverDto>>> GetDrivers()
         {
             var drivers = await _context.Drivers
+                .Where(d => d.Status != "Deleted")
                 .Select(d => new DriverDto
                 {
                     Id = d.Id,
@@ -1155,9 +1218,19 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (driver == null)
                 return NotFound();
 
+            // take them off any vehicle first, then delete or (if they have trip history) retire
+            var vehicles = await _context.Vehicles.Where(v => v.CurrentDriverId == id).ToListAsync();
+            foreach (var v in vehicles) { v.CurrentDriverId = null; v.UpdatedAt = DateTime.UtcNow; }
+            var hasHistory = await _context.Loads.AnyAsync(l => l.DriverId == id);
+            if (hasHistory)
+            {
+                driver.Status = "Deleted"; driver.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                return Ok(new { success = true, retired = true, message = $"{driver.FirstName} {driver.LastName} removed. Past trips stay on record." });
+            }
             _context.Drivers.Remove(driver);
             await _context.SaveChangesAsync();
-            return NoContent();
+            return Ok(new { success = true, retired = false, message = $"{driver.FirstName} {driver.LastName} deleted." });
         }
 
         // Vehicle Type Endpoints
