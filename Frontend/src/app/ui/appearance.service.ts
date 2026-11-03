@@ -23,11 +23,12 @@ function write(key: string, value: string): void {
  * Light or dark, and comfortable or compact rows (design review D-04). The choice is kept on
  * this computer and applied as data-theme / data-density on <html>, which the design tokens
  * and the shared table read. "System" follows the computer's own light or dark setting.
+ * The default is light; dark or system is opt-in from Appearance.
  * index.html applies the saved theme before the app starts, so pages don't flash white.
  */
 @Injectable({ providedIn: 'root' })
 export class AppearanceService {
-  readonly theme = signal<ThemeChoice>(read(THEME_KEY, ['system', 'light', 'dark'], 'system'));
+  readonly theme = signal<ThemeChoice>(read(THEME_KEY, ['system', 'light', 'dark'], 'light'));
   readonly density = signal<Density>(read(DENSITY_KEY, ['comfortable', 'compact'], 'comfortable'));
 
   private readonly media = window.matchMedia?.('(prefers-color-scheme: dark)');

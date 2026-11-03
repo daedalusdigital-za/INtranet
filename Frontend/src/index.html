@@ -17,7 +17,8 @@
   <script>
     try {
       var t = localStorage.getItem('ui.theme');
-      var dark = t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      // Light by default; only 'dark' or an explicit 'system' choice can turn the page dark.
+      var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
       document.documentElement.dataset.density = localStorage.getItem('ui.density') === 'compact' ? 'compact' : 'comfortable';
     } catch (e) {}
