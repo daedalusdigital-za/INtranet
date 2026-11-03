@@ -80,7 +80,7 @@ Three detectors produce a `finding` (evidence) with a `suggestion` child (fix + 
 
 ### Step 6 — Hygiene, reminders, nightly rebuild (ea2219a)
 - **Departments**: `IsActive` + `MergedIntoDepartmentId` + computed `NameKey` with a filtered unique index. Create/rename rejects a clash (409) and treats "X" and "X Department" as the same name. Delete is a soft-deactivate, refused while users remain. Builder only reads active departments. Migration [20261102200000_DepartmentsSoftDeleteAndUniqueName.cs](../Backend/Migrations/20261102200000_DepartmentsSoftDeleteAndUniqueName.cs).
-- **Sales merged** 15 → 30 via [Database/MergeDepartmentsNov2026.sql](../Database/MergeDepartmentsNov2026.sql) (re-points 26 tables, carries manager). Finance and Marketing blocks are in the same script, commented, pending decision.
+- **Sales merged** 15 → 30 via [Database/MergeDepartmentsNov2026.sql](../Database/MergeDepartmentsNov2026.sql) (re-points 26 tables, carries manager). **Marketing merged into IT** (3 Nov: 13 and 34 → IT Department 14 — there is no Marketing department; the Campaign & announcement flow now sits under IT). Finance block is in the same script, commented, pending decision.
 - **Permissions**: users 46 and 84 repaired ([tools/repair_permissions.py](../tools/repair_permissions.py)); `PUT users/{id}` now validates every key (`^[a-z][a-z0-9_.\-]*$`, distinct, trimmed) → 400.
 - **Module owner** is derived from permission holders on each rebuild: one non-admin holder → that person; several → "Dept (n of m holders)". Granting a module changes the owner next rebuild.
 - **Coverage** ignores disabled processes (gap scan and the Cortex "live" counter).
@@ -120,7 +120,7 @@ Three detectors produce a `finding` (evidence) with a `suggestion` child (fix + 
 
 ## 3. Current numbers (after last rebuild)
 
-663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · **25 gaps** (17 no-events, 3 no-owner, 2 uncaptured, 2 data-quality, 1 not-built) · hand-offs: 142 manual / 106 automatic / 9 read / **1 not built**.
+663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · **23 gaps** (17 no-events, 3 no-owner, 1 uncaptured, 1 data-quality, 1 not-built) · hand-offs: 142 manual / 106 automatic / 9 read / **1 not built**.
 
 No Welly findings fire yet — there is almost no task history (flow 5 has 3 approvals, all cleared in 0 h). They will appear as real work passes through Flows.
 
@@ -130,9 +130,9 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 
 | # | Issue | Where it shows | Needs |
 |---|---|---|---|
-| 1 | **Duplicate departments**: ~~Sales~~ (merged into 30) · Finance / Finance Department · Marketing / Marketing Department | gap `deptdup:*` | **Confirm** merge into the short names — the long records hold most links (Finance Department: 1 user / 7 employees / 8 flows / manager Robert Brown; Marketing Department: 1 flow / manager John Smith). Script ready. |
+| 1 | **Duplicate departments**: ~~Sales~~ (merged into 30) · ~~Marketing / Marketing Department~~ (both folded into IT, 3 Nov) · Finance / Finance Department | gap `deptdup:*` | **Confirm** Finance merge into the short name — Finance Department(17) holds most links (1 user / 7 employees / 8 flows / manager Robert Brown). Script ready. |
 | 2 | ~~Two accounts have a corrupted Permissions string~~ | — | Fixed (users 46, 84); save-time validation added; rescan clean. |
-| 3 | Marketing and Training have people but no process | gap `uncaptured:*` | Someone in those teams maps their day (New human flow). |
+| 3 | Training has people but no process (~~Marketing~~ now under IT, which has flows) | gap `uncaptured:*` | Someone in that team maps their day (New human flow). |
 | 4 | Nobody non-admin holds HR / Management / Tenders permission | gap `noowner:module:*` | Grant the module to the people who actually do that work. |
 | 5 | Hand-offs not built in code: tenders → sales. ~~finance → logistics~~ built (Step 8); ~~hr → finance~~ built (Step 9). | gap `handoff:*` | Product decisions; each is a feature. |
 | 6 | **17** enabled processes have never run: Accounts · Invoice to payment; Colene · Debtors day; Finance · Month-end close; Joulene · Creditors & payments; Mamo · Debtors control day; Mbali · PODs day; Nduduzo · Creditors cycle; Peggy · Debtors day; Sne · PODs & debtors day; HR · Staff request handling; IT · Support request; Logistics · Delivery operations; Marketing · Campaign & announcement; Production · Work order; Reception · Visitors & deliveries; Sales · Enquiry to order; Stock · Goods receiving | gap `noevents:*` | Say which to disable; disabled ones drop out of coverage immediately. |
@@ -148,7 +148,7 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 | Payroll settings UI (cut-off day, payroll person) | API exists (`/api/payroll/settings`); no screen yet — set via API or SystemSettings | S, ~0.5 day |
 | **Customers / suppliers / products / tenders layers** | Node types exist (commercial layer) but the builder doesn't derive them | medium |
 | **Time replay UI** (`asOf`) | API supports it; no slider on the map | small |
-| Finance / Marketing merge (§4 #1) | Blocked on your confirmation | 2 min |
+| Finance merge (§4 #1) | Blocked on your confirmation | 2 min |
 
 Agreed order: ~~HR → Finance~~ → Tenders → Sales → commercial layers.
 

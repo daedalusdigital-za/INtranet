@@ -5,18 +5,24 @@
 -- Link counts on 2 Nov 2026 (users / employees / flows / other):
 --   Sales(30)      21 / 9 / 1 / 0   <- survivor        Sales Department(15)      0 / 0 / 0 / 1 (BookDepartmentAccess)
 --   Finance(35)     0 / 2 / 0 / 0                       Finance Department(17)    1 / 7 / 8 / 1   ** holds most links -> confirm **
---   Marketing(34)   1 / 0 / 0 / 0                       Marketing Department(13)  0 / 0 / 1 / 1   ** holds the flow + manager -> confirm **
+--   Marketing(34)   1 / 0 / 0 / 0                       Marketing Department(13)  0 / 0 / 1 / 1   ** 3 Nov: there is no Marketing dept — both fold into IT Department(14) **
 SET NOCOUNT ON;
 
 IF OBJECT_ID('tempdb..#Merge') IS NOT NULL DROP TABLE #Merge;
 CREATE TABLE #Merge (LoserId int, SurvivorId int, LoserName nvarchar(100), SurvivorName nvarchar(100));
 
--- ── Approved: Sales ──────────────────────────────────────────────────────────────────────────────
+-- ── Approved: Sales (applied 2 Nov) ────────────────────────────────────────────────────────────
 INSERT INTO #Merge SELECT 15, 30, 'Sales Department', 'Sales';
+
+-- ── Approved 3 Nov: Marketing falls under IT ───────────────────────────────────────────────────
+INSERT INTO #Merge SELECT 13, 14, 'Marketing Department', 'IT Department';
+INSERT INTO #Merge SELECT 34, 14, 'Marketing', 'IT Department';
+
+-- skip merges already applied (safe to re-run)
+DELETE m FROM #Merge m JOIN Departments d ON d.DepartmentId = m.LoserId WHERE d.IsActive = 0;
 
 -- ── Pending confirmation (uncomment after sign-off) ─────────────────────────────────────────────
 -- INSERT INTO #Merge SELECT 17, 35, 'Finance Department', 'Finance';
--- INSERT INTO #Merge SELECT 13, 34, 'Marketing Department', 'Marketing';
 
 BEGIN TRAN;
 
