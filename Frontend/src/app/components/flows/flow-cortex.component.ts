@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -8,6 +8,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { CortexApiGap, CortexApiNode, CortexGraph, FlowCatalog, FlowDefinition, FlowStats, FlowsService } from '../../services/flows.service';
 import { CORTEX_COMPANIES, CORTEX_EDGES, CORTEX_GAPS, CORTEX_NODES, CORTEX_STREAMS, CortexGap, CortexHow, CortexLayer, CortexNode, CortexStream } from './cortex-model';
 import { BrainEdge, BrainNode, CortexBrainComponent } from './cortex-brain.component';
+import { AppearanceService } from '../../ui/appearance.service';
 
 /** A person on the map: from the employee register, or an intranet user who is not on it. */
 interface CortexPerson { key: string; name: string; title: string | null; employeeId: string | null; userId: number | null; flows: FlowDefinition[]; }
@@ -34,10 +35,14 @@ const DEPT_Y = 600;
   templateUrl: './flow-cortex.component.html',
   styleUrls: ['./flow-cortex.component.scss']
 })
-export class FlowCortexComponent implements OnInit {
+export class FlowCortexComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private api = inject(FlowsService);
   private snack = inject(MatSnackBar);
+  private appearance = inject(AppearanceService);
+  /** Cortex is built for the dark: the whole intranet goes dark while this tab is open, back to normal when you leave. */
+  private releaseDark = this.appearance.holdDark();
+  ngOnDestroy() { this.releaseDark(); }
   flows = input<FlowDefinition[]>([]);
   templates = input<FlowDefinition[]>([]);
   catalog = input<FlowCatalog | null>(null);

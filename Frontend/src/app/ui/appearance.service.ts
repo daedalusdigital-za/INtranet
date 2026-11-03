@@ -34,7 +34,18 @@ export class AppearanceService {
   private readonly systemDark = signal(!!this.media?.matches);
 
   /** The theme actually showing. */
-  readonly dark = computed(() => this.theme() === 'dark' || (this.theme() === 'system' && this.systemDark()));
+  readonly dark = computed(() => this.immersive() > 0 || this.theme() === 'dark' || (this.theme() === 'system' && this.systemDark()));
+
+  /**
+   * Screens that are built for the dark (Cortex) can hold the whole intranet dark while they are on screen,
+   * without touching the person's saved choice. Counted, so two holders don't fight. Release when you leave.
+   */
+  private readonly immersive = signal(0);
+  holdDark(): () => void {
+    this.immersive.update(n => n + 1);
+    let released = false;
+    return () => { if (!released) { released = true; this.immersive.update(n => Math.max(0, n - 1)); } };
+  }
 
   constructor() {
     this.media?.addEventListener('change', e => this.systemDark.set(e.matches));
