@@ -503,7 +503,7 @@
           <app-flow-cortex [flows]="flows()" [templates]="templates()" [catalog]="catalog()" [stats]="stats()" [isDesigner]="isDesigner()"
                            (viewFlow)="viewFlow($event)" (startFlow)="startFlow($event)" (useTemplate)="useTemplate($event)"
                            (newHumanFlow)="newOpsFlowFor($event.dept, $event.owner)" (openHuman)="openHuman($event.dept, $event.personKey)"
-                           (designFlow)="newFlow()"></app-flow-cortex>
+                           (designFlow)="newFlow()" (flowsChanged)="loadAll()"></app-flow-cortex>
         }
           }
           </div>

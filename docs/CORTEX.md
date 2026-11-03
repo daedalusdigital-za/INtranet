@@ -80,7 +80,7 @@ Three detectors produce a `finding` (evidence) with a `suggestion` child (fix + 
 
 ### Step 6 — Hygiene, reminders, nightly rebuild (ea2219a)
 - **Departments**: `IsActive` + `MergedIntoDepartmentId` + computed `NameKey` with a filtered unique index. Create/rename rejects a clash (409) and treats "X" and "X Department" as the same name. Delete is a soft-deactivate, refused while users remain. Builder only reads active departments. Migration [20261102200000_DepartmentsSoftDeleteAndUniqueName.cs](../Backend/Migrations/20261102200000_DepartmentsSoftDeleteAndUniqueName.cs).
-- **Sales merged** 15 → 30 via [Database/MergeDepartmentsNov2026.sql](../Database/MergeDepartmentsNov2026.sql) (re-points 26 tables, carries manager). **Marketing merged into IT** (3 Nov: 13 and 34 → IT Department 14 — there is no Marketing department; the Campaign & announcement flow now sits under IT). Finance block is in the same script, commented, pending decision.
+- **Sales merged** 15 → 30 via [Database/MergeDepartmentsNov2026.sql](../Database/MergeDepartmentsNov2026.sql) (re-points 26 tables, carries manager). **Marketing merged into IT** (3 Nov: 13 and 34 → IT Department 14 — there is no Marketing department; the Campaign & announcement flow now sits under IT). **Finance merged** (3 Nov: 17 → 35, manager Robert Brown carried; 1 user / 9 employees / 8 flows now on "Finance"). All duplicates resolved.
 - **Permissions**: users 46 and 84 repaired ([tools/repair_permissions.py](../tools/repair_permissions.py)); `PUT users/{id}` now validates every key (`^[a-z][a-z0-9_.\-]*$`, distinct, trimmed) → 400.
 - **Module owner** is derived from permission holders on each rebuild: one non-admin holder → that person; several → "Dept (n of m holders)". Granting a module changes the owner next rebuild.
 - **Coverage** ignores disabled processes (gap scan and the Cortex "live" counter).
@@ -119,6 +119,8 @@ Three detectors produce a `finding` (evidence) with a `suggestion` child (fix + 
 ### Step 10 — Work view (cf16a15)
 The map only showed detail when you clicked the right node. **Map | Work** toggle in the bar: Work lays everything out as lists — gaps grouped by kind (expandable, "never ran" collapsed), every module hand-off with how it is carried + code file + measured wait, Welly to-confirm and "Fixed by Welly" with before → after, all blank knowledge slots (department heads first), and the `CortexChanges` feed. Each row jumps back to the node on the map.
 
+**Plain-words layer** (same day): every gap group has a **What does this mean?** button that opens three boxes — *What it is* / *What you do* / *What changes* — and every row carries the button that fixes it: never-run process → **Open** / **Start it now** / **Switch off** (designers; toggles `IsEnabled`, reversible, triggers rebuild); team not captured → **Map their day** (opens the human-flow dialog for that department); duplicate data → **Departments** link. Blank slots have **Write it** directly. Each card opens with a one-paragraph intro saying what it is for.
+
 ### Step 11 — Tenders → Sales hand-off
 [TenderHandoffService.cs](../Backend/Services/Flows/TenderHandoffService.cs) · fire-and-forget on `PUT Tenders/{id}/status` when status becomes **Awarded** (first time only).
 - Starts the Sales process (`SystemSettings Tenders.SalesFlowId`, default: first enabled flow named `Sales…`) with `inputs` pre-filled from the tender: `customer` = issuing department, `customerEmail` / `contactPerson` / `contactPhone`, `enquiry` = tender number, title, awarded value, award date, BOQ lines, award notes; plus a full `tender` object (lines as JSON) for later steps. Run is pinned `entityType=tender`, title "<customer> · tender <no>". One run per tender (cancelled runs don't count).
@@ -130,7 +132,7 @@ The map only showed detail when you clicked the right node. **Map | Work** toggl
 
 ## 3. Current numbers (after last rebuild)
 
-663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · **19 gaps** (17 no-events, 1 uncaptured, 1 data-quality) · hand-offs: 142 manual / 107 automatic / 9 read / **0 not built**.
+663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · **18 gaps** (17 no-events, 1 uncaptured) · hand-offs: 142 manual / 107 automatic / 9 read / **0 not built**.
 
 No Welly findings fire yet — there is almost no task history (flow 5 has 3 approvals, all cleared in 0 h). They will appear as real work passes through Flows.
 
@@ -140,12 +142,12 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 
 | # | Issue | Where it shows | Needs |
 |---|---|---|---|
-| 1 | **Duplicate departments**: ~~Sales~~ (merged into 30) · ~~Marketing / Marketing Department~~ (both folded into IT, 3 Nov) · Finance / Finance Department | gap `deptdup:*` | **Confirm** Finance merge into the short name — Finance Department(17) holds most links (1 user / 7 employees / 8 flows / manager Robert Brown). Script ready. |
+| 1 | ~~Duplicate departments~~: Sales (→ 30), Marketing / Marketing Department (→ IT 14), Finance Department (→ Finance 35) | — | All merged by 3 Nov. |
 | 2 | ~~Two accounts have a corrupted Permissions string~~ | — | Fixed (users 46, 84); save-time validation added; rescan clean. |
 | 3 | Training has people but no process (~~Marketing~~ now under IT, which has flows) | gap `uncaptured:*` | Someone in that team maps their day (New human flow). |
 | 4 | ~~Nobody non-admin holds HR / Management / Tenders permission~~ | — | Resolved: Duran Govender now holds HR and Tenders; owners derived on rebuild. |
 | 5 | ~~Hand-offs not built in code~~ — all three built: finance → logistics (Step 8), hr → finance (Step 9), tenders → sales (Step 11). | — | — |
-| 6 | **17** enabled processes have never run: Accounts · Invoice to payment; Colene · Debtors day; Finance · Month-end close; Joulene · Creditors & payments; Mamo · Debtors control day; Mbali · PODs day; Nduduzo · Creditors cycle; Peggy · Debtors day; Sne · PODs & debtors day; HR · Staff request handling; IT · Support request; Logistics · Delivery operations; Marketing · Campaign & announcement; Production · Work order; Reception · Visitors & deliveries; Sales · Enquiry to order; Stock · Goods receiving | gap `noevents:*` | Say which to disable; disabled ones drop out of coverage immediately. |
+| 6 | **17** enabled processes have never run: Accounts · Invoice to payment; Colene · Debtors day; Finance · Month-end close; Joulene · Creditors & payments; Mamo · Debtors control day; Mbali · PODs day; Nduduzo · Creditors cycle; Peggy · Debtors day; Sne · PODs & debtors day; HR · Staff request handling; IT · Support request; Logistics · Delivery operations; Marketing · Campaign & announcement; Production · Work order; Reception · Visitors & deliveries; Sales · Enquiry to order; Stock · Goods receiving | gap `noevents:*` | In Cortex → Work → "Process never ran": press **Switch off** on the ones nobody does this way, **Start it now** on the ones that are real. |
 | 7 | 166 knowledge slots blank | Knowledge strip | People write. Start with department heads (16 "knowledge" slots) and role authority limits (3). |
 
 ---
@@ -157,7 +159,6 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 | **Customers / suppliers / products / tenders layers** | Node types exist (commercial layer) but the builder doesn't derive them | medium — **next** |
 | Payroll settings UI (cut-off day, payroll person) | API exists (`/api/payroll/settings`); no screen yet — set via API or SystemSettings | S, ~0.5 day |
 | **Time replay UI** (`asOf`) | API supports it; no slider on the map | small |
-| Finance merge (§4 #1) | Blocked on your confirmation | 2 min |
 
 Agreed order: ~~HR → Finance~~ → ~~Tenders → Sales~~ → commercial layers.
 

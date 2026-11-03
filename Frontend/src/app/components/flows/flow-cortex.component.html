@@ -94,15 +94,36 @@
       <!-- Gaps -->
       <div class="cx-card">
         <div class="cx-card-head"><mat-icon>build_circle</mat-icon><h3>Gaps<small>{{ apiGaps().length }} open · the to-do list for how the company runs</small></h3></div>
+        <p class="cx-intro">Each group below is one kind of problem. Open a group, press <b>What does this mean?</b> for plain words on what it is, what you do, and what changes when it is fixed. Every row has the button that fixes it, where one exists.</p>
         @for (grp of gapGroups(); track grp.kind) {
           <details class="cx-grp" [open]="grp.kind !== 'no_events'">
-            <summary><mat-icon>{{ grp.meta.icon }}</mat-icon><b>{{ grp.meta.label }}</b><em>{{ grp.gaps.length }}</em><small>{{ grp.meta.blurb }}</small></summary>
+            <summary><mat-icon>{{ grp.meta.icon }}</mat-icon><b>{{ grp.meta.label }}</b><em>{{ grp.gaps.length }}</em><small>{{ grp.meta.blurb }}</small>
+              <button class="lnk q" (click)="$event.preventDefault(); $event.stopPropagation(); explain.set(explain() === grp.kind ? null : grp.kind)"><mat-icon>help_outline</mat-icon>What does this mean?</button></summary>
+            @if (explain() === grp.kind) {
+              <div class="cx-explain">
+                <div><b>What it is</b><p>{{ grp.meta.means }}</p></div>
+                <div><b>What you do</b><p>{{ grp.meta.youDo }}</p></div>
+                <div><b>What changes</b><p>{{ grp.meta.after }}</p></div>
+              </div>
+            }
             <ul>
               @for (g of grp.gaps; track g.key) {
                 <li [class.p1]="g.priority <= 1">
                   <div class="t"><b>{{ g.label }}</b>@if (g.detail) { <p>{{ g.detail }}</p> }</div>
                   <div class="m">
-                    @if (g.onLabel) { <button class="lnk" (click)="showOnMap(g.on)"><mat-icon>my_location</mat-icon>{{ g.onLabel }}</button> }
+                    @if (grp.kind === 'no_events' && gapFlow(g); as f) {
+                      <button class="lnk" (click)="viewFlow.emit(f)"><mat-icon>open_in_new</mat-icon>Open</button>
+                      @if (f.canStart && f.triggerType === 'manual') { <button class="lnk" (click)="startFlow.emit(f)"><mat-icon>play_arrow</mat-icon>Start it now</button> }
+                      @if (isDesigner()) { <button class="lnk off" (click)="switchOff(g)" [disabled]="busyGap() === g.key" matTooltip="Keeps the flow, stops counting it. Reversible in Flows."><mat-icon>power_settings_new</mat-icon>Switch off</button> }
+                    } @else if (grp.kind === 'uncaptured' && gapDept(g)) {
+                      @if (isDesigner()) { <button class="lnk go" (click)="mapDay(g)"><mat-icon>add</mat-icon>Map their day</button> }
+                      <button class="lnk" (click)="showOnMap(g.on)"><mat-icon>my_location</mat-icon>Show team</button>
+                    } @else if (grp.kind === 'data_quality') {
+                      <a class="lnk" routerLink="/departments"><mat-icon>open_in_new</mat-icon>Departments</a>
+                      <button class="lnk" (click)="showOnMap(g.on)"><mat-icon>my_location</mat-icon>Show</button>
+                    } @else if (g.onLabel) {
+                      <button class="lnk" (click)="showOnMap(g.on)"><mat-icon>my_location</mat-icon>{{ g.onLabel }}</button>
+                    }
                     <span [class.warn]="g.unowned">{{ g.owner ?? 'no owner' }}</span>
                   </div>
                 </li>
@@ -116,6 +137,7 @@
       <div class="cx-card">
         <div class="cx-card-head"><mat-icon>swap_calls</mat-icon><h3>Hand-offs between modules<small>
           {{ hoCount('automatic') }} automatic · {{ hoCount('manual') }} someone acts · {{ hoCount('read') }} read · {{ hoCount('gap') }} not built</small></h3></div>
+        <p class="cx-intro"><b>Automatic</b> = the code carries the work across by itself (the three we built: PODs → Finance, HR changes → payroll, won tender → Sales). <b>Someone acts</b> = a person has to notice and do it. <b>Read</b> = one module only looks at the other's data. <b>Not built</b> = nothing connects them yet. The grey file name is where in the code it happens.</p>
         <ul class="cx-ho-list">
           @for (r of handoffRows(); track r.e.id) {
             <li [attr.data-h]="r.how">
@@ -136,6 +158,7 @@
       <!-- Welly -->
       <div class="cx-card">
         <div class="cx-card-head"><mat-icon>auto_awesome</mat-icon><h3>Welly<small>{{ pendingInferences().length }} to confirm · {{ appliedFixes().length }} fixed</small></h3></div>
+        <p class="cx-intro">Welly reads task history and makes guesses: "this step is slow", "only one person ever clears this", "this process has no owner". Nothing it says is treated as fact until you press <b>Confirm</b>. <b>Let Welly fix it</b> applies the suggested change in your name and measures the same step again 14 days later so you can see if it helped.</p>
         @if (pendingInferences().length) {
           <div class="cx-attached">
             @for (a of pendingInferences(); track a.key) {
@@ -182,9 +205,10 @@
       <!-- Blank knowledge -->
       <div class="cx-card">
         <div class="cx-card-head"><mat-icon>post_add</mat-icon><h3>Still blank<small>{{ blankSlots().length }} slots nobody has written · shown, not hidden</small></h3></div>
+        <p class="cx-intro">Every department has a "what we know" slot, every person a "responsibilities" slot, every role an "authority limits" slot. They start empty. Press <b>Write it</b>, type in plain words what that team or person actually does, pick an owner and how often to re-check it. Start with department heads.</p>
         <ul class="cx-blank">
           @for (b of blankSlots().slice(0, blankLimit()); track b.n.key) {
-            <li><button class="lnk" (click)="showOnMap(b.on?.key)"><mat-icon>{{ b.n.icon ?? 'notes' }}</mat-icon><b>{{ b.on?.label ?? '—' }}</b><small>{{ b.n.label }}</small></button></li>
+            <li><button class="lnk" (click)="writeSlot(b)"><mat-icon>{{ b.n.icon ?? 'notes' }}</mat-icon><b>{{ b.on?.label ?? '—' }}</b><small>{{ b.n.label }}</small><em>Write it</em></button></li>
           }
         </ul>
         @if (blankSlots().length > blankLimit()) { <button class="cx-k-btn" (click)="blankLimit.set(blankLimit() + 40)">Show {{ blankSlots().length - blankLimit() }} more</button> }
@@ -193,6 +217,7 @@
       <!-- Changes -->
       <div class="cx-card">
         <div class="cx-card-head"><mat-icon>history</mat-icon><h3>What changed<small>the graph's own log · rebuilds, writes, decisions, fixes, reminders</small></h3><span class="spacer"></span><button class="cx-k-btn" (click)="loadChanges()" [disabled]="changesBusy()"><mat-icon>refresh</mat-icon></button></div>
+        <p class="cx-intro">Every change to the map is logged with who and when: nightly rebuilds, things people wrote, Welly items confirmed or rejected, fixes applied, reminders sent. This is the audit trail.</p>
         <ul class="cx-feed">
           @for (c of changes(); track c.id) {
             <li [attr.data-k]="c.kind">

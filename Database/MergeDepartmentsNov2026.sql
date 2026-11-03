@@ -22,7 +22,7 @@ INSERT INTO #Merge SELECT 34, 14, 'Marketing', 'IT Department';
 DELETE m FROM #Merge m JOIN Departments d ON d.DepartmentId = m.LoserId WHERE d.IsActive = 0;
 
 -- ── Pending confirmation (uncomment after sign-off) ─────────────────────────────────────────────
--- INSERT INTO #Merge SELECT 17, 35, 'Finance Department', 'Finance';
+INSERT INTO #Merge SELECT 17, 35, 'Finance Department', 'Finance';   -- approved 3 Nov
 
 BEGIN TRAN;
 

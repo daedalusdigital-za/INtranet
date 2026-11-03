@@ -49,6 +49,8 @@ export class FlowCortexComponent implements OnInit {
   newHumanFlow = output<{ dept: string | null; owner: { employeeId: string; name: string; title?: string | null } | null }>();
   openHuman = output<{ dept: string; personKey: string | null }>();
   designFlow = output<void>();
+  /** A flow was switched on/off from the Work view; parent should reload definitions. */
+  flowsChanged = output<void>();
 
   readonly streams = CORTEX_STREAMS;
   readonly gaps = CORTEX_GAPS;
@@ -251,21 +253,65 @@ export class FlowCortexComponent implements OnInit {
     this.changesBusy.set(true);
     this.api.cortexChanges({ take: 60 }).subscribe({ next: c => { this.changes.set(c ?? []); this.changesBusy.set(false); }, error: () => this.changesBusy.set(false) });
   }
-  readonly gapKinds: Record<string, { label: string; icon: string; blurb: string }> = {
-    not_built:   { label: 'Hand-off not built',        icon: 'link_off',      blurb: 'Two modules pass work between them, but no code carries it. Someone re-types it.' },
-    no_owner:    { label: 'Nobody owns it',            icon: 'person_off',    blurb: 'A module, process or department with no accountable person.' },
-    uncaptured:  { label: 'Work not captured',         icon: 'visibility_off',blurb: 'A team exists but none of its work is on the map.' },
-    data_quality:{ label: 'Data needs cleaning',       icon: 'cleaning_services', blurb: 'Duplicates or broken records that make the map lie.' },
-    no_events:   { label: 'Process never ran',         icon: 'play_disabled', blurb: 'Enabled in Flows, but nothing has ever passed through it. Real, or clutter?' },
-    overdue:     { label: 'Review overdue',            icon: 'history',       blurb: 'Written knowledge past its review date.' },
+  readonly gapKinds: Record<string, { label: string; icon: string; blurb: string; means: string; youDo: string; after: string }> = {
+    not_built: { label: 'Hand-off not built', icon: 'link_off',
+      blurb: 'Two modules pass work between them, but no code carries it.',
+      means: 'Someone finishes something in one module and a person in another module has to notice and re-type it. That is where things get forgotten.',
+      youDo: 'Tell me which one matters most. Each is a feature I build; once built the row turns green here and disappears from this list.',
+      after: 'The receiving team gets the work automatically, with the details already filled in.' },
+    no_owner: { label: 'Nobody owns it', icon: 'person_off',
+      blurb: 'A module, process or department with no accountable person.',
+      means: 'If this breaks or needs a decision, there is nobody to ask. Reminders and Welly suggestions have nowhere to go.',
+      youDo: 'For a module: grant that permission to the person who really does the work (Users → edit → modules). For a process: open it in Flows and set an owner. For a department: set its manager.',
+      after: 'The owner shows on the node, gets review reminders, and can press "Write it" on its knowledge slot.' },
+    uncaptured: { label: 'Work not captured', icon: 'visibility_off',
+      blurb: 'A team exists but none of its work is on the map.',
+      means: 'People are employed in this department but the intranet has no idea what they do all day. Nothing can be measured, handed off or covered for them.',
+      youDo: 'Press "Map their day". You get a blank human flow for that team: list the things they do, who does them and roughly how long each waits. 15 minutes with the team lead.',
+      after: 'The department lights up on the map with a flow; its people show as "mapped"; the gap closes on the next rebuild.' },
+    data_quality: { label: 'Data needs cleaning', icon: 'cleaning_services',
+      blurb: 'Duplicates or broken records that make the map lie.',
+      means: 'Two records for one real thing (e.g. "Finance" and "Finance Department") split the same people, permissions and flows, so counts and owners are wrong everywhere.',
+      youDo: 'Say which name survives. I merge them with a script that re-points every table and keeps history. Nothing is deleted.',
+      after: 'One department, correct counts, one manager. The loser record is retired and points at the survivor.' },
+    no_events: { label: 'Process never ran', icon: 'play_disabled',
+      blurb: 'Enabled in Flows, but nothing has ever passed through it.',
+      means: 'This was designed but never used. Either the work is real and nobody starts the flow, or the flow is clutter. Until it runs it does not count as coverage.',
+      youDo: 'If the team does this work: open it and press Start the next time it happens. If nobody does it this way: press "Switch off" — it stays saved, just not counted. You can switch it back on any time.',
+      after: 'Switched-off processes drop out of this list and out of the coverage %. Running ones start collecting waits and Welly findings.' },
+    overdue: { label: 'Review overdue', icon: 'history',
+      blurb: 'Written knowledge past its review date.',
+      means: 'Someone wrote this down months ago and nobody has confirmed it is still true.',
+      youDo: 'Open it, read it, press Update (change what is wrong, or just re-save to confirm). Pick a new review period.',
+      after: 'The review date moves forward and the reminder stops.' },
   };
   gapGroups = computed(() => {
     const by = new Map<string, CortexApiGap[]>();
     for (const g of this.apiGaps()) { const k = g.kind || 'other'; if (!by.has(k)) by.set(k, []); by.get(k)!.push(g); }
     const order = ['not_built', 'data_quality', 'no_owner', 'uncaptured', 'overdue', 'no_events'];
     return [...by.entries()].sort((a, b) => (order.indexOf(a[0]) + 99) % 99 - (order.indexOf(b[0]) + 99) % 99)
-      .map(([kind, gaps]) => ({ kind, meta: this.gapKinds[kind] ?? { label: kind, icon: 'build_circle', blurb: '' }, gaps: gaps.sort((x, y) => x.priority - y.priority || x.label.localeCompare(y.label)) }));
+      .map(([kind, gaps]) => ({ kind, meta: this.gapKinds[kind] ?? { label: kind, icon: 'build_circle', blurb: '', means: '', youDo: '', after: '' }, gaps: gaps.sort((x, y) => x.priority - y.priority || x.label.localeCompare(y.label)) }));
   });
+  /** Which group's "what does this mean" box is open. */
+  explain = signal<string | null>(null);
+  /** The Flows definition a gap points at (gap.on = 'flow:ID'). */
+  gapFlow(g: CortexApiGap): FlowDefinition | null { const m = /^flow:(\d+)$/.exec(g.on ?? ''); return m ? this.flows().find(f => f.id === +m[1]) ?? null : null; }
+  /** The department node a gap points at (gap.on = 'dept:ID'). */
+  gapDept(g: CortexApiGap) { const m = /^dept:(\d+)$/.exec(g.on ?? ''); return m ? this.deptNodes().find(d => d.key === 'd:' + m[1]) ?? null : null; }
+  busyGap = signal<string | null>(null);
+  /** "Switch off": disable a never-run process so it stops counting. Reversible in Flows. */
+  switchOff(g: CortexApiGap) {
+    const f = this.gapFlow(g); if (!f || this.busyGap()) return;
+    this.busyGap.set(g.key);
+    this.api.toggle(f.id).subscribe({
+      next: r => { this.busyGap.set(null); this.snack.open(`${f.name} switched ${r.isEnabled ? 'on' : 'off'}. It is kept, just not counted.`, 'OK', { duration: 4000 }); this.flowsChanged.emit(); this.rebuildGraph(); },
+      error: e => { this.busyGap.set(null); this.snack.open(e?.error?.message ?? 'Could not switch off', 'OK', { duration: 4000 }); }
+    });
+  }
+  /** "Map their day": a blank human flow for the team the gap points at. */
+  mapDay(g: CortexApiGap) { const d = this.gapDept(g); if (d) this.newHumanFlow.emit({ dept: d.deptName, owner: null }); }
+  /** Write a blank slot straight from the Work view: select its node on the map and open the editor. */
+  writeSlot(b: { n: CortexApiNode; on?: CortexApiNode }) { this.showOnMap(b.on?.key); this.openEditor(b.n, 'write'); }
   /** Every module-to-module hand-off the server graph knows, with how it is carried. */
   handoffRows = computed(() => {
     const g = this.graph(); if (!g) return [];
