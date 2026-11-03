@@ -50,19 +50,27 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 var linkedIdSet = new HashSet<string>(linkedCarTrackIds!, StringComparer.OrdinalIgnoreCase);
 
-                // Filter to only unlinked vehicles and map to the shape the frontend expects
+                // Filter to only unlinked vehicles and map to the shape the frontend expects.
+                // Live units first so a user picking by hand doesn't grab the dead one.
                 var unlinkedVehicles = carTrackVehicles
                     .Where(ct => !string.IsNullOrEmpty(ct.VehicleId) && !linkedIdSet.Contains(ct.VehicleId))
-                    .Select(ct => new
+                    .Select(ct =>
                     {
-                        id = ct.VehicleId,
-                        name = ct.Registration ?? $"CT-{ct.VehicleId}",
-                        registrationNumber = ct.Registration,
-                        description = !string.IsNullOrEmpty(ct.DriverFirstName)
-                            ? $"Driver: {ct.DriverFirstName} {ct.DriverLastName}".Trim()
-                            : ct.Status ?? "No driver assigned"
+                        var offline = CarTrackDevicePicker.IsOffline(ct.Status, ct.LastUpdate);
+                        var seen = ct.LastUpdate.HasValue ? $"last seen {ct.LastUpdate.Value.ToLocalTime():dd MMM HH:mm}" : "never reported";
+                        var driver = !string.IsNullOrEmpty(ct.DriverFirstName) ? $"Driver: {ct.DriverFirstName} {ct.DriverLastName}".Trim() : null;
+                        return new
+                        {
+                            id = ct.VehicleId,
+                            name = ct.Registration ?? $"CT-{ct.VehicleId}",
+                            registrationNumber = ct.Registration,
+                            isOffline = offline,
+                            lastUpdate = ct.LastUpdate,
+                            description = (offline ? "OFFLINE · " : "LIVE · ") + seen + (driver != null ? " · " + driver : "")
+                        };
                     })
-                    .OrderBy(v => v.name)
+                    .OrderBy(v => v.isOffline)
+                    .ThenBy(v => v.name)
                     .ToList();
 
                 return Ok(unlinkedVehicles);

@@ -111,35 +111,50 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 // Get live locations from CarTrack
                 var liveLocations = await _carTrackService.GetAllVehicleLocationsAsync();
-                var locationLookup = liveLocations.ToDictionary(
-                    l => l.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") ?? "",
-                    l => l,
-                    StringComparer.OrdinalIgnoreCase
-                );
+
+                // CarTrack can list the same vehicle more than once (old unit + new unit, camera unit with a
+                // suffix). Group by base registration and keep the unit that is actually reporting.
+                var locationLookup = liveLocations
+                    .Where(l => !string.IsNullOrWhiteSpace(l.RegistrationNumber))
+                    .GroupBy(l => CarTrackDevicePicker.BaseReg(l.RegistrationNumber), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.OrderByDescending(l => CarTrackDevicePicker.Score(l.RegistrationNumber, l.Status, l.LastUpdate)).First(),
+                        StringComparer.OrdinalIgnoreCase);
 
                 // Also create lookup by CarTrackId
-                var locationByIdLookup = liveLocations.ToDictionary(
-                    l => l.VehicleId ?? "",
-                    l => l,
-                    StringComparer.OrdinalIgnoreCase
-                );
+                var locationByIdLookup = liveLocations
+                    .Where(l => !string.IsNullOrEmpty(l.VehicleId))
+                    .GroupBy(l => l.VehicleId!, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
                 var vehiclesToUpdate = new List<Vehicle>();
                 
                 var result = vehicles.Select(v => {
                     // Try to find live data by CarTrackId first, then by registration
                     VehicleLocationDto? liveData = null;
+                    var regNormalized = CarTrackDevicePicker.BaseReg(v.RegistrationNumber);
+                    locationLookup.TryGetValue(regNormalized, out var bestByReg);
+
                     if (!string.IsNullOrEmpty(v.CarTrackId) && locationByIdLookup.TryGetValue(v.CarTrackId, out var byId))
                     {
                         liveData = byId;
-                    }
-                    else
-                    {
-                        var regNormalized = v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") ?? "";
-                        if (locationLookup.TryGetValue(regNormalized, out var byReg))
+                        // Linked unit is dead but another unit on the same registration is reporting -> switch to it
+                        if (bestByReg != null && bestByReg.VehicleId != byId.VehicleId
+                            && CarTrackDevicePicker.IsOffline(byId.Status, byId.LastUpdate)
+                            && !CarTrackDevicePicker.IsOffline(bestByReg.Status, bestByReg.LastUpdate))
                         {
-                            liveData = byReg;
+                            _logger.LogInformation("Vehicle {Reg}: CarTrack unit {Old} is offline, switching to live unit {New} ({NewReg})",
+                                v.RegistrationNumber, byId.VehicleId, bestByReg.VehicleId, bestByReg.RegistrationNumber);
+                            v.CarTrackId = bestByReg.VehicleId;
+                            v.CarTrackName = bestByReg.RegistrationNumber;
+                            if (!vehiclesToUpdate.Contains(v)) vehiclesToUpdate.Add(v);
+                            liveData = bestByReg;
                         }
+                    }
+                    else if (bestByReg != null)
+                    {
+                        liveData = bestByReg;
                     }
 
                     // Determine location - use live data if available, otherwise use saved last known location
@@ -267,71 +282,58 @@ namespace ProjectTracker.API.Controllers.Logistics
                 
                 int linked = 0;
                 int updated = 0;
-                
-                // Build lookup of unlinked local vehicles for suffix matching
-                var unlinkedLocals = localVehicles
-                    .Where(v => string.IsNullOrEmpty(v.CarTrackId) && !string.IsNullOrEmpty(v.RegistrationNumber))
-                    .ToList();
-                
-                // Known CarTrack device suffixes (LV=Livestream, FMP=FMPro tracker, BU=Backup, SC=SecondCam, MV=MultiView, TAG=Tag)
-                var deviceSuffixes = new[] { "LV", "FMP", "BU", "SC", "MV", "TAG", "LVHA4", "NEW" };
-                
-                foreach (var ctVehicle in carTrackVehicles)
+                int duplicates = 0;
+                var switched = new List<object>();
+
+                // CarTrack lists the same vehicle more than once when a unit was replaced or a camera unit
+                // was added ("ABC123GP", "ABC123GP LV", …). Group by base registration and pick the unit
+                // that is actually reporting (online > most recent report > plain registration).
+                var byBaseReg = carTrackVehicles
+                    .Where(ct => !string.IsNullOrWhiteSpace(ct.Registration))
+                    .GroupBy(ct => CarTrackDevicePicker.BaseReg(ct.Registration), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.OrderByDescending(ct => CarTrackDevicePicker.Score(ct.Registration, ct.Status, ct.LastUpdate)).ToList(),
+                        StringComparer.OrdinalIgnoreCase);
+                duplicates = byBaseReg.Values.Count(l => l.Count > 1);
+
+                foreach (var localVehicle in localVehicles.Where(v => !string.IsNullOrEmpty(v.RegistrationNumber)))
                 {
-                    if (string.IsNullOrEmpty(ctVehicle.Registration))
-                        continue;
-                    
-                    // Normalize registration for matching
-                    var regNormalized = ctVehicle.Registration.ToUpperInvariant().Replace(" ", "").Replace("-", "");
-                    
-                    // Skip entries with device suffixes - prefer the base registration entry
-                    bool hasSuffix = deviceSuffixes.Any(s => regNormalized.EndsWith(s, StringComparison.OrdinalIgnoreCase));
-                    
-                    // Find matching local vehicle by exact registration first
-                    var localVehicle = localVehicles.FirstOrDefault(v => 
-                        v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") == regNormalized);
-                    
-                    // If no exact match and this entry has a suffix, try matching the base registration
-                    if (localVehicle == null && hasSuffix)
+                    var localReg = CarTrackDevicePicker.BaseReg(localVehicle.RegistrationNumber);
+                    if (!byBaseReg.TryGetValue(localReg, out var candidates))
                     {
-                        // Strip known suffixes to get base registration
-                        var baseReg = regNormalized;
-                        foreach (var suffix in deviceSuffixes.OrderByDescending(s => s.Length))
-                        {
-                            if (baseReg.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                            {
-                                baseReg = baseReg[..^suffix.Length];
-                                break;
-                            }
-                        }
-                        localVehicle = unlinkedLocals.FirstOrDefault(v => 
-                            v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") == baseReg);
+                        // Unknown suffix on CarTrack side: "ABC123GP" vs "ABC123GPXYZ"
+                        var key = byBaseReg.Keys.FirstOrDefault(k => localReg.Length >= 6 && k.StartsWith(localReg, StringComparison.OrdinalIgnoreCase));
+                        if (key == null) continue;
+                        candidates = byBaseReg[key];
                     }
-                    
-                    // If still no match, check if CarTrack reg starts with any unlinked local reg (catches unknown suffixes)
-                    if (localVehicle == null && !hasSuffix)
+
+                    var best = candidates[0];
+                    var current = string.IsNullOrEmpty(localVehicle.CarTrackId)
+                        ? null
+                        : candidates.FirstOrDefault(c => c.VehicleId == localVehicle.CarTrackId);
+
+                    if (string.IsNullOrEmpty(localVehicle.CarTrackId))
                     {
-                        localVehicle = unlinkedLocals.FirstOrDefault(v => {
-                            var localReg = v.RegistrationNumber?.ToUpperInvariant().Replace(" ", "").Replace("-", "") ?? "";
-                            return localReg.Length >= 6 && regNormalized.StartsWith(localReg) && regNormalized.Length > localReg.Length;
-                        });
+                        localVehicle.CarTrackId = best.VehicleId;
+                        localVehicle.CarTrackName = best.Registration;
+                        linked++;
+                        _logger.LogInformation("Linked {Reg} to CarTrack unit {Id} ({CtReg}, {Status})",
+                            localVehicle.RegistrationNumber, best.VehicleId, best.Registration, best.Status);
                     }
-                    
-                    if (localVehicle != null)
+                    else if (localVehicle.CarTrackId != best.VehicleId)
                     {
-                        if (string.IsNullOrEmpty(localVehicle.CarTrackId))
+                        // Only move the link if the linked unit is dead/unknown and the best one is alive,
+                        // so a deliberate manual link to a live unit is never overridden.
+                        bool currentDead = current == null || CarTrackDevicePicker.IsOffline(current.Status, current.LastUpdate);
+                        bool bestAlive = !CarTrackDevicePicker.IsOffline(best.Status, best.LastUpdate);
+                        if (currentDead && bestAlive)
                         {
-                            localVehicle.CarTrackId = ctVehicle.VehicleId;
-                            localVehicle.CarTrackName = ctVehicle.Registration;
-                            linked++;
-                            unlinkedLocals.Remove(localVehicle); // Remove from unlinked pool
-                            _logger.LogInformation($"Linked vehicle {localVehicle.RegistrationNumber} to CarTrack ID {ctVehicle.VehicleId} (CarTrack reg: {ctVehicle.Registration})");
-                        }
-                        else if (localVehicle.CarTrackId != ctVehicle.VehicleId && !hasSuffix)
-                        {
-                            // Only update with base registration entries (not suffix duplicates)
-                            localVehicle.CarTrackId = ctVehicle.VehicleId;
-                            localVehicle.CarTrackName = ctVehicle.Registration;
+                            switched.Add(new { registration = localVehicle.RegistrationNumber, from = localVehicle.CarTrackId, to = best.VehicleId, toName = best.Registration });
+                            _logger.LogInformation("Vehicle {Reg}: CarTrack unit {Old} offline, re-linked to live unit {New} ({CtReg})",
+                                localVehicle.RegistrationNumber, localVehicle.CarTrackId, best.VehicleId, best.Registration);
+                            localVehicle.CarTrackId = best.VehicleId;
+                            localVehicle.CarTrackName = best.Registration;
                             updated++;
                         }
                     }
@@ -342,13 +344,17 @@ namespace ProjectTracker.API.Controllers.Logistics
                     await _context.SaveChangesAsync();
                 }
                 
-                _logger.LogInformation($"CarTrack sync completed: {linked} newly linked, {updated} updated out of {carTrackVehicles.Count} CarTrack vehicles");
+                _logger.LogInformation($"CarTrack sync completed: {linked} newly linked, {updated} re-linked to live unit, {duplicates} registrations listed more than once, out of {carTrackVehicles.Count} CarTrack units");
                 
                 return Ok(new { 
-                    message = $"CarTrack sync completed",
+                    message = updated > 0
+                        ? $"CarTrack sync completed — {updated} vehicle(s) moved from an offline unit to the live one"
+                        : "CarTrack sync completed",
                     carTrackVehicles = carTrackVehicles.Count,
                     linked,
                     updated,
+                    duplicates,
+                    switched,
                     totalLocalVehicles = localVehicles.Count
                 });
             }
@@ -1375,20 +1381,34 @@ namespace ProjectTracker.API.Controllers.Logistics
                 var syncedVehicles = new List<string>();
                 var syncedDrivers = new List<string>();
 
-                foreach (var ctVehicle in carTrackVehicles)
+                // One physical vehicle per registration: when CarTrack lists several units (old + new,
+                // camera unit with a suffix), only the unit that is actually reporting is used.
+                var bestUnits = carTrackVehicles
+                    .Where(ct => !string.IsNullOrEmpty(ct.VehicleId))
+                    .GroupBy(ct => string.IsNullOrWhiteSpace(ct.Registration) ? "ID:" + ct.VehicleId : CarTrackDevicePicker.BaseReg(ct.Registration), StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.OrderByDescending(ct => CarTrackDevicePicker.Score(ct.Registration, ct.Status, ct.LastUpdate)).First())
+                    .ToList();
+
+                foreach (var ctVehicle in bestUnits)
                 {
                     if (string.IsNullOrEmpty(ctVehicle.VehicleId))
                         continue;
 
-                    // Check if vehicle exists by CarTrackId
+                    var baseReg = CarTrackDevicePicker.BaseReg(ctVehicle.Registration);
+
+                    // Check if vehicle exists by CarTrackId, or by any unit id for the same registration
+                    var siblingIds = carTrackVehicles
+                        .Where(c => !string.IsNullOrWhiteSpace(c.Registration) && CarTrackDevicePicker.BaseReg(c.Registration) == baseReg)
+                        .Select(c => c.VehicleId).ToList();
                     var existingVehicle = await _context.Vehicles
-                        .FirstOrDefaultAsync(v => v.CarTrackId == ctVehicle.VehicleId);
+                        .FirstOrDefaultAsync(v => v.CarTrackId == ctVehicle.VehicleId || (v.CarTrackId != null && siblingIds.Contains(v.CarTrackId)));
 
                     // Also check by registration if no CarTrackId match
                     if (existingVehicle == null && !string.IsNullOrEmpty(ctVehicle.Registration))
                     {
-                        existingVehicle = await _context.Vehicles
-                            .FirstOrDefaultAsync(v => v.RegistrationNumber == ctVehicle.Registration);
+                        var locals = await _context.Vehicles.Where(v => v.RegistrationNumber != null).Select(v => new { v.Id, v.RegistrationNumber }).ToListAsync();
+                        var hit = locals.FirstOrDefault(l => CarTrackDevicePicker.BaseReg(l.RegistrationNumber) == baseReg);
+                        if (hit != null) existingVehicle = await _context.Vehicles.FirstAsync(v => v.Id == hit.Id);
                     }
 
                     // Handle driver sync if driver info is available
@@ -1428,9 +1448,22 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                     if (existingVehicle != null)
                     {
-                        // Update existing vehicle
-                        existingVehicle.CarTrackId = ctVehicle.VehicleId;
-                        existingVehicle.CarTrackName = ctVehicle.Registration ?? existingVehicle.CarTrackName;
+                        // Update existing vehicle. Only move the link off a unit that is still reporting if
+                        // the current one is dead — never override a deliberate link to a live unit.
+                        if (existingVehicle.CarTrackId != ctVehicle.VehicleId)
+                        {
+                            var current = carTrackVehicles.FirstOrDefault(c => c.VehicleId == existingVehicle.CarTrackId);
+                            bool currentDead = current == null || CarTrackDevicePicker.IsOffline(current.Status, current.LastUpdate);
+                            if (currentDead)
+                            {
+                                existingVehicle.CarTrackId = ctVehicle.VehicleId;
+                                existingVehicle.CarTrackName = ctVehicle.Registration ?? existingVehicle.CarTrackName;
+                            }
+                        }
+                        else
+                        {
+                            existingVehicle.CarTrackName = ctVehicle.Registration ?? existingVehicle.CarTrackName;
+                        }
                         if (!string.IsNullOrEmpty(ctVehicle.ChassisNumber))
                             existingVehicle.VinNumber = ctVehicle.ChassisNumber;
                         if (driver != null)

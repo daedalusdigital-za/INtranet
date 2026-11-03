@@ -51,6 +51,47 @@ namespace ProjectTracker.API.Services
         public string? DriverFirstName { get; set; }
         public string? DriverLastName { get; set; }
         public string? Status { get; set; }
+        public DateTime? LastUpdate { get; set; }
+    }
+
+    /// <summary>
+    /// CarTrack often lists the same physical vehicle twice (old unit + new unit, or a camera unit
+    /// with a suffix like "ABC123GP LV"). These helpers pick the unit that is actually reporting.
+    /// </summary>
+    public static class CarTrackDevicePicker
+    {
+        // Known device-name suffixes CarTrack appends to a registration
+        public static readonly string[] DeviceSuffixes = { "LVHA4", "FMP", "TAG", "NEW", "OLD", "LV", "BU", "SC", "MV" };
+
+        public static string Normalize(string? reg) =>
+            (reg ?? string.Empty).ToUpperInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+
+        /// <summary>Registration with any device suffix removed ("ABC123GPLV" -> "ABC123GP").</summary>
+        public static string BaseReg(string? reg)
+        {
+            var n = Normalize(reg);
+            foreach (var s in DeviceSuffixes.OrderByDescending(x => x.Length))
+            {
+                if (n.Length > s.Length + 5 && n.EndsWith(s, StringComparison.Ordinal))
+                    return n[..^s.Length];
+            }
+            return n;
+        }
+
+        public static bool HasSuffix(string? reg) => BaseReg(reg) != Normalize(reg);
+
+        public static bool IsOffline(string? status, DateTime? lastUpdate)
+        {
+            if (string.Equals(status, "offline", StringComparison.OrdinalIgnoreCase)) return true;
+            if (lastUpdate == null) return true;
+            return (DateTime.UtcNow - lastUpdate.Value.ToUniversalTime()) > TimeSpan.FromHours(24);
+        }
+
+        /// <summary>Higher is better: online beats offline, then most recent report, then base registration beats suffixed.</summary>
+        public static (int online, long ticks, int plain) Score(string? reg, string? status, DateTime? lastUpdate) =>
+            (IsOffline(status, lastUpdate) ? 0 : 1,
+             lastUpdate?.ToUniversalTime().Ticks ?? 0,
+             HasSuffix(reg) ? 0 : 1);
     }
 
     public class CarTrackService : ICarTrackService
@@ -265,7 +306,8 @@ namespace ProjectTracker.API.Services
                         ChassisNumber = v.ChassisNumber,
                         DriverFirstName = v.Driver?.FirstName,
                         DriverLastName = v.Driver?.LastName,
-                        Status = DetermineVehicleStatus(v.Speed, v.Ignition, lastUpdate)
+                        Status = DetermineVehicleStatus(v.Speed, v.Ignition, lastUpdate),
+                        LastUpdate = lastUpdate
                     };
                 }).ToList();
             }
