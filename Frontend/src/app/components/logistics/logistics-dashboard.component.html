@@ -786,6 +786,21 @@
                         </td>
                       </ng-container>
 
+                      <!-- Last edited by -->
+                      <ng-container matColumnDef="lastEdited">
+                        <th mat-header-cell *matHeaderCellDef>Last edited</th>
+                        <td mat-cell *matCellDef="let record" class="last-edited-cell">
+                          @if (record.updatedBy || record.createdBy) {
+                            <span class="edited-by" [matTooltip]="'Created ' + (record.createdAt | date:'dd MMM yyyy HH:mm') + (record.createdBy ? ' by ' + record.createdBy : '') + (record.updatedAt ? ' · Last edited ' + (record.updatedAt | date:'dd MMM yyyy HH:mm') : '')">
+                              {{ record.updatedBy || record.createdBy }}
+                            </span>
+                            <small class="edited-at">{{ (record.updatedAt || record.createdAt) | date:'dd MMM HH:mm' }}</small>
+                          } @else {
+                            <span class="muted" matTooltip="Entered before edit tracking was switched on">—</span>
+                          }
+                        </td>
+                      </ng-container>
+
                       <!-- Files Column -->
                       <ng-container matColumnDef="files">
                         <th mat-header-cell *matHeaderCellDef>Files</th>

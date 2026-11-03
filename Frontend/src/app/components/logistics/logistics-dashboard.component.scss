@@ -1504,6 +1504,12 @@
     }
 
     .date-range-field { min-width: 240px; }
+    .last-edited-cell {
+      white-space: nowrap;
+      .edited-by { display: block; font-size: var(--text-sm); }
+      .edited-at { display: block; color: var(--color-text-muted); font-size: 11px; }
+      .muted { color: var(--color-text-muted); }
+    }
     .maint-quick-range {
       display: flex;
       gap: 6px;

@@ -80,6 +80,14 @@ namespace ProjectTracker.API.Models.Logistics
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>Who created the record (user full name), for accountability.</summary>
+    [MaxLength(150)]
+    public string? CreatedBy { get; set; }
+
+    /// <summary>Who last changed the record (edit, complete, upload). Shown as "Last edited by".</summary>
+    [MaxLength(150)]
+    public string? UpdatedBy { get; set; }
+
         // Navigation properties
         [ForeignKey("VehicleId")]
         public virtual Vehicle Vehicle { get; set; } = null!;

@@ -185,7 +185,7 @@ export class LogisticsDashboardComponent implements OnInit, OnDestroy {
   /** Date window for the maintenance list (defaults to the last 7 months; set either end to widen or narrow). */
   maintenanceFromDate: Date | null = (() => { const d = new Date(); d.setMonth(d.getMonth() - 7); d.setHours(0, 0, 0, 0); return d; })();
   maintenanceToDate: Date | null = null;
-  maintenanceColumns = ['vehicleReg', 'maintenanceType', 'description', 'scheduledDate', 'cost', 'priority', 'status', 'assignedTo', 'files', 'actions'];
+  maintenanceColumns = ['vehicleReg', 'maintenanceType', 'description', 'scheduledDate', 'cost', 'priority', 'status', 'assignedTo', 'lastEdited', 'files', 'actions'];
 
   // Maintenance attachments
   showMaintenanceAttachmentPanel = false;
@@ -927,7 +927,8 @@ export class LogisticsDashboardComponent implements OnInit, OnDestroy {
       this.maintenanceVehicleFilter !== 'all' ||
       this.maintenanceStatusFilter !== 'all' ||
       this.maintenanceTypeFilter !== 'all' ||
-      this.maintenanceAssignedToFilter !== 'all';
+      this.maintenanceAssignedToFilter !== 'all' ||
+      this.getFilteredMaintenanceRecords().length !== this.maintenanceRecords().filter(r => !!r).length;
 
     const dialogRef = this.dialog.open(MaintenanceExportScopeDialog, {
       width: '420px',
@@ -945,32 +946,20 @@ export class LogisticsDashboardComponent implements OnInit, OnDestroy {
   }
 
   private downloadMaintenanceExcel(scope: 'all' | 'filtered'): void {
-    const params: string[] = [...this.maintenanceDateParams()];
+    const params: string[] = [];
 
     if (scope === 'filtered') {
-      // Map the UI status filter to the backend status vocabulary where sensible.
-      const status = this.maintenanceStatusFilter;
-      if (status && status !== 'all' && status !== 'overdue') {
-        const map: Record<string, string> = {
-          'scheduled': 'Scheduled',
-          'in-progress': 'In Progress',
-          'completed': 'Completed'
-        };
-        if (map[status]) params.push(`status=${encodeURIComponent(map[status])}`);
+      // Export exactly the rows on screen: the server is given their IDs, so search text, the
+      // "overdue" pseudo-status and "Unassigned" all come out the same as the table shows.
+      const ids = this.getFilteredMaintenanceRecords().map(r => r.id).filter(id => id != null);
+      if (ids.length === 0) {
+        this.toast.warn('Nothing to export — the current filter shows no records');
+        return;
       }
-      if (this.maintenanceVehicleFilter !== 'all') {
-        params.push(`vehicleReg=${encodeURIComponent(this.maintenanceVehicleFilter)}`);
-      }
-      if (this.maintenanceTypeFilter !== 'all') {
-        params.push(`maintenanceType=${encodeURIComponent(this.maintenanceTypeFilter)}`);
-      }
-      if (this.maintenanceAssignedToFilter !== 'all' && this.maintenanceAssignedToFilter !== 'Unassigned') {
-        params.push(`assignedTo=${encodeURIComponent(this.maintenanceAssignedToFilter)}`);
-      }
-      // When filtering, don't restrict to open-only so completed matches also export.
-      params.push('openOnly=false');
+      params.push(`ids=${ids.join(',')}`);
     } else {
-      // Export everything, including completed/cancelled records.
+      // Export everything in the selected date range, including completed/cancelled records.
+      params.push(...this.maintenanceDateParams());
       params.push('openOnly=false');
     }
 

@@ -22,6 +22,32 @@ namespace ProjectTracker.API.Controllers.Logistics
             _logger = logger;
         }
 
+        /// <summary>Name of the signed-in user for the CreatedBy / UpdatedBy stamps.</summary>
+        private async Task<string> CurrentUserNameAsync()
+        {
+            var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("UserId")?.Value
+                ?? User.FindFirst("sub")?.Value;
+            if (int.TryParse(idClaim, out var uid))
+            {
+                var u = await _context.Users.Where(x => x.UserId == uid).Select(x => new { x.Name, x.Surname, x.Email }).FirstOrDefaultAsync();
+                if (u != null)
+                {
+                    var full = $"{u.Name} {u.Surname}".Trim();
+                    return string.IsNullOrWhiteSpace(full) ? u.Email : full;
+                }
+            }
+            return User.Identity?.Name
+                ?? User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? "Unknown";
+        }
+
+        private async Task StampAsync(VehicleMaintenance m)
+        {
+            m.UpdatedAt = DateTime.UtcNow;
+            m.UpdatedBy = await CurrentUserNameAsync();
+        }
+
         /// <summary>
         /// Maintenance records. <paramref name="from"/> / <paramref name="to"/> filter on the record's date
         /// (completed date when done, else scheduled date). Both optional; the UI defaults to the last 7 months.
@@ -96,7 +122,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ProofOfWorkPath = m.ProofOfWorkPath,
                     ProofOfPaymentPath = m.ProofOfPaymentPath,
                     NextServiceDate = m.NextServiceDate,
-                    NextServiceOdometer = m.NextServiceOdometer
+                    NextServiceOdometer = m.NextServiceOdometer,
+                    CreatedAt = m.CreatedAt,
+                    CreatedBy = m.CreatedBy,
+                    UpdatedAt = m.UpdatedAt,
+                    UpdatedBy = m.UpdatedBy
                 })
                 .OrderByDescending(m => m.ScheduledDate)
                 .ToListAsync();
@@ -143,7 +173,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ProofOfWorkPath = m.ProofOfWorkPath,
                     ProofOfPaymentPath = m.ProofOfPaymentPath,
                     NextServiceDate = m.NextServiceDate,
-                    NextServiceOdometer = m.NextServiceOdometer
+                    NextServiceOdometer = m.NextServiceOdometer,
+                    CreatedAt = m.CreatedAt,
+                    CreatedBy = m.CreatedBy,
+                    UpdatedAt = m.UpdatedAt,
+                    UpdatedBy = m.UpdatedBy
                 })
                 .FirstOrDefaultAsync();
 
@@ -176,6 +210,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 TargetDate = dto.TargetDate,
                 Status = string.IsNullOrWhiteSpace(dto.Status) ? "Scheduled" : dto.Status
             };
+            maintenance.CreatedBy = await CurrentUserNameAsync();
+            maintenance.UpdatedBy = maintenance.CreatedBy;
+            maintenance.UpdatedAt = DateTime.UtcNow;
 
             _context.VehicleMaintenance.Add(maintenance);
             await _context.SaveChangesAsync();
@@ -210,7 +247,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (dto.ServiceProvider != null) maintenance.ServiceProvider = dto.ServiceProvider;
             if (dto.ScheduledDate.HasValue) maintenance.ScheduledDate = dto.ScheduledDate.Value;
 
-            maintenance.UpdatedAt = DateTime.UtcNow;
+            await StampAsync(maintenance);
 
             // Update vehicle's last service date and next service if completed
             if (dto.Status == "Completed" && dto.CompletedDate.HasValue)
@@ -268,7 +305,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             maintenance.Status = "Completed";
             maintenance.CompletedDate = DateTime.UtcNow;
-            maintenance.UpdatedAt = DateTime.UtcNow;
+            await StampAsync(maintenance);
             
             if (dto.OdometerReading.HasValue)
                 maintenance.OdometerReading = dto.OdometerReading;
@@ -336,7 +373,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             _context.VehicleMaintenance.Remove(maintenance);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Deleted maintenance record {Id}", id);
+            _logger.LogInformation("Deleted maintenance record {Id} ({Vehicle}, {Type}) by {User}", id, maintenance.VehicleId, maintenance.MaintenanceType, await CurrentUserNameAsync());
             return NoContent();
         }
 
@@ -376,7 +413,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 maintenance.ProofOfPaymentPath = $"/uploads/maintenance/{fileName}";
             }
 
-            maintenance.UpdatedAt = DateTime.UtcNow;
+            await StampAsync(maintenance);
             await _context.SaveChangesAsync();
 
             return Ok(new 
@@ -402,12 +439,27 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] string? maintenanceType,
             [FromQuery] DateTime? from,
             [FromQuery] DateTime? to,
+            [FromQuery] string? ids,
             [FromQuery] bool openOnly = true)
         {
             var query = _context.VehicleMaintenance
                 .Include(m => m.Vehicle)
                     .ThenInclude(v => v.VehicleType)
                 .AsQueryable();
+
+            // Exact set of rows the user is looking at ("export filtered view"). When given, this is
+            // the only filter applied so the file always matches the screen.
+            var idSet = (ids ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => int.TryParse(s, out var n) ? n : (int?)null)
+                .Where(n => n.HasValue).Select(n => n!.Value).ToList();
+            if (idSet.Count > 0)
+            {
+                query = query.Where(m => idSet.Contains(m.Id));
+                openOnly = false;
+                status = province = priority = vehicleReg = assignedTo = maintenanceType = null;
+                from = to = null;
+            }
 
             if (from.HasValue) { var f = from.Value.Date; query = query.Where(m => (m.CompletedDate ?? m.ScheduledDate) >= f); }
             if (to.HasValue) { var t = to.Value.Date.AddDays(1); query = query.Where(m => (m.CompletedDate ?? m.ScheduledDate) < t); }
@@ -446,7 +498,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     Stood = m.DateStood,
                     Days = m.DateStood.HasValue
                         ? (int)((m.CompletedDate ?? DateTime.UtcNow).Date - m.DateStood.Value.Date).TotalDays
-                        : (int?)null
+                        : (int?)null,
+                    EditedBy = m.UpdatedBy ?? m.CreatedBy ?? "",
+                    EditedAt = m.UpdatedAt ?? (DateTime?)m.CreatedAt
                 })
                 .Where(r => string.IsNullOrWhiteSpace(province) ||
                             string.Equals(r.Province, province, StringComparison.OrdinalIgnoreCase))
@@ -458,7 +512,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             // ---------- Sheet 1: Repairs List ----------
             var ws = wb.Worksheets.Add("Repairs List");
             ws.Cell(1, 1).Value = "ROCKET FREIGHT - VEHICLE REPAIRS LIST";
-            ws.Range(1, 1, 1, 13).Merge().Style
+            ws.Range(1, 1, 1, 15).Merge().Style
                 .Font.SetBold().Font.SetFontSize(14)
                 .Fill.SetBackgroundColor(XLColor.FromHtml("#1a237e"))
                 .Font.SetFontColor(XLColor.White)
@@ -467,7 +521,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             var headers = new[] { "Province", "Registration", "Make & Model", "Type", "Issue",
                 "Feedback", "Est. Cost", "Actual Cost", "Priority", "Status", "Action Owner",
-                "Target Date", "Days Standing" };
+                "Target Date", "Days Standing", "Last Edited By", "Last Edited" };
             int hr = 4;
             for (int c = 0; c < headers.Length; c++)
             {
@@ -517,6 +571,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     dCell.Style.Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
                     if (row.Days.Value >= 30) dCell.Style.Font.SetBold().Font.SetFontColor(XLColor.FromHtml("#c62828"));
                 }
+                ws.Cell(r, 14).Value = row.EditedBy;
+                if (row.EditedAt.HasValue) ws.Cell(r, 15).Value = row.EditedAt.Value.ToLocalTime();
+                ws.Cell(r, 15).Style.DateFormat.Format = "dd MMM yyyy HH:mm";
                 r++;
             }
 
@@ -524,7 +581,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             ws.Range(hr, 1, r - 1, headers.Length).Style.Border.InsideBorder = XLBorderStyleValues.Hair;
             ws.Column(5).Width = 40; ws.Column(6).Width = 40;
             ws.Columns(1, 4).AdjustToContents();
-            ws.Columns(7, 13).AdjustToContents();
+            ws.Columns(7, 15).AdjustToContents();
             ws.SheetView.FreezeRows(hr);
 
             // ---------- Sheet 2: Fleet Status Dashboard ----------
