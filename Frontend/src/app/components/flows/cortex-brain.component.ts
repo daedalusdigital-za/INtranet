@@ -22,10 +22,32 @@ export interface BrainNode extends CortexNode {
 }
 export interface BrainEdge { from: string; to: string; label: string; how: CortexHow | 'works'; }
 
-interface Body { key: string; node: BrainNode; mesh: THREE.Mesh; halo: THREE.Mesh; label: CSS2DObject; home: THREE.Vector3; ring: THREE.Mesh | null; }
+interface Body { key: string; node: BrainNode; g: THREE.Group; pick: THREE.Mesh; spinner: THREE.Object3D; halo: THREE.Object3D; mats: THREE.Material[]; label: CSS2DObject; home: THREE.Vector3; ring: THREE.Object3D | null; drop: THREE.Line; size: number; }
 interface Wire { edge: BrainEdge; curve: THREE.QuadraticBezierCurve3; line: THREE.Line; mat: THREE.LineBasicMaterial; sparks: THREE.Points | null; }
 
 const HOW_COLOR: Record<string, number> = { code: 0x34d399, manual: 0xf5b942, read: 0x60a5fa, gap: 0xf87171, works: 0x8b9bc4 };
+const FLOOR_Y = -16;
+
+/** Flat outline of a regular polygon (sides = 0 → circle), in the XY plane. */
+function poly(sides: number, r: number, color: THREE.ColorRepresentation, opacity = 1, rot = 0) {
+  const n = sides || 64, pts: THREE.Vector3[] = [];
+  for (let i = 0; i < n; i++) { const a = rot + (i / n) * Math.PI * 2; pts.push(new THREE.Vector3(r * Math.cos(a), r * Math.sin(a), 0)); }
+  return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+}
+/** Ring of short radial ticks (gauge look), in the XY plane. */
+function ticks(count: number, r: number, len: number, color: THREE.ColorRepresentation, opacity = 1, every = 1) {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i < count; i++) { if (i % every) continue; const a = (i / count) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a); pts.push(new THREE.Vector3(r * c, r * s, 0), new THREE.Vector3((r + len) * c, (r + len) * s, 0)); }
+  return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+}
+/** Soft glowing disc that always faces the camera. */
+function glow(color: string, size: number, opacity = 1) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d')!;
+  const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, color); gr.addColorStop(0.25, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending })); s.scale.setScalar(size); return s;
+}
 
 /**
  * Cortex as a living thing: Welly at the centre, the intranet's modules orbiting it, departments and the outside
@@ -49,7 +71,7 @@ const HOW_COLOR: Record<string, number> = { code: 0x34d399, manual: 0xf5b942, re
     @if (hoverKey(); as k) { @if (tip(); as t) { <div class="cb-tip" [style.left.px]="tipPos().x" [style.top.px]="tipPos().y" [style.--c]="t.color"><b>{{ t.label }}</b><small>{{ t.sub }}</small></div> } }
   `,
   styles: [`
-    :host { position: relative; display: block; width: 100%; height: 76vh; min-height: 520px; border-radius: 12px; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #0d1a3a 0%, #060b1a 55%, #03060f 100%); }
+    :host { position: relative; display: block; width: 100%; height: 76vh; min-height: 520px; border-radius: 12px; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #0b1733 0%, #050a18 55%, #02050d 100%); }
     .cb-host { position: absolute; inset: 0; cursor: grab; touch-action: none; }
     .cb-host:active { cursor: grabbing; }
     :host ::ng-deep .cb-label { pointer-events: none; white-space: nowrap; font: 600 11px/1.2 Inter, system-ui, sans-serif; color: #dbe4ff; text-shadow: 0 1px 6px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,1); letter-spacing: .01em; transform: translateY(-2px); transition: opacity .25s, color .25s; }
@@ -98,12 +120,15 @@ export class CortexBrainComponent implements AfterViewInit, OnDestroy {
   private bodies = new Map<string, Body>();
   private wires: Wire[] = [];
   private welly!: THREE.Group;
-  private wellyCore!: THREE.Mesh;
-  private wellyShell!: THREE.Mesh;
-  private wellyRings: THREE.Mesh[] = [];
+  private wellyFace!: THREE.Group;            // billboarded part: hexes, ticks, core glow
+  private wellySpin: { o: THREE.Object3D; v: number }[] = [];
+  private wellyCore!: THREE.Sprite;
+  private wellyPick!: THREE.Mesh;
+  private wellyRings: THREE.Object3D[] = [];
   private wellyDust!: THREE.Points;
   private peopleDust: THREE.Points[] = [];
   private stars!: THREE.Points;
+  private floor!: THREE.Group;
   private pickables: THREE.Object3D[] = [];
   private camTarget: { pos: THREE.Vector3; look: THREE.Vector3; t: number } | null = null;
   private downAt: { x: number; y: number } | null = null;
@@ -132,12 +157,9 @@ export class CortexBrainComponent implements AfterViewInit, OnDestroy {
     this.controls.maxPolarAngle = Math.PI * 0.62; this.controls.minPolarAngle = Math.PI * 0.12;
     this.controls.addEventListener('start', () => { this.camTarget = null; this.idleFor = 0; });
 
-    this.scene.fog = new THREE.FogExp2(0x060b1a, 0.0045);
-    this.scene.add(new THREE.AmbientLight(0x8fa3ff, 0.55));
-    const key = new THREE.PointLight(0xf5b942, 220, 0, 1.6); key.position.set(0, 0, 0); this.scene.add(key);
-    const fill = new THREE.DirectionalLight(0x9fb0ff, 1.1); fill.position.set(30, 60, 40); this.scene.add(fill);
+    this.scene.fog = new THREE.FogExp2(0x050a18, 0.004);
 
-    this.buildStars(); this.buildWelly();
+    this.buildStars(); this.buildFloor(); this.buildWelly();
     this.ready = true;
     this.build(this.nodes(), this.edges(), this.showPeople());
     this.resize();
@@ -154,35 +176,60 @@ export class CortexBrainComponent implements AfterViewInit, OnDestroy {
   // ── scene building ─────────────────────────────────────────────────────────
 
   private buildStars() {
-    const n = 2200, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    const n = 1400, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
       const r = 180 + Math.random() * 220, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
-      pos.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) * 0.6, r * Math.sin(ph) * Math.sin(th)], i * 3);
-      const c = new THREE.Color().setHSL(0.6 + Math.random() * 0.1, 0.5, 0.55 + Math.random() * 0.4); col.set([c.r, c.g, c.b], i * 3);
+      pos.set([r * Math.sin(ph) * Math.cos(th), Math.abs(r * Math.cos(ph)) * 0.6, r * Math.sin(ph) * Math.sin(th)], i * 3);
+      const c = new THREE.Color().setHSL(0.58 + Math.random() * 0.1, 0.6, 0.5 + Math.random() * 0.4); col.set([c.r, c.g, c.b], i * 3);
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    this.stars = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.9, vertexColors: true, transparent: true, opacity: 0.7, sizeAttenuation: true, depthWrite: false }));
+    this.stars = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.8, vertexColors: true, transparent: true, opacity: 0.55, sizeAttenuation: true, depthWrite: false }));
     this.scene.add(this.stars);
+  }
+
+  /** The floor: a fading grid, the three orbit rings the nodes sit over, and radial spokes. */
+  private buildFloor() {
+    this.floor = new THREE.Group(); this.floor.position.y = FLOOR_Y;
+    const grid = new THREE.GridHelper(200, 40, 0x1b3a6b, 0x0e1f3f); (grid.material as THREE.Material).transparent = true; (grid.material as THREE.Material).opacity = 0.35; (grid.material as THREE.Material).depthWrite = false;
+    this.floor.add(grid);
+    for (const [r, c, o] of [[19, 0x22d3ee, 0.35], [36, 0xa78bfa, 0.3], [50, 0x64748b, 0.25]] as [number, number, number][]) {
+      const ring = poly(0, r, c, o); ring.rotation.x = -Math.PI / 2; this.floor.add(ring);
+      const tk = ticks(72, r, 0.6, c, o * 0.8, 1); tk.rotation.x = -Math.PI / 2; this.floor.add(tk);
+    }
+    const spokes = ticks(12, 8, 48, 0x1e3a6a, 0.35); spokes.rotation.x = -Math.PI / 2; this.floor.add(spokes);
+    const core = poly(6, 8, 0xf5b942, 0.3); core.rotation.x = -Math.PI / 2; this.floor.add(core);
+    this.scene.add(this.floor);
   }
 
   private buildWelly() {
     this.welly = new THREE.Group(); this.welly.name = 'welly';
-    this.wellyCore = new THREE.Mesh(new THREE.IcosahedronGeometry(3.2, 3), new THREE.MeshStandardMaterial({ color: 0xffd47a, emissive: 0xf5b942, emissiveIntensity: 1.6, roughness: 0.25, metalness: 0.1 }));
-    this.wellyShell = new THREE.Mesh(new THREE.IcosahedronGeometry(4.6, 2), new THREE.MeshBasicMaterial({ color: 0xf5b942, wireframe: true, transparent: true, opacity: 0.28 }));
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(6.4, 32, 32), new THREE.MeshBasicMaterial({ color: 0xf5b942, transparent: true, opacity: 0.08, side: THREE.BackSide, depthWrite: false }));
-    this.welly.add(this.wellyCore, this.wellyShell, glow);
+    // facing part: glowing core, nested hexagons turning against each other, gauge ticks
+    this.wellyFace = new THREE.Group();
+    this.wellyCore = glow('rgba(255,215,122,1)', 9, 0.95); this.wellyFace.add(this.wellyCore);
+    this.wellyFace.add(glow('rgba(245,185,66,0.5)', 22, 0.35));
+    const hexA = poly(6, 4.2, 0xffe7b0, 0.95), hexB = poly(6, 5.6, 0xf5b942, 0.7, Math.PI / 6), hexC = poly(6, 7.4, 0xf5b942, 0.35);
+    const tA = ticks(60, 6.3, 0.5, 0xffe7b0, 0.8, 1), tB = ticks(24, 8.2, 1.1, 0x22d3ee, 0.7, 1), arc = ticks(120, 9.4, 0.25, 0xf5b942, 0.5, 1);
+    this.wellyFace.add(hexA, hexB, hexC, tA, tB, arc);
+    this.wellySpin = [{ o: hexA, v: 0.35 }, { o: hexB, v: -0.22 }, { o: hexC, v: 0.12 }, { o: tA, v: -0.5 }, { o: tB, v: 0.3 }, { o: arc, v: -0.08 }];
+    this.welly.add(this.wellyFace);
+    // three tilted orbit rings that live in real 3D (this is what gives the space depth when you turn it)
     for (let i = 0; i < 3; i++) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(7.5 + i * 1.6, 0.06, 8, 160), new THREE.MeshBasicMaterial({ color: i === 1 ? 0x22d3ee : 0xf5b942, transparent: true, opacity: 0.45 - i * 0.1, depthWrite: false }));
-      ring.rotation.set(Math.PI / 2 + (i - 1) * 0.35, i * 0.6, 0); this.wellyRings.push(ring); this.welly.add(ring);
+      const g = new THREE.Group();
+      const ring = poly(0, 11 + i * 2.2, i === 1 ? 0x22d3ee : 0xf5b942, 0.5 - i * 0.12); g.add(ring);
+      const sat = glow(i === 1 ? 'rgba(103,232,249,1)' : 'rgba(255,231,176,1)', 1.6, 0.9); sat.position.set(11 + i * 2.2, 0, 0); g.add(sat);
+      g.rotation.set(Math.PI / 2 + (i - 1) * 0.45, i * 0.7, 0); this.wellyRings.push(g); this.welly.add(g);
     }
-    const n = 420, pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { const r = 5.5 + Math.random() * 5, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1); pos.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) * 0.7, r * Math.sin(ph) * Math.sin(th)], i * 3); }
+    const n = 360, pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { const r = 6 + Math.random() * 6, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1); pos.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) * 0.6, r * Math.sin(ph) * Math.sin(th)], i * 3); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.wellyDust = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffe2a8, size: 0.22, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.wellyDust = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffe2a8, size: 0.2, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.welly.add(this.wellyDust);
-    const lbl = this.makeLabel('Welly', 'the company brain · reads everything', 'welly'); lbl.position.set(0, -9.2, 0); this.welly.add(lbl);
-    this.wellyCore.userData['key'] = 'welly';
-    this.pickables.push(this.wellyCore);
+    const lbl = this.makeLabel('Welly', 'the company brain · reads everything', 'welly'); lbl.position.set(0, -11.5, 0); this.welly.add(lbl);
+    this.wellyPick = new THREE.Mesh(new THREE.SphereGeometry(6, 8, 8), new THREE.MeshBasicMaterial({ visible: false })); this.wellyPick.userData['key'] = 'welly'; this.welly.add(this.wellyPick);
+    // light pillar from floor to Welly
+    const pillar = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, FLOOR_Y, 0), new THREE.Vector3(0, -6, 0)]), new THREE.LineBasicMaterial({ color: 0xf5b942, transparent: true, opacity: 0.35 }));
+    this.welly.add(pillar);
+    this.pickables.push(this.wellyPick);
     this.scene.add(this.welly);
   }
 
@@ -205,27 +252,34 @@ export class CortexBrainComponent implements AfterViewInit, OnDestroy {
   }
 
   private build(nodes: BrainNode[], edges: BrainEdge[], people: boolean) {
-    for (const b of this.bodies.values()) { this.scene.remove(b.mesh, b.halo, b.label); if (b.ring) this.scene.remove(b.ring); b.mesh.geometry.dispose(); (b.mesh.material as THREE.Material).dispose(); b.halo.geometry.dispose(); b.label.element.remove(); }
+    for (const b of this.bodies.values()) { this.scene.remove(b.g, b.label, b.drop); b.g.traverse(o => { const m = o as THREE.Mesh; m.geometry?.dispose?.(); }); b.mats.forEach(m => m.dispose()); b.drop.geometry.dispose(); b.label.element.remove(); }
     for (const w of this.wires) { this.scene.remove(w.line); if (w.sparks) this.scene.remove(w.sparks); w.line.geometry.dispose(); w.mat.dispose(); }
     for (const p of this.peopleDust) { this.scene.remove(p); p.geometry.dispose(); }
-    this.bodies.clear(); this.wires = []; this.peopleDust = []; this.pickables = [this.wellyCore];
+    this.bodies.clear(); this.wires = []; this.peopleDust = []; this.pickables = [this.wellyPick];
     const homes = this.layout(nodes);
 
     for (const nd of nodes) {
-      const home = homes.get(nd.key)!; const color = new THREE.Color(nd.color);
-      const size = nd.layer === 'module' ? 2.1 + Math.min(1.2, (nd.flows ?? 0) * 0.12) : nd.layer === 'dept' ? 1.7 + Math.min(1.6, (nd.people ?? 0) * 0.06) : 1.5;
-      const geo = nd.layer === 'module' ? new THREE.SphereGeometry(size, 28, 28) : nd.layer === 'dept' ? new THREE.DodecahedronGeometry(size, 0) : new THREE.BoxGeometry(size * 1.5, size * 1.5, size * 1.5);
-      const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.35, metalness: 0.25, transparent: true, opacity: 1 });
-      const mesh = new THREE.Mesh(geo, mat); mesh.position.copy(home); mesh.userData['key'] = nd.key;
-      const halo = new THREE.Mesh(new THREE.SphereGeometry(size * 1.9, 20, 20), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.0, side: THREE.BackSide, depthWrite: false }));
-      halo.position.copy(home);
-      let ring: THREE.Mesh | null = null;
-      if (nd.runs) { ring = new THREE.Mesh(new THREE.TorusGeometry(size * 1.55, 0.07, 8, 80), new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.8 })); ring.position.copy(home); ring.rotation.x = Math.PI / 2; this.scene.add(ring); }
+      const home = homes.get(nd.key)!; const color = new THREE.Color(nd.color); const hex = '#' + color.getHexString();
+      const size = nd.layer === 'module' ? 2.2 + Math.min(1.2, (nd.flows ?? 0) * 0.12) : nd.layer === 'dept' ? 1.9 + Math.min(1.6, (nd.people ?? 0) * 0.06) : 1.7;
+      const sides = nd.layer === 'module' ? 6 : nd.layer === 'dept' ? 4 : 3;
+      const g = new THREE.Group(); g.position.copy(home);
+      const outline = poly(sides, size, color, 0.95, sides === 4 ? Math.PI / 4 : sides === 3 ? Math.PI / 2 : 0);
+      const inner = poly(sides, size * 0.55, color, 0.5, sides === 4 ? Math.PI / 4 : sides === 3 ? Math.PI / 2 : 0);
+      const spinner = ticks(sides === 6 ? 36 : 24, size * 1.25, 0.35, color, 0.6, 1);
+      const dot = glow(hex, size * 1.1, 0.9);
+      const halo = poly(0, size * 1.75, color, 0); // lights up on hover/select
+      g.add(outline, inner, spinner, dot, halo);
+      if (nd.gaps) { const warn = poly(3, 0.7, 0xfb923c, 0.95, Math.PI / 2); warn.position.set(size * 0.95, size * 0.95, 0); g.add(warn); }
+      let ring: THREE.Object3D | null = null;
+      if (nd.runs) { ring = ticks(48, size * 1.5, 0.3, 0x22d3ee, 0.9, 2); g.add(ring); }
+      const pick = new THREE.Mesh(new THREE.SphereGeometry(size * 1.2, 8, 8), new THREE.MeshBasicMaterial({ visible: false })); pick.userData['key'] = nd.key; g.add(pick);
+      const mats: THREE.Material[] = [outline.material as THREE.Material, inner.material as THREE.Material, spinner.material as THREE.Material, dot.material];
+      const drop = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(home.x, FLOOR_Y, home.z), new THREE.Vector3(home.x, home.y - size, home.z)]), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.18, depthWrite: false }));
       const sub = nd.layer === 'dept' ? `${nd.people ?? 0} people${nd.mapped ? ` · ${nd.mapped} mapped` : ''}${nd.gaps ? ` · ${nd.gaps} gap${nd.gaps > 1 ? 's' : ''}` : ''}`
         : nd.layer === 'module' ? `${nd.flows ?? 0} flow${nd.flows === 1 ? '' : 's'}${nd.runs ? ` · ${nd.runs} live` : ''}${nd.gaps ? ` · ${nd.gaps} gap${nd.gaps > 1 ? 's' : ''}` : ''}` : 'outside source';
-      const label = this.makeLabel(nd.short ?? nd.label, sub); label.position.copy(home).add(new THREE.Vector3(0, -(size + 1.4), 0));
-      this.scene.add(mesh, halo, label); this.pickables.push(mesh);
-      this.bodies.set(nd.key, { key: nd.key, node: nd, mesh, halo, label, home, ring });
+      const label = this.makeLabel(nd.short ?? nd.label, sub); label.position.copy(home).add(new THREE.Vector3(0, -(size * 1.3 + 1.2), 0));
+      this.scene.add(g, label, drop); this.pickables.push(pick);
+      this.bodies.set(nd.key, { key: nd.key, node: nd, g, pick, spinner, halo, mats, label, home, ring, drop, size });
 
       if (people && nd.layer === 'dept' && nd.people) {
         const n = Math.min(60, nd.people), pos = new Float32Array(n * 3), col = new Float32Array(n * 3), lit = new THREE.Color(nd.color), dim = new THREE.Color(0x56638a);
@@ -251,8 +305,10 @@ export class CortexBrainComponent implements AfterViewInit, OnDestroy {
     mid.y += lift; mid.multiplyScalar(edge.from === 'welly' ? 1 : 1.06);
     const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
     const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(40));
-    const mat = new THREE.LineBasicMaterial({ color: HOW_COLOR[edge.how] ?? 0x8b9bc4, transparent: true, opacity, depthWrite: false });
-    const line = new THREE.Line(geo, mat); line.userData['base'] = opacity; this.scene.add(line);
+    const mat = edge.how === 'manual' || edge.how === 'gap'
+      ? new THREE.LineDashedMaterial({ color: HOW_COLOR[edge.how], transparent: true, opacity, depthWrite: false, dashSize: edge.how === 'gap' ? 0.6 : 1.4, gapSize: 0.8 })
+      : new THREE.LineBasicMaterial({ color: HOW_COLOR[edge.how] ?? 0x8b9bc4, transparent: true, opacity, depthWrite: false });
+    const line = new THREE.Line(geo, mat); line.computeLineDistances(); line.userData['base'] = opacity; this.scene.add(line);
     let pts: THREE.Points | null = null;
     if (sparks) {
       const n = 3, pos = new Float32Array(n * 3); const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -270,9 +326,10 @@ export class CortexBrainComponent implements AfterViewInit, OnDestroy {
     for (const b of this.bodies.values()) {
       const on = streamSet ? streamSet.has(b.key) : focus ? near.has(b.key) : true;
       const isFocus = b.key === focus || b.key === this.selected();
-      (b.mesh.material as THREE.MeshStandardMaterial).opacity = on ? 1 : 0.18;
-      (b.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = isFocus ? 1.1 : on ? 0.35 : 0.08;
-      (b.halo.material as THREE.MeshBasicMaterial).opacity = isFocus ? 0.22 : 0;
+      const base = [0.95, 0.5, 0.6, 0.9];
+      b.mats.forEach((m, i) => { (m as THREE.LineBasicMaterial).opacity = on ? base[i] * (isFocus ? 1 : 1) : base[i] * 0.15; });
+      ((b.halo as THREE.LineLoop).material as THREE.LineBasicMaterial).opacity = isFocus ? 0.9 : 0;
+      (b.drop.material as THREE.LineBasicMaterial).opacity = isFocus ? 0.6 : on ? 0.18 : 0.04;
       b.label.element.classList.toggle('dim', !on); b.label.element.classList.toggle('lit', isFocus);
     }
     for (const w of this.wires) {
@@ -289,19 +346,23 @@ export class CortexBrainComponent implements AfterViewInit, OnDestroy {
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.05, this.clock.getDelta()), t = this.clock.elapsedTime;
     this.idleFor += dt;
-    const pulse = 1 + Math.sin(t * 2.2) * 0.05;
-    this.wellyCore.scale.setScalar(pulse); this.wellyCore.rotation.y += dt * 0.25;
-    this.wellyShell.rotation.y -= dt * 0.18; this.wellyShell.rotation.x += dt * 0.07; this.wellyShell.scale.setScalar(1 + Math.sin(t * 2.2 + 1) * 0.04);
+    const pulse = 1 + Math.sin(t * 2.2) * 0.07;
+    this.wellyCore.scale.setScalar(9 * pulse);
+    this.wellyFace.quaternion.copy(this.camera.quaternion);                     // Welly's dial always faces you
+    for (const s of this.wellySpin) s.o.rotation.z += dt * s.v;
     this.wellyRings.forEach((r, i) => { r.rotation.z += dt * (0.25 + i * 0.12) * (i % 2 ? -1 : 1); });
     this.wellyDust.rotation.y += dt * 0.12; this.wellyDust.rotation.x = Math.sin(t * 0.3) * 0.2;
     this.stars.rotation.y += dt * 0.004;
-    (this.wellyCore.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.4 + Math.sin(t * 2.2) * 0.4;
+    this.floor.rotation.y += dt * 0.01;
 
     for (const b of this.bodies.values()) {
       const bob = Math.sin(t * 0.8 + b.home.x * 0.3 + b.home.z * 0.2) * 0.35;
-      b.mesh.position.y = b.home.y + bob; b.halo.position.y = b.mesh.position.y; if (b.ring) { b.ring.position.y = b.mesh.position.y; b.ring.rotation.z += dt * 1.5; }
-      b.mesh.rotation.y += dt * (b.node.layer === 'dept' ? 0.3 : 0.15);
-      const target = (b.key === this.hoverKey() ? 1.25 : b.key === this.selected() ? 1.15 : 1); b.mesh.scale.lerp(new THREE.Vector3(target, target, target), 0.12);
+      b.g.position.y = b.home.y + bob;
+      b.g.quaternion.copy(this.camera.quaternion);                             // flat shapes face the camera
+      b.spinner.rotation.z += dt * (b.node.layer === 'dept' ? -0.4 : 0.3);
+      if (b.ring) b.ring.rotation.z -= dt * 1.2;
+      b.halo.rotation.z += dt * 0.6;
+      const target = (b.key === this.hoverKey() ? 1.25 : b.key === this.selected() ? 1.15 : 1); b.g.scale.lerp(new THREE.Vector3(target, target, target), 0.12);
     }
     for (const p of this.peopleDust) { const h = p.userData['home'] as THREE.Vector3; p.position.y = Math.sin(t * 0.8 + h.x * 0.3 + h.z * 0.2) * 0.35; p.rotation.y = 0; }
     for (const w of this.wires) {
