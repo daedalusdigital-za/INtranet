@@ -1,6 +1,6 @@
 # Cortex — what it is, what's built, what's open
 
-_Last updated: 2 Nov 2026 · branch `stock/ledger-integrity` · commits dcf97f9 → 3854c48 → 54404ab → ea2219a_
+_Last updated: 3 Nov 2026 · branch `stock/ledger-integrity` · commits dcf97f9 → 3854c48 → 54404ab → ea2219a → 83cdb2e → a1433a9 → (payroll hand-off)_
 
 ## 1. What Cortex is (one paragraph)
 
@@ -107,11 +107,20 @@ Three detectors produce a `finding` (evidence) with a `suggestion` child (fix + 
 - Publishes the `pod.received` flow event (listed in the designer) so anyone can trigger a flow on it.
 - Cortex: `logistics → finance` now has two edges (requisitions manual, PODs automatic); hand-off gap closed. Also fixed on the way: `FindLoadIdByInvoiceTextAsync` EF translation error that made `link-invoices` 500 for invoices without a tripsheet; cancelled runs no longer count as process usage; pending Welly items whose evidence disappears are retired on rebuild.
 
+### Step 9 — HR → Finance hand-off (payroll inputs)
+[PayrollHandoffService.cs](../Backend/Services/Flows/PayrollHandoffService.cs) · fire-and-forget, hooked into: leave **approved** (`PUT leave-requests/{id}/review`), **new starter** created Active in HR (`POST hr/employees`, imports excluded), **status change** to Terminated / Serving Notice / Suspended / On Leave or a contract end date set (`PUT hr/employees/{id}`).
+- Each event raises one **Payroll to-do** (Category `Payroll`, title `Payroll input: …`, deduped with a `[payroll:key]` marker so re-saving the same record doesn't duplicate), due on the **next payroll cut-off**, High priority if the cut-off is ≤ 2 days away. Assignee + notification go to the payroll person.
+- Payroll person: SystemSettings `Payroll.UserId` → else the Finance department's manager → else the first active user with the finance/books permission. Cut-off: `Payroll.CutoffDay` (default **20**, 1–28; weekend rolls back to Friday; past → next month).
+- [PayrollController.cs](../Backend/Controllers/PayrollController.cs): `GET/PUT api/payroll/settings` (cutoffDay, payrollUserId; PUT = finance module / Admin / HR), `GET api/payroll/inputs` (open payroll to-dos).
+- Publishes the `hr.payroll_input` flow event (in the designer list).
+- Verified end-to-end: submitted + approved a leave request → to-do "Payroll input: Leave · … · Annual 10 Nov–12 Nov (3 d)" due Fri 20 Nov, assigned to Finance (fallback chain, no `Payroll.UserId` set yet). Test data removed.
+- Also fixed on the way: `POST leave-requests` 500'd (`DBNull` passed to `ExecuteSqlRawAsync` has no EF type mapping) — the leave-request form never worked; now uses explicit `SqlParameter`s. Cortex: `hr → finance` hand-off is now Automatic; only `tenders → sales` remains not built.
+
 ---
 
 ## 3. Current numbers (after last rebuild)
 
-663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · 26 gaps · hand-offs: 142 manual / 105 automatic / 9 read / 2 not built.
+663 nodes · 818 edges · 496 derived · 0 curated written · **166 blank slots** · 1 inferred to confirm · **25 gaps** (17 no-events, 3 no-owner, 2 uncaptured, 2 data-quality, 1 not-built) · hand-offs: 142 manual / 106 automatic / 9 read / **1 not built**.
 
 No Welly findings fire yet — there is almost no task history (flow 5 has 3 approvals, all cleared in 0 h). They will appear as real work passes through Flows.
 
@@ -125,7 +134,7 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 | 2 | ~~Two accounts have a corrupted Permissions string~~ | — | Fixed (users 46, 84); save-time validation added; rescan clean. |
 | 3 | Marketing and Training have people but no process | gap `uncaptured:*` | Someone in those teams maps their day (New human flow). |
 | 4 | Nobody non-admin holds HR / Management / Tenders permission | gap `noowner:module:*` | Grant the module to the people who actually do that work. |
-| 5 | Hand-offs not built in code: tenders → sales, hr → finance (leave → payroll). ~~finance → logistics~~ built (Step 8). | gap `handoff:*` | Product decisions; each is a feature. |
+| 5 | Hand-offs not built in code: tenders → sales. ~~finance → logistics~~ built (Step 8); ~~hr → finance~~ built (Step 9). | gap `handoff:*` | Product decisions; each is a feature. |
 | 6 | **17** enabled processes have never run: Accounts · Invoice to payment; Colene · Debtors day; Finance · Month-end close; Joulene · Creditors & payments; Mamo · Debtors control day; Mbali · PODs day; Nduduzo · Creditors cycle; Peggy · Debtors day; Sne · PODs & debtors day; HR · Staff request handling; IT · Support request; Logistics · Delivery operations; Marketing · Campaign & announcement; Production · Work order; Reception · Visitors & deliveries; Sales · Enquiry to order; Stock · Goods receiving | gap `noevents:*` | Say which to disable; disabled ones drop out of coverage immediately. |
 | 7 | 166 knowledge slots blank | Knowledge strip | People write. Start with department heads (16 "knowledge" slots) and role authority limits (3). |
 
@@ -135,13 +144,13 @@ No Welly findings fire yet — there is almost no task history (flow 5 has 3 app
 
 | Item | Why it matters | Size |
 |---|---|---|
-| **HR → Finance hand-off** (leave / starter / leaver → payroll input with cut-off) | needs the payroll calendar defined | M, ~1.5 days — **next** |
-| **Tenders → Sales hand-off** (won tender starts Enquiry-to-order pre-filled) | tender lines → sales context mapping | M, ~1.5–2 days |
+| **Tenders → Sales hand-off** (won tender starts Enquiry-to-order pre-filled) | tender lines → sales context mapping | M, ~1.5–2 days — **next** |
+| Payroll settings UI (cut-off day, payroll person) | API exists (`/api/payroll/settings`); no screen yet — set via API or SystemSettings | S, ~0.5 day |
 | **Customers / suppliers / products / tenders layers** | Node types exist (commercial layer) but the builder doesn't derive them | medium |
 | **Time replay UI** (`asOf`) | API supports it; no slider on the map | small |
 | Finance / Marketing merge (§4 #1) | Blocked on your confirmation | 2 min |
 
-Agreed order: HR → Finance → Tenders → Sales → commercial layers.
+Agreed order: ~~HR → Finance~~ → Tenders → Sales → commercial layers.
 
 ---
 

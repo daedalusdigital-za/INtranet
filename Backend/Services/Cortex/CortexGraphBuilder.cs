@@ -98,7 +98,7 @@ namespace ProjectTracker.API.Services.Cortex
             ("flows", "hr", "Tasks → people's to-do lists", CortexHandoff.Automatic, "FlowEngine.cs:590"),
             ("tenders", "sales", "Award → nothing downstream; tender pricing is a fixed file", CortexHandoff.NotBuilt, "TendersController.cs:317"),
             ("logistics", "finance", "POD arrives → debtors' POD-wait tasks told / closed, pod.received event", CortexHandoff.Automatic, "PodHandoffService.cs"),
-            ("hr", "finance", "Approved leave → attendance / payroll", CortexHandoff.NotBuilt, "LeaveRequestsController.cs:25"),
+            ("hr", "finance", "Approved leave / starter / leaver → payroll to-do due at the cut-off, hr.payroll_input event", CortexHandoff.Automatic, "PayrollHandoffService.cs"),
         };
         private static readonly (string Key, string Label, string Purpose, string[] Reads, string[] Actions)[] Agents =
         {

@@ -22,14 +22,16 @@ namespace ProjectTracker.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<HrEmployeesController> _logger;
         private readonly string _storagePath;
+        private readonly ProjectTracker.API.Services.Flows.IPayrollHandoff? _payroll;
 
         private static readonly string[] AllowedExtensions =
             { ".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".xls", ".xlsx", ".txt" };
 
-        public HrEmployeesController(ApplicationDbContext context, ILogger<HrEmployeesController> logger, IConfiguration configuration)
+        public HrEmployeesController(ApplicationDbContext context, ILogger<HrEmployeesController> logger, IConfiguration configuration, ProjectTracker.API.Services.Flows.IPayrollHandoff? payroll = null)
         {
             _context = context;
             _logger = logger;
+            _payroll = payroll;
             var basePath = configuration["DocumentsPath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
             _storagePath = Path.Combine(basePath, "HR", "Employees");
             Directory.CreateDirectory(_storagePath);
@@ -162,6 +164,9 @@ namespace ProjectTracker.API.Controllers
             _context.HrEmployees.Add(dto);
             await _context.SaveChangesAsync();
             _logger.LogInformation("HR employee {Id} created by {User}", dto.Id, dto.CreatedByName);
+            // payroll needs to know about a starter before the cut-off
+            if (dto.Status is null or "Active" && !string.Equals(dto.Source, "Import", StringComparison.OrdinalIgnoreCase))
+                _payroll?.NewStarter(dto.Id, $"{dto.FirstName} {dto.LastName}".Trim(), dto.Site, dto.Department, dto.JobTitle, dto.EmploymentType, dto.HireDate, dto.EmployeeNumber, CurrentUserId());
             return Ok(dto);
         }
 
@@ -171,6 +176,7 @@ namespace ProjectTracker.API.Controllers
         {
             var e = await _context.HrEmployees.FirstOrDefaultAsync(x => x.Id == id);
             if (e == null) return NotFound();
+            var oldStatus = e.Status; var oldEnd = e.ContractEndDate;
 
             e.FirstName = dto.FirstName;
             e.LastName = dto.LastName;
@@ -196,6 +202,12 @@ namespace ProjectTracker.API.Controllers
             e.UpdatedByName = CurrentUserName();
 
             await _context.SaveChangesAsync();
+            // a pay-affecting change: status moved, or a last day was set / moved
+            var name = $"{e.FirstName} {e.LastName}".Trim();
+            if (!string.Equals(oldStatus, e.Status, StringComparison.OrdinalIgnoreCase) && e.Status is "Terminated" or "Serving Notice" or "Suspended" or "On Leave")
+                _payroll?.StatusChanged(e.Id, name, e.Site, e.Department, oldStatus, e.Status, e.ContractEndDate, null, CurrentUserId());
+            else if (e.ContractEndDate != oldEnd && e.ContractEndDate != null && e.Status is "Serving Notice" or "Active")
+                _payroll?.StatusChanged(e.Id, name, e.Site, e.Department, oldStatus, e.Status == "Active" ? "Serving Notice" : e.Status, e.ContractEndDate, "Contract end date set", CurrentUserId());
             return Ok(e);
         }
 

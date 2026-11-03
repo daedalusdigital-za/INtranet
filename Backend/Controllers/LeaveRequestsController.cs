@@ -14,10 +14,12 @@ namespace ProjectTracker.API.Controllers
     public class LeaveRequestsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ProjectTracker.API.Services.Flows.IPayrollHandoff? _payroll;
 
-        public LeaveRequestsController(ApplicationDbContext context)
+        public LeaveRequestsController(ApplicationDbContext context, ProjectTracker.API.Services.Flows.IPayrollHandoff? payroll = null)
         {
             _context = context;
+            _payroll = payroll;
         }
 
         // POST api/leave-requests — submit a leave request
@@ -55,10 +57,16 @@ namespace ProjectTracker.API.Controllers
                 INSERT INTO LeaveRequests (UserId, EmployeeName, EmployeeEmail, Department, LeaveType,
                     StartDate, EndDate, DaysRequested, Reason, ContactNumber, Status, SubmittedAt)
                 VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, 'Pending', GETUTCDATE())",
-                userId as object ?? DBNull.Value,
-                userName, userEmail as object ?? DBNull.Value, department as object ?? DBNull.Value,
-                dto.LeaveType, dto.StartDate.Date, dto.EndDate.Date, days,
-                dto.Reason as object ?? DBNull.Value, dto.ContactNumber as object ?? DBNull.Value);
+                new Microsoft.Data.SqlClient.SqlParameter("@p0", (object?)userId ?? DBNull.Value),
+                new Microsoft.Data.SqlClient.SqlParameter("@p1", userName),
+                new Microsoft.Data.SqlClient.SqlParameter("@p2", (object?)userEmail ?? DBNull.Value),
+                new Microsoft.Data.SqlClient.SqlParameter("@p3", (object?)department ?? DBNull.Value),
+                new Microsoft.Data.SqlClient.SqlParameter("@p4", dto.LeaveType),
+                new Microsoft.Data.SqlClient.SqlParameter("@p5", dto.StartDate.Date),
+                new Microsoft.Data.SqlClient.SqlParameter("@p6", dto.EndDate.Date),
+                new Microsoft.Data.SqlClient.SqlParameter("@p7", days),
+                new Microsoft.Data.SqlClient.SqlParameter("@p8", (object?)dto.Reason ?? DBNull.Value),
+                new Microsoft.Data.SqlClient.SqlParameter("@p9", (object?)dto.ContactNumber ?? DBNull.Value));
 
             return Ok(new { message = "Leave request submitted successfully" });
         }
@@ -176,9 +184,33 @@ namespace ProjectTracker.API.Controllers
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
                 UPDATE LeaveRequests SET Status=@p0, ReviewedBy=@p1, ReviewedAt=GETUTCDATE(), ReviewNotes=@p2, UpdatedAt=GETUTCDATE()
                 WHERE LeaveRequestId=@p3",
-                dto.Status, reviewerName, dto.Notes as object ?? DBNull.Value, id);
+                new Microsoft.Data.SqlClient.SqlParameter("@p0", dto.Status),
+                new Microsoft.Data.SqlClient.SqlParameter("@p1", reviewerName),
+                new Microsoft.Data.SqlClient.SqlParameter("@p2", (object?)dto.Notes ?? DBNull.Value),
+                new Microsoft.Data.SqlClient.SqlParameter("@p3", id));
 
             if (affected == 0) return NotFound();
+
+            // approved leave reaches payroll before the cut-off
+            if (dto.Status == "Approved" && _payroll != null)
+            {
+                var conn = _context.Database.GetDbConnection();
+                await conn.OpenAsync();
+                try
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = "SELECT EmployeeName, Department, LeaveType, StartDate, EndDate, DaysRequested FROM LeaveRequests WHERE LeaveRequestId=@p0";
+                    var p = cmd.CreateParameter(); p.ParameterName = "@p0"; p.Value = id; cmd.Parameters.Add(p);
+                    using var r = await cmd.ExecuteReaderAsync();
+                    if (await r.ReadAsync())
+                    {
+                        int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var byUid);
+                        _payroll.LeaveApproved(id, r.IsDBNull(0) ? "Employee" : r.GetString(0), r.IsDBNull(1) ? null : r.GetString(1), r.IsDBNull(2) ? "Leave" : r.GetString(2),
+                            r.GetDateTime(3), r.GetDateTime(4), r.IsDBNull(5) ? 0 : r.GetInt32(5), dto.Notes, byUid == 0 ? null : byUid);
+                    }
+                }
+                finally { await conn.CloseAsync(); }
+            }
             return Ok(new { message = $"Request {dto.Status.ToLower()}" });
         }
 
