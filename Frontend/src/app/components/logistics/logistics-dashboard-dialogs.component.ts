@@ -16629,7 +16629,8 @@ export class VehicleDialogComponent {
             <mat-option [value]="null">No Driver (Unassign)</mat-option>
             @for (driver of drivers; track driver.id) {
               <mat-option [value]="driver.id">
-                {{ driver.name }} {{ driver.surname }} - {{ driver.licenseNumber || 'No License' }}
+                {{ driver.firstName || driver.name }} {{ driver.lastName || driver.surname }}
+                @if (driver.licenseNumber) { <small class="drv-lic">· {{ driver.licenseNumber }}</small> }
               </mat-option>
             }
           </mat-select>
@@ -16672,6 +16673,7 @@ export class VehicleDialogComponent {
       margin-top: 8px;
     }
     .current-driver mat-icon { color: var(--color-warn); }
+    .drv-lic { color: var(--color-text-3); font-size: 0.8em; }
   `]
 })
 export class AssignDriverDialogComponent implements OnInit {
@@ -16696,7 +16698,8 @@ export class AssignDriverDialogComponent implements OnInit {
   loadDrivers(): void {
     const apiUrl = environment.apiUrl;
     this.http.get<any[]>(`${apiUrl}/logistics/drivers`).subscribe({
-      next: (drivers) => this.drivers = drivers,
+      next: (drivers) => this.drivers = (drivers || []).slice().sort((a, b) =>
+        `${a.firstName || a.name || ''} ${a.lastName || a.surname || ''}`.localeCompare(`${b.firstName || b.name || ''} ${b.lastName || b.surname || ''}`)),
       error: () => this.drivers = []
     });
   }
