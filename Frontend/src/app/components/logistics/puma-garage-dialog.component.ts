@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ElementRef, Inject, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -22,6 +22,13 @@ interface PumaOrder {
   date?: string | null;
   period?: string | null;
   notes?: string | null;
+  status?: 'Open' | 'Closed' | string;
+  hasSlip?: boolean;
+  slipFileName?: string | null;
+  slipUploadedAt?: string | null;
+  closedAt?: string | null;
+  closedByName?: string | null;
+  createdAt?: string;
 }
 
 /**
@@ -51,6 +58,10 @@ interface PumaOrder {
 
       <!-- KPI strip -->
       <div class="puma-kpis">
+        <div class="puma-kpi" [class.warn]="openCount() > 0">
+          <span class="k-label">Open · awaiting slip</span>
+          <span class="k-value">{{ openCount() }}</span>
+        </div>
         <div class="puma-kpi">
           <span class="k-label">Orders</span>
           <span class="k-value">{{ orders.length }}</span>
@@ -77,14 +88,50 @@ interface PumaOrder {
                  placeholder="Search order, driver, registration, vehicle type…" />
         </div>
         <span class="spacer"></span>
+        <div class="status-filter">
+          <button type="button" [class.on]="statusFilter === 'Open'" (click)="setStatus('Open')">Open</button>
+          <button type="button" [class.on]="statusFilter === 'Closed'" (click)="setStatus('Closed')">Closed</button>
+          <button type="button" [class.on]="statusFilter === 'All'" (click)="setStatus('All')">All</button>
+        </div>
+        <button mat-flat-button color="primary" (click)="toggleQuick()">
+          <mat-icon>chat</mat-icon> {{ showQuick ? 'Hide' : 'New Order (paste message)' }}
+        </button>
         <button mat-stroked-button (click)="toggleImport()">
-          <mat-icon>content_paste</mat-icon> {{ showImport ? 'Hide Import' : 'Import / Paste' }}
+          <mat-icon>content_paste</mat-icon> {{ showImport ? 'Hide Import' : 'Import sheet' }}
         </button>
         <button mat-stroked-button (click)="toggleAdd()">
           <mat-icon>add</mat-icon> Add Order
         </button>
         <button aria-label="Refresh" mat-icon-button (click)="reload()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
       </div>
+
+      <!-- Quick capture from the garage's message -->
+      @if (showQuick) {
+        <div class="puma-import quick">
+          <p class="hint">
+            Paste the order message exactly as it arrives. One or more orders at a time.
+            Each becomes an <b>Open</b> order that can only be closed once a <b>JPG/PNG photo of the filled slip</b> is uploaded.
+          </p>
+          <textarea [(ngModel)]="quickText" (ngModelChange)="previewQuick()" rows="6"
+                    placeholder="Order number:642&#10;Driver : VUSi&#10;REG: DM 00 TV ZN&#10;LITRES: 500 LT"></textarea>
+          @if (quickPreview.length) {
+            <div class="quick-preview">
+              @for (d of quickPreview; track $index) {
+                <span class="chip"><b>#{{ d.orderNumber }}</b> · {{ d.driverName || '—' }} · {{ d.registration || '—' }} · {{ d.litersFilled != null ? d.litersFilled + ' L' : '—' }}</span>
+              }
+            </div>
+          } @else if (quickText.trim()) {
+            <div class="quick-preview none">No “Order number:” line found yet.</div>
+          }
+          <div class="import-actions">
+            <button mat-flat-button color="primary" [disabled]="quickSaving || quickPreview.length === 0" (click)="doQuick()">
+              @if (quickSaving) { <mat-spinner diameter="18"></mat-spinner> } @else { <mat-icon>add_task</mat-icon> }
+              Create {{ quickPreview.length || '' }} open order{{ quickPreview.length === 1 ? '' : 's' }}
+            </button>
+            <button mat-button (click)="quickText=''; quickPreview=[]">Clear</button>
+          </div>
+        </div>
+      }
 
       <!-- Import panel -->
       @if (showImport) {
@@ -136,13 +183,13 @@ interface PumaOrder {
       <div class="puma-table-wrap">
         @if (filtered.length === 0) {
           @if (orders.length) {
-            <app-empty-state icon="search_off" title="No orders match “{{ search.trim() }}”"
+            <app-empty-state icon="search_off" [title]="search.trim() ? 'No orders match “' + search.trim() + '”' : 'No ' + statusFilter.toLowerCase() + ' orders'"
                              message="Search looks at the order number, driver, registration and vehicle type.">
-              <button mat-stroked-button (click)="search = ''; applyFilter()">Clear the search</button>
+              <button mat-stroked-button (click)="search = ''; statusFilter = 'All'; applyFilter()">Show all</button>
             </app-empty-state>
           } @else {
             <app-empty-state icon="local_gas_station" title="No Puma Garage orders yet"
-                             message="Use “Import / Paste” to load a monthly sheet, or “Add Order” to capture one.">
+                             message="Paste the order message from the garage under “New Order”, or import a monthly sheet.">
               @if (!showAdd) {
                 <button mat-stroked-button (click)="toggleAdd()"><mat-icon>add</mat-icon> Add Order</button>
               }
@@ -152,23 +199,53 @@ interface PumaOrder {
           <table class="app-table">
             <thead>
               <tr>
+                <th>Status</th>
                 <th>Order #</th><th>Driver</th><th>Vehicle</th><th>Registration</th>
-                <th class="num">Capacity</th><th class="num">Litres</th><th class="num">Value</th>
-                <th>Date</th><th></th>
+                <th class="num">Litres</th><th class="num">Value</th>
+                <th>Date</th><th>Slip</th><th></th>
               </tr>
             </thead>
             <tbody>
               @for (o of filtered; track o.id) {
-                <tr>
+                <tr [class.open-row]="o.status !== 'Closed'">
+                  <td>
+                    @if (o.status === 'Closed') {
+                      <span class="pill closed" [matTooltip]="'Closed ' + (o.closedAt | date:'dd MMM HH:mm') + (o.closedByName ? ' by ' + o.closedByName : '')"><mat-icon>check_circle</mat-icon> Closed</span>
+                    } @else if (o.hasSlip) {
+                      <span class="pill ready" matTooltip="Slip uploaded – ready to close"><mat-icon>task_alt</mat-icon> Slip in</span>
+                    } @else {
+                      <span class="pill open" matTooltip="Waiting for a photo of the filled slip"><mat-icon>hourglass_top</mat-icon> Open</span>
+                    }
+                  </td>
                   <td class="ref b">{{ o.orderNumber }}</td>
                   <td>{{ o.driverName || '—' }}</td>
                   <td>{{ o.vehicleType || '—' }}</td>
                   <td class="ref">{{ o.registration || '—' }}</td>
-                  <td class="num">{{ o.capacity != null ? (o.capacity | number:'1.0-0') : '—' }}</td>
-                  <td class="num">{{ o.litersFilled != null ? (o.litersFilled | number:'1.2-2') : '—' }}</td>
+                  <td class="num">{{ o.litersFilled != null ? (o.litersFilled | number:'1.0-2') : '—' }}</td>
                   <td class="num b">{{ o.value != null ? ('R ' + (o.value | number:'1.2-2')) : '—' }}</td>
                   <td>{{ o.date ? (o.date | date:'dd MMM yyyy') : '—' }}</td>
+                  <td class="slip-cell">
+                    @if (o.hasSlip) {
+                      <button type="button" class="slip-thumb" (click)="viewSlip(o)" matTooltip="View slip photo">
+                        <mat-icon>image</mat-icon>
+                      </button>
+                    }
+                    @if (o.status !== 'Closed') {
+                      <button mat-stroked-button class="slip-btn" (click)="pickSlip(o)" [disabled]="uploadingId === o.id">
+                        @if (uploadingId === o.id) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>photo_camera</mat-icon> }
+                        {{ o.hasSlip ? 'Replace' : 'Upload slip' }}
+                      </button>
+                    }
+                  </td>
                   <td class="row-actions">
+                    @if (o.status !== 'Closed') {
+                      <button mat-flat-button color="primary" class="close-btn" [disabled]="!o.hasSlip || closingId === o.id"
+                              [matTooltip]="o.hasSlip ? 'Close this order' : 'Upload the slip photo first'" (click)="doClose(o)">
+                        <mat-icon>lock</mat-icon> Close
+                      </button>
+                    } @else {
+                      <button aria-label="Reopen" mat-icon-button matTooltip="Reopen" (click)="doReopen(o)"><mat-icon>lock_open</mat-icon></button>
+                    }
                     <button aria-label="Delete" mat-icon-button color="warn" matTooltip="Delete" (click)="doDelete(o)">
                       <mat-icon>delete_outline</mat-icon>
                     </button>
@@ -179,6 +256,7 @@ interface PumaOrder {
           </table>
         }
       </div>
+      <input #slipInput type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" capture="environment" hidden (change)="onSlipChosen($event)" />
     </div>
   `,
   styles: [`
@@ -231,7 +309,33 @@ interface PumaOrder {
 
     .puma-table-wrap { overflow: auto; padding: 4px 20px 20px; flex: 1; }
     .app-table .b { font-weight: 700; }
-    .app-table .row-actions { text-align: right; padding-top: 0; padding-bottom: 0; }
+    .app-table .row-actions { text-align: right; padding-top: 0; padding-bottom: 0; white-space: nowrap; }
+    .app-table tr.open-row td { background: color-mix(in srgb, var(--color-warning) 7%, transparent); }
+
+    .puma-kpi.warn { border-color: var(--color-warning); }
+    .puma-kpi.warn .k-value { color: var(--color-warning); }
+
+    .status-filter { display: inline-flex; border: 1px solid var(--color-line-strong); border-radius: 999px; overflow: hidden; }
+    .status-filter button { border: none; background: transparent; padding: 6px 14px; font-size: var(--text-sm); cursor: pointer; color: var(--color-text-2); }
+    .status-filter button.on { background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; }
+
+    .puma-import.quick { border-style: solid; border-color: var(--color-primary); }
+    .quick-preview { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .quick-preview.none { color: var(--color-text-3); font-size: var(--text-sm); }
+    .quick-preview .chip { background: var(--color-primary-soft); color: var(--color-primary); border-radius: 999px; padding: 4px 10px; font-size: var(--text-xs); }
+
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+    .pill mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    .pill.open { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
+    .pill.ready { background: color-mix(in srgb, var(--color-info, #1e88e5) 16%, transparent); color: var(--color-info, #1e88e5); }
+    .pill.closed { background: color-mix(in srgb, var(--color-ok) 16%, transparent); color: var(--color-ok); }
+
+    .slip-cell { white-space: nowrap; }
+    .slip-thumb { border: 1px solid var(--color-line-strong); background: var(--color-surface); border-radius: 8px; width: 34px; height: 34px; display: inline-grid; place-items: center; cursor: pointer; margin-right: 6px; vertical-align: middle; }
+    .slip-thumb mat-icon { color: var(--color-primary); }
+    .slip-btn { height: 32px; line-height: 32px; font-size: var(--text-xs); }
+    .slip-btn mat-spinner { display: inline-block; margin-right: 4px; }
+    .close-btn { height: 32px; line-height: 32px; font-size: var(--text-xs); margin-right: 4px; }
 
     @media (max-width: 720px) {
       .puma-kpis, .add-grid { grid-template-columns: repeat(2, 1fr); }
@@ -239,16 +343,29 @@ interface PumaOrder {
   `]
 })
 export class PumaGarageDialog {
+  @ViewChild('slipInput') slipInput!: ElementRef<HTMLInputElement>;
+
   orders: PumaOrder[] = [];
   filtered: PumaOrder[] = [];
   search = '';
   apiUrl = '';
+  statusFilter: 'Open' | 'Closed' | 'All' = 'Open';
 
   showImport = false;
   showAdd = false;
+  showQuick = false;
   importText = '';
   importPeriod = '';
   importing = false;
+
+  quickText = '';
+  quickPreview: PumaOrder[] = [];
+  quickSaving = false;
+  private quickTimer: any;
+
+  uploadingId: number | null = null;
+  closingId: number | null = null;
+  private slipTarget: PumaOrder | null = null;
 
   newOrder: PumaOrder = { orderNumber: '' };
 
@@ -276,11 +393,112 @@ export class PumaGarageDialog {
 
   applyFilter(): void {
     const t = this.search.trim().toLowerCase();
-    this.filtered = !t ? [...this.orders] : this.orders.filter(o =>
-      o.orderNumber?.toLowerCase().includes(t) ||
-      o.driverName?.toLowerCase().includes(t) ||
-      o.registration?.toLowerCase().includes(t) ||
-      o.vehicleType?.toLowerCase().includes(t));
+    this.filtered = this.orders.filter(o => {
+      const isClosed = o.status === 'Closed';
+      if (this.statusFilter === 'Open' && isClosed) return false;
+      if (this.statusFilter === 'Closed' && !isClosed) return false;
+      if (!t) return true;
+      return !!(o.orderNumber?.toLowerCase().includes(t) ||
+        o.driverName?.toLowerCase().includes(t) ||
+        o.registration?.toLowerCase().includes(t) ||
+        o.vehicleType?.toLowerCase().includes(t));
+    });
+  }
+
+  setStatus(s: 'Open' | 'Closed' | 'All'): void { this.statusFilter = s; this.applyFilter(); }
+  openCount(): number { return this.orders.filter(o => o.status !== 'Closed').length; }
+
+  toggleQuick(): void { this.showQuick = !this.showQuick; if (this.showQuick) { this.showImport = false; this.showAdd = false; } }
+
+  previewQuick(): void {
+    clearTimeout(this.quickTimer);
+    const text = this.quickText;
+    if (!text.trim()) { this.quickPreview = []; return; }
+    this.quickTimer = setTimeout(() => {
+      this.http.post<PumaOrder[]>(`${this.base()}/parse`, { text }).subscribe({
+        next: (d) => this.quickPreview = d || [],
+        error: () => this.quickPreview = []
+      });
+    }, 250);
+  }
+
+  doQuick(): void {
+    if (!this.quickText.trim()) return;
+    this.quickSaving = true;
+    this.http.post<{ created: PumaOrder[]; skipped: string[] }>(`${this.base()}/quick`, { text: this.quickText }).subscribe({
+      next: (res) => {
+        this.quickSaving = false;
+        const n = res.created?.length || 0;
+        const skipped = res.skipped?.length ? ` Skipped (already exist): ${res.skipped.join(', ')}.` : '';
+        if (n) this.toast.done(`${n} open order${n === 1 ? '' : 's'} created.${skipped}`);
+        else this.toast.error(`Nothing created.${skipped}`);
+        this.quickText = ''; this.quickPreview = []; this.showQuick = false;
+        this.statusFilter = 'Open';
+        this.reload();
+      },
+      error: (err) => { this.quickSaving = false; this.toast.error(err.error?.message || 'Could not create the order.'); }
+    });
+  }
+
+  pickSlip(o: PumaOrder): void {
+    this.slipTarget = o;
+    this.slipInput.nativeElement.value = '';
+    this.slipInput.nativeElement.click();
+  }
+
+  onSlipChosen(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    const target = this.slipTarget;
+    if (!file || !target?.id) return;
+    const okType = /^image\/(jpeg|png)$/i.test(file.type) || /\.(jpe?g|png)$/i.test(file.name);
+    if (!okType) { this.toast.error('Only JPG or PNG photos of the slip are accepted.'); return; }
+    const form = new FormData();
+    form.append('file', file, file.name);
+    this.uploadingId = target.id;
+    this.http.post<PumaOrder>(`${this.base()}/${target.id}/slip`, form).subscribe({
+      next: (updated) => {
+        this.uploadingId = null;
+        Object.assign(target, updated);
+        this.applyFilter();
+        this.toast.done(`Slip uploaded for order ${target.orderNumber}. You can close it now.`);
+      },
+      error: (err) => { this.uploadingId = null; this.toast.error(err.error?.message || 'Upload failed.'); }
+    });
+  }
+
+  viewSlip(o: PumaOrder): void {
+    if (!o.id) return;
+    this.http.get(`${this.base()}/${o.id}/slip`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: () => this.toast.error('Could not open the slip.')
+    });
+  }
+
+  doClose(o: PumaOrder): void {
+    if (!o.id || !o.hasSlip) { this.toast.error('Upload the slip photo first.'); return; }
+    this.closingId = o.id;
+    this.http.post<PumaOrder>(`${this.base()}/${o.id}/close`, {}).subscribe({
+      next: (updated) => {
+        this.closingId = null;
+        Object.assign(o, updated);
+        this.applyFilter();
+        this.toast.done(`Order ${o.orderNumber} closed.`);
+      },
+      error: (err) => { this.closingId = null; this.toast.error(err.error?.message || 'Could not close the order.'); }
+    });
+  }
+
+  doReopen(o: PumaOrder): void {
+    if (!o.id) return;
+    this.http.post<PumaOrder>(`${this.base()}/${o.id}/reopen`, {}).subscribe({
+      next: (updated) => { Object.assign(o, updated); this.applyFilter(); this.toast.done(`Order ${o.orderNumber} reopened.`); },
+      error: () => this.toast.error('Could not reopen the order.')
+    });
   }
 
   totalLitres(): number { return this.orders.reduce((s, o) => s + (o.litersFilled || 0), 0); }
@@ -292,8 +510,8 @@ export class PumaGarageDialog {
     return dates.length === 1 ? fmt(dates[0]) : `${fmt(dates[0])} → ${fmt(dates[dates.length - 1])}`;
   }
 
-  toggleImport(): void { this.showImport = !this.showImport; if (this.showImport) this.showAdd = false; }
-  toggleAdd(): void { this.showAdd = !this.showAdd; if (this.showAdd) this.showImport = false; if (!this.showAdd) this.newOrder = { orderNumber: '' }; }
+  toggleImport(): void { this.showImport = !this.showImport; if (this.showImport) { this.showAdd = false; this.showQuick = false; } }
+  toggleAdd(): void { this.showAdd = !this.showAdd; if (this.showAdd) { this.showImport = false; this.showQuick = false; } if (!this.showAdd) this.newOrder = { orderNumber: '' }; }
 
   doImport(): void {
     if (!this.importText.trim()) return;

@@ -91,15 +91,15 @@
             </div>
           </div>
 
-          <div class="modern-stat-card clickable" (click)="openPumaGarageDialog()">
+          <div class="modern-stat-card clickable" [class.warning]="pumaOrdersCount() > 0" (click)="openPumaGarageDialog()">
             <div class="stat-icon-wrapper puma">
               <mat-icon>local_gas_station</mat-icon>
             </div>
             <div class="stat-content">
               <span class="stat-value">{{ pumaOrdersCount() }}</span>
-              <span class="stat-label">Puma Garage</span>
+              <span class="stat-label">Puma Garage · open</span>
               <div class="stat-progress">
-                <div class="progress-bar" [style.width.%]="pumaOrdersCount() > 0 ? Math.min(pumaOrdersCount() * 2, 100) : 0"></div>
+                <div class="progress-bar" [style.width.%]="pumaOrdersCount() > 0 ? Math.min(pumaOrdersCount() * 10, 100) : 0"></div>
               </div>
             </div>
           </div>

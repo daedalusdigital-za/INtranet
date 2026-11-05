@@ -4793,7 +4793,8 @@ Notes: ${record.notes || 'No notes'}
     this.http.get<any[]>(`${environment.apiUrl}/logistics/pumagarageorders`).subscribe({
       next: (orders) => {
         this.pumaOrders.set(orders);
-        this.pumaOrdersCount.set(orders.length);
+        // Card shows orders still waiting for the filled-slip photo
+        this.pumaOrdersCount.set(orders.filter(o => o.status !== 'Closed').length);
       },
       error: (err) => {
         console.error('Failed to load Puma Garage orders:', err);

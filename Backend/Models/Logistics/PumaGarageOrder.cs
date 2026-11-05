@@ -49,6 +49,30 @@ namespace ProjectTracker.API.Models.Logistics
         [StringLength(500)]
         public string? Notes { get; set; }
 
+        /// <summary>"Open" until the filled slip photo is uploaded and the order is closed; then "Closed".</summary>
+        [StringLength(20)]
+        public string Status { get; set; } = "Open";
+
+        /// <summary>Original file name of the slip photo (jpg/png) proving the fill.</summary>
+        [StringLength(260)]
+        public string? SlipFileName { get; set; }
+
+        /// <summary>Stored file name under uploads/puma-slips.</summary>
+        [StringLength(260)]
+        public string? SlipStoredFileName { get; set; }
+
+        [StringLength(100)]
+        public string? SlipContentType { get; set; }
+
+        public DateTime? SlipUploadedAt { get; set; }
+        public int? SlipUploadedByUserId { get; set; }
+
+        public DateTime? ClosedAt { get; set; }
+        public int? ClosedByUserId { get; set; }
+
+        [StringLength(150)]
+        public string? ClosedByName { get; set; }
+
         public int? CreatedByUserId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
