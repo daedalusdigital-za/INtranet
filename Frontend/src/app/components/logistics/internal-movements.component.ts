@@ -20,6 +20,7 @@ export interface InternalMovement {
   fromWarehouseId: number | null; fromWarehouseName?: string; toWarehouseId: number | null; toWarehouseName?: string;
   vehicleId: number | null; vehicleRegistration?: string; vehicleName?: string; driverId: number | null; driverName?: string;
   scheduledDate?: string; dispatchedAt?: string; receivedAt?: string; notes?: string; createdAt: string; createdBy?: string;
+  requestSource?: string; requestedBy?: string; reference?: string;
   lineCount: number; totalUnits: number; unlinkedLines: number; stockOutPosted: boolean; stockInPosted: boolean; lines: InternalMovementLine[];
 }
 interface Ref { id: number; name: string; }
@@ -42,6 +43,7 @@ interface Ref { id: number; name: string; }
             <mat-label>Status</mat-label>
             <mat-select [(ngModel)]="statusFilter">
               <mat-option value="">Open &amp; recent</mat-option>
+              <mat-option value="Requested">Requested (to accept)</mat-option>
               <mat-option value="Available">Planned</mat-option>
               <mat-option value="Assigned">Assigned</mat-option>
               <mat-option value="InTransit">In transit</mat-option>
@@ -63,6 +65,7 @@ interface Ref { id: number; name: string; }
         <app-fleet-movements />
       } @else {
         <div class="im-kpis">
+          <div class="k req" [class.warn]="count('Requested') > 0" (click)="statusFilter = count('Requested') ? 'Requested' : ''" role="button"><span>Requests to accept</span><b>{{ count('Requested') }}</b></div>
           <div class="k"><span>Planned</span><b>{{ count('Available') + count('Assigned') }}</b></div>
           <div class="k warn"><span>In transit</span><b>{{ count('InTransit') }}</b></div>
           <div class="k ok"><span>Received (30 d)</span><b>{{ receivedRecent() }}</b></div>
@@ -73,11 +76,15 @@ interface Ref { id: number; name: string; }
         @else if (error()) { <p class="im-muted err"><mat-icon>error_outline</mat-icon>{{ error() }}</p> }
         @else {
           <table class="app-table im-table">
-            <thead><tr><th>Trip</th><th>From → To</th><th>Stock</th><th>Vehicle / driver</th><th>When</th><th>Status</th><th class="act"></th></tr></thead>
+            <thead><tr><th>Trip</th><th>Requested by</th><th>From → To</th><th>Stock</th><th>Vehicle / driver</th><th>When</th><th>Status</th><th class="act"></th></tr></thead>
             <tbody>
               @for (m of filtered(); track m.id) {
-                <tr [class.open]="expanded() === m.id">
-                  <td><button class="im-ref" (click)="toggle(m.id)">{{ m.loadNumber }}<mat-icon>{{ expanded() === m.id ? 'expand_less' : 'expand_more' }}</mat-icon></button><small>{{ m.createdBy || '—' }} · {{ m.createdAt | date:'dd MMM' }}</small></td>
+                <tr [class.open]="expanded() === m.id" [class.req]="m.status === 'Requested'">
+                  <td><button class="im-ref" (click)="toggle(m.id)">{{ m.loadNumber }}<mat-icon>{{ expanded() === m.id ? 'expand_less' : 'expand_more' }}</mat-icon></button><small>{{ m.createdAt | date:'dd MMM HH:mm' }}</small></td>
+                  <td>
+                    <b>{{ m.requestedBy || m.createdBy || '—' }}</b>
+                    <small><span class="src" [attr.data-src]="m.requestSource">@if (m.requestSource === 'Welly') { <mat-icon>auto_awesome</mat-icon> } {{ m.requestSource || 'Logistics' }}</span>@if (m.reference) { · {{ m.reference }} }</small>
+                  </td>
                   <td><b>{{ m.fromWarehouseName || '?' }}</b> <mat-icon class="arrow">arrow_forward</mat-icon> <b>{{ m.toWarehouseName || '?' }}</b></td>
                   <td>{{ m.lineCount }} line{{ m.lineCount === 1 ? '' : 's' }} · <b>{{ m.totalUnits | number }}</b> units
                     @if (m.unlinkedLines) { <span class="tag bad" matTooltip="These lines are not linked to a stock item and block dispatch">{{ m.unlinkedLines }} unlinked</span> }</td>
@@ -94,6 +101,10 @@ interface Ref { id: number; name: string; }
                   <td><span class="st" [attr.data-s]="m.status">{{ label(m.status) }}</span>
                     <small>@if (m.stockOutPosted) { out ✓ } @if (m.stockInPosted) { · in ✓ }</small></td>
                   <td class="act">
+                    @if (m.status === 'Requested') {
+                      <button mat-raised-button color="primary" (click)="accept(m)" matTooltip="Accept this request and assign a vehicle and driver"><mat-icon>task_alt</mat-icon> Accept &amp; assign</button>
+                      <button mat-icon-button matTooltip="Decline" (click)="cancel(m)"><mat-icon>close</mat-icon></button>
+                    }
                     @if (m.status === 'Available' || m.status === 'Assigned') {
                       <button mat-icon-button matTooltip="Assign vehicle / driver" (click)="assign(m)"><mat-icon>badge</mat-icon></button>
                       <button mat-stroked-button color="primary" (click)="dispatch(m)" matTooltip="Stock leaves the source warehouse"><mat-icon>local_shipping</mat-icon> Dispatch</button>
@@ -105,7 +116,7 @@ interface Ref { id: number; name: string; }
                   </td>
                 </tr>
                 @if (expanded() === m.id) {
-                  <tr class="im-detail"><td colspan="7">
+                  <tr class="im-detail"><td colspan="8">
                     <div class="im-lines">
                       <table>
                         <thead><tr><th>Code</th><th>Item</th><th class="num">Qty</th></tr></thead>
@@ -116,7 +127,7 @@ interface Ref { id: number; name: string; }
                   </td></tr>
                 }
               } @empty {
-                <tr><td colspan="7" class="im-empty"><mat-icon>warehouse</mat-icon>No internal movements{{ statusFilter || search ? ' match' : ' yet' }}. Create one to move stock between warehouses on a trip.</td></tr>
+                <tr><td colspan="8" class="im-empty"><mat-icon>warehouse</mat-icon>No internal movements{{ statusFilter || search ? ' match' : ' yet' }}. Create one to move stock between warehouses on a trip.</td></tr>
               }
             </tbody>
           </table>
@@ -132,9 +143,11 @@ interface Ref { id: number; name: string; }
     .im-view { display: inline-flex; background: var(--color-surface-2); border-radius: 999px; padding: 3px; gap: 2px;
       button { border: 0; background: transparent; border-radius: 999px; padding: 5px 14px; font: inherit; font-size: var(--text-sm); color: var(--color-text-2); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; mat-icon { font-size: 18px; width: 18px; height: 18px; } }
       button.on { background: var(--color-surface); color: var(--color-primary); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); } }
-    .im-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-2); margin-bottom: var(--space-3);
+    .im-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-2); margin-bottom: var(--space-3);
       .k { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 10px 12px; display: flex; flex-direction: column; span { font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); } b { font-size: 1.3rem; } }
-      .k.ok b { color: var(--color-ok); } .k.warn b { color: var(--color-warn); } }
+      .k.ok b { color: var(--color-ok); } .k.warn b { color: var(--color-warn); } .k.req { cursor: pointer; } .k.req.warn { border-color: var(--color-warn); background: #fffbeb; } }
+    .src { display: inline-flex; align-items: center; gap: 2px; mat-icon { font-size: 13px; width: 13px; height: 13px; color: #7c3aed; } &[data-src="Welly"] { color: #7c3aed; font-weight: 600; } }
+    tr.req td { background: #fffbeb; }
     .im-table { width: 100%; td small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } .num { text-align: right; } .act { text-align: right; white-space: nowrap; }
       tr.open td { background: var(--color-primary-soft); } }
     .im-ref { font-family: var(--font-mono); font-weight: 700; border: 0; background: none; padding: 0; cursor: pointer; color: var(--color-primary); display: inline-flex; align-items: center; font: inherit; font-weight: 700; mat-icon { font-size: 18px; width: 18px; height: 18px; } }
@@ -144,6 +157,7 @@ interface Ref { id: number; name: string; }
     .tag { display: inline-block; font-size: var(--text-xs); border-radius: 6px; padding: 1px 6px; margin-left: 6px; &.bad { background: var(--color-danger-soft, #fef2f2); color: var(--color-danger); } }
     .st { display: inline-block; font-size: var(--text-xs); font-weight: 600; border-radius: 999px; padding: 2px 10px; background: var(--color-surface-2);
       &[data-s="InTransit"] { background: #fff7ed; color: #c2410c; } &[data-s="Delivered"], &[data-s="Completed"] { background: #ecfdf5; color: #047857; }
+      &[data-s="Requested"] { background: #fef3c7; color: #92400e; }
       &[data-s="Assigned"] { background: #eff6ff; color: #1d4ed8; } &[data-s="Cancelled"] { color: var(--color-text-3); text-decoration: line-through; } }
     .im-detail td { padding: 0 12px 12px 32px !important; }
     .im-lines table { border-collapse: collapse; font-size: var(--text-sm); min-width: 420px; th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); padding: 4px 8px; } td { padding: 3px 8px; border-top: 1px solid var(--color-surface-2); } tr.bad td { color: var(--color-danger); } }
@@ -193,15 +207,20 @@ export class InternalMovementsComponent implements OnInit {
       if (this.statusFilter && m.status !== this.statusFilter) return false;
       if (!this.statusFilter && m.status === 'Cancelled') return false;
       if (!q) return true;
-      const hay = [m.loadNumber, m.fromWarehouseName, m.toWarehouseName, m.driverName, m.vehicleRegistration, m.notes, ...m.lines.map(l => `${l.code} ${l.name}`)].join(' ').toLowerCase();
+      const hay = [m.loadNumber, m.fromWarehouseName, m.toWarehouseName, m.driverName, m.vehicleRegistration, m.notes, m.requestedBy, m.requestSource, m.reference, ...m.lines.map(l => `${l.code} ${l.name}`)].join(' ').toLowerCase();
       return hay.includes(q);
     });
   }
   count(status: string): number { return this.rows().filter(m => m.status === status).length; }
   receivedRecent(): number { const cutoff = Date.now() - 30 * 864e5; return this.rows().filter(m => m.status === 'Delivered' && m.receivedAt && new Date(m.receivedAt).getTime() >= cutoff).length; }
   unitsInTransit(): number { return this.rows().filter(m => m.status === 'InTransit').reduce((n, m) => n + (m.totalUnits || 0), 0); }
-  label(s: string): string { return ({ Available: 'Planned', Assigned: 'Assigned', InTransit: 'In transit', Delivered: 'Received', Completed: 'Received', Cancelled: 'Cancelled' } as any)[s] || s; }
+  label(s: string): string { return ({ Requested: 'Requested', Available: 'Planned', Assigned: 'Assigned', InTransit: 'In transit', Delivered: 'Received', Completed: 'Received', Cancelled: 'Cancelled' } as any)[s] || s; }
   toggle(id: number): void { this.expanded.set(this.expanded() === id ? null : id); }
+
+  accept(m: InternalMovement): void {
+    this.dialog.open(AssignInternalMovementDialog, { width: '460px', data: { movement: m, vehicles: this.vehicles, drivers: this.drivers, accept: true } })
+      .afterClosed().subscribe(ok => { if (ok) this.load(); });
+  }
 
   openNew(): void {
     this.dialog.open(InternalMovementDialog, { width: '860px', maxWidth: '96vw', data: { warehouses: this.warehouses, vehicles: this.vehicles, drivers: this.drivers } })
@@ -229,7 +248,11 @@ export class InternalMovementsComponent implements OnInit {
   }
 
   async cancel(m: InternalMovement): Promise<void> {
-    const ok = await this.confirm.ask({ title: `Cancel ${m.loadNumber}?`, message: 'No stock has moved yet, so nothing is reversed. The trip is marked cancelled.', confirmText: 'Cancel movement', danger: true });
+    const isReq = m.status === 'Requested';
+    const ok = await this.confirm.ask({
+      title: isReq ? `Decline ${m.loadNumber}?` : `Cancel ${m.loadNumber}?`,
+      message: isReq ? `This request from ${m.requestedBy || m.requestSource || 'another team'} will be marked cancelled. No stock has moved.` : 'No stock has moved yet, so nothing is reversed. The trip is marked cancelled.',
+      confirmText: isReq ? 'Decline request' : 'Cancel movement', danger: true });
     if (!ok) return;
     this.http.post(`${this.api}/logistics/internal-movements/${m.id}/cancel`, {}).subscribe({
       next: () => { this.toast.info(`${m.loadNumber} cancelled`); this.load(); },
@@ -432,9 +455,10 @@ export class InternalMovementDialog {
   standalone: true,
   imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
-    <h2 mat-dialog-title>Assign {{ data.movement.loadNumber }}</h2>
+    <h2 mat-dialog-title>{{ data.accept ? 'Accept' : 'Assign' }} {{ data.movement.loadNumber }}</h2>
     <mat-dialog-content>
-      <p class="sub">{{ data.movement.fromWarehouseName }} → {{ data.movement.toWarehouseName }} · {{ data.movement.totalUnits | number }} units</p>
+      <p class="sub">{{ data.movement.fromWarehouseName }} → {{ data.movement.toWarehouseName }} · {{ data.movement.totalUnits | number }} units
+        @if (data.accept) { <br>Requested by <b>{{ data.movement.requestedBy || data.movement.createdBy }}</b> via {{ data.movement.requestSource }}@if (data.movement.reference) { · {{ data.movement.reference }} } }</p>
       <mat-form-field appearance="outline" style="width:100%">
         <mat-label>Vehicle</mat-label>
         <mat-select [(ngModel)]="vehicleId">
@@ -456,7 +480,7 @@ export class InternalMovementDialog {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-raised-button color="primary" [disabled]="saving" (click)="save()">Save</button>
+      <button mat-raised-button color="primary" [disabled]="saving" (click)="save()">{{ data.accept ? 'Accept request' : 'Save' }}</button>
     </mat-dialog-actions>
   `,
   styles: [`.sub { color: var(--color-text-3); font-size: var(--text-sm); margin: 0 0 12px; }`]
@@ -465,15 +489,19 @@ export class AssignInternalMovementDialog {
   vehicleId: number; driverId: number; date: string; saving = false;
   private http = inject(HttpClient);
   private toast = inject(ToastService);
-  constructor(public dialogRef: MatDialogRef<AssignInternalMovementDialog>, @Inject(MAT_DIALOG_DATA) public data: { movement: InternalMovement; vehicles: any[]; drivers: any[] }) {
+  constructor(public dialogRef: MatDialogRef<AssignInternalMovementDialog>, @Inject(MAT_DIALOG_DATA) public data: { movement: InternalMovement; vehicles: any[]; drivers: any[]; accept?: boolean }) {
     this.vehicleId = data.movement.vehicleId || 0;
     this.driverId = data.movement.driverId || 0;
-    this.date = data.movement.scheduledDate ? data.movement.scheduledDate.substring(0, 10) : '';
+    this.date = data.movement.scheduledDate ? data.movement.scheduledDate.substring(0, 10) : new Date().toISOString().substring(0, 10);
   }
   save(): void {
     this.saving = true;
-    this.http.put(`${environment.apiUrl}/logistics/internal-movements/${this.data.movement.id}/assign`, { vehicleId: this.vehicleId, driverId: this.driverId, scheduledDate: this.date || null }).subscribe({
-      next: () => { this.toast.done('Assignment saved'); this.dialogRef.close(true); },
+    const body = { vehicleId: this.vehicleId, driverId: this.driverId, scheduledDate: this.date || null };
+    const req = this.data.accept
+      ? this.http.post(`${environment.apiUrl}/logistics/internal-movements/${this.data.movement.id}/accept`, body)
+      : this.http.put(`${environment.apiUrl}/logistics/internal-movements/${this.data.movement.id}/assign`, body);
+    req.subscribe({
+      next: () => { this.toast.done(this.data.accept ? `${this.data.movement.loadNumber} accepted — now a planned trip` : 'Assignment saved'); this.dialogRef.close(true); },
       error: e => { this.saving = false; this.toast.error(e?.error?.message || 'Could not save'); }
     });
   }

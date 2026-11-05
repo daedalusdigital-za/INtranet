@@ -1842,6 +1842,11 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     });
     ref.afterClosed().subscribe((a: WellySuggestionsAction | undefined) => {
       if (!a) return;
+      if (a.action === 'requested') {
+        // Requests now live in Logistics › Movement; nothing hits the ledger until the trip is dispatched/received.
+        this.toast.info(`${a.loadNumbers.length} movement request(s) with Logistics: ${a.loadNumbers.join(', ')}`);
+        return;
+      }
       if (a.action === 'transfer') {
         this.openTransferStock({ fromWarehouseId: a.lane.fromWarehouseId, toWarehouseId: a.lane.toWarehouseId, code: a.item.code, quantity: a.item.qty,
           reference: 'Welly · ' + a.item.invoices.slice(0, 3).join(', ') });

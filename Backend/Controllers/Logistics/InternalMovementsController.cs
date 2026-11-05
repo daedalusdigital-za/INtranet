@@ -118,6 +118,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     notes = l.Notes,
                     createdAt = l.CreatedAt,
                     createdBy = l.CreatedByUserId != null && userNames.TryGetValue(l.CreatedByUserId.Value, out var cb) ? cb : null,
+                    requestSource = l.RequestSource ?? "Logistics",
+                    requestedBy = l.RequestedBy ?? (l.CreatedByUserId != null && userNames.TryGetValue(l.CreatedByUserId.Value, out var rb) ? rb : null),
+                    reference = l.SpecialInstructions,
                     lineCount = ll.Count,
                     totalUnits = ll.Sum(x => x.Quantity),
                     unlinkedLines = ll.Count(x => x.CommodityId == null),
@@ -136,7 +139,23 @@ namespace ProjectTracker.API.Controllers.Logistics
             var from = await _context.Warehouses.FindAsync(dto.FromWarehouseId);
             var to = await _context.Warehouses.FindAsync(dto.ToWarehouseId);
             if (from == null || to == null) return NotFound(new { message = "Warehouse not found" });
-            var lines = (dto.Lines ?? new()).Where(l => l.Quantity > 0).GroupBy(l => l.CommodityId)
+
+            // Lines may come by CommodityId (Logistics UI) or by stock code (Welly / Sales), resolved here.
+            var rawLines = (dto.Lines ?? new()).Where(l => l.Quantity > 0).ToList();
+            var codes = rawLines.Where(l => l.CommodityId <= 0 && !string.IsNullOrWhiteSpace(l.Code)).Select(l => l.Code!.Trim().ToUpper()).Distinct().ToList();
+            var byCode = codes.Count == 0 ? new Dictionary<string, int>() :
+                (await _context.Commodities.Where(c => c.Code != null && codes.Contains(c.Code.ToUpper())).Select(c => new { c.Id, c.Code }).ToListAsync())
+                    .GroupBy(c => c.Code!.ToUpper()).ToDictionary(g => g.Key, g => g.First().Id);
+            var unknownCodes = new List<string>();
+            foreach (var l in rawLines.Where(l => l.CommodityId <= 0))
+            {
+                if (!string.IsNullOrWhiteSpace(l.Code) && byCode.TryGetValue(l.Code.Trim().ToUpper(), out var cid)) l.CommodityId = cid;
+                else unknownCodes.Add(l.Code ?? "?");
+            }
+            if (unknownCodes.Count > 0)
+                return BadRequest(new { message = $"{unknownCodes.Count} code(s) aren't stock items: {string.Join(", ", unknownCodes.Take(5))}", unknownCodes });
+
+            var lines = rawLines.GroupBy(l => l.CommodityId)
                 .Select(g => new { CommodityId = g.Key, Qty = g.Sum(x => x.Quantity) }).ToList();
             if (lines.Count == 0) return BadRequest(new { message = "Add at least one stock line with a quantity" });
             var commodityIds = lines.Select(l => l.CommodityId).ToList();
@@ -147,6 +166,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
+                var source = string.IsNullOrWhiteSpace(dto.Source) ? "Logistics" : dto.Source!.Trim();
+                var isRequest = !string.Equals(source, "Logistics", StringComparison.OrdinalIgnoreCase);
                 var load = new Load
                 {
                     LoadNumber = await GenerateLoadNumberAsync(),
@@ -156,18 +177,21 @@ namespace ProjectTracker.API.Controllers.Logistics
                     VehicleId = dto.VehicleId,
                     DriverId = dto.DriverId,
                     CreatedByUserId = CurrentUserId(),
+                    RequestSource = source,
+                    RequestedBy = CurrentUserName,
                     PickupLocation = FormatAddress(from),
                     PickupLatitude = from.Latitude,
                     PickupLongitude = from.Longitude,
                     DeliveryLocation = FormatAddress(to),
                     DeliveryLatitude = to.Latitude,
                     DeliveryLongitude = to.Longitude,
-                    Status = dto.DriverId.HasValue ? "Assigned" : "Available",
+                    // Requests from Stock / Sales / Welly wait for Logistics to accept them
+                    Status = isRequest ? "Requested" : (dto.DriverId.HasValue ? "Assigned" : "Available"),
                     Priority = string.IsNullOrWhiteSpace(dto.Priority) ? "Normal" : dto.Priority!,
                     ScheduledPickupDate = dto.ScheduledDate,
                     ScheduledDeliveryDate = dto.ScheduledDate,
                     Notes = dto.Notes,
-                    SpecialInstructions = $"Internal stock movement {from.Name} → {to.Name}"
+                    SpecialInstructions = string.IsNullOrWhiteSpace(dto.Reference) ? $"Internal stock movement {from.Name} → {to.Name}" : dto.Reference!.Trim()
                 };
                 _context.Loads.Add(load);
                 await _context.SaveChangesAsync();
@@ -203,8 +227,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                _logger.LogInformation("Internal movement {LoadNumber} created {From} → {To} with {Lines} lines by {User}",
-                    load.LoadNumber, from.Name, to.Name, lines.Count, CurrentUserName);
+                _logger.LogInformation("Internal movement {LoadNumber} ({Status}, from {Source}) created {From} → {To} with {Lines} lines by {User}",
+                    load.LoadNumber, load.Status, source, from.Name, to.Name, lines.Count, CurrentUserName);
                 return await Get(load.Id);
             }
             catch (Exception ex)
@@ -234,6 +258,23 @@ namespace ProjectTracker.API.Controllers.Logistics
             return await Get(id);
         }
 
+        // ═══ POST: accept a request from Stock / Sales / Welly — becomes a planned trip (optionally assigned at once) ═══
+        [HttpPost("{id:int}/accept")]
+        public async Task<ActionResult<object>> Accept(int id, [FromBody] AssignInternalMovementDto? dto)
+        {
+            var load = await _context.Loads.FirstOrDefaultAsync(l => l.Id == id && l.LoadType == LoadTypeInternal);
+            if (load == null) return NotFound(new { message = "Internal movement not found" });
+            if (load.Status != "Requested") return Conflict(new { message = $"{load.LoadNumber} is already {load.Status.ToLower()}" });
+            if (dto?.VehicleId is > 0) load.VehicleId = dto.VehicleId;
+            if (dto?.DriverId is > 0) load.DriverId = dto.DriverId;
+            if (dto?.ScheduledDate.HasValue == true) { load.ScheduledPickupDate = dto.ScheduledDate; load.ScheduledDeliveryDate = dto.ScheduledDate; }
+            load.Status = load.DriverId.HasValue ? "Assigned" : "Available";
+            load.UpdatedAt = DateTime.UtcNow;
+            load.Notes = string.Join("\n", new[] { load.Notes, $"Accepted by {CurrentUserName} on {DateTime.UtcNow.AddHours(2):dd MMM HH:mm}" }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            await _context.SaveChangesAsync();
+            return await Get(id);
+        }
+
         // ═══ POST: dispatch — stock leaves the source warehouse ═══
         [HttpPost("{id:int}/dispatch")]
         public async Task<ActionResult<object>> Dispatch(int id, [FromBody] InternalMovementNoteDto? dto)
@@ -243,6 +284,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (load == null) return NotFound(new { message = "Internal movement not found" });
             if (load.Status is "InTransit" or "Delivered" or "Completed") return Conflict(new { message = $"{load.LoadNumber} has already left" });
             if (load.Status == "Cancelled") return Conflict(new { message = $"{load.LoadNumber} is cancelled" });
+            if (load.Status == "Requested") return Conflict(new { message = $"{load.LoadNumber} is still a request — accept it first" });
             if (load.WarehouseId == null || load.DestinationWarehouseId == null) return BadRequest(new { message = "Movement has no source/destination warehouse" });
             if (await HasTransferRowsAsync(id, load.WarehouseId.Value, outbound: true))
                 return Conflict(new { message = $"Stock has already been taken out of the source for {load.LoadNumber}" });
@@ -395,9 +437,13 @@ namespace ProjectTracker.API.Controllers.Logistics
         public DateTime? ScheduledDate { get; set; }
         public string? Priority { get; set; }
         public string? Notes { get; set; }
+        /// <summary>Logistics (default) | Stock | Sales | Welly. Anything but Logistics creates a *request*.</summary>
+        public string? Source { get; set; }
+        /// <summary>Shown as the trip's reference, e.g. "Welly · IN146545, IN146550".</summary>
+        public string? Reference { get; set; }
         public List<InternalMovementLineDto> Lines { get; set; } = new();
     }
-    public class InternalMovementLineDto { public int CommodityId { get; set; } public decimal Quantity { get; set; } }
+    public class InternalMovementLineDto { public int CommodityId { get; set; } public string? Code { get; set; } public decimal Quantity { get; set; } }
     public class AssignInternalMovementDto { public int? VehicleId { get; set; } public int? DriverId { get; set; } public DateTime? ScheduledDate { get; set; } public string? Notes { get; set; } }
     public class InternalMovementNoteDto { public string? Reason { get; set; } }
     public class ReceiveInternalMovementDto { public string? Reason { get; set; } public List<ReceiveLineDto>? Lines { get; set; } }

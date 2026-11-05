@@ -2,6 +2,8 @@ import { Component, OnDestroy, OnInit, inject, signal, computed } from '@angular
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { ToastService } from '../../ui/toast.service';
+import { ConfirmService } from '../../ui/confirm.service';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -57,12 +59,14 @@ interface WellyResult {
 
 interface ThinkStep { icon: string; text: string; state: 'pending' | 'active' | 'done'; detail?: string; }
 
-/** Opened from Sales (read-only) or Stock (`mode: 'stock'` adds "Record" buttons that hand a lane/item back to the caller). */
+/** Opened from Sales or Stock. Both can send a suggested lane / line to Logistics as an internal movement request;
+ *  the dialog does that itself and closes with `{ action: 'requested' }` so the caller can refresh. */
 export interface WellySuggestionsDialogData { mode?: 'sales' | 'stock'; }
 export type WellySuggestionsAction =
   | { action: 'transfer'; lane: WellyLane; item: WellyLaneItem }
   | { action: 'transfer-lane'; lane: WellyLane }
-  | { action: 'ic-transfer'; lane: WellyTransferLane; item: WellyTransferItem };
+  | { action: 'ic-transfer'; lane: WellyTransferLane; item: WellyTransferItem }
+  | { action: 'requested'; loadNumbers: string[] };
 export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
 
 @Component({
@@ -87,7 +91,7 @@ export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
           </mat-button-toggle-group>
           <button mat-icon-button (click)="run()" matTooltip="Re-run analysis"><mat-icon>refresh</mat-icon></button>
         }
-        <button mat-icon-button mat-dialog-close aria-label="Close"><mat-icon>close</mat-icon></button>
+        <button mat-icon-button (click)="closeDialog()" aria-label="Close"><mat-icon>close</mat-icon></button>
       </h2>
 
       <mat-dialog-content>
@@ -292,11 +296,11 @@ export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
                         </mat-panel-description>
                       </mat-expansion-panel-header>
 
-                      @if (stockMode) {
+                      @if (canRequest) {
                         <div class="lane-actions">
-                          <mat-icon>edit_note</mat-icon>
-                          <span>Record these as transfers in the stock ledger ({{ lane.from }} → {{ lane.to }}). Each line becomes two ledger entries; nothing moves physically until Logistics does.</span>
-                          <button mat-flat-button color="primary" (click)="pick({ action: 'transfer-lane', lane })"><mat-icon>playlist_add_check</mat-icon>Record all {{ lane.items.length }}</button>
+                          <mat-icon>local_shipping</mat-icon>
+                          <span>Send this to Logistics as an internal movement trip ({{ lane.from }} → {{ lane.to }}). It appears in Logistics › Movement with your name on it; Logistics accepts it, assigns a vehicle and driver, and stock moves in the ledger when the trip is dispatched and received.</span>
+                          <button mat-flat-button color="primary" [disabled]="busy()" (click)="requestLane(lane)"><mat-icon>send</mat-icon>Send all {{ lane.items.length }} to Logistics</button>
                         </div>
                       }
 
@@ -304,7 +308,7 @@ export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
                         <div class="lane-col">
                           <h4><mat-icon>inventory</mat-icon>Items to move</h4>
                           <table class="line-table">
-                            <thead><tr><th>Code</th><th>Item</th><th class="num">Move</th><th class="num">Left at {{ lane.from }}</th><th>For invoices</th>@if (stockMode) { <th></th> }</tr></thead>
+                            <thead><tr><th>Code</th><th>Item</th><th class="num">Move</th><th class="num">Left at {{ lane.from }}</th><th>For invoices</th>@if (canRequest) { <th></th> }</tr></thead>
                             <tbody>
                               @for (it of lane.items; track it.code) {
                                 <tr>
@@ -313,7 +317,7 @@ export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
                                   <td class="num"><b>{{ it.qty | number }}</b></td>
                                   <td class="num" [class.low]="it.donorRemaining < it.qty">{{ it.donorRemaining | number }}</td>
                                   <td class="inv-chips">@for (n of it.invoices.slice(0, 4); track n) { <span class="chip">{{ n }}</span> } @if (it.invoices.length > 4) { <span class="chip more">+{{ it.invoices.length - 4 }}</span> }</td>
-                                  @if (stockMode) { <td class="act"><button mat-stroked-button class="rec-btn" (click)="pick({ action: 'transfer', lane, item: it })" matTooltip="Open the transfer form pre-filled with this line"><mat-icon>sync_alt</mat-icon>Record</button></td> }
+                                  @if (canRequest) { <td class="act"><button mat-stroked-button class="rec-btn" [disabled]="busy()" (click)="requestLane(lane, it)" matTooltip="Send just this line to Logistics as a movement trip"><mat-icon>send</mat-icon>Send</button></td> }
                                 </tr>
                               }
                             </tbody>
@@ -395,7 +399,7 @@ export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
                         <div class="lane-col">
                           <h4><mat-icon>inventory</mat-icon>Items to transfer</h4>
                           <table class="line-table">
-                            <thead><tr><th>Item</th><th>From code<br><small>{{ lane.from }}</small></th><th>To code<br><small>{{ lane.to }}</small></th><th class="num">Qty</th><th>Where</th><th>For invoices</th>@if (stockMode) { <th></th> }</tr></thead>
+                            <thead><tr><th>Item</th><th>From code<br><small>{{ lane.from }}</small></th><th>To code<br><small>{{ lane.to }}</small></th><th class="num">Qty</th><th>Where</th><th>For invoices</th>@if (canRequest) { <th></th> }</tr></thead>
                             <tbody>
                               @for (it of lane.items; track it.fromCode + it.toCode) {
                                 <tr>
@@ -405,12 +409,12 @@ export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
                                   <td class="num"><b>{{ it.qty | number }}</b><br><small class="muted-sm">{{ it.donorRemaining | number }} left</small></td>
                                   <td>@for (w of it.warehouses; track w) { <span class="chip" [class.cross]="w.includes('→')">{{ w }}</span> }</td>
                                   <td class="inv-chips">@for (n of it.invoices.slice(0, 4); track n) { <span class="chip">{{ n }}</span> } @if (it.invoices.length > 4) { <span class="chip more">+{{ it.invoices.length - 4 }}</span> }</td>
-                                  @if (stockMode) {
+                                  @if (canRequest) {
                                     <td class="act">
                                       @if (it.sameWarehouse) {
                                         <span class="tag xfer" matTooltip="Donor stock is already in the right warehouse — this is an inter-company invoice between {{ lane.from }} and {{ lane.to }}, no stock moves">paperwork only</span>
                                       } @else {
-                                        <button mat-stroked-button class="rec-btn" (click)="pick({ action: 'ic-transfer', lane, item: it })" matTooltip="Open the transfer form for the donor code, source → destination warehouse"><mat-icon>sync_alt</mat-icon>Record move</button>
+                                        <button mat-stroked-button class="rec-btn" [disabled]="busy()" (click)="requestInterCompany(lane, it)" matTooltip="Send the donor code to Logistics as a movement trip, source → destination warehouse"><mat-icon>send</mat-icon>Send to Logistics</button>
                                       }
                                     </td>
                                   }
@@ -702,10 +706,71 @@ export class WellySuggestionsDialogComponent implements OnInit, OnDestroy {
   private ref = inject(MatDialogRef<WellySuggestionsDialogComponent>);
   private apiUrl = environment.apiUrl;
   private dlgData = inject<WellySuggestionsDialogData | null>(MAT_DIALOG_DATA, { optional: true });
+  private toast = inject(ToastService);
+  private confirm = inject(ConfirmService);
   readonly stockMode = this.dlgData?.mode === 'stock';
+  /** Sales and Stock can both ask Logistics to move stock. */
+  readonly canRequest = true;
+  private readonly source = this.stockMode ? 'Stock' : 'Sales';
+  busy = signal(false);
+  requested = signal<string[]>([]);
 
   /** Hand a suggestion back to the caller (Stock) so it can record it. */
   pick(a: WellySuggestionsAction): void { this.ref.close(a); }
+
+  /** Send a whole lane (or one line of it) to Logistics as an internal movement request. */
+  async requestLane(lane: WellyLane, only?: WellyLaneItem): Promise<void> {
+    const items = only ? [only] : lane.items;
+    const units = items.reduce((n, i) => n + i.qty, 0);
+    const invoices = [...new Set(items.flatMap(i => i.invoices))];
+    const ok = await this.confirm.ask({
+      title: `Send ${items.length} line(s) ${lane.from} → ${lane.to} to Logistics?`,
+      message: `${units.toLocaleString()} unit(s) become one internal movement trip request. Logistics will accept it and assign a vehicle and driver; stock only changes in the ledger when the trip is dispatched and received. It completes ${invoices.length} invoice(s).`,
+      confirmText: 'Send to Logistics'
+    });
+    if (!ok) return;
+    await this.post({
+      fromWarehouseId: lane.fromWarehouseId, toWarehouseId: lane.toWarehouseId, source: 'Welly',
+      reference: `Welly · ${this.source} · ${invoices.slice(0, 4).join(', ')}${invoices.length > 4 ? ` +${invoices.length - 4}` : ''}`,
+      notes: `Suggested by Welly (${this.source}) to complete ${invoices.length} invoice(s): ${invoices.slice(0, 12).join(', ')}${invoices.length > 12 ? '…' : ''}`,
+      lines: items.map(i => ({ code: i.code, quantity: i.qty }))
+    }, `${lane.from} → ${lane.to}`);
+  }
+
+  /** Inter-company donor line that sits in another warehouse ("KZN→GP" chip) → movement request for the donor code. */
+  async requestInterCompany(lane: WellyTransferLane, it: WellyTransferItem): Promise<void> {
+    const cross = it.warehouses.find(w => w.includes('→'));
+    const [fromCode, toCode] = (cross || '').split('→').map(s => s.trim());
+    const whs = this.result()?.warehouses || [];
+    const byCode = (c: string) => whs.find(w => (w.code || '').toUpperCase() === c.toUpperCase() || (w.name || '').toUpperCase().startsWith(c.toUpperCase()));
+    const from = byCode(fromCode), to = byCode(toCode);
+    if (!from || !to) { this.toast.warn(`Couldn't work out the warehouses for ${cross || 'this line'}.`); return; }
+    const ok = await this.confirm.ask({
+      title: `Send ${it.fromCode} × ${it.qty.toLocaleString()} ${from.code} → ${to.code} to Logistics?`,
+      message: `Donor code ${it.fromCode} (${it.donorName}) moves so ${lane.to} can invoice ${it.toCode}. Logistics accepts, assigns vehicle and driver, and the ledger moves on dispatch / receive.`,
+      confirmText: 'Send to Logistics'
+    });
+    if (!ok) return;
+    await this.post({
+      fromWarehouseId: from.warehouseId, toWarehouseId: to.warehouseId, source: 'Welly',
+      reference: `Welly inter-company ${lane.from}→${lane.to} · ${it.invoices.slice(0, 3).join(', ')}`,
+      notes: `Suggested by Welly (${this.source}): donor ${it.fromCode} for ${it.toCode} · invoices ${it.invoices.join(', ')}`,
+      lines: [{ code: it.fromCode, quantity: it.qty }]
+    }, `${from.code} → ${to.code}`);
+  }
+
+  private async post(body: any, label: string): Promise<void> {
+    this.busy.set(true);
+    try {
+      const r: any = await this.http.post(`${this.apiUrl}/logistics/internal-movements`, body).toPromise();
+      this.requested.update(l => [...l, r?.loadNumber]);
+      this.toast.done(`${r?.loadNumber || 'Request'} sent to Logistics — ${label}. It's in Logistics › Movement waiting to be accepted.`);
+    } catch (e: any) {
+      this.toast.error(e?.error?.message || 'Could not send the request to Logistics');
+    } finally { this.busy.set(false); }
+  }
+
+  closeDialog(): void { this.ref.close(this.requested().length ? { action: 'requested', loadNumbers: this.requested() } : undefined); }
 
   phase = signal<'thinking' | 'ready' | 'error'>('thinking');
   error = signal('');

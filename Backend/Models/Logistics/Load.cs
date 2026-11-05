@@ -55,6 +55,14 @@ namespace ProjectTracker.API.Models.Logistics
         /// <summary>Receiving warehouse for an InternalTransfer load (WarehouseId is the source).</summary>
         public int? DestinationWarehouseId { get; set; }
 
+        /// <summary>Where an internal movement request came from: Logistics | Stock | Sales | Welly.</summary>
+        [MaxLength(50)]
+        public string? RequestSource { get; set; }
+
+        /// <summary>Display name of the person who raised the request (kept even if the user record changes).</summary>
+        [MaxLength(200)]
+        public string? RequestedBy { get; set; }
+
         public DateTime? ScheduledPickupDate { get; set; }
         public DateTime? ScheduledPickupTime { get; set; }
         public DateTime? ActualPickupDate { get; set; }

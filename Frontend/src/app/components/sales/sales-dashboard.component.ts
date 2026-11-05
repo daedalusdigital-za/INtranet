@@ -2932,7 +2932,8 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
       maxWidth: '96vw',
       maxHeight: '92vh',
       panelClass: 'welly-suggestions-panel',
-      autoFocus: false
+      autoFocus: false,
+      data: { mode: 'sales' }
     });
   }
 
