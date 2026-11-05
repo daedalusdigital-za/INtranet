@@ -817,6 +817,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                         endLocation = m.EndLocation,
                         startGeofence = m.StartGeofence,
                         endGeofence = m.EndGeofence,
+                        startLat = m.StartLatitude, startLng = m.StartLongitude,
+                        endLat = m.EndLatitude, endLng = m.EndLongitude,
                         km = Math.Round(m.TripDistance / 1000.0, 1),
                         durationSeconds = m.TripDurationSeconds,
                         idleSeconds = m.IdleTimeSeconds,
@@ -874,6 +876,61 @@ namespace ProjectTracker.API.Controllers.Logistics
                 _logger.LogError(ex, "Error building fleet movements");
                 return StatusCode(500, new { error = "Failed to load movements", message = ex.Message });
             }
+        }
+
+        // GET: api/Fleet/movements/trail?registration=ND123&from=2026-11-01&to=2026-11-03[&tripId=123]
+        // Everything we know about where one vehicle went in a window, for drawing on a map:
+        // CarTrack trip legs (start/end points) in time order plus our own GPS breadcrumbs when we have them.
+        [HttpGet("movements/trail")]
+        public async Task<ActionResult> GetMovementTrail([FromQuery] string registration, [FromQuery] string? from, [FromQuery] string? to, [FromQuery] int? tripId)
+        {
+            if (string.IsNullOrWhiteSpace(registration)) return BadRequest(new { message = "registration is required" });
+            var today = DateTime.Today;
+            var start = today.AddDays(-6); var end = today;
+            if (!string.IsNullOrEmpty(from) && DateTime.TryParse(from, out var pf)) start = pf.Date;
+            if (!string.IsNullOrEmpty(to) && DateTime.TryParse(to, out var pt)) end = pt.Date;
+            if (end < start) (start, end) = (end, start);
+
+            var baseReg = CarTrackDevicePicker.BaseReg(registration);
+            var q = _context.VehicleMovementHistory.AsNoTracking()
+                .Where(m => m.RegistrationNumber == registration || m.RegistrationNumber.StartsWith(baseReg));
+            q = tripId.HasValue ? q.Where(m => m.Id == tripId.Value) : q.Where(m => m.MovementDate >= start && m.MovementDate <= end);
+            var legs = await q.OrderBy(m => m.StartTimestamp).Take(3000).ToListAsync();
+            if (tripId.HasValue && legs.Count == 1) { start = legs[0].MovementDate; end = start; }
+
+            var vehicle = await _context.Vehicles.AsNoTracking().Include(v => v.CurrentDriver)
+                .FirstOrDefaultAsync(v => v.RegistrationNumber == registration || v.RegistrationNumber.StartsWith(baseReg));
+
+            // Our GPS breadcrumbs (SAST days → UTC window); only exist while a vehicle was on a load
+            var sast = TimeSpan.FromHours(2);
+            var fromUtc = start - sast; var toUtc = end.AddDays(1) - sast;
+            var crumbs = vehicle == null ? new() : await _context.VehiclePositionLogs.AsNoTracking()
+                .Where(p => p.VehicleId == vehicle.Id && p.RecordedAt >= fromUtc && p.RecordedAt < toUtc)
+                .OrderBy(p => p.RecordedAt)
+                .Select(p => new { t = p.RecordedAt, lat = p.Latitude, lng = p.Longitude, speed = p.Speed, address = p.Address })
+                .Take(20000)
+                .ToListAsync();
+
+            var trips = legs.Where(m => !(m.StartLatitude == 0 && m.StartLongitude == 0)).Select((m, i) => new
+            {
+                id = m.Id, seq = i + 1, date = m.MovementDate.ToString("yyyy-MM-dd"),
+                start = m.StartTimestamp, end = m.EndTimestamp,
+                startLat = m.StartLatitude, startLng = m.StartLongitude, startLocation = m.StartGeofence ?? m.StartLocation,
+                endLat = m.EndLatitude, endLng = m.EndLongitude, endLocation = m.EndGeofence ?? m.EndLocation,
+                km = Math.Round(m.TripDistance / 1000.0, 1), durationSeconds = m.TripDurationSeconds, idleSeconds = m.IdleTimeSeconds,
+                maxSpeed = Math.Round(m.MaxSpeed, 0), harsh = m.HarshBrakingEvents + m.HarshCorneringEvents + m.HarshAccelerationEvents
+            }).ToList();
+
+            return Ok(new
+            {
+                registration,
+                vehicle = vehicle != null ? $"{vehicle.Make} {vehicle.Model}".Trim() : null,
+                driver = vehicle?.CurrentDriver != null ? $"{vehicle.CurrentDriver.FirstName} {vehicle.CurrentDriver.LastName}" : null,
+                from = start.ToString("yyyy-MM-dd"), to = end.ToString("yyyy-MM-dd"),
+                totalKm = Math.Round(trips.Sum(t => t.km), 1),
+                trips,
+                breadcrumbs = crumbs
+            });
         }
 
         // GET: api/Fleet/vehicles/{registration}/km-summary?from=2026-08-01&to=2026-08-26

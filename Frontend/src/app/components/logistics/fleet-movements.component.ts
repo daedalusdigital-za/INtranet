@@ -8,8 +8,10 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
+import { FleetTrailMapDialog, FleetTrailDialogData } from './fleet-trail-map-dialog.component';
 
 interface Trip {
   id: number; date: string; registration: string; vehicleId?: number; vehicle?: string; province?: string; driver?: string;
@@ -27,7 +29,7 @@ interface Movements {
 @Component({
   selector: 'app-fleet-movements',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatDialogModule],
   template: `
     <div class="fm">
       <div class="fm-bar">
@@ -89,7 +91,7 @@ interface Movements {
                   <td class="num" [class.hot]="v.maxSpeed > 120">{{ v.maxSpeed | number:'1.0-0' }}</td>
                   <td class="num" [class.hot]="v.harsh > 0">{{ v.harsh }}</td>
                   <td>{{ v.lastTrip | date:'dd MMM HH:mm' }}</td>
-                  <td><button mat-button (click)="search = v.registration; view.set('trips')">Trips <mat-icon iconPositionEnd>chevron_right</mat-icon></button></td>
+                  <td class="acts"><button mat-icon-button (click)="showMap(v.registration)" matTooltip="See this vehicle's movement on a map" aria-label="Show on map"><mat-icon>visibility</mat-icon></button><button mat-button (click)="search = v.registration; view.set('trips')">Trips <mat-icon iconPositionEnd>chevron_right</mat-icon></button></td>
                 </tr>
               } @empty { <tr><td colspan="11" class="fm-muted">No vehicle moved in this period.</td></tr> }
             </tbody>
@@ -102,7 +104,7 @@ interface Movements {
           }
         } @else {
           <table class="app-table fm-table">
-            <thead><tr><th>Date</th><th>Vehicle</th><th>Driver</th><th>From</th><th>To</th><th class="num">km</th><th class="num">Time</th><th class="num">Idle</th><th class="num">Max</th><th class="num">Harsh</th></tr></thead>
+            <thead><tr><th>Date</th><th>Vehicle</th><th>Driver</th><th>From</th><th>To</th><th class="num">km</th><th class="num">Time</th><th class="num">Idle</th><th class="num">Max</th><th class="num">Harsh</th><th></th></tr></thead>
             <tbody>
               @for (t of filteredTrips(); track t.id) {
                 <tr>
@@ -116,8 +118,9 @@ interface Movements {
                   <td class="num">{{ dur(t.idleSeconds) }}</td>
                   <td class="num" [class.hot]="t.maxSpeed > 120">{{ t.maxSpeed | number:'1.0-0' }}</td>
                   <td class="num" [class.hot]="t.harsh > 0" [matTooltip]="t.harsh ? ('Braking ' + t.harshBraking + ' · Cornering ' + t.harshCornering + ' · Acceleration ' + t.harshAcceleration) : ''">{{ t.harsh || '—' }}</td>
+                  <td class="acts"><button mat-icon-button (click)="showMap(t.registration, t.id)" matTooltip="See this trip on a map" aria-label="Show trip on map"><mat-icon>visibility</mat-icon></button></td>
                 </tr>
-              } @empty { <tr><td colspan="10" class="fm-muted">No trips match.</td></tr> }
+              } @empty { <tr><td colspan="11" class="fm-muted">No trips match.</td></tr> }
             </tbody>
           </table>
         }
@@ -138,7 +141,7 @@ interface Movements {
     .fm-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-2); margin-bottom: var(--space-3);
       .k { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 10px 12px; display: flex; flex-direction: column; span { font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); } b { font-size: 1.3rem; } }
       .k.ok b { color: var(--color-ok); } .k.warn b { color: var(--color-warn); } .k.bad b { color: var(--color-danger); } }
-    .fm-table { width: 100%; td small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } .ref { font-family: var(--font-mono); font-weight: 600; } .num { text-align: right; white-space: nowrap; } .hot { color: var(--color-danger); font-weight: 600; } .place { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+    .fm-table { width: 100%; td small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } .ref { font-family: var(--font-mono); font-weight: 600; } .num { text-align: right; white-space: nowrap; } .hot { color: var(--color-danger); font-weight: 600; } .place { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .acts { white-space: nowrap; text-align: right; } }
     .fm-muted { color: var(--color-text-3); display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); &.err { color: var(--color-danger); } mat-icon { font-size: 18px; width: 18px; height: 18px; } }
     .fm-idle { margin-top: var(--space-3); summary { cursor: pointer; color: var(--color-text-2); font-size: var(--text-sm); } }
     .fm-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; .chip { display: inline-flex; align-items: center; gap: 3px; font-family: var(--font-mono); font-size: var(--text-xs); background: var(--color-surface-2); border-radius: 6px; padding: 2px 8px; mat-icon { font-size: 14px; width: 14px; height: 14px; } } .chip.untracked { color: var(--color-text-3); } }
@@ -148,6 +151,7 @@ interface Movements {
 export class FleetMovementsComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
+  private dialog = inject(MatDialog);
   private api = environment.apiUrl;
 
   readonly presets = [{ key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' }, { key: '7d', label: '7 days' }, { key: 'month', label: 'This month' }, { key: '30d', label: '30 days' }];
@@ -193,6 +197,11 @@ export class FleetMovementsComponent implements OnInit {
   filteredVehicles(): PerVehicle[] { return (this.data()?.perVehicle || []).filter(v => this.matches([v.registration, v.vehicle, v.driver, v.province])); }
   filteredTrips(): Trip[] { return (this.data()?.trips || []).filter(t => this.matches([t.registration, t.vehicle, t.driver, t.startLocation, t.endLocation, t.startGeofence, t.endGeofence])); }
   idleTip(): string { const d = this.data(); return d ? d.idle.slice(0, 12).map(v => v.registrationNumber).join(', ') + (d.idle.length > 12 ? '…' : '') : ''; }
+
+  showMap(registration: string, tripId?: number): void {
+    const data: FleetTrailDialogData = { registration, from: this.from, to: this.to, tripId };
+    this.dialog.open(FleetTrailMapDialog, { data, width: '1100px', maxWidth: '96vw', panelClass: 'fleet-trail-dialog', autoFocus: false });
+  }
 
   dur(s: number): string {
     if (!s) return '—';
