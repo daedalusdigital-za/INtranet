@@ -1816,8 +1816,9 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   openManualMovement(type: 'Receive' | 'Return' | 'Adjustment' | 'Scrap'): void {
     const w = this.whFilterId ? this.warehouses.find(x => x.id === this.whFilterId) : (this.warehouses.length === 1 ? this.warehouses[0] : null);
     const ref = this.dialog.open(ManualMovementDialog, {
-      width: '620px', maxWidth: '95vw',
-      data: { warehouse: w, warehouses: this.warehouses, type, inventory: this.allInventory }
+      width: '860px', maxWidth: '96vw',
+      data: { warehouse: w, warehouses: this.warehouses, type, inventory: this.allInventory,
+              onPartial: () => { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } }
     });
     ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } });
   }
@@ -1826,7 +1827,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     const from = prefill?.fromWarehouseId ? this.warehouses.find(w => w.id === prefill.fromWarehouseId)
       : this.whFilterId ? this.warehouses.find(w => w.id === this.whFilterId) : this.warehouses[0];
     const ref = this.dialog.open(TransferStockDialog, {
-      width: '680px', maxWidth: '95vw',
+      width: '860px', maxWidth: '96vw',
       data: { warehouses: this.warehouses, fromWarehouseId: from?.id, inventory: this.allInventory,
               toWarehouseId: prefill?.toWarehouseId, preselectCode: prefill?.code, quantity: prefill?.quantity, reference: prefill?.reference }
     });
@@ -3692,93 +3693,151 @@ export class ResolveIssueDialog {
   }
 }
 
-// ═══ Manual Movement Dialog (Receive / Return) ═══
+// ═══ Shared: pick-list line used by the multi-line movement and transfer dialogs ═══
+interface MovementLine { inv: any; quantity: number | null; reference: string; reason: string; }
+
+// ═══ Manual Movement Dialog (Receive / Return / Adjustment / Scrap) — multi-line ═══
 @Component({
   selector: 'app-manual-movement-dialog',
   standalone: true,
   imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
-            MatFormFieldModule, MatInputModule, MatSelectModule],
+            MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule],
   template: `
     <h2 mat-dialog-title>
       <mat-icon style="vertical-align:middle;margin-right:8px;" [style.color]="data.type === 'Scrap' ? 'var(--color-danger)' : 'var(--color-ok)'">{{ typeIcon() }}</mat-icon>
       {{ typeTitle() }}
+      <small class="mm-sub">Search an item, click it to add a line, set the quantity. Add as many lines as you need, then save them all.</small>
     </h2>
     <mat-dialog-content>
-      <mat-form-field appearance="outline" style="width:100%;">
-        <mat-label>Warehouse</mat-label>
-        <mat-select [(ngModel)]="warehouseId" (ngModelChange)="selected = null">
-          @for (w of data.warehouses; track w.id) { <mat-option [value]="w.id">{{ w.name }}</mat-option> }
-        </mat-select>
-      </mat-form-field>
-      <mat-form-field appearance="outline" style="width:100%;">
-        <mat-label>Search item</mat-label>
-        <input matInput [(ngModel)]="search" placeholder="Code or description" (ngModelChange)="selected = null" [disabled]="!warehouseId">
-        <mat-icon matPrefix>search</mat-icon>
-      </mat-form-field>
-      @if (!selected) {
-        <div class="mm-list">
+      <div class="mm-top">
+        <mat-form-field appearance="outline">
+          <mat-label>Warehouse</mat-label>
+          <mat-select [(ngModel)]="warehouseId" (ngModelChange)="onWarehouseChange()" [disabled]="lines.length > 0">
+            @for (w of data.warehouses; track w.id) { <mat-option [value]="w.id">{{ w.name }}</mat-option> }
+          </mat-select>
+          @if (lines.length) { <mat-hint>Locked while lines are added</mat-hint> }
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="mm-search">
+          <mat-label>Search item — code, name or description</mat-label>
+          <input #searchBox matInput [(ngModel)]="search" placeholder="e.g. GLV-M or nitrile glove" [disabled]="!warehouseId"
+                 (keydown.enter)="addFirstMatch($event)" (keydown.arrowDown)="focusList($event)" autocomplete="off">
+          <mat-icon matPrefix>search</mat-icon>
+          @if (search) { <button matSuffix mat-icon-button aria-label="Clear" (click)="search = ''"><mat-icon>close</mat-icon></button> }
+        </mat-form-field>
+      </div>
+
+      @if (search.trim().length) {
+        <div class="mm-list" #listBox>
           @for (r of matches(); track r.id) {
-            <button class="mm-item" (click)="selected = r">
+            <button class="mm-item" [class.added]="isAdded(r)" (click)="add(r)" (keydown.enter)="add(r)">
               <span class="mm-code">{{ r.commodityCode }}</span>
               <span class="mm-name">{{ r.commodityName }}</span>
               <span class="mm-qty">{{ r.quantityOnHand | number }} on hand</span>
+              <mat-icon class="mm-add">{{ isAdded(r) ? 'done' : 'add' }}</mat-icon>
             </button>
-          } @empty { <div class="mm-empty">{{ warehouseId ? 'Type to search items at this warehouse' : 'Choose a warehouse first' }}</div> }
+          } @empty { <div class="mm-empty">{{ warehouseId ? 'No item at this warehouse matches "' + search + '"' : 'Choose a warehouse first' }}</div> }
         </div>
-      } @else {
-        <div class="mm-selected">
-          <div><b>{{ selected.commodityCode }}</b> — {{ selected.commodityName }}</div>
-          <div class="mm-onhand">On hand: <b>{{ selected.quantityOnHand | number }}</b></div>
-          <button mat-button (click)="selected = null"><mat-icon>swap_horiz</mat-icon> Change item</button>
-        </div>
-        <div class="mm-row">
-          <mat-form-field appearance="outline">
-            <mat-label>{{ data.type === 'Adjustment' ? 'Adjustment (+/-)' : 'Quantity (' + (data.type === 'Receive' ? 'received' : (data.type === 'Scrap' ? 'scrapped' : 'returned')) + ')' }}</mat-label>
-            <input matInput type="number" [min]="data.type === 'Adjustment' ? null : 1" [(ngModel)]="quantity">
-            @if (selected && quantity) {
-              <mat-hint>New balance: {{ selected.quantityOnHand + signedQty() | number }}</mat-hint>
+      }
+
+      @if (lines.length) {
+        <table class="mm-table">
+          <thead>
+            <tr>
+              <th>Code</th><th>Item</th><th class="num">On hand</th>
+              <th class="num qty">{{ data.type === 'Adjustment' ? 'Adjust +/−' : 'Qty' }}</th>
+              <th class="num">New balance</th>
+              @if (perLineRef) { <th>Reference</th> }
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (l of lines; track l.inv.id; let i = $index) {
+              <tr [class.bad]="lineError(l)">
+                <td class="mono">{{ l.inv.commodityCode }}</td>
+                <td class="name">{{ l.inv.commodityName }}</td>
+                <td class="num">{{ l.inv.quantityOnHand | number }}</td>
+                <td class="num qty">
+                  <input class="mm-qty-input" type="number" [attr.id]="'qty-' + i" [(ngModel)]="l.quantity"
+                         [min]="data.type === 'Adjustment' ? null : 1" (keydown.enter)="focusSearch()" [matTooltip]="lineError(l) || ''">
+                </td>
+                <td class="num" [class.neg]="newBalance(l) < 0">{{ newBalance(l) | number }}</td>
+                @if (perLineRef) { <td><input class="mm-ref-input" [(ngModel)]="l.reference" [placeholder]="refLabel()"></td> }
+                <td class="act"><button mat-icon-button aria-label="Remove line" (click)="remove(i)" matTooltip="Remove"><mat-icon>close</mat-icon></button></td>
+              </tr>
             }
-          </mat-form-field>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="3">{{ lines.length }} line(s)</td><td class="num qty"><b>{{ totalQty() | number }}</b></td><td [attr.colspan]="perLineRef ? 3 : 2"></td></tr>
+          </tfoot>
+        </table>
+
+        <div class="mm-shared">
           <mat-form-field appearance="outline">
-            <mat-label>{{ data.type === 'Receive' ? 'Supplier / GRV reference' : (data.type === 'Adjustment' ? 'Reference (count sheet, etc.)' : (data.type === 'Scrap' ? 'Reference (damage report, batch)' : 'Return reference (invoice, customer)')) }}</mat-label>
+            <mat-label>{{ refLabel() }} {{ perLineRef ? '(default for blank lines)' : '' }}</mat-label>
             <input matInput [(ngModel)]="reference">
           </mat-form-field>
+          <button mat-button type="button" class="mm-perline" (click)="perLineRef = !perLineRef">{{ perLineRef ? 'One reference for all' : 'Different reference per line' }}</button>
+          <mat-form-field appearance="outline" style="grid-column: 1 / -1;">
+            <mat-label>{{ needsReason() ? 'Reason (required)' : 'Notes (optional)' }}</mat-label>
+            <input matInput [(ngModel)]="reason">
+          </mat-form-field>
         </div>
-        <mat-form-field appearance="outline" style="width:100%;">
-          <mat-label>{{ (data.type === 'Adjustment' || data.type === 'Scrap') ? 'Reason (required)' : 'Notes (optional)' }}</mat-label>
-          <input matInput [(ngModel)]="reason">
-        </mat-form-field>
+      } @else if (!search.trim().length) {
+        <div class="mm-empty tall"><mat-icon>playlist_add</mat-icon>No lines yet — search above and click an item to add it.</div>
       }
+
+      @if (progress) { <div class="mm-progress">{{ progress }}</div> }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-button mat-dialog-close [disabled]="saving">Cancel</button>
       <button mat-raised-button [color]="data.type === 'Scrap' ? 'warn' : 'primary'" [disabled]="!valid() || saving" (click)="save()">
-        <mat-icon>check</mat-icon> {{ data.type === 'Adjustment' ? 'Adjust' : data.type }} {{ quantity || '' }}
+        <mat-icon>check</mat-icon> {{ data.type === 'Adjustment' ? 'Adjust' : data.type }} {{ lines.length || '' }} {{ lines.length === 1 ? 'line' : 'lines' }}
       </button>
     </mat-dialog-actions>
   `,
   styles: [`
-    .mm-list { max-height: 260px; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
-    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; }
-    .mm-item:hover { background: var(--color-ok-soft); }
+    h2 { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .mm-sub { font-size: var(--text-xs); font-weight: 400; color: var(--color-text-3); }
+    .mm-top { display: grid; grid-template-columns: 240px 1fr; gap: 12px; }
+    .mm-list { max-height: 220px; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-bottom: 12px; }
+    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; font: inherit; }
+    .mm-item:hover, .mm-item:focus { background: var(--color-ok-soft); outline: none; }
+    .mm-item.added { opacity: .6; }
     .mm-code { font-family: var(--font-mono); font-weight: 700; min-width: 110px; }
     .mm-name { flex: 1; font-size: var(--text-sm); color: var(--color-text-2); }
     .mm-qty { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; }
+    .mm-add { color: var(--color-ok); font-size: 18px; width: 18px; height: 18px; }
     .mm-empty { padding: 20px; text-align: center; color: var(--color-text-3); }
-    .mm-selected { background: var(--color-ok-soft); border: 1px solid var(--color-ok); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px; }
-    .mm-onhand { font-size: var(--text-sm); color: var(--color-text-2); margin: 4px 0; }
-    .mm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mm-empty.tall { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 36px 20px; border: 1px dashed var(--color-line); border-radius: var(--radius-md); mat-icon { font-size: 32px; width: 32px; height: 32px; opacity: .5; } }
+    .mm-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: var(--text-sm); }
+    .mm-table th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); padding: 6px 8px; border-bottom: 1px solid var(--color-line); }
+    .mm-table td { padding: 4px 8px; border-bottom: 1px solid var(--color-surface-2); vertical-align: middle; }
+    .mm-table tfoot td { border-bottom: 0; color: var(--color-text-3); font-size: var(--text-xs); padding-top: 8px; }
+    .mm-table .num { text-align: right; white-space: nowrap; }
+    .mm-table .qty { width: 120px; }
+    .mm-table .name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mm-table .neg { color: var(--color-danger); font-weight: 600; }
+    .mm-table tr.bad td { background: var(--color-danger-soft, #fef2f2); }
+    .mm-table .act { width: 40px; }
+    .mono { font-family: var(--font-mono); }
+    .mm-qty-input, .mm-ref-input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--color-line); border-radius: 6px; font: inherit; background: var(--color-surface); color: inherit; }
+    .mm-qty-input { text-align: right; }
+    .mm-qty-input:focus, .mm-ref-input:focus { outline: 2px solid var(--color-primary); outline-offset: -1px; }
+    .mm-shared { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; align-items: center; }
+    .mm-perline { font-size: var(--text-xs); margin-top: -18px; }
+    .mm-progress { font-size: var(--text-sm); color: var(--color-text-2); padding: 6px 0; }
     mat-form-field { width: 100%; }
   `]
 })
 export class ManualMovementDialog {
   warehouseId: number | null = null;
   search = '';
-  selected: any = null;
-  quantity: number | null = null;
+  lines: MovementLine[] = [];
   reference = '';
   reason = '';
+  perLineRef = false;
   saving = false;
+  progress = '';
 
   private http = inject(HttpClient);
   private toast = inject(ToastService);
@@ -3788,16 +3847,34 @@ export class ManualMovementDialog {
     @Inject(MAT_DIALOG_DATA) public data: any
   ) {
     this.warehouseId = data.warehouse?.id ?? null;
+    if (!this.warehouseId && data.warehouses?.length === 1) this.warehouseId = data.warehouses[0].id;
   }
 
+  onWarehouseChange(): void { this.search = ''; this.lines = []; }
+
+  /** Code, name or description — several words all have to appear somewhere (so "glove m" finds "GLV-M Nitrile glove medium"). */
   matches(): any[] {
-    const t = this.search.trim().toLowerCase();
-    if (!t || !this.warehouseId) return [];
-    return (this.data.inventory || []).filter((r: any) =>
-      r.warehouseId === this.warehouseId && (
-      (r.commodityCode || '').toLowerCase().includes(t) ||
-      (r.commodityName || '').toLowerCase().includes(t))).slice(0, 50);
+    const words = this.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length || !this.warehouseId) return [];
+    return (this.data.inventory || []).filter((r: any) => {
+      if (r.warehouseId !== this.warehouseId) return false;
+      const hay = `${r.commodityCode || ''} ${r.commodityName || ''} ${r.commodityDescription || r.description || ''}`.toLowerCase();
+      return words.every(w => hay.includes(w));
+    }).slice(0, 50);
   }
+
+  isAdded(r: any): boolean { return this.lines.some(l => l.inv.id === r.id); }
+
+  add(r: any): void {
+    const existing = this.lines.findIndex(l => l.inv.id === r.id);
+    const idx = existing >= 0 ? existing : this.lines.push({ inv: r, quantity: null, reference: '', reason: '' }) - 1;
+    this.search = '';
+    setTimeout(() => (document.getElementById('qty-' + idx) as HTMLInputElement | null)?.focus(), 0);
+  }
+  addFirstMatch(ev: Event): void { ev.preventDefault(); const m = this.matches(); if (m.length) this.add(m[0]); }
+  focusList(ev: Event): void { ev.preventDefault(); (document.querySelector('.mm-list .mm-item') as HTMLElement | null)?.focus(); }
+  focusSearch(): void { (document.querySelector('input[placeholder^="e.g."]') as HTMLInputElement | null)?.focus(); }
+  remove(i: number): void { this.lines.splice(i, 1); }
 
   typeIcon(): string {
     switch (this.data.type) { case 'Receive': return 'south_west'; case 'Adjustment': return 'tune'; case 'Scrap': return 'delete_sweep'; default: return 'undo'; }
@@ -3805,52 +3882,83 @@ export class ManualMovementDialog {
   typeTitle(): string {
     switch (this.data.type) { case 'Receive': return 'Receive Stock (GRV)'; case 'Adjustment': return 'Stock Adjustment'; case 'Scrap': return 'Scrap / Write-off'; default: return 'Return Stock'; }
   }
-  signedQty(): number {
-    const q = this.quantity || 0;
+  refLabel(): string {
+    switch (this.data.type) { case 'Receive': return 'Supplier / GRV reference'; case 'Adjustment': return 'Reference (count sheet, etc.)'; case 'Scrap': return 'Reference (damage report, batch)'; default: return 'Return reference (invoice, customer)'; }
+  }
+  needsReason(): boolean { return this.data.type === 'Adjustment' || this.data.type === 'Scrap'; }
+
+  signedQty(l: MovementLine): number {
+    const q = l.quantity || 0;
     return this.data.type === 'Scrap' ? -Math.abs(q) : q;
+  }
+  newBalance(l: MovementLine): number { return (l.inv.quantityOnHand || 0) + this.signedQty(l); }
+  totalQty(): number { return this.lines.reduce((n, l) => n + this.signedQty(l), 0); }
+
+  lineError(l: MovementLine): string | null {
+    if (l.quantity == null || l.quantity === 0) return 'Enter a quantity';
+    if (this.data.type !== 'Adjustment' && l.quantity < 0) return 'Quantity must be positive';
+    return null;
   }
 
   valid(): boolean {
-    if (!this.warehouseId || !this.selected || !this.quantity || this.quantity === 0) return false;
-    if (this.data.type === 'Adjustment' || this.data.type === 'Scrap') return !!this.reason.trim();
-    return this.quantity > 0;
+    if (!this.warehouseId || !this.lines.length) return false;
+    if (this.lines.some(l => this.lineError(l))) return false;
+    if (this.needsReason() && !this.reason.trim()) return false;
+    return true;
   }
 
-  save(): void {
+  async save(): Promise<void> {
     this.saving = true;
-    this.http.post(`${environment.apiUrl}/logistics/stock-movements`, {
-      warehouseId: this.warehouseId,
-      commodityId: this.selected.commodityId,
-      movementType: this.data.type,
-      quantity: this.quantity,
-      reference: this.reference || null,
-      reason: this.reason || null
-    }).subscribe({
-      next: (r: any) => {
-        this.toast.done(`${this.data.type} recorded — new balance ${r?.balanceAfter ?? ''}`);
-        this.dialogRef.close(true);
-      },
-      error: (e) => { this.saving = false; this.toast.error(e?.error?.message || 'Failed to record movement'); }
-    });
+    let done = 0; const failed: string[] = [];
+    for (let i = 0; i < this.lines.length; i++) {
+      const l = this.lines[i];
+      this.progress = `Saving line ${i + 1} of ${this.lines.length} — ${l.inv.commodityCode}…`;
+      try {
+        await this.http.post(`${environment.apiUrl}/logistics/stock-movements`, {
+          warehouseId: this.warehouseId,
+          commodityId: l.inv.commodityId,
+          movementType: this.data.type,
+          quantity: l.quantity,
+          reference: (this.perLineRef && l.reference.trim()) ? l.reference.trim() : (this.reference || null),
+          reason: this.reason || null
+        }).toPromise();
+        done++;
+      } catch (e: any) {
+        failed.push(`${l.inv.commodityCode}: ${e?.error?.message || 'failed'}`);
+      }
+    }
+    this.progress = '';
+    if (!failed.length) {
+      this.toast.done(`${done} ${this.data.type.toLowerCase()} line(s) recorded`);
+      this.dialogRef.close(true);
+    } else {
+      // Keep only the lines that failed so they can be fixed and resubmitted.
+      const failedCodes = new Set(failed.map(f => f.split(':')[0]));
+      this.lines = this.lines.filter(l => failedCodes.has(l.inv.commodityCode));
+      this.saving = false;
+      this.toast.warn(`${done} saved, ${failed.length} failed — ${failed.slice(0, 3).join('; ')}`);
+      if (done) this.data.onPartial?.();
+    }
   }
 }
 
-// ═══ Transfer Stock Dialog (warehouse → warehouse) ═══
+// ═══ Transfer Stock Dialog (warehouse → warehouse) — multi-line ═══
 @Component({
   selector: 'app-transfer-stock-dialog',
   standalone: true,
   imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
-            MatFormFieldModule, MatInputModule, MatSelectModule],
+            MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule],
   template: `
     <h2 mat-dialog-title>
       <mat-icon style="vertical-align:middle;margin-right:8px;color:var(--color-primary);">sync_alt</mat-icon>
       Transfer Stock Between Warehouses
+      <small class="mm-sub">Search an item at the source warehouse, click it to add a line, set the quantity. Save writes two ledger entries per line.</small>
     </h2>
     <mat-dialog-content>
       <div class="ts-row">
         <mat-form-field appearance="outline">
           <mat-label>From warehouse</mat-label>
-          <mat-select [(ngModel)]="fromId" (ngModelChange)="selected = null; search = ''">
+          <mat-select [(ngModel)]="fromId" (ngModelChange)="lines = []; search = ''" [disabled]="lines.length > 0">
             @for (w of data.warehouses; track w.id) { <mat-option [value]="w.id">{{ w.name }}</mat-option> }
           </mat-select>
         </mat-form-field>
@@ -3865,65 +3973,95 @@ export class ManualMovementDialog {
         </mat-form-field>
       </div>
       <mat-form-field appearance="outline" style="width:100%;">
-        <mat-label>Search item at source warehouse</mat-label>
-        <input matInput [(ngModel)]="search" placeholder="Code or description" (ngModelChange)="selected = null">
+        <mat-label>Search item at source — code, name or description</mat-label>
+        <input matInput [(ngModel)]="search" placeholder="e.g. GLV-M or nitrile glove" [disabled]="!fromId"
+               (keydown.enter)="addFirstMatch($event)" autocomplete="off">
         <mat-icon matPrefix>search</mat-icon>
+        @if (search) { <button matSuffix mat-icon-button aria-label="Clear" (click)="search = ''"><mat-icon>close</mat-icon></button> }
       </mat-form-field>
-      @if (!selected) {
+
+      @if (search.trim().length) {
         <div class="mm-list">
           @for (r of matches(); track r.id) {
-            <button class="mm-item" (click)="selected = r">
+            <button class="mm-item" [class.added]="isAdded(r)" (click)="add(r)">
               <span class="mm-code">{{ r.commodityCode }}</span>
               <span class="mm-name">{{ r.commodityName }}</span>
               <span class="mm-qty">{{ r.quantityOnHand | number }} on hand</span>
+              <mat-icon class="mm-add">{{ isAdded(r) ? 'done' : 'add' }}</mat-icon>
             </button>
-          } @empty { <div class="mm-empty">Type to search items at the source warehouse</div> }
+          } @empty { <div class="mm-empty">{{ fromId ? 'No item at the source warehouse matches "' + search + '"' : 'Choose a source warehouse first' }}</div> }
         </div>
-      } @else {
-        <div class="mm-selected">
-          <div><b>{{ selected.commodityCode }}</b> — {{ selected.commodityName }}</div>
-          <div class="mm-onhand">On hand at source: <b>{{ selected.quantityOnHand | number }}</b></div>
-          <button mat-button (click)="selected = null"><mat-icon>swap_horiz</mat-icon> Change item</button>
-        </div>
-        <div class="ts-grid">
-          <mat-form-field appearance="outline">
-            <mat-label>Quantity to transfer</mat-label>
-            <input matInput type="number" min="1" [(ngModel)]="quantity">
-            @if (quantity && selected && quantity > selected.quantityOnHand) {
-              <mat-hint style="color:var(--color-danger);">Exceeds on hand — a reason will be required</mat-hint>
+      }
+
+      @if (lines.length) {
+        <table class="mm-table">
+          <thead><tr><th>Code</th><th>Item</th><th class="num">On hand</th><th class="num qty">Transfer</th><th class="num">Left at source</th><th></th></tr></thead>
+          <tbody>
+            @for (l of lines; track l.inv.id; let i = $index) {
+              <tr [class.bad]="!!lineError(l)">
+                <td class="mono">{{ l.inv.commodityCode }}</td>
+                <td class="name">{{ l.inv.commodityName }}</td>
+                <td class="num">{{ l.inv.quantityOnHand | number }}</td>
+                <td class="num qty"><input class="mm-qty-input" type="number" min="1" [attr.id]="'tqty-' + i" [(ngModel)]="l.quantity" [matTooltip]="lineError(l) || ''"></td>
+                <td class="num" [class.neg]="remaining(l) < 0">{{ remaining(l) | number }}</td>
+                <td class="act"><button mat-icon-button aria-label="Remove line" (click)="lines.splice(i, 1)"><mat-icon>close</mat-icon></button></td>
+              </tr>
             }
-          </mat-form-field>
+          </tbody>
+          <tfoot><tr><td colspan="3">{{ lines.length }} line(s)</td><td class="num qty"><b>{{ totalQty() | number }}</b></td><td colspan="2"></td></tr></tfoot>
+        </table>
+        <div class="ts-grid">
           <mat-form-field appearance="outline">
             <mat-label>Reference (optional)</mat-label>
             <input matInput [(ngModel)]="reference" placeholder="e.g. IBT number">
           </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Reason / notes {{ needsReason() ? '(required — a line goes negative)' : '(optional)' }}</mat-label>
+            <input matInput [(ngModel)]="reason">
+          </mat-form-field>
         </div>
-        <mat-form-field appearance="outline" style="width:100%;">
-          <mat-label>Reason / notes {{ needsReason() ? '(required — stock goes negative)' : '(optional)' }}</mat-label>
-          <input matInput [(ngModel)]="reason">
-        </mat-form-field>
+      } @else if (!search.trim().length) {
+        <div class="mm-empty tall"><mat-icon>playlist_add</mat-icon>No lines yet — search above and click an item to add it.</div>
       }
+      @if (progress) { <div class="mm-progress">{{ progress }}</div> }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>Cancel</button>
+      <button mat-button mat-dialog-close [disabled]="saving">Cancel</button>
       <button mat-raised-button color="primary" [disabled]="!valid() || saving" (click)="save()">
-        <mat-icon>sync_alt</mat-icon> Transfer {{ quantity || '' }}
+        <mat-icon>sync_alt</mat-icon> Transfer {{ lines.length || '' }} {{ lines.length === 1 ? 'line' : 'lines' }}
       </button>
     </mat-dialog-actions>
   `,
   styles: [`
+    h2 { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .mm-sub { font-size: var(--text-xs); font-weight: 400; color: var(--color-text-3); }
     .ts-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
     .ts-arrow { color: var(--color-primary); margin-top: -18px; }
     .ts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .mm-list { max-height: 220px; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
-    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; }
-    .mm-item:hover { background: var(--color-primary-soft); }
+    .mm-list { max-height: 220px; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-bottom: 12px; }
+    .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; font: inherit; }
+    .mm-item:hover, .mm-item:focus { background: var(--color-primary-soft); outline: none; }
+    .mm-item.added { opacity: .6; }
     .mm-code { font-family: var(--font-mono); font-weight: 700; min-width: 110px; }
     .mm-name { flex: 1; font-size: var(--text-sm); color: var(--color-text-2); }
     .mm-qty { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; }
+    .mm-add { color: var(--color-primary); font-size: 18px; width: 18px; height: 18px; }
     .mm-empty { padding: 20px; text-align: center; color: var(--color-text-3); }
-    .mm-selected { background: var(--color-primary-soft); border: 1px solid var(--color-primary); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px; }
-    .mm-onhand { font-size: var(--text-sm); color: var(--color-text-2); margin: 4px 0; }
+    .mm-empty.tall { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 36px 20px; border: 1px dashed var(--color-line); border-radius: var(--radius-md); mat-icon { font-size: 32px; width: 32px; height: 32px; opacity: .5; } }
+    .mm-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: var(--text-sm); }
+    .mm-table th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); padding: 6px 8px; border-bottom: 1px solid var(--color-line); }
+    .mm-table td { padding: 4px 8px; border-bottom: 1px solid var(--color-surface-2); vertical-align: middle; }
+    .mm-table tfoot td { border-bottom: 0; color: var(--color-text-3); font-size: var(--text-xs); padding-top: 8px; }
+    .mm-table .num { text-align: right; white-space: nowrap; }
+    .mm-table .qty { width: 120px; }
+    .mm-table .name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mm-table .neg { color: var(--color-danger); font-weight: 600; }
+    .mm-table tr.bad td { background: var(--color-danger-soft, #fef2f2); }
+    .mm-table .act { width: 40px; }
+    .mono { font-family: var(--font-mono); }
+    .mm-qty-input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--color-line); border-radius: 6px; font: inherit; text-align: right; background: var(--color-surface); color: inherit; }
+    .mm-qty-input:focus { outline: 2px solid var(--color-primary); outline-offset: -1px; }
+    .mm-progress { font-size: var(--text-sm); color: var(--color-text-2); padding: 6px 0; }
     mat-form-field { width: 100%; }
   `]
 })
@@ -3931,11 +4069,11 @@ export class TransferStockDialog {
   fromId: number | null = null;
   toId: number | null = null;
   search = '';
-  selected: any = null;
-  quantity: number | null = null;
+  lines: MovementLine[] = [];
   reference = '';
   reason = '';
   saving = false;
+  progress = '';
 
   private http = inject(HttpClient);
   private toast = inject(ToastService);
@@ -3946,51 +4084,77 @@ export class TransferStockDialog {
   ) {
     this.fromId = data.fromWarehouseId ?? data.warehouses?.[0]?.id ?? null;
     this.toId = data.toWarehouseId ?? null;
-    if (data.quantity) this.quantity = data.quantity;
     if (data.reference) this.reference = data.reference;
+    // Welly / callers can hand in one pre-selected line (code + quantity).
     if (data.preselectCode) {
       const code = String(data.preselectCode).toUpperCase();
-      this.selected = (data.inventory || []).find((r: any) => r.warehouseId === this.fromId && (r.commodityCode || '').toUpperCase() === code) ?? null;
-      if (!this.selected) this.search = data.preselectCode;
+      const inv = (data.inventory || []).find((r: any) => r.warehouseId === this.fromId && (r.commodityCode || '').toUpperCase() === code);
+      if (inv) this.lines.push({ inv, quantity: data.quantity ?? null, reference: '', reason: '' });
+      else this.search = data.preselectCode;
     }
   }
 
   matches(): any[] {
-    const t = this.search.trim().toLowerCase();
-    if (!t || !this.fromId) return [];
-    return (this.data.inventory || []).filter((r: any) =>
-      r.warehouseId === this.fromId &&
-      ((r.commodityCode || '').toLowerCase().includes(t) ||
-       (r.commodityName || '').toLowerCase().includes(t))).slice(0, 50);
+    const words = this.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length || !this.fromId) return [];
+    return (this.data.inventory || []).filter((r: any) => {
+      if (r.warehouseId !== this.fromId) return false;
+      const hay = `${r.commodityCode || ''} ${r.commodityName || ''} ${r.commodityDescription || r.description || ''}`.toLowerCase();
+      return words.every(w => hay.includes(w));
+    }).slice(0, 50);
   }
 
-  needsReason(): boolean {
-    return !!(this.selected && this.quantity && this.quantity > this.selected.quantityOnHand);
+  isAdded(r: any): boolean { return this.lines.some(l => l.inv.id === r.id); }
+  add(r: any): void {
+    const existing = this.lines.findIndex(l => l.inv.id === r.id);
+    const idx = existing >= 0 ? existing : this.lines.push({ inv: r, quantity: null, reference: '', reason: '' }) - 1;
+    this.search = '';
+    setTimeout(() => (document.getElementById('tqty-' + idx) as HTMLInputElement | null)?.focus(), 0);
   }
+  addFirstMatch(ev: Event): void { ev.preventDefault(); const m = this.matches(); if (m.length) this.add(m[0]); }
+
+  remaining(l: MovementLine): number { return (l.inv.quantityOnHand || 0) - (l.quantity || 0); }
+  totalQty(): number { return this.lines.reduce((n, l) => n + (l.quantity || 0), 0); }
+  lineError(l: MovementLine): string | null { return (!l.quantity || l.quantity <= 0) ? 'Enter a quantity' : null; }
+  needsReason(): boolean { return this.lines.some(l => this.remaining(l) < 0); }
 
   valid(): boolean {
     if (!this.fromId || !this.toId || this.fromId === this.toId) return false;
-    if (!this.selected || !this.quantity || this.quantity <= 0) return false;
+    if (!this.lines.length || this.lines.some(l => this.lineError(l))) return false;
     if (this.needsReason() && !this.reason.trim()) return false;
     return true;
   }
 
-  save(): void {
+  async save(): Promise<void> {
     this.saving = true;
-    this.http.post(`${environment.apiUrl}/logistics/stock-movements/transfer`, {
-      fromWarehouseId: this.fromId,
-      toWarehouseId: this.toId,
-      commodityId: this.selected.commodityId,
-      quantity: this.quantity,
-      reference: this.reference || null,
-      reason: this.reason || null
-    }).subscribe({
-      next: () => {
-        this.toast.done('Transfer recorded — two ledger entries written');
-        this.dialogRef.close(true);
-      },
-      error: (e) => { this.saving = false; this.toast.error(e?.error?.message || 'Failed to transfer stock'); }
-    });
+    let done = 0; const failed: string[] = [];
+    for (let i = 0; i < this.lines.length; i++) {
+      const l = this.lines[i];
+      this.progress = `Transferring line ${i + 1} of ${this.lines.length} — ${l.inv.commodityCode}…`;
+      try {
+        await this.http.post(`${environment.apiUrl}/logistics/stock-movements/transfer`, {
+          fromWarehouseId: this.fromId,
+          toWarehouseId: this.toId,
+          commodityId: l.inv.commodityId,
+          quantity: l.quantity,
+          reference: this.reference || null,
+          reason: this.reason || null
+        }).toPromise();
+        done++;
+      } catch (e: any) {
+        failed.push(`${l.inv.commodityCode}: ${e?.error?.message || 'failed'}`);
+      }
+    }
+    this.progress = '';
+    if (!failed.length) {
+      this.toast.done(`${done} transfer line(s) recorded — two ledger entries each`);
+      this.dialogRef.close(true);
+    } else {
+      const failedCodes = new Set(failed.map(f => f.split(':')[0]));
+      this.lines = this.lines.filter(l => failedCodes.has(l.inv.commodityCode));
+      this.saving = false;
+      this.toast.warn(`${done} saved, ${failed.length} failed — ${failed.slice(0, 3).join('; ')}`);
+    }
   }
 }
 
