@@ -197,7 +197,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                         VehicleTypeId = v.VehicleTypeId,
                         VehicleTypeName = v.VehicleType?.Name ?? "Unknown",
                         CurrentDriverId = v.CurrentDriverId,
-                        CurrentDriverName = liveData?.CurrentDriverName ?? (v.CurrentDriver != null ? $"{v.CurrentDriver.FirstName} {v.CurrentDriver.LastName}" : null),
+                        // The driver we assigned wins; CarTrack's driver tag (often blank/"Unknown") is only a fallback.
+                        CurrentDriverName = v.CurrentDriver != null
+                            ? $"{v.CurrentDriver.FirstName} {v.CurrentDriver.LastName}"
+                            : (string.IsNullOrWhiteSpace(liveData?.CurrentDriverName) || string.Equals(liveData!.CurrentDriverName, "Unknown", StringComparison.OrdinalIgnoreCase)
+                                ? null : liveData.CurrentDriverName),
                         Province = v.Province,
                         CarTrackId = v.CarTrackId,
                         CarTrackName = v.CarTrackName,
@@ -760,6 +764,115 @@ namespace ProjectTracker.API.Controllers.Logistics
             {
                 _logger.LogError(ex, "Error fetching trip history for {Registration}", registration);
                 return StatusCode(500, new { error = "Failed to fetch trip history", message = ex.Message });
+            }
+        }
+
+        // GET: api/Fleet/movements?from=&to=&registration=&province=&limit=
+        // Fleet-wide trip log from persisted CarTrack movement history (ignition on → off legs),
+        // plus a per-vehicle rollup for the same window. Defaults to the last 7 days.
+        [HttpGet("movements")]
+        public async Task<ActionResult> GetFleetMovements([FromQuery] string? from, [FromQuery] string? to,
+            [FromQuery] string? registration, [FromQuery] string? province, [FromQuery] int limit = 500)
+        {
+            try
+            {
+                var today = DateTime.Today;
+                var start = today.AddDays(-6);
+                var end = today;
+                if (!string.IsNullOrEmpty(from) && DateTime.TryParse(from, out var pf)) start = pf.Date;
+                if (!string.IsNullOrEmpty(to) && DateTime.TryParse(to, out var pt)) end = pt.Date;
+                if (end < start) (start, end) = (end, start);
+                limit = Math.Clamp(limit, 1, 5000);
+
+                var vehicles = await _context.Vehicles.AsNoTracking()
+                    .Include(v => v.CurrentDriver)
+                    .Where(v => v.Status != "Decommissioned" && v.Status != "Sold")
+                    .ToListAsync();
+                var vehByReg = vehicles
+                    .Where(v => !string.IsNullOrWhiteSpace(v.RegistrationNumber))
+                    .GroupBy(v => CarTrackDevicePicker.BaseReg(v.RegistrationNumber), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+                var q = _context.VehicleMovementHistory.AsNoTracking()
+                    .Where(m => m.MovementDate >= start && m.MovementDate <= end);
+                if (!string.IsNullOrWhiteSpace(registration))
+                    q = q.Where(m => m.RegistrationNumber.Contains(registration));
+                var rows = await q.OrderByDescending(m => m.StartTimestamp).Take(limit * 3).ToListAsync();
+
+                var trips = rows.Select(m =>
+                {
+                    vehByReg.TryGetValue(CarTrackDevicePicker.BaseReg(m.RegistrationNumber), out var v);
+                    return new
+                    {
+                        id = m.Id,
+                        date = m.MovementDate.ToString("yyyy-MM-dd"),
+                        registration = m.RegistrationNumber,
+                        vehicleId = v?.Id,
+                        vehicle = v != null ? $"{v.Make} {v.Model}".Trim() : null,
+                        province = v?.Province,
+                        driver = v?.CurrentDriver != null ? $"{v.CurrentDriver.FirstName} {v.CurrentDriver.LastName}" : null,
+                        start = m.StartTimestamp,
+                        end = m.EndTimestamp,
+                        startLocation = m.StartLocation,
+                        endLocation = m.EndLocation,
+                        startGeofence = m.StartGeofence,
+                        endGeofence = m.EndGeofence,
+                        km = Math.Round(m.TripDistance / 1000.0, 1),
+                        durationSeconds = m.TripDurationSeconds,
+                        idleSeconds = m.IdleTimeSeconds,
+                        maxSpeed = Math.Round(m.MaxSpeed, 0),
+                        harsh = m.HarshBrakingEvents + m.HarshCorneringEvents + m.HarshAccelerationEvents,
+                        harshBraking = m.HarshBrakingEvents,
+                        harshCornering = m.HarshCorneringEvents,
+                        harshAcceleration = m.HarshAccelerationEvents
+                    };
+                })
+                .Where(t => string.IsNullOrWhiteSpace(province) || string.Equals(t.province, province, StringComparison.OrdinalIgnoreCase))
+                .Take(limit)
+                .ToList();
+
+                var perVehicle = trips.GroupBy(t => t.registration, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => new
+                    {
+                        registration = g.Key,
+                        vehicle = g.First().vehicle,
+                        province = g.First().province,
+                        driver = g.First().driver,
+                        trips = g.Count(),
+                        km = Math.Round(g.Sum(x => x.km), 1),
+                        activeDays = g.Select(x => x.date).Distinct().Count(),
+                        maxSpeed = g.Max(x => x.maxSpeed),
+                        harsh = g.Sum(x => x.harsh),
+                        lastTrip = g.Max(x => x.end ?? x.start)
+                    })
+                    .OrderByDescending(x => x.km)
+                    .ToList();
+
+                var idle = vehicles
+                    .Where(v => !perVehicle.Any(p => string.Equals(CarTrackDevicePicker.BaseReg(p.registration), CarTrackDevicePicker.BaseReg(v.RegistrationNumber), StringComparison.OrdinalIgnoreCase)))
+                    .Where(v => string.IsNullOrWhiteSpace(province) || string.Equals(v.Province, province, StringComparison.OrdinalIgnoreCase))
+                    .Select(v => new { v.Id, v.RegistrationNumber, vehicle = $"{v.Make} {v.Model}".Trim(), v.Province, tracked = v.CarTrackId != null })
+                    .ToList();
+
+                return Ok(new
+                {
+                    from = start.ToString("yyyy-MM-dd"),
+                    to = end.ToString("yyyy-MM-dd"),
+                    totalTrips = trips.Count,
+                    totalKm = Math.Round(trips.Sum(t => t.km), 1),
+                    vehiclesMoved = perVehicle.Count,
+                    vehiclesIdle = idle.Count,
+                    harshEvents = trips.Sum(t => t.harsh),
+                    truncated = rows.Count >= limit * 3,
+                    perVehicle,
+                    idle,
+                    trips
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error building fleet movements");
+                return StatusCode(500, new { error = "Failed to load movements", message = ex.Message });
             }
         }
 

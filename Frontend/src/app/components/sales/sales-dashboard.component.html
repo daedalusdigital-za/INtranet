@@ -4,11 +4,6 @@
                        [subtitle]="sectionSubtitle()">
         <!-- The dialogs these open live in the loaded view, so the actions wait for it too. -->
         @if (!initialLoading()) {
-          <button mat-stroked-button (click)="openAttentionDialog()"
-                  [matBadge]="attentionCount()" matBadgeColor="accent"
-                  [matBadgeHidden]="attentionCount() === 0">
-            <mat-icon>warning</mat-icon>Attention
-          </button>
           <button mat-stroked-button class="welly-btn" (click)="openWellySuggestions()" matTooltip="Welly looks at open invoices, stock in each warehouse and free trucks, then suggests what to fulfil and what to move">
             <img src="/welly/default.png" alt="" class="welly-btn-img">Welly suggestions
           </button>
@@ -26,12 +21,6 @@
       <mat-menu #salesMoreMenu="matMenu" xPosition="before">
         <button mat-menu-item (click)="promptImportPassword('sales')">
           <mat-icon>upload_file</mat-icon><span>Import sales</span>
-        </button>
-        <button mat-menu-item (click)="promptImportPassword('customers')">
-          <mat-icon>group_add</mat-icon><span>Import customers</span>
-        </button>
-        <button mat-menu-item (click)="exportCustomers()" [disabled]="loadingCustomers() || customers().length === 0">
-          <mat-icon>file_download</mat-icon><span>Export customers</span>
         </button>
       </mat-menu>
 
@@ -758,12 +747,6 @@
                       }
                     </mat-select>
                   </mat-form-field>
-                  <button mat-raised-button color="primary" (click)="promptImportPassword('customers')">
-                    <mat-icon>group_add</mat-icon> Import Customers
-                  </button>
-                  <button mat-raised-button color="accent" (click)="exportCustomers()" [disabled]="loadingCustomers() || customers().length === 0">
-                    <mat-icon>file_download</mat-icon> Export Customers
-                  </button>
                 </div>
               </div>
 
