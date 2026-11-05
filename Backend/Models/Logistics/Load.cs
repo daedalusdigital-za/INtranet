@@ -48,6 +48,13 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(50)]
         public string Priority { get; set; } = "Normal"; // Low, Normal, High, Urgent
 
+        /// <summary>null/"Delivery" = customer delivery; "InternalTransfer" = stock moving between our own warehouses.</summary>
+        [MaxLength(30)]
+        public string? LoadType { get; set; }
+
+        /// <summary>Receiving warehouse for an InternalTransfer load (WarehouseId is the source).</summary>
+        public int? DestinationWarehouseId { get; set; }
+
         public DateTime? ScheduledPickupDate { get; set; }
         public DateTime? ScheduledPickupTime { get; set; }
         public DateTime? ActualPickupDate { get; set; }

@@ -42,7 +42,7 @@ import { PumaGarageDialog } from './puma-garage-dialog.component';
 import { OpenMapComponent } from './open-map.component';
 import { OpenMapDialogComponent } from './open-map-dialog.component';
 import { LogisticsReportsComponent } from './logistics-reports.component';
-import { FleetMovementsComponent } from './fleet-movements.component';
+import { InternalMovementsComponent } from './internal-movements.component';
 import { OverbergTripsheetsComponent } from './overberg-tripsheets/overberg-tripsheets.component';
 import { AssetTrackingService, ResolveResult } from '../../services/asset-tracking.service';
 import { ConfirmService } from '../../ui/confirm.service';
@@ -91,7 +91,7 @@ import { UploadPODDialog, UploadPodDocumentDialog, LinkTripsheetDialog, EditPodD
     ControllerMonitoringComponent,
     OpenMapComponent,
     LogisticsReportsComponent,
-    FleetMovementsComponent,
+    InternalMovementsComponent,
     OverbergTripsheetsComponent,
     PumaGarageDialog
   ],

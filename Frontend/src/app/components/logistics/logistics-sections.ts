@@ -10,7 +10,7 @@ export type LogisticsSlug =
 export const LOGISTICS_SECTIONS: readonly SubPage<LogisticsSlug>[] = [
   { slug: 'loads', label: 'Loads', icon: 'assignment', hint: 'Active loads across all warehouses' },
   { slug: 'fleet', label: 'Fleet', icon: 'directions_car', hint: 'Vehicles, drivers and live positions' },
-  { slug: 'movement', label: 'Movement', icon: 'route', hint: 'Every trip the fleet made, by vehicle and by day' },
+  { slug: 'movement', label: 'Movement', icon: 'move_down', hint: 'Stock moving between our warehouses — create and track internal movement trips; plus fleet trip log' },
   { slug: 'maintenance', label: 'Maintenance', icon: 'build', hint: 'Services, repairs and inspections' },
   { slug: 'trip-sheets', label: 'Trip sheets', icon: 'description', hint: 'Planned and completed trips' },
   { slug: 'overberg-tripsheets', label: 'Overberg Tripsheets', icon: 'rocket_launch', hint: 'Waybills placed on the Rocket Freight client portal and the tripsheets carrying them' },

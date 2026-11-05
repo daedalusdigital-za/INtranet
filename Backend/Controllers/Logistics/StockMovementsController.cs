@@ -98,7 +98,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .Select(m => m.LoadId!.Value).Distinct().ToListAsync()).ToHashSet();
 
             var loads = await _context.Loads.AsNoTracking()
-                .Where(l => l.Status != "Cancelled")
+                .Where(l => l.Status != "Cancelled" && l.LoadType != InternalMovementsController.LoadTypeInternal)
                 .ToListAsync();
             var lines = (await _context.StopCommodities.AsNoTracking()
                     .Where(sc => sc.CommodityId != null && sc.Quantity > 0)
@@ -244,6 +244,8 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (load == null) return NotFound(new { message = "Load not found" });
             if (string.Equals(load.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
                 return Conflict(new { message = $"Load {load.LoadNumber} is cancelled, so it takes no stock." });
+            if (load.LoadType == InternalMovementsController.LoadTypeInternal)
+                return Conflict(new { message = $"{load.LoadNumber} is an internal warehouse movement — dispatch and receive it from Logistics › Movement instead." });
             var warehouseId = dto.WarehouseId ?? load.WarehouseId;
             if (warehouseId == null) return BadRequest(new { message = "Load has no warehouse — specify warehouseId" });
 
