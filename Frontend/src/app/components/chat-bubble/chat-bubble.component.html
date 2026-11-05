@@ -1,6 +1,7 @@
-<div class="chat-bubble-wrapper" [class.minimized]="isMinimized" [class.attention]="attention" [style.right.px]="getBubblePosition()">
+<div class="chat-bubble-wrapper" [class.minimized]="isMinimized" [class.attention]="attention" [class.pending]="isMinimized && pendingRead" [style.right.px]="getBubblePosition()">
   <!-- Minimized Bubble -->
-  <div class="bubble-icon" *ngIf="isMinimized" (click)="toggleMinimize()" role="button" [attr.aria-label]="'Open chat with ' + getChatTitle()">
+  <div class="bubble-icon" *ngIf="isMinimized" (click)="toggleMinimize()" role="button" [attr.aria-label]="'Open chat with ' + getChatTitle()" [title]="pendingRead ? 'New message from ' + getChatTitle() + ' – click to read' : getChatTitle()">
+    <span class="pending-ring" *ngIf="pendingRead"></span>
     <div class="avatar" *ngIf="!getProfileImage()">
       <span class="initials">{{ getInitials() }}</span>
     </div>
@@ -75,7 +76,10 @@
                 </div>
               </div>
               
-              <span class="message-time">{{ formatTime(message.sentAt) }}</span>
+              <span class="message-meta">
+                <span class="message-time">{{ formatTime(message.sentAt) }}</span>
+                <mat-icon *ngIf="isOwnMessage(message)" class="tick" [class.read]="readStatus(message) === 'read'" [title]="readTooltip(message)" aria-hidden="true">{{ readStatus(message) === 'sent' ? 'done' : 'done_all' }}</mat-icon>
+              </span>
             </div>
           </div>
         </ng-container>

@@ -1048,14 +1048,15 @@ export class NavbarComponent implements OnInit, OnDestroy {
         // On the full Messages page the inbox already shows it; no bubble needed
         if (this.router.url.startsWith('/messages')) return;
 
-        // If this conversation isn't already the open bubble, fetch it and open it
+        // If this conversation isn't already the open bubble, fetch it and pop it as a round,
+        // pulsing bubble that stays on screen until the user opens and reads it.
         const alreadyOpen = this.activeChatBubbles.some(
           c => c.conversationId === message.conversationId
         );
         if (!alreadyOpen) {
           this.messageService.getConversation(message.conversationId, this.currentUserId)
             .subscribe({
-              next: (conv) => this.messageService.openChatBubble(conv),
+              next: (conv) => this.messageService.openChatBubble(conv, { minimized: true }),
               error: () => {}
             });
         }

@@ -31,6 +31,8 @@ export interface Conversation {
   participants: Participant[];
   lastMessage?: Message;
   unreadCount: number;
+  /** Set when a bubble is auto-popped for an incoming message: start as a round pulsing bubble until opened. */
+  popMinimized?: boolean;
 }
 
 export interface Participant {
@@ -345,8 +347,9 @@ export class MessageService {
   }
 
   // Chat bubble management
-  openChatBubble(conversation: Conversation): void {
+  openChatBubble(conversation: Conversation, options?: { minimized?: boolean }): void {
     const currentChats = this.activeChatBubblesSubject.value;
+    conversation.popMinimized = !!options?.minimized;
     // If this chat is already open, keep only it (bring to front / avoid duplicates)
     if (currentChats.find((c: Conversation) => c.conversationId === conversation.conversationId)) {
       this.activeChatBubblesSubject.next([conversation]);
@@ -354,6 +357,35 @@ export class MessageService {
     }
     // Single-bubble mode: opening a chat closes any other open bubbles to avoid conflicts
     this.activeChatBubblesSubject.next([conversation]);
+  }
+
+  /**
+   * WhatsApp-style delivery status for a message the current user sent.
+   * 'sent'  → one grey tick (nobody else has read it yet)
+   * 'read'  → blue double tick (read by at least one other participant; in groups, by everyone)
+   * 'partial' → grey double tick (group chat: read by some but not all)
+   */
+  getReadStatus(message: Message, currentUserId: number, participants?: Participant[]): 'sent' | 'partial' | 'read' {
+    if (!message || message.senderId !== currentUserId) return 'sent';
+    const readers = new Set((message.readReceipts || []).filter(r => r.userId !== message.senderId).map(r => r.userId));
+    if (readers.size === 0) return 'sent';
+    const others = (participants || []).filter(p => p.userId !== currentUserId);
+    if (others.length <= 1) return 'read';
+    return others.every(p => readers.has(p.userId)) ? 'read' : 'partial';
+  }
+
+  getReadTooltip(message: Message, currentUserId: number, participants?: Participant[]): string {
+    const status = this.getReadStatus(message, currentUserId, participants);
+    if (status === 'sent') return 'Sent';
+    const receipts = (message.readReceipts || []).filter(r => r.userId !== message.senderId);
+    const names = receipts.map(r => {
+      const p = (participants || []).find(x => x.userId === r.userId);
+      const name = p ? `${p.name} ${p.surname}`.trim() : (r.userName || 'Someone');
+      const t = new Date(r.readAt);
+      const when = isNaN(t.getTime()) ? '' : ` · ${t.toLocaleString('en-ZA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+      return `${name}${when}`;
+    });
+    return `Read by ${names.join(', ')}`;
   }
 
   closeChatBubble(conversationId: number): void {

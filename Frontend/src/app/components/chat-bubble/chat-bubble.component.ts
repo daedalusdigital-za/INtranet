@@ -34,6 +34,8 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   selectedFile: File | null = null;
   showEmojiPicker = false;
   attention = false;
+  /** True while there are unread incoming messages the user has not opened yet (keeps the round bubble pulsing). */
+  pendingRead = false;
   typingUser: string | null = null;
   uploadError: string | null = null;
 
@@ -42,10 +44,17 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   private attentionTimeout: any;
   private typingTimeout: any;
   private typingSentAt = 0;
+  private visibilityHandler: (() => void) | null = null;
 
   constructor(private messageService: MessageService) {}
 
   ngOnInit(): void {
+    // Auto-popped for an incoming message: start as a round bubble that keeps pulsing until opened and read.
+    if (this.conversation?.popMinimized) {
+      this.isMinimized = true;
+      this.pendingRead = true;
+      this.conversation.popMinimized = false;
+    }
     this.loadMessages();
     if (this.conversation?.conversationId) {
       this.messageService.joinConversation(this.conversation.conversationId);
@@ -69,10 +78,30 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
     this.subs.push(this.messageService.newMessage$.subscribe((m) => {
       if (m?.conversationId !== this.conversation?.conversationId) return;
       this.upsertMessage(m);
-      if (!this.isMinimized && m.senderId !== this.currentUserId) {
-        this.markRead();
+      if (m.senderId !== this.currentUserId) {
+        if (!this.isMinimized && document.visibilityState === 'visible') {
+          this.markRead();
+        } else {
+          this.pendingRead = true;
+          if (this.conversation) this.conversation.unreadCount = (this.conversation.unreadCount || 0) + 1;
+        }
       }
     }));
+    // Blue ticks: another participant read our messages
+    this.subs.push(this.messageService.messagesRead$.subscribe(({ conversationId, userId, messageIds, readAt }) => {
+      if (conversationId !== this.conversation?.conversationId || userId === this.currentUserId) return;
+      const ids = new Set(messageIds || []);
+      for (const msg of this.messages) {
+        if (ids.has(msg.messageId) && !msg.readReceipts?.some(r => r.userId === userId)) {
+          msg.readReceipts = [...(msg.readReceipts || []), { userId, userName: '', readAt }];
+        }
+      }
+    }));
+    // If the tab regains focus while the window is open, mark as read then
+    this.visibilityHandler = () => {
+      if (document.visibilityState === 'visible' && !this.isMinimized && this.pendingRead) this.markRead();
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
     this.subs.push(this.messageService.messageUpdated$.subscribe((m) => {
       if (m?.conversationId === this.conversation?.conversationId) this.upsertMessage(m);
     }));
@@ -110,6 +139,7 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
     this.messageService.markAsRead(this.conversation.conversationId, this.currentUserId).subscribe({
       next: () => {
         if (this.conversation) this.conversation.unreadCount = 0;
+        this.pendingRead = false;
         this.messageService.refreshUnreadCount(this.currentUserId);
       },
       error: () => {}
@@ -117,13 +147,20 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
   }
 
   triggerAttention(): void {
-    // Make sure the bubble is visible, then pulse
-    this.isMinimized = false;
+    // Shake + glow. If the user has it minimized we keep it as a round bubble (it will pulse until opened).
     this.attention = false;
     // Restart the animation on repeated messages
     setTimeout(() => { this.attention = true; }, 20);
     if (this.attentionTimeout) clearTimeout(this.attentionTimeout);
     this.attentionTimeout = setTimeout(() => { this.attention = false; }, 1600);
+  }
+
+  readStatus(message: Message): 'sent' | 'partial' | 'read' {
+    return this.messageService.getReadStatus(message, this.currentUserId, this.conversation?.participants);
+  }
+
+  readTooltip(message: Message): string {
+    return this.messageService.getReadTooltip(message, this.currentUserId, this.conversation?.participants);
   }
 
   ngOnDestroy(): void {
@@ -181,7 +218,7 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
           this.messages = messages;
           this.isLoading = false;
           setTimeout(() => this.scrollToBottom(), 100);
-          this.markRead();
+          if (!this.isMinimized) this.markRead();
         },
         error: (err: any) => {
           console.error('Error loading messages:', err);
@@ -199,7 +236,7 @@ export class ChatBubbleComponent implements OnInit, OnDestroy {
           if (messages.length !== this.messages.length) {
             this.messages = messages;
             setTimeout(() => this.scrollToBottom(), 100);
-            this.markRead();
+            if (!this.isMinimized) this.markRead();
           }
         }
       });

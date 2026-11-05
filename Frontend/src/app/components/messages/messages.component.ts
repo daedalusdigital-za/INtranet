@@ -246,7 +246,7 @@ import { ConfirmService } from '../../ui/confirm.service';
                     <div class="message-meta">
                       <span class="time">{{ formatMessageTime(message.sentAt) }}</span>
                       <mat-icon *ngIf="message.isEdited" class="edited-icon" matTooltip="Edited">edit</mat-icon>
-                      <mat-icon *ngIf="message.senderId === currentUserId && message.isRead" class="read-icon">done_all</mat-icon>
+                      <mat-icon *ngIf="message.senderId === currentUserId" class="read-icon" [class.read]="readStatus(message) === 'read'" [matTooltip]="readTooltip(message)">{{ readStatus(message) === 'sent' ? 'done' : 'done_all' }}</mat-icon>
                     </div>
                   </div>
                   
@@ -903,7 +903,13 @@ import { ConfirmService } from '../../ui/confirm.service';
             }
 
             .read-icon {
-              color: var(--color-ok);
+              color: var(--color-text-3);
+              opacity: 0.8;
+
+              &.read {
+                color: #34B7F1; // WhatsApp blue
+                opacity: 1;
+              }
             }
           }
         }
@@ -1948,6 +1954,14 @@ export class MessagesComponent implements OnInit, OnDestroy {
     } else {
       return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
+  }
+
+  readStatus(message: Message): 'sent' | 'partial' | 'read' {
+    return this.messageService.getReadStatus(message, this.currentUserId, this.selectedConversation?.participants);
+  }
+
+  readTooltip(message: Message): string {
+    return this.messageService.getReadTooltip(message, this.currentUserId, this.selectedConversation?.participants);
   }
 
   formatMessageTime(date: Date | string): string {
