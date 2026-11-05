@@ -93,42 +93,76 @@ interface PumaOrder {
           <button type="button" [class.on]="statusFilter === 'Closed'" (click)="setStatus('Closed')">Closed</button>
           <button type="button" [class.on]="statusFilter === 'All'" (click)="setStatus('All')">All</button>
         </div>
-        <button mat-flat-button color="primary" (click)="toggleQuick()">
-          <mat-icon>chat</mat-icon> {{ showQuick ? 'Hide' : 'New Order (paste message)' }}
+        <button mat-flat-button color="primary" (click)="toggleAdd()">
+          <mat-icon>add</mat-icon> {{ showAdd ? 'Hide' : 'New Order' }}
         </button>
         <button mat-stroked-button (click)="toggleImport()">
           <mat-icon>content_paste</mat-icon> {{ showImport ? 'Hide Import' : 'Import sheet' }}
         </button>
-        <button mat-stroked-button (click)="toggleAdd()">
-          <mat-icon>add</mat-icon> Add Order
-        </button>
         <button aria-label="Refresh" mat-icon-button (click)="reload()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
       </div>
 
-      <!-- Quick capture from the garage's message -->
-      @if (showQuick) {
-        <div class="puma-import quick">
+      <!-- New order form -->
+      @if (showAdd) {
+        <div class="puma-add">
           <p class="hint">
-            Paste the order message exactly as it arrives. One or more orders at a time.
-            Each becomes an <b>Open</b> order that can only be closed once a <b>JPG/PNG photo of the filled slip</b> is uploaded.
+            Capture the order from the garage. It stays <b>Open</b> until a <b>JPG/PNG photo of the filled slip</b> is uploaded and the order is closed.
           </p>
-          <textarea [(ngModel)]="quickText" (ngModelChange)="previewQuick()" rows="6"
-                    placeholder="Order number:642&#10;Driver : VUSi&#10;REG: DM 00 TV ZN&#10;LITRES: 500 LT"></textarea>
-          @if (quickPreview.length) {
-            <div class="quick-preview">
-              @for (d of quickPreview; track $index) {
-                <span class="chip"><b>#{{ d.orderNumber }}</b> · {{ d.driverName || '—' }} · {{ d.registration || '—' }} · {{ d.litersFilled != null ? d.litersFilled + ' L' : '—' }}</span>
+          <div class="form-grid">
+            <label class="f">
+              <span>Order number *</span>
+              <input type="text" [(ngModel)]="newOrder.orderNumber" placeholder="e.g. 642" autofocus />
+            </label>
+            <label class="f">
+              <span>Registration *</span>
+              <select [(ngModel)]="selectedVehicleId" (ngModelChange)="onVehiclePicked($event)">
+                <option [ngValue]="null">— choose vehicle —</option>
+                @for (v of vehicles; track v.id) {
+                  <option [ngValue]="v.id">{{ v.registrationNumber }}{{ v.vehicleTypeName ? ' · ' + v.vehicleTypeName : '' }}{{ v.currentDriverName ? ' · ' + v.currentDriverName : '' }}</option>
+                }
+                <option [ngValue]="-1">Other / not on the fleet list…</option>
+              </select>
+              @if (selectedVehicleId === -1) {
+                <input type="text" [(ngModel)]="newOrder.registration" placeholder="Type the registration" class="mt" />
               }
-            </div>
-          } @else if (quickText.trim()) {
-            <div class="quick-preview none">No “Order number:” line found yet.</div>
-          }
+            </label>
+            <label class="f">
+              <span>Driver *</span>
+              <select [(ngModel)]="selectedDriverId" (ngModelChange)="onDriverPicked($event)">
+                <option [ngValue]="null">— choose driver —</option>
+                @for (d of drivers; track d.id) {
+                  <option [ngValue]="d.id">{{ d.firstName }} {{ d.lastName }}</option>
+                }
+                <option [ngValue]="-1">Other / not on the driver list…</option>
+              </select>
+              @if (selectedDriverId === -1) {
+                <input type="text" [(ngModel)]="newOrder.driverName" placeholder="Type the driver's name" class="mt" />
+              }
+            </label>
+            <label class="f">
+              <span>Litres ordered *</span>
+              <input type="number" min="1" step="1" [(ngModel)]="newOrder.litersFilled" placeholder="e.g. 500" />
+            </label>
+            <label class="f">
+              <span>Vehicle type</span>
+              <input type="text" [(ngModel)]="newOrder.vehicleType" placeholder="auto from fleet" />
+            </label>
+            <label class="f">
+              <span>Date</span>
+              <input type="date" [(ngModel)]="newOrder.date" />
+            </label>
+            <label class="f wide">
+              <span>Notes</span>
+              <input type="text" [(ngModel)]="newOrder.notes" placeholder="optional" />
+            </label>
+          </div>
           <div class="import-actions">
-            <button mat-flat-button color="primary" [disabled]="quickSaving || quickPreview.length === 0" (click)="doQuick()">
-              @if (quickSaving) { <mat-spinner diameter="18"></mat-spinner> } @else { <mat-icon>add_task</mat-icon> }
-              Create {{ quickPreview.length || '' }} open order{{ quickPreview.length === 1 ? '' : 's' }}
+            <button mat-flat-button color="primary" [disabled]="!canSave() || saving" (click)="doAdd()">
+              @if (saving) { <mat-spinner diameter="18"></mat-spinner> } @else { <mat-icon>add_task</mat-icon> }
+              Create open order
             </button>
-            <button mat-button (click)="quickText=''; quickPreview=[]">Clear</button>
+            <button mat-button (click)="toggleAdd()">Cancel</button>
+            @if (!canSave()) { <span class="req-hint">Order number, registration, driver and litres are required.</span> }
           </div>
         </div>
       }
@@ -157,28 +191,6 @@ interface PumaOrder {
         </div>
       }
 
-      <!-- Add panel -->
-      @if (showAdd) {
-        <div class="puma-add">
-          <div class="add-grid">
-            <input type="text" [(ngModel)]="newOrder.orderNumber" placeholder="Order # *" />
-            <input type="text" [(ngModel)]="newOrder.driverName" placeholder="Driver" />
-            <input type="text" [(ngModel)]="newOrder.vehicleType" placeholder="Vehicle Type" />
-            <input type="text" [(ngModel)]="newOrder.registration" placeholder="Registration" />
-            <input type="number" [(ngModel)]="newOrder.capacity" placeholder="Capacity" />
-            <input type="number" [(ngModel)]="newOrder.litersFilled" placeholder="Litres" />
-            <input type="number" [(ngModel)]="newOrder.value" placeholder="Value (R)" />
-            <input type="date" [(ngModel)]="newOrder.date" />
-          </div>
-          <div class="import-actions">
-            <button mat-flat-button color="primary" [disabled]="!newOrder.orderNumber.trim()" (click)="doAdd()">
-              <mat-icon>save</mat-icon> Save Order
-            </button>
-            <button mat-button (click)="toggleAdd()">Cancel</button>
-          </div>
-        </div>
-      }
-
       <!-- Table -->
       <div class="puma-table-wrap">
         @if (filtered.length === 0) {
@@ -189,9 +201,9 @@ interface PumaOrder {
             </app-empty-state>
           } @else {
             <app-empty-state icon="local_gas_station" title="No Puma Garage orders yet"
-                             message="Paste the order message from the garage under “New Order”, or import a monthly sheet.">
+                             message="Press “New Order” to capture one from the garage, or import a monthly sheet.">
               @if (!showAdd) {
-                <button mat-stroked-button (click)="toggleAdd()"><mat-icon>add</mat-icon> Add Order</button>
+                <button mat-stroked-button (click)="toggleAdd()"><mat-icon>add</mat-icon> New Order</button>
               }
             </app-empty-state>
           }
@@ -304,8 +316,7 @@ interface PumaOrder {
     .import-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
     .import-actions mat-spinner { margin-right: 4px; }
 
-    .add-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .add-grid input { border: 1px solid var(--color-line-strong); border-radius: 8px; padding: 9px 11px; font-size: var(--text-sm); box-sizing: border-box; background: var(--color-surface); color: var(--color-text); }
+    .add-grid { display: none; }
 
     .puma-table-wrap { overflow: auto; padding: 4px 20px 20px; flex: 1; }
     .app-table .b { font-weight: 700; }
@@ -319,11 +330,18 @@ interface PumaOrder {
     .status-filter button { border: none; background: transparent; padding: 6px 14px; font-size: var(--text-sm); cursor: pointer; color: var(--color-text-2); }
     .status-filter button.on { background: var(--color-primary); color: var(--color-on-primary); font-weight: 600; }
 
-    .puma-import.quick { border-style: solid; border-color: var(--color-primary); }
-    .quick-preview { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    .quick-preview.none { color: var(--color-text-3); font-size: var(--text-sm); }
-    .quick-preview .chip { background: var(--color-primary-soft); color: var(--color-primary); border-radius: 999px; padding: 4px 10px; font-size: var(--text-xs); }
-
+    .puma-add { border-style: solid; border-color: var(--color-primary); }
+    .puma-add .hint { margin: 0 0 12px; font-size: var(--text-sm); color: var(--color-text-3); }
+    .form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .form-grid .f { display: flex; flex-direction: column; gap: 4px; }
+    .form-grid .f.wide { grid-column: span 2; }
+    .form-grid .f > span { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-3); }
+    .form-grid input, .form-grid select {
+      border: 1px solid var(--color-line-strong); border-radius: 8px; padding: 9px 11px; font-size: var(--text-sm);
+      box-sizing: border-box; background: var(--color-surface); color: var(--color-text); width: 100%; font-family: inherit;
+    }
+    .form-grid .mt { margin-top: 6px; }
+    .req-hint { font-size: var(--text-xs); color: var(--color-text-3); }
     .pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
     .pill mat-icon { font-size: 15px; width: 15px; height: 15px; }
     .pill.open { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-warning); }
@@ -338,7 +356,7 @@ interface PumaOrder {
     .close-btn { height: 32px; line-height: 32px; font-size: var(--text-xs); margin-right: 4px; }
 
     @media (max-width: 720px) {
-      .puma-kpis, .add-grid { grid-template-columns: repeat(2, 1fr); }
+      .puma-kpis, .form-grid { grid-template-columns: repeat(2, 1fr); }
     }
   `]
 })
@@ -353,15 +371,15 @@ export class PumaGarageDialog {
 
   showImport = false;
   showAdd = false;
-  showQuick = false;
   importText = '';
   importPeriod = '';
   importing = false;
 
-  quickText = '';
-  quickPreview: PumaOrder[] = [];
-  quickSaving = false;
-  private quickTimer: any;
+  drivers: Array<{ id: number; firstName: string; lastName: string; status?: string }> = [];
+  vehicles: Array<{ id: number; registrationNumber: string; vehicleTypeName?: string; currentDriverId?: number | null; currentDriverName?: string | null; tankSize?: number | null }> = [];
+  selectedVehicleId: number | null = null;
+  selectedDriverId: number | null = null;
+  saving = false;
 
   uploadingId: number | null = null;
   closingId: number | null = null;
@@ -380,6 +398,63 @@ export class PumaGarageDialog {
     this.applyFilter();
     // Always refresh from the server so KPIs are current.
     this.reload();
+    this.loadLookups();
+  }
+
+  private loadLookups(): void {
+    this.http.get<any[]>(`${this.apiUrl}/logistics/drivers`).subscribe({
+      next: (d) => {
+        this.drivers = (d || [])
+          .filter(x => !['inactive', 'terminated'].includes((x.status || '').toLowerCase()))
+          .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
+      },
+      error: () => this.drivers = []
+    });
+    this.http.get<any[]>(`${this.apiUrl}/fleet/vehicles`).subscribe({
+      next: (v) => {
+        this.vehicles = (v || [])
+          .filter(x => !!x.registrationNumber)
+          .sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
+      },
+      error: () => this.vehicles = []
+    });
+  }
+
+  onVehiclePicked(id: number | null): void {
+    if (id == null || id === -1) {
+      if (id === -1) { this.newOrder.registration = ''; this.newOrder.vehicleType = ''; }
+      return;
+    }
+    const v = this.vehicles.find(x => x.id === id);
+    if (!v) return;
+    this.newOrder.registration = v.registrationNumber;
+    this.newOrder.vehicleType = v.vehicleTypeName || this.newOrder.vehicleType || '';
+    this.newOrder.capacity = v.tankSize ?? this.newOrder.capacity ?? null;
+    // Pre-select the vehicle's assigned driver if we know it
+    if (v.currentDriverId && this.drivers.some(d => d.id === v.currentDriverId)) {
+      this.selectedDriverId = v.currentDriverId;
+      this.onDriverPicked(v.currentDriverId);
+    }
+  }
+
+  onDriverPicked(id: number | null): void {
+    if (id == null) { this.newOrder.driverName = ''; return; }
+    if (id === -1) { this.newOrder.driverName = ''; return; }
+    const d = this.drivers.find(x => x.id === id);
+    if (d) this.newOrder.driverName = `${d.firstName} ${d.lastName}`.trim();
+  }
+
+  canSave(): boolean {
+    return !!(this.newOrder.orderNumber?.trim()
+      && this.newOrder.registration?.trim()
+      && this.newOrder.driverName?.trim()
+      && this.newOrder.litersFilled && this.newOrder.litersFilled > 0);
+  }
+
+  private resetForm(): void {
+    this.newOrder = { orderNumber: '', date: new Date().toISOString().slice(0, 10) };
+    this.selectedVehicleId = null;
+    this.selectedDriverId = null;
   }
 
   private base() { return `${this.apiUrl}/logistics/pumagarageorders`; }
@@ -407,38 +482,6 @@ export class PumaGarageDialog {
 
   setStatus(s: 'Open' | 'Closed' | 'All'): void { this.statusFilter = s; this.applyFilter(); }
   openCount(): number { return this.orders.filter(o => o.status !== 'Closed').length; }
-
-  toggleQuick(): void { this.showQuick = !this.showQuick; if (this.showQuick) { this.showImport = false; this.showAdd = false; } }
-
-  previewQuick(): void {
-    clearTimeout(this.quickTimer);
-    const text = this.quickText;
-    if (!text.trim()) { this.quickPreview = []; return; }
-    this.quickTimer = setTimeout(() => {
-      this.http.post<PumaOrder[]>(`${this.base()}/parse`, { text }).subscribe({
-        next: (d) => this.quickPreview = d || [],
-        error: () => this.quickPreview = []
-      });
-    }, 250);
-  }
-
-  doQuick(): void {
-    if (!this.quickText.trim()) return;
-    this.quickSaving = true;
-    this.http.post<{ created: PumaOrder[]; skipped: string[] }>(`${this.base()}/quick`, { text: this.quickText }).subscribe({
-      next: (res) => {
-        this.quickSaving = false;
-        const n = res.created?.length || 0;
-        const skipped = res.skipped?.length ? ` Skipped (already exist): ${res.skipped.join(', ')}.` : '';
-        if (n) this.toast.done(`${n} open order${n === 1 ? '' : 's'} created.${skipped}`);
-        else this.toast.error(`Nothing created.${skipped}`);
-        this.quickText = ''; this.quickPreview = []; this.showQuick = false;
-        this.statusFilter = 'Open';
-        this.reload();
-      },
-      error: (err) => { this.quickSaving = false; this.toast.error(err.error?.message || 'Could not create the order.'); }
-    });
-  }
 
   pickSlip(o: PumaOrder): void {
     this.slipTarget = o;
@@ -510,8 +553,11 @@ export class PumaGarageDialog {
     return dates.length === 1 ? fmt(dates[0]) : `${fmt(dates[0])} → ${fmt(dates[dates.length - 1])}`;
   }
 
-  toggleImport(): void { this.showImport = !this.showImport; if (this.showImport) { this.showAdd = false; this.showQuick = false; } }
-  toggleAdd(): void { this.showAdd = !this.showAdd; if (this.showAdd) { this.showImport = false; this.showQuick = false; } if (!this.showAdd) this.newOrder = { orderNumber: '' }; }
+  toggleImport(): void { this.showImport = !this.showImport; if (this.showImport) this.showAdd = false; }
+  toggleAdd(): void {
+    this.showAdd = !this.showAdd;
+    if (this.showAdd) { this.showImport = false; this.resetForm(); }
+  }
 
   doImport(): void {
     if (!this.importText.trim()) return;
@@ -535,15 +581,25 @@ export class PumaGarageDialog {
   }
 
   doAdd(): void {
-    if (!this.newOrder.orderNumber.trim()) return;
-    this.http.post<PumaOrder>(this.base(), this.newOrder).subscribe({
-      next: () => {
-        this.toast.done('Order added.');
-        this.newOrder = { orderNumber: '' };
+    if (!this.canSave() || this.saving) return;
+    this.saving = true;
+    const payload: PumaOrder = {
+      ...this.newOrder,
+      orderNumber: this.newOrder.orderNumber.trim(),
+      registration: (this.newOrder.registration || '').trim().toUpperCase(),
+      driverName: (this.newOrder.driverName || '').trim(),
+      date: this.newOrder.date || new Date().toISOString().slice(0, 10)
+    };
+    this.http.post<PumaOrder>(this.base(), payload).subscribe({
+      next: (created) => {
+        this.saving = false;
+        this.toast.done(`Order ${created.orderNumber} created – upload the slip photo when it's filled.`);
+        this.resetForm();
         this.showAdd = false;
+        this.statusFilter = 'Open';
         this.reload();
       },
-      error: (err) => this.toast.error(err.error?.message || 'Failed to add order.')
+      error: (err) => { this.saving = false; this.toast.error(err.error?.message || 'Failed to create the order.'); }
     });
   }
 
