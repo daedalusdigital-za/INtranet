@@ -1,0 +1,1 @@
+import{K as o,fa as n}from"./chunk-6T7VJVTR.js";var t=class e{shipment=n(null);open=n(!1);static \u0275fac=function(a){return new(a||e)};static \u0275prov=o({token:e,factory:e.\u0275fac,providedIn:"root"})};export{t as a};

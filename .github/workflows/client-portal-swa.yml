@@ -8,6 +8,10 @@
 #   PORTAL_GOOGLE_MAPS_KEY   browser-restricted Google Maps key (optional)
 #
 # Pull requests get a preview environment; closing the PR removes it.
+#
+# Fallback: if client-portal/prebuilt/ exists (a previously compiled Angular bundle), it is deployed as-is with
+# apiBase/googleMapsKey patched, instead of building from source. Delete that folder once the full portal
+# source is back in client-portal/src.
 name: client-portal → Azure Static Web Apps
 
 on:
@@ -42,16 +46,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Detect prebuilt bundle
+        id: mode
+        run: |
+          if [ -f prebuilt/index.html ]; then echo "prebuilt=true" >> "$GITHUB_OUTPUT"; echo "::notice::Deploying prebuilt bundle from client-portal/prebuilt (source build skipped)"; else echo "prebuilt=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Prepare prebuilt bundle
+        if: steps.mode.outputs.prebuilt == 'true'
+        env:
+          PORTAL_API_BASE: ${{ vars.PORTAL_API_BASE }}
+          PORTAL_GOOGLE_MAPS_KEY: ${{ vars.PORTAL_GOOGLE_MAPS_KEY }}
+        run: |
+          [ -n "$PORTAL_API_BASE" ] || { echo "::error::PORTAL_API_BASE not set"; exit 1; }
+          mkdir -p dist/client-portal && rm -rf dist/client-portal/browser && cp -r prebuilt dist/client-portal/browser
+          cp public/staticwebapp.config.json dist/client-portal/browser/
+          cd dist/client-portal/browser
+          grep -l 'apiBase:"' *.js | xargs -r sed -i "s#apiBase:\"[^\"]*\"#apiBase:\"${PORTAL_API_BASE}\"#g"
+          if [ -n "$PORTAL_GOOGLE_MAPS_KEY" ]; then grep -l 'googleMapsKey:"' *.js | xargs -r sed -i "s#googleMapsKey:\"[^\"]*\"#googleMapsKey:\"${PORTAL_GOOGLE_MAPS_KEY}\"#g"; fi
+          grep -o 'apiBase:"[^"]*"' *.js | sort -u
+
       - uses: actions/setup-node@v4
+        if: steps.mode.outputs.prebuilt != 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: client-portal/package-lock.json
 
       - name: Install
+        if: steps.mode.outputs.prebuilt != 'true'
         run: npm ci
 
       - name: Inject environment (API base, Maps key)
+        if: steps.mode.outputs.prebuilt != 'true'
         env:
           PORTAL_API_BASE: ${{ vars.PORTAL_API_BASE }}
           PORTAL_GOOGLE_MAPS_KEY: ${{ vars.PORTAL_GOOGLE_MAPS_KEY }}
@@ -64,6 +90,7 @@ jobs:
           grep -n "apiBase" src/environments/environment.ts
 
       - name: Build (production)
+        if: steps.mode.outputs.prebuilt != 'true'
         run: npx ng build --configuration=production
 
       - name: Deploy to Static Web Apps

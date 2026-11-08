@@ -76,6 +76,8 @@ Az webapp config appsettings set --name $app --resource-group $rg --output none 
     "WEBSITE_RUN_FROM_PACKAGE=1"
 
 Write-Host "== Publish profile"
+# Publish-profile deploys (azure/webapps-deploy) need SCM basic auth, which new apps disable by default.
+Az resource update --resource-group $rg --name scm --namespace Microsoft.Web --resource-type basicPublishingCredentialsPolicies --parent "sites/$app" --set properties.allow=true --output none
 $pubProfile = (Az webapp deployment list-publishing-profiles --name $app --resource-group $rg --xml) -join "`n"
 
 $outFile = Join-Path $PSScriptRoot 'portal-azure-output.local.txt'

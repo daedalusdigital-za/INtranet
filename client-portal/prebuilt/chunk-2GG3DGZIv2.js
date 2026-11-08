@@ -1,0 +1,1 @@
+var e={brandName:"Rocket Freight",supportPhone:"031 537 8030",supportPhoneIntl:"+27315378030",supportEmail:"admin@rocketfright.co.za",apiBase:"/api/portal",useMock:!1,useHashRouting:!1,googleMapsKey:"AIzaSyCqVfKPCFqCsGEzAe3ofunRDtuNLb7aV7k"};export{e as a};
