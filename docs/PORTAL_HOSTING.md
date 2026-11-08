@@ -19,7 +19,28 @@ is useless on intranet endpoints · edge key check + 404 for anything outside `/
 
 ---
 
-## 1. One-time Azure setup (≈ 30 min, portal clicks)
+## 0. What exists (provisioned 8 Nov 2026 by `tools/provision-portal-azure.ps1`)
+
+Subscription **PromedSubscription** · resource group **rg-rocket-portal**
+
+| Resource | Name | Notes |
+|---|---|---|
+| Static Web App | `swa-rocket-portal` (Free, westus2*) | https://thankful-river-00b68851e.5.azurestaticapps.net |
+| App Service plan | `asp-rocket-portal-edge` (B1 Windows, southafricanorth) | Windows is required for Hybrid Connections |
+| Web app | `app-rocket-portal-edge` (.NET 10) | https://app-rocket-portal-edge.azurewebsites.net |
+| Relay namespace / hybrid connection | `relay-rocket-portal` / `sage-svr-5143` | endpoint `sage-svr:5143`; auth rules `defaultSender` (app) + `defaultListener` (HCM) |
+| Hybrid Connection Manager | installed on SAGE-SVR (`C:\Program Files (x86)\HybridConnectionManager`) | `hcm.exe list` should show **Connected** |
+
+\* West Europe refused new SWA customers on this subscription; SWA content is served from a global CDN so the region only holds metadata.
+
+GitHub repo vars/secrets were set by `tools/set_portal_github_secrets.py` (`PORTAL_API_BASE`, `PORTAL_EDGE_APP_NAME`,
+`AZURE_STATIC_WEB_APPS_API_TOKEN_PORTAL`, `AZURE_WEBAPP_PUBLISH_PROFILE_PORTAL_EDGE`). `PORTAL_GOOGLE_MAPS_KEY` is **not** set yet.
+Generated values live in `tools/portal-azure-output.local.txt` (gitignored). Re-running the provisioning script is safe (idempotent).
+
+Custom domains (`portal.rocketfreight.co.za`, `portal-api.rocketfreight.co.za`) are not configured; when they are, add them in
+SWA → Custom domains and App Service → Custom domains, then add the host to `ALLOWED_ORIGINS` (edge) and `.env` `PORTAL_ORIGIN_1` (API).
+
+## 1. One-time Azure setup (manual alternative to the script, ≈ 30 min)
 
 ### 1.1 Static Web App (portal front end)
 1. Azure Portal → **Create resource → Static Web App**. Plan **Free**. Region: West Europe (closest with SWA).

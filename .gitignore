@@ -148,3 +148,5 @@ login.json
 Backend/runlog.txt
 *.csx
 
+
+*.local.txt
