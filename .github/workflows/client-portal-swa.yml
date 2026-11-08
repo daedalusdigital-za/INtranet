@@ -1,0 +1,88 @@
+# Client portal → Azure Static Web Apps
+#
+# Builds client-portal/ with Angular and publishes the static output to the Static Web App
+# whose deployment token is stored in the secret AZURE_STATIC_WEB_APPS_API_TOKEN_PORTAL.
+#
+# Repository variables (Settings → Secrets and variables → Actions → Variables):
+#   PORTAL_API_BASE          e.g. https://portal-api.rocketfreight.co.za/api/portal   (the Azure edge, see portal-edge/)
+#   PORTAL_GOOGLE_MAPS_KEY   browser-restricted Google Maps key (optional)
+#
+# Pull requests get a preview environment; closing the PR removes it.
+name: client-portal → Azure Static Web Apps
+
+on:
+  push:
+    branches: [main, stock/ledger-integrity]
+    paths:
+      - 'client-portal/**'
+      - '.github/workflows/client-portal-swa.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+    paths:
+      - 'client-portal/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: client-portal-swa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_deploy:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    name: Build and deploy
+    defaults:
+      run:
+        working-directory: client-portal
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client-portal/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Inject environment (API base, Maps key)
+        env:
+          PORTAL_API_BASE: ${{ vars.PORTAL_API_BASE }}
+          PORTAL_GOOGLE_MAPS_KEY: ${{ vars.PORTAL_GOOGLE_MAPS_KEY }}
+        run: |
+          if [ -z "$PORTAL_API_BASE" ]; then
+            echo "::error::Repository variable PORTAL_API_BASE is not set (e.g. https://portal-api.rocketfreight.co.za/api/portal)"; exit 1
+          fi
+          sed -i "s#__PORTAL_API_BASE__#${PORTAL_API_BASE}#g" src/environments/environment.ts
+          sed -i "s#__PORTAL_GOOGLE_MAPS_KEY__#${PORTAL_GOOGLE_MAPS_KEY}#g" src/environments/environment.ts
+          grep -n "apiBase" src/environments/environment.ts
+
+      - name: Build (production)
+        run: npx ng build --configuration=production
+
+      - name: Deploy to Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PORTAL }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          skip_app_build: true
+          skip_api_build: true
+          app_location: client-portal/dist/client-portal/browser
+          output_location: ''
+
+  close_pull_request:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Remove PR preview
+    steps:
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PORTAL }}
+          action: close

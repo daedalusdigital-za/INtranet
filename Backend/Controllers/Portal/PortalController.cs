@@ -26,6 +26,7 @@ namespace ProjectTracker.API.Controllers.Portal
     [ApiController]
     [Route("api/portal")]
     [Authorize(AuthenticationSchemes = PortalAuth.Scheme)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(ProjectTracker.API.Security.PortalRateLimiting.Policy)]
     public class PortalController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
@@ -61,6 +62,7 @@ namespace ProjectTracker.API.Controllers.Portal
         /// <summary>POST /auth/login → LoginResponse; 401 wrong details; 429 when locked after repeated failures.</summary>
         [HttpPost("auth/login")]
         [AllowAnonymous]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(ProjectTracker.API.Security.PortalRateLimiting.AuthPolicy)]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto?.Email) || string.IsNullOrWhiteSpace(dto.Password)) return Unauthorized(new { message = "Email or password is incorrect." });
@@ -94,6 +96,7 @@ namespace ProjectTracker.API.Controllers.Portal
         /// <summary>POST /auth/forgot-password → 204 always (never reveals whether the email exists).</summary>
         [HttpPost("auth/forgot-password")]
         [AllowAnonymous]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(ProjectTracker.API.Security.PortalRateLimiting.AuthPolicy)]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotDto dto)
         {
             var email = dto?.Email?.Trim().ToLowerInvariant();
@@ -118,6 +121,7 @@ namespace ProjectTracker.API.Controllers.Portal
         /// <summary>POST /auth/reset-password {token, password} – completes the forgot-password flow.</summary>
         [HttpPost("auth/reset-password")]
         [AllowAnonymous]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(ProjectTracker.API.Security.PortalRateLimiting.AuthPolicy)]
         public async Task<IActionResult> ResetPassword([FromBody] ResetDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto?.Token) || (dto.Password?.Length ?? 0) < 8) return BadRequest(new { message = "Password must be at least 8 characters." });

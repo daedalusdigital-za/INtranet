@@ -54,6 +54,11 @@ services:
       - KnowledgeBase__DocumentsPath=/app/kb-docs
       - Cors__AllowedOrigins__6=http://localhost:4400
       - Cors__AllowedOrigins__7=http://192.168.10.151:4400
+      # Client portal (public, via the Azure edge). Only /api/portal is reachable that way; see Security/PortalEdge.cs.
+      - Cors__AllowedOrigins__8=${PORTAL_ORIGIN_1:-https://portal.rocketfreight.co.za}
+      - Cors__AllowedOrigins__9=${PORTAL_ORIGIN_2:-}
+      - Portal__EdgeKey=${PORTAL_EDGE_KEY:-}
+      - Portal__PublicUrl=${PORTAL_ORIGIN_1:-https://portal.rocketfreight.co.za}
       - DocumentsPath=/app/documents
       - QuotesPath=/app/quotes
       - DownloadsPath=/app/downloads

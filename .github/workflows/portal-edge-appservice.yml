@@ -1,0 +1,41 @@
+# Portal edge (YARP) → Azure App Service
+#
+# Publishes portal-edge/ to the App Service named in the repository variable PORTAL_EDGE_APP_NAME
+# using the publish profile stored in the secret AZURE_WEBAPP_PUBLISH_PROFILE_PORTAL_EDGE
+# (App Service → Overview → Download publish profile).
+name: portal-edge → Azure App Service
+
+on:
+  push:
+    branches: [main, stock/ledger-integrity]
+    paths:
+      - 'portal-edge/**'
+      - '.github/workflows/portal-edge-appservice.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portal-edge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        run: dotnet publish portal-edge/PortalEdge.csproj -c Release -o ${{ github.workspace }}/publish
+
+      - name: Deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.PORTAL_EDGE_APP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PORTAL_EDGE }}
+          package: ${{ github.workspace }}/publish

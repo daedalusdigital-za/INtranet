@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Rocket Freight client portal – public edge.
+    Runs on Azure App Service (B1 Windows). Forwards ONLY /api/portal/* (and /health) to the
+    on-prem intranet API over an App Service Hybrid Connection (outbound-only from the LAN, no
+    router ports), stamping X-Portal-Edge-Key so the API can tell public traffic from LAN traffic.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>PortalEdge</AssemblyName>
+    <RootNamespace>PortalEdge</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+  </ItemGroup>
+
+</Project>

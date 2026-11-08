@@ -4,6 +4,7 @@ using ProjectTracker.API.Data;
 using ProjectTracker.API.Extensions;
 using ProjectTracker.API.HealthChecks;
 using ProjectTracker.API.Hubs;
+using ProjectTracker.API.Security;
 using ProjectTracker.API.Services;
 
 // Force BouncyCastle adapter registration for iText PDF generation.
@@ -60,6 +61,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlSer
 // Auth (fails fast if JwtSettings:SecretKey is missing) + explicit-origin CORS
 builder.Services.AddAppAuthentication(builder.Configuration);
 builder.Services.AddAppCors(builder.Configuration);
+// Client portal: per-IP rate limits (general + credential endpoints). Policies are applied on PortalController.
+builder.Services.AddPortalRateLimiting();
 
 // Health checks — /health (liveness) and /health/ready (DB readiness).
 // Required for load-balanced / blue-green deployments.
@@ -220,7 +223,12 @@ using (var settingsScope = app.Services.CreateScope())
 // HTTP pipeline
 // ---------------------------------------------------------------------------
 app.UseResponseCompression();
+// Public edge guard: requests stamped by the Azure portal edge may only reach /api/portal (+ /health),
+// and get their real client IP from X-Forwarded-For. LAN traffic is untouched. Must run before the
+// rate limiter so limits key on the customer's address, not the proxy's.
+app.UseMiddleware<ProjectTracker.API.Security.PortalEdgeMiddleware>();
 app.UseCors("AppCors");
+app.UseRateLimiter();
 
 app.UseAuthentication();
 
