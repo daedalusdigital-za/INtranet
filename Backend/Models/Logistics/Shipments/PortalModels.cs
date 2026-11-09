@@ -66,4 +66,37 @@ namespace ProjectTracker.API.Models.Logistics.Shipments
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public virtual PortalUser PortalUser { get; set; } = null!;
     }
+
+    /// <summary>
+    /// A priced quote for a booking the client has drafted on the portal but not yet placed.
+    /// Stores the full booking request so "Book this quote" can create the booking later.
+    /// </summary>
+    [Table("PortalQuotes")]
+    public class PortalQuote
+    {
+        public int Id { get; set; }
+        [Required, MaxLength(20)] public string QuoteNo { get; set; } = string.Empty; // QT-YYYY-NNNNNN
+        public int CustomerId { get; set; }
+        public int PortalUserId { get; set; }
+        [MaxLength(50)] public string? ClientReference { get; set; }
+        /// <summary>The PortalBookingRequest exactly as submitted (JSON).</summary>
+        public string RequestJson { get; set; } = "{}";
+        /// <summary>Priced lines per shipment (JSON) for the PDF and the portal.</summary>
+        public string PricingJson { get; set; } = "{}";
+        public int ShipmentCount { get; set; }
+        public decimal TotalWeightKg { get; set; }
+        public decimal DistanceKm { get; set; }
+        public decimal Subtotal { get; set; }
+        public decimal Vat { get; set; }
+        public decimal Total { get; set; }
+        /// <summary>DRAFT | BOOKED | EXPIRED | DELETED</summary>
+        [MaxLength(20)] public string Status { get; set; } = "DRAFT";
+        public DateTime ValidUntil { get; set; }
+        public int? BookingId { get; set; }
+        [MaxLength(20)] public string? BookingNo { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
+        public virtual Customer? Customer { get; set; }
+        public virtual PortalUser? PortalUser { get; set; }
+    }
 }

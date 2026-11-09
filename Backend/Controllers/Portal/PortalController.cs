@@ -37,11 +37,15 @@ namespace ProjectTracker.API.Controllers.Portal
         private readonly IEmailService _email;
         private readonly IConfiguration _config;
         private readonly ILogger<PortalController> _logger;
+        private readonly IPortalQuoteService _quotes;
+        private readonly INumberSequenceService _seq;
 
         public PortalController(ApplicationDbContext db, IPortalTokenService tokens, IBookingIntakeService intake, IShipmentLifecycleService lifecycle,
-            IWaybillService waybills, IEmailService email, IConfiguration config, ILogger<PortalController> logger)
+            IWaybillService waybills, IEmailService email, IConfiguration config, ILogger<PortalController> logger,
+            IPortalQuoteService quotes, INumberSequenceService seq)
         {
             _db = db; _tokens = tokens; _intake = intake; _lifecycle = lifecycle; _waybills = waybills; _email = email; _config = config; _logger = logger;
+            _quotes = quotes; _seq = seq;
         }
 
         // ------------------------------------------------------------------ identity from the token
@@ -267,6 +271,118 @@ namespace ProjectTracker.API.Controllers.Portal
             }
         }
 
+        // ------------------------------------------------------------------ quotes (priced drafts)
+
+        /// <summary>
+        /// POST /bookings/quote → 201 { id, quoteNo, subtotal, vat, total, validUntil, pdfUrl, pricing }; 422 {problems}.
+        /// Validates like /bookings, prices the request from the rate card and saves it as a DRAFT quote
+        /// (nothing is booked). The PDF link is a signed 30-minute URL.
+        /// </summary>
+        [HttpPost("bookings/quote")]
+        public async Task<IActionResult> CreateQuote([FromBody] PortalBookingRequest req)
+        {
+            var errors = _intake.Validate(ToDto(req));
+            if (errors.Count > 0) return UnprocessableEntity(new { problems = errors.Select(Problem).ToList() });
+
+            var ids = (req.Shipments ?? new()).SelectMany(s => new[] { s.Pickup?.AddressId, s.Delivery?.AddressId }).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            var book = ids.Count == 0 ? new Dictionary<int, ShipmentAddress>()
+                : await _db.ShipmentAddresses.AsNoTracking().Where(a => ids.Contains(a.Id) && a.CustomerId == CustomerId).ToDictionaryAsync(a => a.Id);
+            if (book.Count != ids.Count) return UnprocessableEntity(new { problems = new[] { new { path = "shipments", message = "One of the saved addresses no longer exists." } } });
+
+            var pricing = _quotes.Price(req, book);
+            var q = new PortalQuote
+            {
+                QuoteNo = await _seq.NextAsync("QT"),
+                CustomerId = CustomerId, PortalUserId = PortalUserId,
+                ClientReference = string.IsNullOrWhiteSpace(req.ClientReference) ? null : req.ClientReference.Trim(),
+                RequestJson = JsonSerializer.Serialize(req, Json), PricingJson = JsonSerializer.Serialize(pricing, Json),
+                ShipmentCount = pricing.Shipments.Count, TotalWeightKg = pricing.Shipments.Sum(s => s.WeightKg), DistanceKm = pricing.Shipments.Sum(s => s.DistanceKm),
+                Subtotal = pricing.Subtotal, Vat = pricing.Vat, Total = pricing.Total,
+                Status = "DRAFT", ValidUntil = DateTime.UtcNow.AddDays(_quotes.RateCard.ValidityDays), CreatedAt = DateTime.UtcNow
+            };
+            _db.PortalQuotes.Add(q);
+            await _db.SaveChangesAsync();
+            _logger.LogInformation("Portal quote {QuoteNo} created for customer {CustomerId} total {Total}", q.QuoteNo, CustomerId, q.Total);
+            return StatusCode(201, QuoteDto(q, pricing));
+        }
+
+        /// <summary>GET /quotes?status=DRAFT → saved quotes (drafts) for this customer, newest first.</summary>
+        [HttpGet("quotes")]
+        public async Task<IActionResult> Quotes([FromQuery] string? status = "DRAFT")
+        {
+            var now = DateTime.UtcNow;
+            var qry = _db.PortalQuotes.AsNoTracking().Where(q => q.CustomerId == CustomerId && q.Status != "DELETED");
+            if (!string.IsNullOrWhiteSpace(status) && status != "ALL") qry = qry.Where(q => q.Status == status.ToUpper());
+            var rows = await qry.OrderByDescending(q => q.Id).Take(200).ToListAsync();
+            return Ok(rows.Select(q => QuoteDto(q, null, now)));
+        }
+
+        /// <summary>GET /quotes/{id} → quote with pricing and the original request (for re-loading into the form).</summary>
+        [HttpGet("quotes/{id:int}")]
+        public async Task<IActionResult> Quote(int id)
+        {
+            var q = await _db.PortalQuotes.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.CustomerId == CustomerId && x.Status != "DELETED");
+            if (q == null) return NotFound();
+            var dto = QuoteDto(q, JsonSerializer.Deserialize<QuotePricing>(q.PricingJson, Json));
+            return Ok(new { quote = dto, request = JsonSerializer.Deserialize<PortalBookingRequest>(q.RequestJson, Json) });
+        }
+
+        /// <summary>POST /quotes/{id}/book → places the booking exactly as quoted; 201 BookingResult; 409 if already booked; 422 {problems}.</summary>
+        [HttpPost("quotes/{id:int}/book")]
+        public async Task<IActionResult> BookQuote(int id)
+        {
+            var q = await _db.PortalQuotes.FirstOrDefaultAsync(x => x.Id == id && x.CustomerId == CustomerId && x.Status != "DELETED");
+            if (q == null) return NotFound();
+            if (q.Status == "BOOKED") return Conflict(new { message = $"Quote {q.QuoteNo} was already booked as {q.BookingNo}." });
+            var req = JsonSerializer.Deserialize<PortalBookingRequest>(q.RequestJson, Json) ?? new PortalBookingRequest();
+            if (string.IsNullOrWhiteSpace(req.ClientReference)) req.ClientReference = q.QuoteNo;
+            try
+            {
+                var (booking, shipments) = await _intake.CreateAsync(ToDto(req), null, PortalUserName);
+                q.Status = "BOOKED"; q.BookingId = booking.Id; q.BookingNo = booking.BookingNo; q.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return StatusCode(201, new { booking.BookingNo, shipmentIds = shipments.Select(s => s.Id).ToList(), quoteNo = q.QuoteNo });
+            }
+            catch (BookingValidationException ex)
+            {
+                return UnprocessableEntity(new { problems = ex.Errors.Select(Problem).ToList() });
+            }
+        }
+
+        /// <summary>DELETE /quotes/{id} → discards a draft quote.</summary>
+        [HttpDelete("quotes/{id:int}")]
+        public async Task<IActionResult> DeleteQuote(int id)
+        {
+            var q = await _db.PortalQuotes.FirstOrDefaultAsync(x => x.Id == id && x.CustomerId == CustomerId);
+            if (q == null) return NotFound();
+            if (q.Status == "BOOKED") return Conflict(new { message = "A booked quote cannot be deleted." });
+            q.Status = "DELETED"; q.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        /// <summary>GET /quotes/{id}/pdf → {url} signed for 30 minutes.</summary>
+        [HttpGet("quotes/{id:int}/pdf")]
+        public async Task<IActionResult> QuotePdfUrl(int id)
+        {
+            var exists = await _db.PortalQuotes.AsNoTracking().AnyAsync(x => x.Id == id && x.CustomerId == CustomerId && x.Status != "DELETED");
+            if (!exists) return NotFound();
+            return Ok(new { url = QuotePdfLink(id) });
+        }
+
+        private string QuotePdfLink(int id) => $"{ApiBase()}/api/portal/documents/{Sign($"quote|{id}|pdf", TimeSpan.FromMinutes(30))}";
+
+        private object QuoteDto(PortalQuote q, QuotePricing? pricing, DateTime? now = null)
+        {
+            var status = q.Status == "DRAFT" && q.ValidUntil < (now ?? DateTime.UtcNow) ? "EXPIRED" : q.Status;
+            return new
+            {
+                q.Id, q.QuoteNo, status, q.ClientReference, q.ShipmentCount, q.TotalWeightKg, q.DistanceKm,
+                q.Subtotal, q.Vat, q.Total, currency = "ZAR", q.ValidUntil, q.CreatedAt, q.BookingNo,
+                pdfUrl = QuotePdfLink(q.Id), pricing
+            };
+        }
+
         private CreateBookingDto ToDto(PortalBookingRequest r) => new()
         {
             CustomerId = CustomerId,
@@ -445,7 +561,15 @@ namespace ProjectTracker.API.Controllers.Portal
             var payload = Verify(token);
             if (payload == null) return NotFound();
             var parts = payload.Split('|');
-            if (parts.Length != 3 || parts[0] != "doc" || !int.TryParse(parts[1], out var id)) return NotFound();
+            if (parts.Length != 3 || !int.TryParse(parts[1], out var id)) return NotFound();
+            if (parts[0] == "quote")
+            {
+                var q = await _db.PortalQuotes.AsNoTracking().Include(x => x.Customer).Include(x => x.PortalUser).FirstOrDefaultAsync(x => x.Id == id);
+                if (q == null) return NotFound();
+                var pdf = _quotes.RenderPdf(q, q.Customer?.Name ?? "", q.PortalUser?.Name);
+                return File(pdf, "application/pdf", $"{q.QuoteNo}.pdf");
+            }
+            if (parts[0] != "doc") return NotFound();
             try
             {
                 var wb = await _db.ShipmentWaybills.AsNoTracking().FirstOrDefaultAsync(w => w.ShipmentId == id);

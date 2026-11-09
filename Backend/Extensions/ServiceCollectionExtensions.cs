@@ -206,6 +206,7 @@ namespace ProjectTracker.API.Extensions
             services.AddScoped<Services.Logistics.IShipmentLifecycleService, Services.Logistics.ShipmentLifecycleService>();
             services.AddScoped<Services.Logistics.IShipmentNotificationService, Services.Logistics.ShipmentNotificationService>();
             services.AddScoped<Services.Logistics.IWaybillService, Services.Logistics.WaybillService>();
+            services.AddSingleton<Services.Logistics.IPortalQuoteService, Services.Logistics.PortalQuoteService>();
             // Booking intake shared by ops, CSV, API and the client portal (same validation everywhere)
             services.AddScoped<Services.Logistics.IBookingIntakeService, Services.Logistics.BookingIntakeService>();
             // Rocket Freight client portal tokens (separate audience, see AddAppAuthentication)
