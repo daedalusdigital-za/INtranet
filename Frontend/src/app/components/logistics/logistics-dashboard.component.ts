@@ -55,6 +55,7 @@ import { formatDay, isFilterRecord, parseDay, queryText, recordFilters, toQuery 
 import { LOGISTICS_SECTIONS, LogisticsSlug, logisticsSection } from './logistics-sections';
 import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord, DeliveryRequest, DeliveryRequestSummary, DeliveredWithoutPodRow } from './logistics.models';
 import { UploadPODDialog, UploadPodDocumentDialog, LinkTripsheetDialog, EditPodDialog, LinkInvoiceDialog, InvoiceDetailsDialog, FleetMapDialogComponent, NewLoadDialogComponent, LogisticsPodInvoicesDialog, TripSheetPreviewDialog, TripsheetDocumentPreviewDialog, TripsheetEmailRecipientsDialog, MaintenanceExportScopeDialog, SyncResultDialogComponent, SuggestedTripsDialog, TfnOrdersListDialog, TfnOrderDetailsDialog, IncomingRequestsDialog, AddressIssuesDialog, TfnDepotsMapDialog, AddDeliveryNoteDialog, CreateTripsheetDialog, TripsheetTypeDialog, ManualTripsheetDialog, InternalTransferDialog, ImportTripsheetDialog, AddMaintenanceDialog, VehicleDialogComponent, AssignDriverDialogComponent, LinkVehicleDialogComponent, AssignTripsheetDialog, CompleteMaintenanceDialog, UpdateLoadStatusDialog, ViewLoadDetailsDialog, ViewRouteMapDialog, LogisticsReportsDialog, LiveStreamingDialog, ReassignLoadDialog, RescheduleTripsheetDialog, ReassignProvinceDialog, VehicleStatusDialog, WellyTripsheetWizardDialog, WellySuggestsDialog, AiTripsheetBuilderDialog, FuelHistoryDialog, VehicleMaintenanceHistoryDialog, TodayHistoryDialog, FuelHealthDialog, BarcodeLookupDialog } from './logistics-dashboard-dialogs.component';
+import { OverbergTripsheetDialogComponent } from './client-bookings/overberg-tripsheet-dialog.component';
 
 @Component({
   selector: 'app-logistics-dashboard',
@@ -2804,7 +2805,28 @@ Notes: ${record.notes || 'No notes'}
           case 'welly-suggests':
             this.openWellySuggestsDialog();
             break;
+          case 'overberg':
+            this.openOverbergTripsheetDialog();
+            break;
         }
+      }
+    });
+  }
+
+  // Overberg Tripsheets — build a load from confirmed client bookings (stops + waybills issued server-side)
+  openOverbergTripsheetDialog(preselect?: number[]): void {
+    const unavailableStatuses = ['Under Maintenance', 'Decommissioned', 'Unavailable'];
+    const availableVehicles = this.vehicles().filter(v => !unavailableStatuses.includes(v.status));
+    const dialogRef = this.dialog.open(OverbergTripsheetDialogComponent, {
+      width: '95vw',
+      maxWidth: '1200px',
+      height: '88vh',
+      data: { drivers: this.drivers(), vehicles: availableVehicles, warehouses: this.warehouses(), preselect }
+    });
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.created || result?.updated) {
+        this.loadTripsheets();
+        this.loadDashboardData();
       }
     });
   }

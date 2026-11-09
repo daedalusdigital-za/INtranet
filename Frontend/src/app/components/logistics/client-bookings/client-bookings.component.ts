@@ -19,7 +19,7 @@ import {
   BookingRow, SHIPMENT_STATUS_LABEL, ShipmentCounts, ShipmentDetail, ShipmentService, ShipmentStatus, ShipmentSummary
 } from '../../../services/shipment.service';
 import { NewBookingDialogComponent } from './new-booking-dialog.component';
-import { PlanShipmentsDialogComponent } from './plan-shipments-dialog.component';
+import { OverbergTripsheetDialogComponent } from './overberg-tripsheet-dialog.component';
 import { ShipmentRouteMapComponent } from './shipment-route-map.component';
 
 type Tab = 'queue' | 'unplanned' | 'shipments' | 'exceptions';
@@ -440,11 +440,9 @@ export class ClientBookingsComponent implements OnInit {
   planSelected() { this.plan(this.unplanned().filter(s => this.selected().has(s.id))); }
   planOne(s: ShipmentSummary) { this.plan([s]); }
   private plan(list: ShipmentSummary[]) {
-    this.dialog.open(PlanShipmentsDialogComponent, { width: '720px', maxWidth: '96vw', data: { shipments: list } })
+    this.dialog.open(OverbergTripsheetDialogComponent, { width: '95vw', maxWidth: '1200px', height: '88vh', data: { preselect: list.map(s => s.id) } })
       .afterClosed().subscribe(res => {
         if (!res) return;
-        this.toast.done(`${list.length} shipment(s) planned onto ${res.loadNumber}; waybills issued`);
-        if (res.warnings?.length) this.toast.warn(res.warnings.join(' '));
         this.detail.set(null); this.loadTab(); this.refreshCounts();
       });
   }

@@ -71,6 +71,18 @@ namespace ProjectTracker.API.DTOs.Logistics.Shipments
         public bool CreateStops { get; set; } = true;
     }
 
+    /// <summary>Create a brand-new load (Overberg tripsheet) from confirmed client bookings in one step.</summary>
+    public class CreateLoadFromShipmentsDto
+    {
+        [Required, MinLength(1)] public List<int> ShipmentIds { get; set; } = new();
+        public int? WarehouseId { get; set; }
+        public int? DriverId { get; set; }
+        public int? VehicleId { get; set; }
+        public DateTime? ScheduledPickupDate { get; set; }
+        public string? SpecialInstructions { get; set; }
+        public string? Priority { get; set; }
+    }
+
     public class DriverScanDto
     {
         [Required] public string ScanId { get; set; } = string.Empty;   // client UUID, idempotency key

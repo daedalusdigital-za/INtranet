@@ -133,14 +133,100 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (load.Status is "Delivered" or "Completed" or "Cancelled") return BadRequest(new { message = $"Load {load.LoadNumber} is {load.Status} and cannot take new shipments." });
 
             var shipments = await Full().Where(s => dto.ShipmentIds.Contains(s.Id)).ToListAsync();
-            var missing = dto.ShipmentIds.Except(shipments.Select(s => s.Id)).ToList();
+            var invalid = ValidateForPlanning(dto.ShipmentIds, shipments);
+            if (invalid != null) return invalid;
+
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            var warnings = await PlanCoreAsync(load, shipments, dto.CreateStops);
+            await tx.CommitAsync();
+
+            var planned = await Full().AsNoTracking().Where(s => dto.ShipmentIds.Contains(s.Id)).ToListAsync();
+            return Ok(new { loadId = load.Id, load.LoadNumber, warnings, shipments = planned.Select(ShipmentMapper.ShipmentSummary) });
+        }
+
+        /// <summary>Overberg tripsheet: create a new load for the given confirmed client bookings and plan them onto it (stops + waybills) in one call.</summary>
+        [HttpPost("/api/logistics/loads/from-shipments")]
+        public async Task<IActionResult> CreateLoadFromShipments([FromBody] CreateLoadFromShipmentsDto dto)
+        {
+            var shipments = await Full().Where(s => dto.ShipmentIds.Contains(s.Id)).ToListAsync();
+            var invalid = ValidateForPlanning(dto.ShipmentIds, shipments);
+            if (invalid != null) return invalid;
+
+            if (dto.DriverId.HasValue && !await _db.Drivers.AnyAsync(d => d.Id == dto.DriverId)) return BadRequest(new { message = "Driver not found" });
+            if (dto.VehicleId.HasValue && !await _db.Vehicles.AnyAsync(v => v.Id == dto.VehicleId)) return BadRequest(new { message = "Vehicle not found" });
+            if (dto.WarehouseId.HasValue && !await _db.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId)) return BadRequest(new { message = "Warehouse not found" });
+
+            var first = shipments.OrderBy(s => s.CollectionDate).First();
+            var last = shipments.OrderByDescending(s => s.RequestedDeliveryDate).First();
+            var singleCustomer = shipments.Select(s => s.Booking.CustomerId).Distinct().Count() == 1 ? shipments[0].Booking.CustomerId : (int?)null;
+
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            var load = new Load
+            {
+                LoadNumber = await NextLoadNumberAsync(),
+                CustomerId = singleCustomer,
+                WarehouseId = dto.WarehouseId,
+                DriverId = dto.DriverId,
+                VehicleId = dto.VehicleId,
+                CreatedByUserId = UserId,
+                Status = dto.DriverId.HasValue ? "Assigned" : "Available",
+                Priority = string.IsNullOrWhiteSpace(dto.Priority) ? "Normal" : dto.Priority,
+                ScheduledPickupDate = dto.ScheduledPickupDate ?? first.CollectionDate,
+                ScheduledDeliveryDate = last.RequestedDeliveryDate,
+                PickupLocation = first.PickupAddress.OneLine,
+                PickupLatitude = first.PickupAddress.Latitude.HasValue ? (decimal)first.PickupAddress.Latitude.Value : null,
+                PickupLongitude = first.PickupAddress.Longitude.HasValue ? (decimal)first.PickupAddress.Longitude.Value : null,
+                DeliveryLocation = last.DeliveryAddress.OneLine,
+                DeliveryLatitude = last.DeliveryAddress.Latitude.HasValue ? (decimal)last.DeliveryAddress.Latitude.Value : null,
+                DeliveryLongitude = last.DeliveryAddress.Longitude.HasValue ? (decimal)last.DeliveryAddress.Longitude.Value : null,
+                SpecialInstructions = dto.SpecialInstructions,
+                Notes = "Overberg tripsheet – created from client bookings",
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _db.Loads.Add(load);
+            await _db.SaveChangesAsync();
+
+            // Load vehicle type for the capacity warning.
+            await _db.Entry(load).Reference(l => l.Vehicle).LoadAsync();
+            if (load.Vehicle != null) await _db.Entry(load.Vehicle).Reference(v => v.VehicleType).LoadAsync();
+            load.Stops ??= new List<LoadStop>();
+
+            var warnings = await PlanCoreAsync(load, shipments, createStops: true);
+            await tx.CommitAsync();
+
+            var planned = await Full().AsNoTracking().Where(s => dto.ShipmentIds.Contains(s.Id)).ToListAsync();
+            return Ok(new { id = load.Id, loadId = load.Id, load.LoadNumber, load.Status, warnings, shipments = planned.Select(ShipmentMapper.ShipmentSummary) });
+        }
+
+        private IActionResult? ValidateForPlanning(List<int> requested, List<Shipment> shipments)
+        {
+            var missing = requested.Except(shipments.Select(s => s.Id)).ToList();
             if (missing.Count > 0) return BadRequest(new { message = "Unknown shipment ids", missing });
             var notReady = shipments.Where(s => s.Status != ShipmentStatus.Confirmed).Select(s => new { s.Id, s.Status }).ToList();
             if (notReady.Count > 0) return BadRequest(new { message = "Only CONFIRMED shipments can be planned", notReady });
+            return null;
+        }
 
+        private async Task<string> NextLoadNumberAsync()
+        {
+            var lastLoad = await _db.Loads.OrderByDescending(l => l.Id).Select(l => new { l.Id, l.LoadNumber }).FirstOrDefaultAsync();
+            int next = 1;
+            if (lastLoad != null)
+            {
+                var n = lastLoad.LoadNumber ?? "";
+                if ((n.StartsWith("RF-") || n.StartsWith("LD-")) && n.Length == 9 && int.TryParse(n[3..], out var num)) next = num + 1;
+                else next = lastLoad.Id + 1;
+            }
+            return $"RF-{next:D6}";
+        }
+
+        /// <summary>Shared planning core: stops, PLANNED, waybill, WAYBILL_ISSUED, load totals. Caller owns the transaction.</summary>
+        private async Task<List<string>> PlanCoreAsync(Load load, List<Shipment> shipments, bool createStops)
+        {
             // Capacity + compatibility warnings (never block – ops decide).
             var warnings = new List<string>();
-            var existing = await _db.Shipments.AsNoTracking().Where(s => s.LoadId == loadId && ShipmentStatus.Active.Contains(s.Status)).ToListAsync();
+            var existing = await _db.Shipments.AsNoTracking().Where(s => s.LoadId == load.Id && ShipmentStatus.Active.Contains(s.Status)).ToListAsync();
             var totalKg = existing.Sum(s => s.TotalWeightKg) + shipments.Sum(s => s.TotalWeightKg);
             var maxKg = load.Vehicle?.VehicleType?.MaxLoadWeight ?? load.VehicleType?.MaxLoadWeight;
             if (maxKg.HasValue && maxKg > 0 && totalKg > maxKg) warnings.Add($"Total weight {totalKg:N0} kg exceeds vehicle capacity {maxKg:N0} kg.");
@@ -149,13 +235,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                 warnings.Add("Hazardous and temperature-controlled cargo share this load.");
 
             var ctx = new TransitionContext(ShipmentEventSource.Ops, UserId, UserName, $"Planned onto load {load.LoadNumber}");
-            var seq = load.Stops.Count == 0 ? 0 : load.Stops.Max(s => s.StopSequence);
+            var seq = load.Stops == null || load.Stops.Count == 0 ? 0 : load.Stops.Max(s => s.StopSequence);
 
-            await using var tx = await _db.Database.BeginTransactionAsync();
             foreach (var s in shipments)
             {
                 s.LoadId = load.Id;
-                if (dto.CreateStops)
+                if (createStops)
                 {
                     var pick = MakeStop(load.Id, ++seq, "Pickup", s.PickupAddress, s);
                     var drop = MakeStop(load.Id, ++seq, "Delivery", s.DeliveryAddress, s);
@@ -174,10 +259,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (load.Status == "Available" || load.Status == "Draft") load.Status = "Pending";
             load.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            var planned = await Full().AsNoTracking().Where(s => dto.ShipmentIds.Contains(s.Id)).ToListAsync();
-            return Ok(new { loadId = load.Id, load.LoadNumber, warnings, shipments = planned.Select(ShipmentMapper.ShipmentSummary) });
+            return warnings;
         }
 
         [HttpGet("/api/logistics/loads/{loadId:int}/shipments")]

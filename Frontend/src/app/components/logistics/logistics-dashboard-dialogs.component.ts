@@ -14044,13 +14044,13 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
             <span class="ai-badge">AI Powered</span>
           </div>
           
-          <div class="type-card suggests-card" (click)="selectType('welly-suggests')" matTooltip="Welly analyzes all pending invoices and suggests optimal tripsheet groupings by warehouse">
+          <div class="type-card suggests-card" (click)="selectType('overberg')" matTooltip="Build a tripsheet from confirmed Rocket Freight client bookings — stops are added and waybills issued automatically">
             <div class="type-icon suggests">
-              <mat-icon>lightbulb</mat-icon>
+              <mat-icon>local_shipping</mat-icon>
             </div>
-            <h3>Welly Suggests</h3>
-            <p>AI batches pending invoices by warehouse &amp; region into ready-to-create tripsheets</p>
-            <span class="ai-badge suggests-badge">Smart Batching</span>
+            <h3>Overberg Tripsheets</h3>
+            <p>Pick confirmed client bookings, choose driver &amp; vehicle (or add to an active load) &mdash; waybills are issued on save</p>
+            <span class="ai-badge suggests-badge">Client bookings</span>
           </div>
         </div>
       </div>
@@ -14185,7 +14185,7 @@ export class TripsheetTypeDialog {
     public dialogRef: MatDialogRef<TripsheetTypeDialog>
   ) {}
 
-  selectType(type: 'import' | 'pad' | 'manual' | 'transfer' | 'welly' | 'welly-suggests' | 'ai-builder'): void {
+  selectType(type: 'import' | 'pad' | 'manual' | 'transfer' | 'welly' | 'welly-suggests' | 'ai-builder' | 'overberg'): void {
     this.dialogRef.close({ type });
   }
 }

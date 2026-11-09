@@ -125,6 +125,10 @@ export class ShipmentService {
   planOntoLoad(loadId: number, shipmentIds: number[]) {
     return this.http.post<{ loadId: number; loadNumber: string; warnings: string[]; shipments: ShipmentSummary[] }>(`${this.base}/loads/${loadId}/shipments`, { shipmentIds, createStops: true });
   }
+  /** Overberg tripsheet: create a new load from confirmed client bookings (stops + waybills issued server-side). */
+  createLoadFromShipments(body: { shipmentIds: number[]; warehouseId?: number | null; driverId?: number | null; vehicleId?: number | null; scheduledPickupDate?: string | null; specialInstructions?: string | null }) {
+    return this.http.post<{ id: number; loadId: number; loadNumber: string; status: string; warnings: string[]; shipments: ShipmentSummary[] }>(`${this.base}/loads/from-shipments`, body);
+  }
   forLoad(loadId: number) { return this.http.get<ShipmentSummary[]>(`${this.base}/loads/${loadId}/shipments`); }
 
   // Documents (blob, auth header added by interceptor)
