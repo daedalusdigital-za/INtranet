@@ -39,6 +39,7 @@ import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { sanitizeHtmlDocument } from '../../utils/sanitize-html';
 import { GoogleMapsLoaderService } from '../../services/google-maps-loader.service';
+import { ShipmentService } from '../../services/shipment.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of, Subject, firstValueFrom } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
@@ -9008,7 +9009,7 @@ export class AddDeliveryNoteDialog {
       <div class="dialog-content">
         <mat-stepper #stepper linear (selectionChange)="onStepChange($event)">
           <!-- Step 1: Select Invoices/Stops -->
-          <mat-step [completed]="selectedStops.length > 0" label="Select Stops">
+          <mat-step [completed]="selectedStops.length > 0 || selectedPortalShipments.length > 0" label="Select Stops">
             <div class="step-content">
               <div class="source-panel">
                 <div class="panel-header">
@@ -9034,6 +9035,36 @@ export class AddDeliveryNoteDialog {
                 </div>
                 @if (loadingProvinces) {
                   <app-skeleton-rows [rows]="2" [avatar]="false"></app-skeleton-rows>
+                }
+                @if (availablePortalShipments().length > 0) {
+                  <div class="portal-bookings">
+                    <div class="portal-bookings-head" (click)="showPortalBookings = !showPortalBookings">
+                      <mat-icon>local_shipping</mat-icon>
+                      <b>Client bookings ({{ availablePortalShipments().length }})</b>
+                      <span class="muted">confirmed in the portal, not on a trip sheet yet</span>
+                      <span class="spacer"></span>
+                      <mat-icon>{{ showPortalBookings ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    </div>
+                    @if (showPortalBookings) {
+                      @for (s of availablePortalShipments(); track s.id) {
+                        <div class="invoice-item portal-item">
+                          <div class="invoice-main">
+                            <span class="invoice-number">{{ s.bookingNo }}</span>
+                            <span class="customer-name">{{ s.customerName }}</span>
+                            @if (s.delivery?.province) { <span class="province-badge">{{ s.delivery.province }}</span> }
+                          </div>
+                          <div class="invoice-details">
+                            <span class="product">{{ s.pickup?.city || s.pickup?.suburb }} → {{ s.delivery?.city || s.delivery?.suburb }}</span>
+                            <span class="quantity">{{ s.totalWeightKg | number:'1.0-0' }} kg · {{ s.totalPallets }} plt / {{ s.totalParcels }} pcl</span>
+                            <span class="city">Collect {{ s.collectionDate | date:'dd MMM' }}</span>
+                          </div>
+                          <button aria-label="Add to trip sheet" mat-icon-button class="add-btn" (click)="addPortalShipment(s)" matTooltip="Add to trip sheet (waybill is issued on save)">
+                            <mat-icon class="add-icon">add_circle</mat-icon>
+                          </button>
+                        </div>
+                      }
+                    }
+                  </div>
                 }
                 <cdk-virtual-scroll-viewport itemSize="72" class="invoice-list">
                   @if (totalFilteredCount > 200) {
@@ -9149,17 +9180,36 @@ export class AddDeliveryNoteDialog {
                       </button>
                     </div>
                   }
-                  @if (selectedStops.length === 0) {
+                  @if (selectedStops.length === 0 && selectedPortalShipments.length === 0) {
                     <app-empty-state icon="add_location" title="No stops yet" [compact]="true"
-                                     message="Select invoices from the left to add stops."></app-empty-state>
+                                     message="Select invoices or client bookings from the left to add stops."></app-empty-state>
                   }
                 </div>
+                @if (selectedPortalShipments.length > 0) {
+                  <div class="portal-selected">
+                    <div class="portal-bookings-head"><mat-icon>local_shipping</mat-icon> <b>Client bookings on this trip ({{ selectedPortalShipments.length }})</b>
+                      <span class="muted">pickup + delivery stops and waybills are added when you save</span></div>
+                    @for (s of selectedPortalShipments; track s.id) {
+                      <div class="stop-item portal-item">
+                        <div class="stop-sequence"><mat-icon>local_shipping</mat-icon></div>
+                        <div class="stop-info">
+                          <span class="stop-customer">{{ s.customerName }} · {{ s.bookingNo }}</span>
+                          <span class="stop-address">{{ s.pickup?.oneLine || s.pickup?.line1 }} → {{ s.delivery?.oneLine || s.delivery?.line1 }}</span>
+                          <span class="stop-invoice">{{ s.totalWeightKg | number:'1.0-0' }} kg · collect {{ s.collectionDate | date:'dd MMM' }}</span>
+                        </div>
+                        <button aria-label="Remove" mat-icon-button (click)="removePortalShipment(s)" matTooltip="Remove">
+                          <mat-icon>remove_circle</mat-icon>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
               </div>
             </div>
 
             <div class="step-actions">
               <button mat-button mat-dialog-close>Cancel</button>
-              <button mat-raised-button color="primary" matStepperNext [disabled]="selectedStops.length === 0">
+              <button mat-raised-button color="primary" matStepperNext [disabled]="selectedStops.length === 0 && selectedPortalShipments.length === 0">
                 Next <mat-icon>arrow_forward</mat-icon>
               </button>
             </div>
@@ -9858,6 +9908,24 @@ export class AddDeliveryNoteDialog {
     .invoice-list {
       contain: strict; /* Performance optimization */
     }
+    .portal-bookings, .portal-selected {
+      margin: 12px 12px 0;
+      border: 1px solid var(--color-line);
+      border-radius: 10px;
+      background: var(--color-surface);
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .portal-selected { margin: 0 12px 12px; max-height: none; }
+    .portal-bookings-head {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer;
+      font-size: var(--text-sm); color: var(--color-text);
+      position: sticky; top: 0; background: var(--color-surface); border-bottom: 1px solid var(--color-line);
+    }
+    .portal-bookings-head .muted { color: var(--color-text-2); font-size: var(--text-xs); }
+    .portal-bookings-head .spacer { flex: 1; }
+    .portal-item { border-left: 3px solid var(--color-primary, #033142); }
+    .portal-item .stop-sequence mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .scroll-hint {
       display: flex;
       align-items: center;
@@ -10847,6 +10915,12 @@ export class AddDeliveryNoteDialog {
 export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
   invoiceSearch = '';
   selectedStops: any[] = [];
+  // Rocket Freight portal bookings (CONFIRMED, not on a load). Planned via POST /loads/{id}/shipments after the load is saved,
+  // which adds pickup/delivery stops and issues waybills server-side.
+  portalShipments: any[] = [];
+  selectedPortalShipments: any[] = [];
+  showPortalBookings = true;
+  private readonly shipmentSvc = inject(ShipmentService);
   selectedWarehouse: any = null;
   selectedDriver: any = null;
   selectedVehicle: any = null;
@@ -11117,10 +11191,49 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     
     // Pre-filter invoices to only pending ones (performance optimization)
     this._pendingInvoices = (data.invoices || []).filter((inv: any) => inv.status === 'Pending');
+
+    // Confirmed portal bookings waiting to be planned
+    this.shipmentSvc.unplanned().subscribe({
+      next: rows => { this.portalShipments = rows || []; },
+      error: () => { this.portalShipments = []; }
+    });
   }
   
   // Pre-filtered pending invoices (computed once)
   private _pendingInvoices: any[] = [];
+
+  availablePortalShipments(): any[] {
+    const sel = new Set(this.selectedPortalShipments.map(s => s.id));
+    const q = (this.invoiceSearch || '').trim().toLowerCase();
+    return this.portalShipments.filter(s => !sel.has(s.id) && (!q || [s.bookingNo, s.customerName, s.clientReference, s.delivery?.city, s.pickup?.city]
+      .some((x: string | null | undefined) => x?.toLowerCase().includes(q))));
+  }
+  addPortalShipment(s: any): void {
+    if (this.selectedPortalShipments.some(x => x.id === s.id)) return;
+    this.selectedPortalShipments = [...this.selectedPortalShipments, s];
+  }
+  removePortalShipment(s: any): void {
+    this.selectedPortalShipments = this.selectedPortalShipments.filter(x => x.id !== s.id);
+  }
+  /** After the load is created/updated, put the selected portal shipments on it (server adds stops + issues waybills). */
+  private planPortalShipments(loadId: number): Promise<void> {
+    const ids = this.selectedPortalShipments.map(s => s.id);
+    if (!loadId || ids.length === 0) return Promise.resolve();
+    return new Promise(resolve => {
+      this.shipmentSvc.planOntoLoad(loadId, ids).subscribe({
+        next: r => {
+          const n = r?.shipments?.length ?? ids.length;
+          this.toast.done(`${n} client booking(s) planned – waybill${n === 1 ? '' : 's'} issued`);
+          (r?.warnings || []).forEach((w: string) => this.toast.warn(w));
+          resolve();
+        },
+        error: e => {
+          this.toast.error('Trip sheet saved, but client bookings could not be planned: ' + (e?.error?.message || e?.error?.error || e?.message || 'Unknown error'));
+          resolve();
+        }
+      });
+    });
+  }
 
   ngAfterViewInit(): void {
     // Map will be initialized when step 2 is active
@@ -13546,8 +13659,9 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const httpMethod = isUpdate ? this.http.put.bind(this.http) : this.http.post.bind(this.http);
     
     httpMethod(apiUrl, payload).subscribe({
-      next: (result: any) => {
+      next: async (result: any) => {
         const loadId = isUpdate ? loadIdToUpdate : result.id;
+        await this.planPortalShipments(loadId);
         // Download the PDF
         this.http.get(`${environment.apiUrl}/logistics/tripsheet/${loadId}/pdf`, { responseType: 'text' }).subscribe({
           next: (html) => {
@@ -13664,8 +13778,9 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
     const httpMethod = isUpdate ? this.http.put.bind(this.http) : this.http.post.bind(this.http);
     
     httpMethod(apiUrl, payload).subscribe({
-      next: (result: any) => {
+      next: async (result: any) => {
         const loadId = isUpdate ? loadIdToUpdate : result.id;
+        await this.planPortalShipments(loadId);
         
         // Send email with the tripsheet
         this.http.post(`${environment.apiUrl}/logistics/tripsheet/${loadId}/email`, {
