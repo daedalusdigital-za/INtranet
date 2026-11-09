@@ -6,6 +6,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDialog } from '@angular/material/dialog';
+import { OverbergTripsheetDialogComponent } from '../client-bookings/overberg-tripsheet-dialog.component';
 import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
 import { KpiItem, KpiStripComponent } from '../../../ui/kpi-strip/kpi-strip.component';
 import { StatusChipComponent } from '../../../ui/status-chip/status-chip.component';
@@ -14,10 +16,10 @@ import { ToastService } from '../../../ui/toast.service';
 import { ConfirmService } from '../../../ui/confirm.service';
 import {
   PortalPendingBooking, PortalPendingWaybill, PortalSummary, PortalSupportMessage, PortalSupportThreadRow, PortalTripsheet,
-  PortalTripsheetWaybill, PortalUserRow, SHIPMENT_STATUS_LABEL, ShipmentService, ShipmentStatus
+  PortalTripsheetWaybill, PortalUserRow, SHIPMENT_STATUS_LABEL, ShipmentService, ShipmentStatus, ShipmentSummary
 } from '../../../services/shipment.service';
 
-type View = 'pending' | 'tripsheets' | 'support' | 'logins';
+type View = 'pending' | 'ready' | 'tripsheets' | 'support' | 'logins';
 
 /**
  * Overberg Tripsheets – the intranet side of the Rocket Freight client portal.
@@ -53,7 +55,7 @@ type View = 'pending' | 'tripsheets' | 'support' | 'logins';
             <input class="search" type="search" placeholder="Booking no, reference or client…" [(ngModel)]="pendingSearch" (keyup.enter)="loadPending()" />
             <button mat-stroked-button (click)="loadPending()"><mat-icon>search</mat-icon> Search</button>
             <span class="spacer"></span>
-            <span class="muted">Waybills a client placed on the portal. Confirming moves them to <b>Confirmed</b> and emails the client; they can then be planned onto a tripsheet from Client bookings → Unplanned.</span>
+            <span class="muted">Waybills a client placed on the portal. Confirming moves them to <b>Confirmed</b> and emails the client; they then appear under <b>Ready for tripsheet</b>.</span>
           </div>
           @if (loadingPending()) { <app-skeleton-rows [rows]="4"></app-skeleton-rows> }
           @else if (pending().length === 0) {
@@ -108,6 +110,46 @@ type View = 'pending' | 'tripsheets' | 'support' | 'logins';
         </section>
       }
 
+      <!-- ============ READY FOR TRIPSHEET ============ -->
+      @if (view() === 'ready') {
+        <section class="card">
+          <div class="toolbar">
+            <input class="search" type="search" placeholder="Booking no, reference, client or town…" [(ngModel)]="readySearch" />
+            <label><input type="checkbox" [checked]="allReadySelected()" (change)="toggleAllReady($any($event.target).checked)" /> Select all</label>
+            <span class="spacer"></span>
+            <span class="muted">{{ readySelected().size }} selected · {{ readySelectedKg() | number:'1.0-0' }} kg</span>
+            <button mat-flat-button color="primary" (click)="createTripsheet()" [disabled]="ready().length === 0"><mat-icon>local_shipping</mat-icon> {{ readySelected().size ? 'Create tripsheet (' + readySelected().size + ')' : 'Create tripsheet' }}</button>
+          </div>
+          @if (loadingReady()) { <app-skeleton-rows [rows]="4"></app-skeleton-rows> }
+          @else if (readyVisible().length === 0) {
+            <app-empty-state icon="route" title="Nothing ready to plan" message="Confirmed portal waybills that are not on a tripsheet yet appear here. Accept waybills under Awaiting confirmation first."></app-empty-state>
+          } @else {
+            <table class="tbl">
+              <thead><tr><th></th><th>Waybill</th><th>Client</th><th>From</th><th>To</th><th>Collect</th><th>Deliver by</th><th>Cargo</th><th>Handling</th><th></th></tr></thead>
+              <tbody>
+                @for (s of readyVisible(); track s.id) {
+                  <tr [class.sel]="readySelected().has(s.id)">
+                    <td><input type="checkbox" [checked]="readySelected().has(s.id)" (change)="toggleReady(s.id)" /></td>
+                    <td><span class="mono">#{{ s.id }}</span><div class="muted">{{ s.bookingNo }}{{ s.clientReference ? ' · ' + s.clientReference : '' }}</div></td>
+                    <td>{{ s.customerName }}</td>
+                    <td>{{ place(s.pickup) }}<div class="muted">{{ s.pickup.contactName }} {{ s.pickup.contactPhone }}</div></td>
+                    <td>{{ place(s.delivery) }}<div class="muted">{{ s.delivery.contactName }} {{ s.delivery.contactPhone }}</div></td>
+                    <td>{{ s.collectionDate | date:'EEE dd MMM' }}</td>
+                    <td [class.late]="isSoon(s.requestedDeliveryDate)">{{ s.requestedDeliveryDate | date:'EEE dd MMM' }}</td>
+                    <td>{{ cargo(s) }}</td>
+                    <td>{{ handlingS(s) }}</td>
+                    <td class="row-actions">
+                      <button mat-flat-button color="primary" (click)="createTripsheet([s.id])"><mat-icon>local_shipping</mat-icon> Tripsheet</button>
+                      <button mat-icon-button matTooltip="Open in Client bookings" (click)="openShipment(s.id)"><mat-icon>open_in_new</mat-icon></button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+      }
+
       <!-- ============ TRIPSHEETS ============ -->
       @if (view() === 'tripsheets') {
         <section class="card">
@@ -126,7 +168,7 @@ type View = 'pending' | 'tripsheets' | 'support' | 'logins';
           </div>
           @if (loadingTripsheets()) { <app-skeleton-rows [rows]="5"></app-skeleton-rows> }
           @else if (tripsheets().length === 0) {
-            <app-empty-state icon="route" title="No Overberg tripsheets" message="A tripsheet shows here as soon as a confirmed portal waybill is planned onto a load (Client bookings → Unplanned → Plan onto load)."></app-empty-state>
+            <app-empty-state icon="route" title="No Overberg tripsheets" message="A tripsheet shows here as soon as a confirmed portal waybill is put on one (Ready for tripsheet → Create tripsheet)."></app-empty-state>
           } @else {
             <table class="tbl">
               <thead><tr><th></th><th>Tripsheet</th><th>Date</th><th>Driver / vehicle</th><th>Warehouse</th><th>Clients</th><th>Portal waybills</th><th>Stops</th><th>Status</th><th></th></tr></thead>
@@ -315,6 +357,7 @@ type View = 'pending' | 'tripsheets' | 'support' | 'logins';
     .chev { transition: transform .15s; } .chev.open { transform: rotate(90deg); }
     .muted { color: var(--color-text-2, var(--color-text-2)); font-size: 12px; }
     .late { color: var(--color-danger, #b3261e); font-weight: 600; }
+    tr.sel td { background: var(--color-primary-soft, #eaf3f8); }
     .link { color: var(--color-primary, var(--color-brand)); font-weight: 600; cursor: pointer; text-decoration: none; }
     .mono { font-family: ui-monospace, monospace; font-size: 12px; }
     .row-actions { white-space: nowrap; text-align: right; }
@@ -352,6 +395,7 @@ export class OverbergTripsheetsComponent implements OnInit {
   private toast = inject(ToastService);
   private confirm = inject(ConfirmService);
   private router = inject(Router);
+  private dialog = inject(MatDialog);
 
   view = signal<View>('pending');
   busy = signal(false);
@@ -359,6 +403,7 @@ export class OverbergTripsheetsComponent implements OnInit {
 
   readonly views: { key: View; label: string; icon: string; hot: boolean; count: () => number | null }[] = [
     { key: 'pending', label: 'Awaiting confirmation', icon: 'pending_actions', hot: true, count: () => this.summary()?.waybillsAwaiting ?? null },
+    { key: 'ready', label: 'Ready for tripsheet', icon: 'local_shipping', hot: true, count: () => this.summary()?.unplanned ?? null },
     { key: 'tripsheets', label: 'Tripsheets', icon: 'route', hot: false, count: () => this.summary()?.onTripsheets ?? null },
     { key: 'support', label: 'Support', icon: 'forum', hot: true, count: () => this.summary()?.unreadSupport ?? null },
     { key: 'logins', label: 'Portal logins', icon: 'badge', hot: false, count: () => this.summary()?.portalUsers ?? null },
@@ -378,6 +423,14 @@ export class OverbergTripsheetsComponent implements OnInit {
 
   // pending
   pending = signal<PortalPendingBooking[]>([]); loadingPending = signal(false); pendingSearch = '';
+  // ready for tripsheet (CONFIRMED, no load)
+  ready = signal<ShipmentSummary[]>([]); loadingReady = signal(false); readySearch = ''; readySelected = signal(new Set<number>());
+  readyVisible = computed(() => {
+    const q = this.readySearch.trim().toLowerCase();
+    return this.ready().filter(s => !q || [s.bookingNo, s.clientReference, s.customerName, s.pickup?.city, s.pickup?.suburb, s.delivery?.city, s.delivery?.suburb].some(x => x?.toLowerCase().includes(q)));
+  });
+  allReadySelected = computed(() => this.readyVisible().length > 0 && this.readyVisible().every(s => this.readySelected().has(s.id)));
+  readySelectedKg = computed(() => this.ready().filter(s => this.readySelected().has(s.id)).reduce((t, s) => t + (s.totalWeightKg || 0), 0));
   // tripsheets
   tripsheets = signal<PortalTripsheet[]>([]); loadingTripsheets = signal(false); tsSearch = ''; tsStatus = 'active'; tsFrom = ''; tsTo = '';
   expanded = signal(new Set<number>());
@@ -400,6 +453,7 @@ export class OverbergTripsheetsComponent implements OnInit {
   private loadView(): void {
     switch (this.view()) {
       case 'pending': return this.loadPending();
+      case 'ready': return this.loadReady();
       case 'tripsheets': return this.loadTripsheets();
       case 'support': return this.loadThreads();
       case 'logins': return this.loadUsers();
@@ -421,6 +475,37 @@ export class OverbergTripsheetsComponent implements OnInit {
   isSoon(d: string): boolean { const t = new Date(d).getTime() - Date.now(); return t < 36 * 3600 * 1000; }
   isFuture(d: string): boolean { return new Date(d).getTime() > Date.now(); }
   openCount(b: PortalPendingBooking): number { return b.waybills.filter(w => w.status === 'BOOKED').length; }
+  handlingS(s: ShipmentSummary): string {
+    return [s.fragile ? 'Fragile' : '', s.hazardous ? 'Haz ' + (s.hazardClass ?? '') : '', s.temperatureRange ? 'Temp ' + s.temperatureRange : ''].filter(Boolean).join(' · ') || '—';
+  }
+
+  // ---------- ready for tripsheet
+  loadReady(): void {
+    this.loadingReady.set(true);
+    this.svc.unplanned().subscribe({
+      next: rows => {
+        // Only portal-sourced bookings belong on this page; ops-created bookings live under Client bookings.
+        this.ready.set(rows);
+        const ids = new Set(rows.map(r => r.id));
+        this.readySelected.set(new Set([...this.readySelected()].filter(i => ids.has(i))));
+        this.loadingReady.set(false);
+      },
+      error: e => { this.loadingReady.set(false); this.toast.error(this.err(e, 'Could not load confirmed waybills')); }
+    });
+  }
+  toggleReady(id: number): void { const s = new Set(this.readySelected()); s.has(id) ? s.delete(id) : s.add(id); this.readySelected.set(s); }
+  toggleAllReady(on: boolean): void { const s = new Set(this.readySelected()); this.readyVisible().forEach(x => on ? s.add(x.id) : s.delete(x.id)); this.readySelected.set(s); }
+  createTripsheet(ids?: number[]): void {
+    const preselect = ids ?? [...this.readySelected()];
+    this.dialog.open(OverbergTripsheetDialogComponent, { width: '95vw', maxWidth: '1200px', height: '88vh', data: { preselect } })
+      .afterClosed().subscribe(res => {
+        if (!res) return;
+        this.readySelected.set(new Set());
+        this.loadReady();
+        this.svc.portalSummary().subscribe({ next: s => this.summary.set(s), error: () => {} });
+        this.setView('tripsheets');
+      });
+  }
 
   // ---------- pending
   loadPending(): void {
