@@ -58,7 +58,8 @@ services:
       - Cors__AllowedOrigins__8=${PORTAL_ORIGIN_1:-https://portal.rocketfreight.co.za}
       - Cors__AllowedOrigins__9=${PORTAL_ORIGIN_2:-}
       - Portal__EdgeKey=${PORTAL_EDGE_KEY:-}
-      - Portal__PublicUrl=${PORTAL_ORIGIN_1:-https://portal.rocketfreight.co.za}
+      - Portal__PublicUrl=${PORTAL_PUBLIC_URL:-https://portal.rocketfreight.co.za}
+      - Portal__PublicApiBase=${PORTAL_PUBLIC_API_BASE:-}
       - DocumentsPath=/app/documents
       - QuotesPath=/app/quotes
       - DownloadsPath=/app/downloads
