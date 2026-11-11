@@ -252,6 +252,8 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Logistics.Shipments.PortalNotificationPref> PortalNotificationPrefs { get; set; }
         public DbSet<Models.Logistics.Shipments.PortalSupportMessage> PortalSupportMessages { get; set; }
         public DbSet<Models.Logistics.Shipments.PortalQuote> PortalQuotes { get; set; }
+        public DbSet<Models.Finance.ArAgingSnapshot> ArAgingSnapshots { get; set; }
+        public DbSet<Models.Finance.ArAgingItem> ArAgingItems { get; set; }
 
         // Flows (automated business processes)
         public DbSet<Models.Flows.FlowDefinition> FlowDefinitions { get; set; }

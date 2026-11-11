@@ -593,6 +593,20 @@
     </div>
   </mat-tab>
 
+  <!-- ═══════════ AGING ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">hourglass_bottom</mat-icon> Aging
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Debtors Age Analysis</h2>
+        <p>Who owes us, and for how long. Upload the Sage aging workbook for each company; every open invoice is bucketed into Current / 30 / 60 / 90 / 120+ days with drill-down to the documents and whether a POD is on file.</p>
+      </div>
+      @if (tabIndex === 4) { <app-finance-aging></app-finance-aging> }
+    </div>
+  </mat-tab>
+
   <!-- ═══════════ VAULT ═══════════ -->
   <mat-tab>
     <ng-template mat-tab-label>
@@ -604,7 +618,7 @@
         <h2>Compliance Vault</h2>
         <p>Statutory documents every company must keep current — tax clearance, B-BBEE, CSD, bank confirmation. Finance owns the renewals; the Tenders team reads the same vault.</p>
       </div>
-      @if (tabIndex === 4) { <app-finance-vault></app-finance-vault> }
+      @if (tabIndex === 5) { <app-finance-vault></app-finance-vault> }
     </div>
   </mat-tab>
 

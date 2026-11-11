@@ -21,10 +21,11 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
 import { environment } from '../../../environments/environment';
 import { FinancePodsComponent } from './finance-pods.component';
 import { FinanceVaultComponent } from './finance-vault.component';
+import { FinanceAgingComponent } from './finance-aging.component';
 import { TenderService } from '../../services/tender.service';
 
 /** Tab order in finance.component.html */
-const TABS = ['overview', 'approvals', 'invoices', 'pods', 'vault'] as const;
+const TABS = ['overview', 'approvals', 'invoices', 'pods', 'aging', 'vault'] as const;
 type FinanceTab = typeof TABS[number];
 
 interface BookInvoice {
@@ -84,7 +85,8 @@ interface RequestedPayment {
     NavbarComponent,
     PageHeaderComponent,
     FinancePodsComponent,
-    FinanceVaultComponent
+    FinanceVaultComponent,
+    FinanceAgingComponent
   ],
   templateUrl: './finance.component.html',
   styleUrls: ['./finance.component.scss']
