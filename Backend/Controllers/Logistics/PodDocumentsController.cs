@@ -46,6 +46,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             [FromQuery] int? month,
             [FromQuery] int? year,
             [FromQuery] string? linkStatus,
+            [FromQuery] string? search,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 50)
         {
@@ -54,6 +55,20 @@ namespace ProjectTracker.API.Controllers.Logistics
                     .ThenInclude(l => l.Invoice)
                 .AsQueryable();
 
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim();
+                query = query.Where(p =>
+                    (p.PodNumber != null && p.PodNumber.Contains(s)) ||
+                    (p.DriverName != null && p.DriverName.Contains(s)) ||
+                    (p.FileName != null && p.FileName.Contains(s)) ||
+                    (p.OriginalFileName != null && p.OriginalFileName.Contains(s)) ||
+                    (p.Notes != null && p.Notes.Contains(s)) ||
+                    (p.Region != null && p.Region.Contains(s)) ||
+                    (p.Load != null && p.Load.LoadNumber.Contains(s)) ||
+                    (p.Invoice != null && p.Invoice.TransactionNumber.Contains(s)) ||
+                    p.InvoiceLinks.Any(l => (l.InvoiceNumber != null && l.InvoiceNumber.Contains(s)) || (l.Invoice != null && l.Invoice.TransactionNumber.Contains(s))));
+            }
             if (!string.IsNullOrEmpty(region))
                 query = query.Where(p => p.Region == region);
 

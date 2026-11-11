@@ -1328,6 +1328,13 @@
                   <!-- POD Toolbar -->
                   <div class="pod-toolbar">
                     <div class="pod-filters">
+                      <mat-form-field appearance="outline" class="pod-filter-field pod-search-field">
+                        <mat-label>Search PODs</mat-label>
+                        <mat-icon matPrefix>search</mat-icon>
+                        <input matInput [(ngModel)]="podSearch" (ngModelChange)="podSearchChanged()" (keyup.enter)="podFilterChanged()" placeholder="Invoice #, POD #, tripsheet, driver, file…" />
+                        @if (podSearch) { <button matSuffix mat-icon-button aria-label="Clear search" (click)="podSearch = ''; podFilterChanged()"><mat-icon>close</mat-icon></button> }
+                      </mat-form-field>
+
                       <mat-form-field appearance="outline" class="pod-filter-field">
                         <mat-label>Region</mat-label>
                         <mat-select [(ngModel)]="podRegionFilter" (selectionChange)="podFilterChanged()">

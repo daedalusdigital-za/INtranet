@@ -3656,6 +3656,12 @@
       width: 200px;
     }
 
+    .pod-search-field {
+      width: 300px;
+      flex: 1 1 260px;
+      max-width: 420px;
+    }
+
     .pod-actions {
       display: flex;
       align-items: center;

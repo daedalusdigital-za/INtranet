@@ -71,8 +71,8 @@ interface PodSummary {
     <div class="fp-toolbar">
       <div class="fp-search">
         <mat-icon>search</mat-icon>
-        <input type="text" placeholder="Invoice #, POD #, driver, file…" [ngModel]="search()" (ngModelChange)="search.set($event)" (keyup.enter)="reload()" />
-        @if (search()) { <button aria-label="Clear" mat-icon-button (click)="search.set(''); reload()"><mat-icon>close</mat-icon></button> }
+        <input type="text" placeholder="Search invoice #, POD #, tripsheet, driver, file, notes…" [ngModel]="search()" (ngModelChange)="onSearch($event)" (keyup.enter)="reload()" />
+        @if (search()) { <button aria-label="Clear" mat-icon-button (click)="onSearch('')"><mat-icon>close</mat-icon></button> }
       </div>
       <select [ngModel]="region()" (ngModelChange)="region.set($event); reload()" aria-label="Region">
         <option value="">All regions</option>
@@ -309,22 +309,20 @@ export class FinancePodsComponent implements OnInit {
     if (this.driver()) params = params.set('driverName', this.driver());
     if (this.linkStatus()) params = params.set('linkStatus', this.linkStatus());
     if (this.monthKey()) { const [y, m] = this.monthKey().split('-'); params = params.set('year', y).set('month', m); }
+    const q = this.search().trim();
+    if (q) params = params.set('search', q);
     this.http.get<{ data: Pod[]; total: number }>(`${this.api}/PodDocuments`, { params }).subscribe({
-      next: r => {
-        let data = r.data ?? [];
-        const q = this.search().trim().toLowerCase();
-        if (q) {
-          data = data.filter(p =>
-            (p.podNumber ?? '').toLowerCase().includes(q) ||
-            (p.driverName ?? '').toLowerCase().includes(q) ||
-            (p.originalFileName ?? p.fileName ?? '').toLowerCase().includes(q) ||
-            (p.loadNumber ?? '').toLowerCase().includes(q) ||
-            this.invoiceNumbers(p).some(n => n.toLowerCase().includes(q)));
-        }
-        this.rows.set(data); this.total.set(q ? data.length : r.total ?? data.length); this.loading.set(false);
-      },
+      next: r => { this.rows.set(r.data ?? []); this.total.set(r.total ?? (r.data ?? []).length); this.loading.set(false); },
       error: () => { this.loading.set(false); this.toast.error("Couldn't load PODs. Try again."); }
     });
+  }
+
+  private searchTimer: any;
+  onSearch(v: string): void {
+    this.search.set(v ?? '');
+    this.pageIndex.set(0);
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => this.reload(), 300);
   }
 
   setLink(v: '' | 'linked' | 'not-linked'): void { this.linkStatus.set(v); this.pageIndex.set(0); this.reload(); }

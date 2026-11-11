@@ -155,6 +155,14 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
     this.loadPodDocuments();
   }
 
+  /** Search-as-you-type for PODs (debounced, server-side). */
+  podSearch = '';
+  private podSearchTimer: any;
+  podSearchChanged(): void {
+    clearTimeout(this.podSearchTimer);
+    this.podSearchTimer = setTimeout(() => this.podFilterChanged(), 300);
+  }
+
   /** Filters change from many fields and buttons, so look for a change once per check and follow it in the address. */
   ngDoCheck(): void {
     const key = JSON.stringify(this.currentQuery(this.section()));
@@ -4212,6 +4220,7 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
     if (this.podRegionFilter) params += `&region=${this.podRegionFilter}`;
     if (this.podDriverFilter) params += `&driverName=${encodeURIComponent(this.podDriverFilter)}`;
     if (this.podLinkFilter) params += `&linkStatus=${this.podLinkFilter}`;
+    if (this.podSearch?.trim()) params += `&search=${encodeURIComponent(this.podSearch.trim())}`;
 
     if (this.podMonthFilter) {
       const [m, y] = this.podMonthFilter.split('-');

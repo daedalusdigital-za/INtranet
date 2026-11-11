@@ -480,6 +480,14 @@ export class LogisticsDashboardComponent implements OnInit, OnDestroy {
     this.filterChanged();
   }
 
+  /** Search-as-you-type for PODs (debounced, server-side). */
+  podSearch = '';
+  private podSearchTimer: any;
+  podSearchChanged(): void {
+    clearTimeout(this.podSearchTimer);
+    this.podSearchTimer = setTimeout(() => this.podFilterChanged(), 300);
+  }
+
   /** Opens a load through its own address, so the address can be shared and Back closes it. */
   openLoad(load: ActiveLoad): void {
     this.refAddedHere = true;
@@ -4458,6 +4466,7 @@ Notes: ${record.notes || 'No notes'}
     if (this.podRegionFilter) params += `&region=${this.podRegionFilter}`;
     if (this.podDriverFilter) params += `&driverName=${encodeURIComponent(this.podDriverFilter)}`;
     if (this.podLinkFilter) params += `&linkStatus=${this.podLinkFilter}`;
+    if (this.podSearch?.trim()) params += `&search=${encodeURIComponent(this.podSearch.trim())}`;
     
     if (this.podMonthFilter) {
       const [m, y] = this.podMonthFilter.split('-');
