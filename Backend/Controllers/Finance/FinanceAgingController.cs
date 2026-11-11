@@ -96,7 +96,9 @@ namespace ProjectTracker.API.Controllers.Finance
             }
             if (items.Count == 0) return BadRequest(new { message = "No customer documents were found. The workbook needs the 'Customer Transaction' sheet with Document Number/Type, Doc date, Due date, Days over, Transaction amount and Balance columns." });
 
-            var asOf = (asOfDate ?? items.Where(i => i.DocumentDate.HasValue).Max(i => i.DocumentDate!.Value)).Date;
+            var dated = items.Where(i => i.DocumentDate.HasValue).ToList();
+            if (asOfDate == null && dated.Count == 0) return BadRequest(new { message = "Documents were found but none had a readable document date. Check the Doc. Date column format, or supply the as-of date." });
+            var asOf = (asOfDate ?? dated.Max(i => i.DocumentDate!.Value)).Date;
             foreach (var i in items)
             {
                 var basis = i.DocumentDate ?? asOf;
@@ -186,7 +188,9 @@ namespace ProjectTracker.API.Controllers.Finance
         {
             if (string.IsNullOrWhiteSpace(s)) return null;
             s = s.Trim();
-            if (DateTime.TryParseExact(s, new[] { "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd", "dd-MM-yyyy", "dd/MM/yyyy HH:mm:ss" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)) return d.Date;
+            if (DateTime.TryParseExact(s, new[] { "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd", "dd-MM-yyyy", "dd/MM/yyyy HH:mm:ss", "yyyy/MM/dd", "yyyy/M/d", "yyyy-MM-dd HH:mm:ss", "yyyy/MM/dd HH:mm:ss" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)) return d.Date;
+            // Excel serial stored as text/number (e.g. "46175")
+            if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var serial) && serial > 20000 && serial < 80000) return DateTime.FromOADate(serial).Date;
             return null;
         }
         private static decimal ParseMoney(string? s)
