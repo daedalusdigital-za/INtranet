@@ -207,6 +207,9 @@ namespace ProjectTracker.API.Extensions
             services.AddScoped<Services.Logistics.IShipmentNotificationService, Services.Logistics.ShipmentNotificationService>();
             services.AddScoped<Services.Logistics.IWaybillService, Services.Logistics.WaybillService>();
             services.AddSingleton<Services.Logistics.IPortalQuoteService, Services.Logistics.PortalQuoteService>();
+            // Finance: nightly (00:00) remittance-advice sweep of the finance mailbox(es) + manual "scan now"
+            services.AddSingleton<Services.Finance.IRemittanceSweepService, Services.Finance.RemittanceSweepService>();
+            services.AddHostedService<Services.Finance.RemittanceSweepScheduler>();
             // Booking intake shared by ops, CSV, API and the client portal (same validation everywhere)
             services.AddScoped<Services.Logistics.IBookingIntakeService, Services.Logistics.BookingIntakeService>();
             // Rocket Freight client portal tokens (separate audience, see AddAppAuthentication)
