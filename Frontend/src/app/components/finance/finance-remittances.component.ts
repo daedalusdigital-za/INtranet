@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
@@ -54,7 +54,7 @@ interface ListResp { mailboxes: string[]; keywords: string[]; lastScan?: Scan; c
     @else if (items().length === 0) {
       <div class="rm-empty"><mat-icon>inbox</mat-icon><p>No remittances {{ status() === 'All' ? '' : 'in "' + status() + '"' }} yet. Run <b>Scan mailbox now</b> or wait for the nightly sweep.</p></div>
     } @else {
-      <div class="rm-layout" [class.has-detail]="!!detail()">
+      <div class="rm-tablewrap">
         <table class="rm-table">
           <thead><tr><th>Received</th><th>From</th><th>Subject</th><th>Customer</th><th>Attachments</th><th class="r">Invoices</th><th class="r">Amount</th><th>Status</th></tr></thead>
           <tbody>
@@ -78,23 +78,29 @@ interface ListResp { mailboxes: string[]; keywords: string[]; lastScan?: Scan; c
                   @if (r.invoiceCount) { <span [class.ok]="r.matchedCount === r.invoiceCount" [class.warn]="r.matchedCount < r.invoiceCount">{{ r.matchedCount }}/{{ r.invoiceCount }}</span> } @else { <span class="muted">—</span> }
                 </td>
                 <td class="r nowrap">{{ r.totalAmount ? (r.totalAmount | currency:'ZAR':'R':'1.2-2') : '—' }}</td>
-                <td><span class="st" [class]="'st ' + r.status.toLowerCase()">{{ r.status }}</span></td>
+                <td><span class="st" [ngClass]="r.status.toLowerCase()">{{ r.status }}</span></td>
               </tr>
             }
           </tbody>
         </table>
+      </div>
+    }
 
-        @if (detail(); as d) {
-          <aside class="rm-detail">
+    <!-- Detail drawer (overlay, independent of the tab's scroll container) -->
+    @if (detail(); as d) {
+      <div class="rm-backdrop" (click)="detail.set(null)"></div>
+      <aside class="rm-detail" role="dialog" aria-label="Remittance detail">
             <div class="d-head">
-              <div>
+              <div class="d-title">
                 <h3>{{ d.subject || '(no subject)' }}</h3>
-                <div class="sub">From <b>{{ d.fromName || d.fromEmail }}</b> &lt;{{ d.fromEmail }}&gt; · {{ d.receivedAt | date:'EEE dd MMM yyyy HH:mm' }} · to {{ d.mailbox }}</div>
-                @if (d.matchedOn) { <div class="sub">Picked up because: {{ d.matchedOn }}</div> }
+                <div class="sub">From <b>{{ d.fromName || d.fromEmail }}</b> &lt;{{ d.fromEmail }}&gt;</div>
+                <div class="sub">{{ d.receivedAt | date:'EEE dd MMM yyyy HH:mm' }} · to {{ d.mailbox }}</div>
+                @if (d.matchedOn) { <div class="sub">Picked up because — {{ d.matchedOn }}</div> }
               </div>
               <button mat-icon-button (click)="detail.set(null)" aria-label="Close"><mat-icon>close</mat-icon></button>
             </div>
 
+            <div class="d-body">
             <div class="d-status">
               @for (s of ['New','Reviewed','Allocated','Ignored']; track s) {
                 <button class="rm-chip" [class.active]="d.status === s" (click)="setStatus(d, s)">{{ s }}</button>
@@ -138,7 +144,12 @@ interface ListResp { mailboxes: string[]; keywords: string[]; lastScan?: Scan; c
                     <tr [class.miss]="!i.inAging">
                       <td class="mono">{{ i.invoiceNumber }}</td>
                       <td class="r">{{ i.amount != null ? (i.amount | currency:'ZAR':'R':'1.2-2') : '—' }}</td>
-                      <td class="r">@if (i.inAging) { {{ i.agingBalance | currency:'ZAR':'R':'1.2-2' }} @if (i.shortPaid) { <mat-icon class="warn-ic" matTooltip="Paid less than the outstanding balance">warning</mat-icon> } } @else { <span class="muted">not in aging</span> }</td>
+                      <td class="r nowrap">
+                        @if (i.inAging) {
+                          <span>{{ i.agingBalance | currency:'ZAR':'R':'1.2-2' }}</span>
+                          @if (i.shortPaid) { <mat-icon class="warn-ic" matTooltip="Paid less than the outstanding balance">warning</mat-icon> }
+                        } @else { <span class="muted">not in aging</span> }
+                      </td>
                       <td>{{ i.inAging ? ((i.daysOver || 0) > 0 ? i.daysOver + 'd over' : 'current') : '' }}</td>
                       <td>{{ i.customerName || '' }} <span class="sub">{{ i.company || '' }}</span></td>
                       <td>@if (i.hasPod) { <mat-icon class="ok-ic" matTooltip="POD on file">task_alt</mat-icon> } @else { <span class="muted">—</span> }</td>
@@ -156,9 +167,8 @@ interface ListResp { mailboxes: string[]; keywords: string[]; lastScan?: Scan; c
             <h4>Finance notes</h4>
             <textarea class="notes" rows="3" [(ngModel)]="notesDraft" placeholder="e.g. Allocated in Sage on 12 Nov, short-paid IN123456 by R250 – queried with customer"></textarea>
             <div class="notes-actions"><button mat-flat-button color="primary" (click)="saveNotes(d)">Save notes</button></div>
-          </aside>
-        }
-      </div>
+            </div>
+      </aside>
     }
   `,
   styles: [`
@@ -174,29 +184,38 @@ interface ListResp { mailboxes: string[]; keywords: string[]; lastScan?: Scan; c
     .rm-meta mat-icon { font-size:18px; width:18px; height:18px; } .rm-meta .sep { opacity:.5; } .rm-meta .err { color:#b42318; font-weight:600; }
     .rm-center { display:flex; justify-content:center; padding:40px; }
     .rm-empty { text-align:center; padding:48px 16px; color:#666; } .rm-empty mat-icon { font-size:44px; width:44px; height:44px; opacity:.4; }
-    .rm-layout { display:grid; grid-template-columns:1fr; gap:14px; } .rm-layout.has-detail { grid-template-columns:minmax(0,1fr) minmax(420px,560px); }
-    .rm-table { width:100%; border-collapse:collapse; font-size:13px; background:#fff; border:1px solid #e3e7eb; border-radius:8px; overflow:hidden; }
-    .rm-table th { text-align:left; padding:8px 10px; background:#f6f8fa; font-weight:600; font-size:12px; color:#444; border-bottom:1px solid #e3e7eb; }
-    .rm-table td { padding:8px 10px; border-bottom:1px solid #f0f2f4; vertical-align:top; }
+    .rm-tablewrap { overflow-x:auto; border:1px solid #e3e7eb; border-radius:8px; background:#fff; }
+    .rm-table { width:100%; border-collapse:collapse; font-size:13px; min-width:980px; }
+    .rm-table th { text-align:left; padding:8px 10px; background:#f6f8fa; font-weight:600; font-size:12px; color:#444; border-bottom:1px solid #e3e7eb; white-space:nowrap; }
+    .rm-table td { padding:8px 10px; border-bottom:1px solid #f0f2f4; vertical-align:middle; }
+    .rm-table tbody tr:last-child td { border-bottom:0; }
     .rm-table tbody tr { cursor:pointer; } .rm-table tbody tr:hover { background:#f8fafc; } .rm-table tr.sel { background:#eaf1fb; } .rm-table tr.unread .from, .rm-table tr.unread .subj { font-weight:600; }
+    .subj { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .r { text-align:right; } .nowrap { white-space:nowrap; } .muted { color:#999; } .sub { color:#777; font-size:11.5px; } .mono { font-family:ui-monospace,monospace; }
     .ok { color:#1a7f37; font-weight:600; } .warn { color:#b54708; font-weight:600; }
-    .atts { display:flex; flex-wrap:wrap; gap:4px; }
-    .att { display:inline-flex; align-items:center; gap:3px; border:1px solid #d0d7de; background:#fff; border-radius:4px; padding:2px 6px; font-size:11.5px; cursor:pointer; max-width:180px; }
-    .att span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .att mat-icon { font-size:15px; width:15px; height:15px; } .att.pdf mat-icon { color:#c62828; } .att:hover { background:#f0f4f8; }
-    .st { border-radius:4px; padding:2px 8px; font-size:11.5px; font-weight:600; }
+    .atts { display:flex; flex-wrap:wrap; gap:4px; max-width:260px; }
+    .att { display:inline-flex; align-items:center; gap:3px; border:1px solid #d0d7de; background:#fff; border-radius:4px; padding:2px 6px; font-size:11.5px; cursor:pointer; max-width:180px; line-height:1.4; }
+    .att span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .att mat-icon { font-size:15px; width:15px; height:15px; line-height:15px; } .att.pdf mat-icon { color:#c62828; } .att:hover { background:#f0f4f8; }
+    .st { display:inline-block; border-radius:4px; padding:2px 8px; font-size:11.5px; font-weight:600; white-space:nowrap; }
     .st.new { background:#fff4e5; color:#b54708; } .st.reviewed { background:#e8f0fe; color:#1a56db; } .st.allocated { background:#e6f4ea; color:#1a7f37; } .st.ignored { background:#f0f0f0; color:#777; }
-    .rm-detail { background:#fff; border:1px solid #e3e7eb; border-radius:8px; padding:14px 16px; position:sticky; top:8px; max-height:calc(100vh - 120px); overflow:auto; }
-    .d-head { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; } .d-head h3 { margin:0 0 4px; font-size:15px; }
-    .d-status { display:flex; gap:6px; align-items:center; margin:12px 0; }
-    .d-cards { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:12px; }
-    .c { border:1px solid #e3e7eb; border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; } .c .l { font-size:11px; color:#777; text-transform:uppercase; } .c .v { font-size:15px; font-weight:600; } .c .s { font-size:11.5px; color:#777; }
-    h4 { margin:14px 0 6px; font-size:13px; color:#333; }
-    .d-att { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f0f2f4; } .d-att .n { flex:1; font-size:13px; } .d-att mat-icon.pdf { color:#c62828; }
-    .inv { width:100%; border-collapse:collapse; font-size:12.5px; } .inv th { text-align:left; font-size:11.5px; color:#555; padding:4px 6px; border-bottom:1px solid #e3e7eb; } .inv td { padding:5px 6px; border-bottom:1px solid #f0f2f4; }
-    .inv tr.miss td { background:#fff8f6; } .warn-ic { font-size:16px; width:16px; height:16px; color:#b54708; vertical-align:middle; } .ok-ic { font-size:18px; width:18px; height:18px; color:#1a7f37; }
-    .body { white-space:pre-wrap; background:#f8f9fa; border:1px solid #e3e7eb; border-radius:6px; padding:10px; font:12.5px/1.45 ui-monospace,Consolas,monospace; max-height:320px; overflow:auto; }
-    .notes { width:100%; box-sizing:border-box; border:1px solid #d0d7de; border-radius:6px; padding:8px; font:inherit; } .notes-actions { margin-top:6px; text-align:right; }
+
+    /* Drawer */
+    .rm-backdrop { position:fixed; inset:0; background:rgba(15,23,42,.35); z-index:1000; animation:rmFade .15s ease-out; }
+    .rm-detail { position:fixed; top:0; right:0; bottom:0; width:min(680px, 100vw); background:#fff; z-index:1001; display:flex; flex-direction:column; box-shadow:-8px 0 30px rgba(0,0,0,.18); animation:rmSlide .2s ease-out; }
+    @keyframes rmSlide { from { transform:translateX(40px); opacity:0; } to { transform:none; opacity:1; } }
+    @keyframes rmFade { from { opacity:0; } to { opacity:1; } }
+    .d-head { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; padding:16px 16px 12px 20px; border-bottom:1px solid #e3e7eb; background:#f8fafc; flex:0 0 auto; }
+    .d-title { min-width:0; } .d-head h3 { margin:0 0 4px; font-size:15px; line-height:1.3; word-break:break-word; }
+    .d-body { flex:1 1 auto; overflow-y:auto; padding:12px 20px 24px; min-height:0; }
+    .d-status { display:flex; gap:6px; align-items:center; margin:0 0 12px; flex-wrap:wrap; }
+    .d-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
+    .c { border:1px solid #e3e7eb; border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; min-width:0; } .c .l { font-size:11px; color:#777; text-transform:uppercase; } .c .v { font-size:15px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .c .s { font-size:11.5px; color:#777; }
+    h4 { margin:16px 0 6px; font-size:13px; color:#333; }
+    .d-att { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f0f2f4; } .d-att .n { flex:1; font-size:13px; min-width:0; word-break:break-all; } .d-att mat-icon.pdf { color:#c62828; }
+    .inv { width:100%; border-collapse:collapse; font-size:12.5px; } .inv th { text-align:left; font-size:11.5px; color:#555; padding:4px 6px; border-bottom:1px solid #e3e7eb; white-space:nowrap; } .inv td { padding:5px 6px; border-bottom:1px solid #f0f2f4; vertical-align:middle; }
+    .inv tr.miss td { background:#fff8f6; } .warn-ic { font-size:16px; width:16px; height:16px; color:#b54708; vertical-align:middle; margin-left:2px; } .ok-ic { font-size:18px; width:18px; height:18px; color:#1a7f37; }
+    .body { white-space:pre-wrap; word-break:break-word; background:#f8f9fa; border:1px solid #e3e7eb; border-radius:6px; padding:10px; font:12.5px/1.45 ui-monospace,Consolas,monospace; max-height:320px; overflow:auto; margin:0; }
+    .notes { width:100%; box-sizing:border-box; border:1px solid #d0d7de; border-radius:6px; padding:8px; font:inherit; resize:vertical; } .notes-actions { margin-top:6px; text-align:right; }
     .cust { font-weight:500; }
   `]
 })
@@ -219,6 +238,7 @@ export class FinanceRemittancesComponent implements OnInit {
   notesDraft = '';
 
   ngOnInit(): void { this.load(); }
+  @HostListener('document:keydown.escape') onEsc(): void { if (this.detail()) this.detail.set(null); }
 
   load(): void {
     this.loading.set(true);
