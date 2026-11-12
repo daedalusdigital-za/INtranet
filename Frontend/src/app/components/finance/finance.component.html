@@ -163,6 +163,7 @@
         <button class="qa" (click)="goToCommitments()"><mat-icon>event_repeat</mat-icon><span>Commitments</span></button>
         <button class="qa" (click)="goToCreditors()"><mat-icon>call_made</mat-icon><span>Creditors</span></button>
         <button class="qa" (click)="goToDebtors()"><mat-icon>call_received</mat-icon><span>Debtors</span></button>
+        <button class="qa" (click)="goTab('credit-notes')"><mat-icon>undo</mat-icon><span>Credit notes</span></button>
         <button class="qa" routerLink="/finance/categories"><mat-icon>category</mat-icon><span>Categories</span></button>
       </div>
     </section>
@@ -558,6 +559,20 @@
     </div>
   </mat-tab>
 
+  <!-- ═══════════ CREDIT NOTES ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">undo</mat-icon> Credit Notes
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Credit Notes</h2>
+        <p>Everything the group has credited, from the Sage sales history, stitched to the original invoice (same customer and products), to the aging (is the credit still unapplied on the debtor's account?) and to the signed authorisation PDF a manager uploaded. A credit with no signed copy is flagged — that's the control Sales and Finance both rely on.</p>
+      </div>
+      @if (tabIndex === 6) { <app-finance-credit-notes></app-finance-credit-notes> }
+    </div>
+  </mat-tab>
+
   <!-- ═══════════ VAULT ═══════════ -->
   <mat-tab>
     <ng-template mat-tab-label>
@@ -569,7 +584,7 @@
         <h2>Compliance Vault</h2>
         <p>Statutory documents every company must keep current — tax clearance, B-BBEE, CSD, bank confirmation. Finance owns the renewals; the Tenders team reads the same vault.</p>
       </div>
-      @if (tabIndex === 6) { <app-finance-vault></app-finance-vault> }
+      @if (tabIndex === 7) { <app-finance-vault></app-finance-vault> }
     </div>
   </mat-tab>
 
