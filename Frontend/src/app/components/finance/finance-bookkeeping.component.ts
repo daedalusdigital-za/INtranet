@@ -55,10 +55,15 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
           <span class="k-label">Credited</span><b><mat-icon>undo</mat-icon></b><span class="k-sub">invoices with a credit note</span>
         </button>
       </div>
-      <div class="co-strip">
+      <div class="co-bar">
+        <button class="co-tile all" [class.active]="!company" (click)="setCompany('')">
+          <span class="co-logo all-logo"><mat-icon>apps</mat-icon></span>
+          <span class="co-text"><b>All companies</b><span>{{ s.invoices | number }} invoices · <em [class.zero]="s.needsPod === 0">{{ s.needsPod | number }} need POD</em></span></span>
+        </button>
         @for (c of s.byCompany; track c.company) {
-          <button class="co" [class.active]="company === c.company" (click)="setCompany(company === c.company ? '' : c.company)" [matTooltip]="c.companyName">
-            <b>{{ c.company }}</b> <span>{{ c.invoices | number }} inv</span> <span class="np" [class.zero]="c.needsPod === 0">{{ c.needsPod }} need POD</span>
+          <button class="co-tile" [class.active]="company === c.company" [class.dim]="company && company !== c.company" (click)="setCompany(company === c.company ? '' : c.company)" [attr.aria-pressed]="company === c.company">
+            <img class="co-logo" [src]="logo(c.company)" [alt]="c.companyName">
+            <span class="co-text"><b>{{ c.companyName }}</b><span>{{ c.invoices | number }} invoices · <em [class.zero]="c.needsPod === 0">{{ c.needsPod | number }} need POD</em></span></span>
           </button>
         }
       </div>
@@ -107,7 +112,7 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
               <tr [class.needs]="r.state === 'Needs POD'" [class.pod]="r.state === 'POD received'">
                 <td class="nowrap">{{ r.date | date:'dd MMM yyyy' }}</td>
                 <td class="mono"><b>{{ r.invoiceNumber }}</b><div class="sub">{{ r.lines }} line{{ r.lines === 1 ? '' : 's' }}</div></td>
-                <td><span class="co-chip">{{ r.company }}</span></td>
+                <td><img class="row-logo" [src]="logo(r.company)" [alt]="r.companyName" [matTooltip]="r.companyName"></td>
                 <td class="mono">{{ r.customerNumber }}</td>
                 <td>{{ r.province || '—' }}</td>
                 <td class="name" [title]="r.customerName">{{ r.customerName }}</td>
@@ -160,10 +165,18 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
     .kpi b { font-size: 24px; line-height: 1.1; }
     .kpi .k-sub { font-size: 12px; color: #6b7280; }
     .kpi.warn b { color: #b45309; } .kpi.ok b { color: #047857; }
-    .co-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-    .co { border: 1px solid #e5e7eb; border-radius: 999px; background: #fff; padding: 4px 12px; display: inline-flex; gap: 8px; align-items: center; font-size: 12px; cursor: pointer; }
-    .co.active { border-color: #2563eb; background: #eff6ff; }
-    .co .np { color: #b45309; font-weight: 600; } .co .np.zero { color: #047857; }
+    .co-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .co-tile { display: flex; align-items: center; gap: 14px; text-align: left; background: #fff; border: 2px solid #e5e7eb; border-radius: 16px; padding: 12px 16px; cursor: pointer; transition: border-color .15s, box-shadow .15s, opacity .15s, transform .15s; }
+    .co-tile:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-1px); }
+    .co-tile.active { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+    .co-tile.dim { opacity: .55; }
+    .co-logo { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: 0 0 56px; background: #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .co-logo.all-logo { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; }
+    .co-logo.all-logo mat-icon { font-size: 30px; width: 30px; height: 30px; }
+    .co-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .co-text b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .co-text span { font-size: 12px; color: #6b7280; }
+    .co-text em { font-style: normal; color: #b45309; font-weight: 600; } .co-text em.zero { color: #047857; }
     .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
     .filters .grow { flex: 1; min-width: 240px; }
     .filters mat-form-field { margin-bottom: -1.25em; }
@@ -178,7 +191,7 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
     .nowrap { white-space: nowrap; }
     .name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sub, .muted { color: #9ca3af; font-size: 11px; }
-    .co-chip { background: #eef2ff; color: #3730a3; border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 600; }
+    .row-logo { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; display: block; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
     .link { color: #2563eb; text-decoration: none; } .link:hover { text-decoration: underline; }
     .cn { display: flex; align-items: center; gap: 4px; color: #7c3aed; } .cn mat-icon { font-size: 14px; width: 14px; height: 14px; }
     .pod-date { display: inline-flex; align-items: center; gap: 4px; color: #047857; font-weight: 600; } .pod-date mat-icon { font-size: 16px; width: 16px; height: 16px; }
@@ -251,6 +264,10 @@ export class FinanceBookkeepingComponent implements OnInit {
   }
 
   stateClass(s: Row['state']): string { return s === 'POD received' ? 'ok' : s === 'Needs POD' ? 'warn' : 'idle'; }
+  logo(code: string): string {
+    const f: Record<string, string> = { PMT: 'promed', ACM: 'access', PHT: 'pharmatech', SBT: 'sebenzani' };
+    return `/logos/${f[code] ?? 'rocket'}-round.png`;
+  }
   openPod(id: number): void {
     this.http.get(`${this.api}/PodDocuments/${id}/view`, { responseType: 'blob' })
       .subscribe({ next: b => window.open(URL.createObjectURL(b), '_blank') });
