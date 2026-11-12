@@ -226,6 +226,7 @@ export class FinanceBookkeepingComponent implements OnInit {
   ngOnInit(): void {
     const v = this.route.snapshot.queryParamMap.get('view');
     if (v === 'needs-pod' || v === 'has-pod' || v === 'not-dispatched' || v === 'credited') this.status = v;
+    const s = this.route.snapshot.queryParamMap.get('search'); if (s) this.search = s;
     this.reload(true);
   }
 

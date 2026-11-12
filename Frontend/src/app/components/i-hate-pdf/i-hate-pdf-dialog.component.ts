@@ -156,6 +156,7 @@ export class IHatePdfDialogComponent {
   private dragMode: 'move' | 'resize' | null = null;
   private dragStartX = 0;
   private dragStartY = 0;
+  private dragStartRect: DOMRect = new DOMRect();
   private dragOrig: PlacedStamp | null = null;
   private dragPageEl: HTMLElement | null = null;
 
@@ -878,6 +879,33 @@ export class IHatePdfDialogComponent {
     return this.placedStamps().filter(p => p.pageIndex === pageIndex);
   }
 
+  /** One-click placement in a page corner — the stamp usually belongs at the foot of the page. */
+  placeAt(pageIndex: number, where: 'bl' | 'bc' | 'br', evt: Event): void {
+    evt.stopPropagation();
+    const key = this.selectedStamp();
+    if (!key) { this.error.set('Pick a company stamp first.'); return; }
+    const pageEl = (evt.currentTarget as HTMLElement).closest('.ihp-stamp-page') as HTMLElement | null;
+    const imgEl = pageEl?.querySelector('.ihp-stamp-page__img') as HTMLElement | null;
+    const rect = (imgEl ?? pageEl)?.getBoundingClientRect();
+    if (!rect) return;
+    const aspect = this.stampAspect.get(key) || 0.4;
+    const wPct = 0.22, margin = 0.03;
+    const hPct = (wPct * rect.width * aspect) / rect.height;
+    const xPct = where === 'bl' ? margin : where === 'br' ? 1 - wPct - margin : 0.5 - wPct / 2;
+    const yPct = Math.max(0, 1 - hPct - margin);
+    this.placedStamps.update(list => [...list, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, pageIndex, assetKey: key, xPct, yPct, wPct, aspect }]);
+    this.stampSaved.set(false);
+  }
+
+  /** While dragging near the top/bottom of the dialog body, scroll it so the stamp can reach the page foot. */
+  private autoScroll(evt: MouseEvent): void {
+    const body = this.dragPageEl?.closest('.ihp__body') as HTMLElement | null;
+    if (!body) return;
+    const r = body.getBoundingClientRect(), edge = 48;
+    if (evt.clientY > r.bottom - edge) body.scrollTop += Math.min(24, evt.clientY - (r.bottom - edge));
+    else if (evt.clientY < r.top + edge) body.scrollTop -= Math.min(24, (r.top + edge) - evt.clientY);
+  }
+
   removePlaced(id: string, evt?: Event): void {
     evt?.stopPropagation();
     this.placedStamps.update(list => list.filter(p => p.id !== id));
@@ -898,21 +926,25 @@ export class IHatePdfDialogComponent {
     // The page surface is the stamp overlay's offset parent.
     let node = (evt.currentTarget as HTMLElement).closest('.ihp-stamp-page') as HTMLElement | null;
     this.dragPageEl = node;
+    this.dragStartRect = node?.getBoundingClientRect() ?? new DOMRect();
     window.addEventListener('mousemove', this.onDragMove);
     window.addEventListener('mouseup', this.onDragEnd);
   }
 
   private onDragMove = (evt: MouseEvent): void => {
     if (!this.dragId || !this.dragOrig || !this.dragPageEl) return;
+    this.autoScroll(evt);
     const rect = this.dragPageEl.getBoundingClientRect();
+    const o = this.dragOrig;
+    // Position relative to the page's current rect (not the mouse delta) so auto-scrolling mid-drag keeps the stamp under the cursor.
+    const grabDx = this.dragStartX - (this.dragStartRect.left + o.xPct * this.dragStartRect.width);
+    const grabDy = this.dragStartY - (this.dragStartRect.top + o.yPct * this.dragStartRect.height);
     const dxPct = (evt.clientX - this.dragStartX) / rect.width;
-    const dyPct = (evt.clientY - this.dragStartY) / rect.height;
     this.placedStamps.update(list => list.map(p => {
       if (p.id !== this.dragId) return p;
-      const o = this.dragOrig!;
       if (this.dragMode === 'move') {
-        let x = o.xPct + dxPct;
-        let y = o.yPct + dyPct;
+        let x = (evt.clientX - grabDx - rect.left) / rect.width;
+        let y = (evt.clientY - grabDy - rect.top) / rect.height;
         const hPct = (o.wPct * rect.width * o.aspect) / rect.height;
         x = Math.max(0, Math.min(1 - o.wPct, x));
         y = Math.max(0, Math.min(1 - hPct, y));

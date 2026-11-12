@@ -351,6 +351,11 @@
                      (click)="onPageClick(pg.index, $event)">
                   <img class="ihp-stamp-page__img" [src]="pg.dataUrl" [alt]="'Page ' + (pg.index + 1)" draggable="false" />
                   <span class="ihp-stamp-page__no">{{ pg.index + 1 }}</span>
+                  <span class="ihp-stamp-page__quick" (click)="$event.stopPropagation()" (mousedown)="$event.stopPropagation()">
+                    <button type="button" (click)="placeAt(pg.index, 'bl', $event)" title="Stamp bottom-left"><span class="material-icons">south_west</span></button>
+                    <button type="button" (click)="placeAt(pg.index, 'bc', $event)" title="Stamp bottom-centre"><span class="material-icons">south</span></button>
+                    <button type="button" (click)="placeAt(pg.index, 'br', $event)" title="Stamp bottom-right"><span class="material-icons">south_east</span></button>
+                  </span>
                   @for (st of placedForPage(pg.index); track st.id) {
                     <div class="ihp-placed"
                          [style.left.%]="st.xPct * 100"

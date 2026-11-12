@@ -221,6 +221,23 @@ namespace ProjectTracker.API.Controllers.Finance
             }
             var items = await q.Select(i => new { i.CustomerCode, i.CustomerName, i.DocumentType, i.DocumentNumber, i.Bucket, i.Balance, i.DaysOver, i.DueDate }).ToListAsync();
 
+            // Province per customer: delivery province on their invoices → logistics customer record → customer master.
+            var codes = items.Select(i => i.CustomerCode).Distinct().ToList();
+            var provByCode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var coCode = snap.Company switch { "Promed Technologies" => "PMT", "Access Medical" => "ACM", "Promed Pharmatech" => "PHT", "Sebenzani Trading" => "SBT", _ => snap.Company };
+            foreach (var x in await _db.ImportedInvoices.AsNoTracking()
+                .Where(i => codes.Contains(i.CustomerNumber) && i.DeliveryProvince != null && i.DeliveryProvince != "Unclassified" && (i.SourceCompany == coCode || i.SourceCompany == null))
+                .GroupBy(i => i.CustomerNumber).Select(g => new { g.Key, P = g.Max(i => i.DeliveryProvince) }).ToListAsync())
+                provByCode[x.Key] = x.P!;
+            foreach (var x in await _db.LogisticsCustomers.AsNoTracking()
+                .Where(c => c.CustomerCode != null && codes.Contains(c.CustomerCode) && (c.DeliveryProvince ?? c.Province) != null)
+                .Select(c => new { Code = c.CustomerCode!, P = c.DeliveryProvince ?? c.Province }).ToListAsync())
+                provByCode.TryAdd(x.Code, x.P!);
+            foreach (var x in await _db.CustomerAliases.AsNoTracking()
+                .Where(a => a.Company == coCode && codes.Contains(a.CustomerCode) && a.Master != null && a.Master.Province != null)
+                .Select(a => new { a.CustomerCode, P = a.Master!.Province }).ToListAsync())
+                provByCode.TryAdd(x.CustomerCode, x.P!);
+
             var customers = items.GroupBy(i => i.CustomerCode).Select(g =>
             {
                 var b = new decimal[5];
@@ -230,6 +247,7 @@ namespace ProjectTracker.API.Controllers.Finance
                 {
                     code = g.Key,
                     name = g.First().CustomerName,
+                    province = provByCode.TryGetValue(g.Key, out var pv) ? pv : null,
                     current = b[0], d30 = b[1], d60 = b[2], d90 = b[3], d120 = b[4],
                     balance = b.Sum(),
                     overdue = invoices.Where(i => (i.DaysOver ?? 0) > 0).Sum(i => i.Balance),
@@ -253,6 +271,7 @@ namespace ProjectTracker.API.Controllers.Finance
                 buckets = BucketLabels.Select((l, i) => new { index = i, label = l, amount = totals[i], pct = grand == 0 ? 0 : Math.Round(totals[i] / grand * 100, 1) }),
                 total = grand,
                 overdue = customers.Sum(c => c.overdue),
+                provinces = customers.Select(c => c.province).Where(p => p != null).Distinct().OrderBy(p => p).ToList(),
                 customers
             });
         }
@@ -293,6 +312,69 @@ namespace ProjectTracker.API.Controllers.Finance
                     hasPod = i.DocumentType == "IN" && podNos.Contains(i.DocumentNumber),
                     importedInvoiceId = importedIds.TryGetValue(i.DocumentNumber, out var iid) ? iid : (int?)null
                 })
+            });
+        }
+
+        /// <summary>
+        /// GET api/finance/aging/invoice/{number}?company= → everything we know about one invoice for the pop-up:
+        /// Sage lines (products, qty, value), trip sheet / load, PODs, credit notes against it, and the aging row.
+        /// </summary>
+        [HttpGet("invoice/{number}")]
+        public async Task<IActionResult> Invoice(string number, [FromQuery] string? company, [FromQuery] int? snapshotId)
+        {
+            var coCode = company switch { "Promed Technologies" => "PMT", "Access Medical" => "ACM", "Promed Pharmatech" => "PHT", "Sebenzani Trading" => "SBT", _ => company };
+            var allLines = await _db.ImportedInvoices.AsNoTracking()
+                .Where(i => i.TransactionNumber == number)
+                .OrderBy(i => i.Id)
+                .Select(i => new { i.Id, i.SourceCompany, i.CustomerNumber, i.CustomerName, i.TransactionDate, i.ProductCode, i.ProductDescription, i.Brand, i.Quantity, i.SalesAmount, i.CostOfSales, i.LoadId, i.Status, i.DeliveryAddress, i.DeliveryCity, i.DeliveryProvince, i.ContactPerson, i.ContactPhone, i.DeliveredQuantity, i.LastDeliveryDate })
+                .ToListAsync();
+            // Prefer the requested company, but fall back to whichever company Sage filed it under
+            // (invoices do occasionally sit on one company's aging while captured under another).
+            var lines = coCode != null && allLines.Any(l => l.SourceCompany == coCode)
+                ? allLines.Where(l => l.SourceCompany == coCode).ToList()
+                : allLines;
+
+            var head = lines.FirstOrDefault();
+            var loadId = lines.Select(l => l.LoadId).FirstOrDefault(l => l != null);
+            var load = loadId == null ? null : await _db.Loads.AsNoTracking().Where(l => l.Id == loadId)
+                .Select(l => new { l.Id, l.LoadNumber, l.Status, l.ScheduledPickupDate, l.ActualPickupDate, l.ScheduledDeliveryDate, l.ActualDeliveryDate }).FirstOrDefaultAsync();
+            var driverPods = loadId == null ? new() : await _db.ProofOfDeliveries.AsNoTracking().Where(p => p.LoadId == loadId)
+                .Select(p => new { p.Id, p.DeliveredAt, p.FileName }).ToListAsync();
+            var scanPods = await _db.PodDocumentInvoiceLinks.AsNoTracking()
+                .Where(l => l.PodDocument != null && ((l.Invoice != null && l.Invoice.TransactionNumber == number) || l.InvoiceNumber == number))
+                .Select(l => new { l.PodDocumentId, l.PodDocument!.DeliveryDate, l.PodDocument.FileName, l.LinkedAt }).Distinct().ToListAsync();
+
+            // Credit notes: same company+customer, dated on/after, sharing a product
+            var products = lines.Select(l => l.ProductCode).ToHashSet();
+            var credits = head == null ? new() : (await _db.ImportedInvoices.AsNoTracking()
+                .Where(i => i.TransactionType == "CR" && i.SourceCompany == head.SourceCompany && i.CustomerNumber == head.CustomerNumber && i.TransactionDate >= head.TransactionDate)
+                .Select(i => new { i.TransactionNumber, i.TransactionDate, i.ProductCode, i.SalesAmount, i.SalesReturns }).ToListAsync())
+                .GroupBy(c => c.TransactionNumber).Where(g => g.Any(c => products.Contains(c.ProductCode)))
+                .Select(g => new { number = g.Key, date = g.Min(c => c.TransactionDate), value = g.Sum(c => c.SalesReturns != 0 ? c.SalesReturns : Math.Abs(c.SalesAmount)) }).ToList();
+
+            var agingQ = _db.ArAgingItems.AsNoTracking().Where(a => a.DocumentNumber == number)
+                .OrderByDescending(a => a.SnapshotId)
+                .Select(a => new { a.SnapshotId, a.CustomerCode, a.CustomerName, a.DocumentDate, a.DueDate, a.Amount, a.Balance, a.AgeDays, a.DaysOver, a.Bucket, a.PoNumber, a.OrderNumber, a.Reference });
+            var aging = snapshotId.HasValue ? await agingQ.Where(a => a.SnapshotId == snapshotId.Value).FirstOrDefaultAsync() : null;
+            aging ??= await agingQ.FirstOrDefaultAsync();
+
+            if (head == null && aging == null) return NotFound();
+            return Ok(new
+            {
+                number,
+                company = head?.SourceCompany ?? coCode,
+                customerNumber = head?.CustomerNumber ?? aging?.CustomerCode,
+                customerName = head?.CustomerName ?? aging?.CustomerName,
+                date = head?.TransactionDate ?? aging?.DocumentDate,
+                total = lines.Sum(l => l.SalesAmount),
+                cost = lines.Sum(l => l.CostOfSales),
+                quantity = lines.Sum(l => l.Quantity),
+                status = head?.Status,
+                delivery = head == null ? null : new { head.DeliveryAddress, head.DeliveryCity, head.DeliveryProvince, head.ContactPerson, head.ContactPhone },
+                lines = lines.Select(l => new { l.ProductCode, l.ProductDescription, l.Brand, l.Quantity, l.SalesAmount, l.CostOfSales, l.DeliveredQuantity }),
+                load, driverPods, scanPods, credits,
+                aging = aging == null ? null : new { aging.SnapshotId, aging.DocumentDate, aging.DueDate, aging.Amount, aging.Balance, aging.AgeDays, aging.DaysOver, aging.Bucket, bucketLabel = BucketLabels[aging.Bucket], aging.PoNumber, aging.OrderNumber, aging.Reference },
+                inSage = head != null
             });
         }
 

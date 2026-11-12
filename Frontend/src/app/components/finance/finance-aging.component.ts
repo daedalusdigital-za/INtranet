@@ -8,20 +8,22 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
 import { companyLogo } from '../../core/company-logos';
+import { InvoiceDetailDialogComponent } from './invoice-detail-dialog.component';
 
 interface Snapshot { id: number; company: string; asOfDate: string; sourceFileName?: string; uploadedAt: string; uploadedBy?: string; customerCount: number; documentCount: number; totalBalance: number; notes?: string; }
 interface Bucket { index: number; label: string; amount: number; pct?: number; }
-interface AgingCustomer { code: string; name: string; current: number; d30: number; d60: number; d90: number; d120: number; balance: number; overdue: number; maxDaysOver: number; documents: number; invoices: number; credits: number; oldestBucket: number; }
+interface AgingCustomer { code: string; name: string; province?: string; current: number; d30: number; d60: number; d90: number; d120: number; balance: number; overdue: number; maxDaysOver: number; documents: number; invoices: number; credits: number; oldestBucket: number; }
 interface AgingItem { id: number; documentNumber: string; documentType: string; typeLabel: string; orderNumber?: string; poNumber?: string; documentDate?: string; dueDate?: string; reference?: string; daysOver?: number; amount: number; balance: number; ageDays: number; bucket: number; bucketLabel: string; hasPod: boolean; importedInvoiceId?: number; }
 type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'd120' | 'balance' | 'overdue' | 'maxDaysOver'>;
 
 @Component({
   selector: 'app-finance-aging',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatMenuModule],
+  imports: [CommonModule, FormsModule, RouterModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatMenuModule, MatDialogModule],
   template: `
     <!-- Company + snapshot picker -->
     <div class="ag-toolbar">
@@ -87,6 +89,13 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
             <input type="text" placeholder="Search customer, invoice, PO or order number…" [ngModel]="search()" (ngModelChange)="onSearch($event)" />
             @if (search()) { <button mat-icon-button aria-label="Clear" (click)="onSearch('')"><mat-icon>close</mat-icon></button> }
           </div>
+          <label class="ag-select"><mat-icon>place</mat-icon>
+            <select [ngModel]="province()" (ngModelChange)="province.set($event)" aria-label="Province">
+              <option value="">All provinces</option>
+              @for (p of a.provinces ?? []; track p) { <option [value]="p">{{ p }}</option> }
+              <option value="__none">Unknown province</option>
+            </select>
+          </label>
           <label class="ag-check"><input type="checkbox" [ngModel]="onlyOverdue()" (ngModelChange)="onlyOverdue.set($event)" /> Only customers past due</label>
           <label class="ag-check"><input type="checkbox" [ngModel]="hideCredits()" (ngModelChange)="hideCredits.set($event)" /> Hide credit balances</label>
           <button class="ag-nopod" [class.active]="showNoPod()" (click)="toggleNoPod()" matTooltip="Invoices open 60+ days with no proof of delivery — the collection-dispute pattern"><mat-icon>gavel</mat-icon> 60+ days, no POD @if (noPodForCompany().length) { <span class="n">{{ noPodForCompany().length }}</span> }</button>
@@ -102,7 +111,7 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
             @else {
               <table class="ag-docs"><thead><tr><th>Invoice</th><th>Customer</th><th>PO</th><th>Doc date</th><th class="num">Age</th><th class="num">Balance</th><th></th></tr></thead><tbody>
                 @for (i of noPodForCompany(); track i.documentNumber) {
-                  <tr><td class="mono"><b>{{ i.documentNumber }}</b></td><td>{{ i.customerName }}<small>{{ i.customerCode }}</small></td><td>{{ i.poNumber || '—' }}</td><td>{{ i.documentDate | date:'dd MMM yy' }}</td><td class="num"><span class="badge danger">{{ i.ageDays }}d</span></td><td class="num">{{ i.balance | number:'1.2-2' }}</td>
+                  <tr><td class="mono"><button class="inv-link" (click)="openInvoice(i.documentNumber)">{{ i.documentNumber }}</button></td><td>{{ i.customerName }}<small>{{ i.customerCode }}</small></td><td>{{ i.poNumber || '—' }}</td><td>{{ i.documentDate | date:'dd MMM yy' }}</td><td class="num"><span class="badge danger">{{ i.ageDays }}d</span></td><td class="num">{{ i.balance | number:'1.2-2' }}</td>
                     <td><button mat-icon-button (click)="open360(i.customerCode)" matTooltip="Customer 360"><mat-icon>hub</mat-icon></button></td></tr>
                 }
               </tbody></table>
@@ -130,7 +139,7 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
               @for (c of visible(); track c.code) {
                 <tr class="cust" [class.open]="expanded() === c.code" [class.risk]="c.oldestBucket >= 3" (click)="toggle(c)">
                   <td>
-                    <div class="ag-name"><b>{{ c.name }}</b><small>{{ c.code }} · {{ c.invoices }} invoice{{ c.invoices === 1 ? '' : 's' }}{{ c.credits ? ' · ' + c.credits + ' credit/receipt' : '' }}</small></div>
+                    <div class="ag-name"><b>{{ c.name }}</b><small>{{ c.code }}{{ c.province ? ' · ' + c.province : '' }} · {{ c.invoices }} invoice{{ c.invoices === 1 ? '' : 's' }}{{ c.credits ? ' · ' + c.credits + ' credit/receipt' : '' }}</small></div>
                   </td>
                   <td class="num" [class.zero]="!c.current">{{ c.current | number:'1.2-2' }}</td>
                   <td class="num" [class.zero]="!c.d30">{{ c.d30 | number:'1.2-2' }}</td>
@@ -150,7 +159,7 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
                         <tbody>
                           @for (i of d.items; track i.id) {
                             <tr [class.credit]="i.balance < 0">
-                              <td><span class="ref">{{ i.documentNumber }}</span></td>
+                              <td>@if (i.documentType === 'IN') { <button class="inv-link" (click)="openInvoice(i.documentNumber); $event.stopPropagation()" matTooltip="Open invoice details">{{ i.documentNumber }}</button> } @else { <span class="ref">{{ i.documentNumber }}</span> }</td>
                               <td><span class="type t-{{ i.documentType }}">{{ i.typeLabel }}</span></td>
                               <td><small>{{ i.orderNumber || '' }}{{ i.orderNumber && i.poNumber ? ' · ' : '' }}{{ i.poNumber || '' }}</small></td>
                               <td class="nowrap">{{ i.documentDate | date:'dd MMM yyyy' }}</td>
@@ -270,6 +279,8 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
       .h { display:flex; align-items:center; gap:10px; margin-bottom:8px; small { color: var(--color-text-3); max-width:640px; } mat-icon { color:#9f1239; } }
       .ok { color: var(--color-ok); display:flex; align-items:center; gap:6px; } .mono { font-variant-numeric: tabular-nums; } }
     .chev { white-space:nowrap; }
+    .ag-select { display:inline-flex; align-items:center; gap:6px; mat-icon { color: var(--color-text-3); font-size:18px; width:18px; height:18px; } select { font: inherit; padding: 6px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-control); background: var(--color-surface); color: inherit; } }
+    .inv-link { font: inherit; font-family: ui-monospace, Menlo, Consolas, monospace; font-weight:700; color: var(--color-primary); background:none; border:none; padding:0; cursor:pointer; text-decoration: underline dotted; &:hover { text-decoration-style: solid; } }
   `]
 })
 export class FinanceAgingComponent implements OnInit {
@@ -277,22 +288,25 @@ export class FinanceAgingComponent implements OnInit {
   private toast = inject(ToastService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private dialog = inject(MatDialog);
   private api = `${environment.apiUrl}/finance/aging`;
+  openInvoice(number: string): void { InvoiceDetailDialogComponent.open(this.dialog, { number, company: this.company(), snapshotId: this.snapshotId() ?? undefined }); }
 
   companies = signal<string[]>([]);
   snapshots = signal<Snapshot[]>([]);
   company = signal<string>('');
   snapshotId = signal<number | null>(null);
   snapshot = computed(() => this.snapshots().find(s => s.id === this.snapshotId()) ?? null);
-  aging = signal<{ total: number; overdue: number; buckets: Bucket[]; customers: AgingCustomer[] } | null>(null);
+  aging = signal<{ total: number; overdue: number; buckets: Bucket[]; provinces?: string[]; customers: AgingCustomer[] } | null>(null);
   loading = signal(false);
 
   search = signal('');
+  province = signal('');
   bucketFilter = signal<number | null>(null);
   onlyOverdue = signal(false);
   hideCredits = signal(false);
-  sortKey = signal<SortKey>('balance');
-  sortDir = signal<1 | -1>(-1);
+  sortKey = signal<SortKey>('name');
+  sortDir = signal<1 | -1>(1);
 
   expanded = signal<string | null>(null);
   detail = signal<{ items: AgingItem[]; buckets: Bucket[]; balance: number } | null>(null);
@@ -303,13 +317,15 @@ export class FinanceAgingComponent implements OnInit {
     const q = this.search().trim().toLowerCase();
     const bf = this.bucketFilter();
     const bucketVal = (c: AgingCustomer, i: number) => [c.current, c.d30, c.d60, c.d90, c.d120][i];
+    const pv = this.province();
     let rows = a.customers.filter(c =>
       (!q || c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)) &&
+      (!pv || (pv === '__none' ? !c.province : c.province === pv)) &&
       (bf === null || bucketVal(c, bf) > 0.005) &&
       (!this.onlyOverdue() || c.overdue > 0) &&
       (!this.hideCredits() || c.balance >= 0));
     const k = this.sortKey(), d = this.sortDir();
-    rows = [...rows].sort((x, y) => k === 'name' ? d * x.name.localeCompare(y.name) : d * ((x[k] as number) - (y[k] as number)));
+    rows = [...rows].sort((x, y) => k === 'name' ? d * x.name.localeCompare(y.name) : (d * ((x[k] as number) - (y[k] as number))) || x.name.localeCompare(y.name));
     return rows;
   });
 
@@ -359,7 +375,7 @@ export class FinanceAgingComponent implements OnInit {
   latestFor(co: string): Snapshot | undefined { return this.snapshotsFor(co)[0]; }
 
   pickCompany(co: string): void {
-    this.company.set(co); this.expanded.set(null); this.bucketFilter.set(null);
+    this.company.set(co); this.expanded.set(null); this.bucketFilter.set(null); this.province.set('');
     const latest = this.latestFor(co);
     if (latest) this.loadSnapshot(latest.id); else { this.snapshotId.set(null); this.aging.set(null); }
   }
