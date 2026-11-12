@@ -29,6 +29,115 @@ namespace ProjectTracker.API.Controllers.Finance
             _logger = logger;
         }
 
+        // GET: api/finance/overview
+        // One call for the Finance landing page. Every number is a server-side aggregate so the
+        // page paints in a single round-trip; debtors come from the latest aging snapshot per company
+        // (real open balances) rather than lifetime sales.
+        [HttpGet("overview")]
+        public async Task<IActionResult> GetOverview()
+        {
+            var now = DateTime.UtcNow;
+
+            // Supplier invoices (Books)
+            var openInv = _context.BookInvoices.AsNoTracking().Where(b => b.Status != "Paid" && b.PaymentDate == null && b.Status != "Draft" && b.Status != "Archived");
+            var invoices = new
+            {
+                total = await _context.BookInvoices.CountAsync(),
+                totalAmount = await _context.BookInvoices.SumAsync(b => (decimal?)b.Total) ?? 0m,
+                unpaid = await openInv.CountAsync(),
+                unpaidAmount = await openInv.SumAsync(b => (decimal?)b.Total) ?? 0m,
+                paid = await _context.BookInvoices.CountAsync(b => b.Status == "Paid" || b.PaymentDate != null),
+                paidThisMonth = await _context.BookInvoices.Where(b => b.PaymentDate != null && b.PaymentDate.Value.Year == now.Year && b.PaymentDate.Value.Month == now.Month).SumAsync(b => (decimal?)b.Total) ?? 0m,
+                paymentRequested = await _context.BookInvoices.CountAsync(b => b.Status == "Payment Requested"),
+                paymentRequestedAmount = await _context.BookInvoices.Where(b => b.Status == "Payment Requested").SumAsync(b => (decimal?)b.Total) ?? 0m,
+                overdue = await _context.BookInvoices.CountAsync(b => b.Status == "Overdue"),
+                submitted = await _context.BookInvoices.CountAsync(b => b.Status == "Submitted"),
+            };
+
+            // Recurring commitments → monthly equivalent
+            var commitments = await _context.RecurringPayments.AsNoTracking().Where(r => r.IsActive).Select(r => new { r.Amount, r.Frequency }).ToListAsync();
+            var commitmentsMonthly = commitments.Sum(c => c.Frequency == "Annually" ? c.Amount / 12m : c.Frequency == "Quarterly" ? c.Amount / 3m : c.Amount);
+
+            // Requisitions (finance payment workflow)
+            var reqRows = await _context.Requisitions.AsNoTracking().Where(r => r.Status != "Cancelled")
+                .GroupBy(r => r.FinanceStatus).Select(g => new { status = g.Key, n = g.Count(), amount = g.Sum(r => r.AmountEwallet + r.DieselAmount) }).ToListAsync();
+            var requisitions = new
+            {
+                requested = reqRows.FirstOrDefault(r => r.status == "Requested")?.n ?? 0,
+                requestedAmount = reqRows.FirstOrDefault(r => r.status == "Requested")?.amount ?? 0m,
+                paid = reqRows.FirstOrDefault(r => r.status == "Paid")?.n ?? 0,
+                rejected = reqRows.FirstOrDefault(r => r.status == "Rejected")?.n ?? 0,
+                total = reqRows.Sum(r => r.n)
+            };
+
+            // Pending expenses awaiting payment
+            var pendingExpenses = await _context.Expenses.AsNoTracking().Where(e => e.Status == "Pending" || e.Status == "Approved").GroupBy(_ => 1).Select(g => new { n = g.Count(), amount = g.Sum(e => e.TotalAmount) }).FirstOrDefaultAsync();
+
+            var creditors = new
+            {
+                totalPayable = invoices.unpaidAmount + commitmentsMonthly + requisitions.requestedAmount + (pendingExpenses?.amount ?? 0m),
+                unpaidInvoices = invoices.unpaidAmount,
+                commitmentsMonthly,
+                requisitions = requisitions.requestedAmount,
+                pendingExpenses = pendingExpenses?.amount ?? 0m
+            };
+
+            // Debtors = latest aging snapshot per company
+            var snaps = await _context.ArAgingSnapshots.AsNoTracking().GroupBy(s => s.Company)
+                .Select(g => g.OrderByDescending(s => s.AsOfDate).ThenByDescending(s => s.Id).First()).ToListAsync();
+            var snapIds = snaps.Select(s => s.Id).ToList();
+            var bucketRows = snapIds.Count == 0 ? new() : await _context.ArAgingItems.AsNoTracking().Where(i => snapIds.Contains(i.SnapshotId))
+                .GroupBy(i => new { i.SnapshotId, i.Bucket }).Select(g => new { g.Key.SnapshotId, g.Key.Bucket, amount = g.Sum(i => i.Balance) }).ToListAsync();
+            decimal Sum(int snapId, Func<byte, bool> pick) => bucketRows.Where(r => r.SnapshotId == snapId && pick(r.Bucket)).Sum(r => r.amount);
+            var debtorsByCompany = snaps.Select(s => new
+            {
+                snapshotId = s.Id, s.Company, s.AsOfDate, s.CustomerCount, s.DocumentCount,
+                total = s.TotalBalance,
+                current = Sum(s.Id, b => b == 0),
+                overdue = Sum(s.Id, b => b >= 1),
+                d90plus = Sum(s.Id, b => b >= 3),
+                d120 = Sum(s.Id, b => b == 4),
+                stale = (now.Date - s.AsOfDate.Date).Days > 14
+            }).OrderByDescending(c => c.total).ToList();
+            var debtors = new
+            {
+                total = debtorsByCompany.Sum(c => c.total),
+                current = debtorsByCompany.Sum(c => c.current),
+                overdue = debtorsByCompany.Sum(c => c.overdue),
+                d90plus = debtorsByCompany.Sum(c => c.d90plus),
+                d120 = debtorsByCompany.Sum(c => c.d120),
+                companiesLoaded = debtorsByCompany.Count,
+                oldestAsOf = debtorsByCompany.Count == 0 ? (DateTime?)null : debtorsByCompany.Min(c => c.AsOfDate),
+                byCompany = debtorsByCompany
+            };
+
+            // Remittances
+            var remittances = new
+            {
+                @new = await _context.RemittanceEmails.CountAsync(r => r.Status == "New"),
+                thisMonth = await _context.RemittanceEmails.CountAsync(r => r.ReceivedAt.Year == now.Year && r.ReceivedAt.Month == now.Month),
+                thisMonthAmount = await _context.RemittanceEmails.Where(r => r.ReceivedAt.Year == now.Year && r.ReceivedAt.Month == now.Month).SumAsync(r => r.TotalAmount) ?? 0m,
+                lastScanAt = await _context.RemittanceScans.OrderByDescending(s => s.Id).Select(s => (DateTime?)s.StartedAt).FirstOrDefaultAsync(),
+                lastScanError = await _context.RemittanceScans.OrderByDescending(s => s.Id).Select(s => s.Error).FirstOrDefaultAsync()
+            };
+
+            // PODs
+            var podTotal = await _context.PodDocuments.CountAsync();
+            var podLinked = await _context.PodDocuments.CountAsync(p => p.LoadId != null || p.InvoiceId != null || p.InvoiceLinks.Any());
+            var pods = new { total = podTotal, unlinked = podTotal - podLinked };
+
+            // Compliance vault
+            var vaultDocs = await _context.ComplianceDocuments.AsNoTracking().Select(d => d.ExpiryDate).ToListAsync();
+            var vault = new
+            {
+                total = vaultDocs.Count,
+                expired = vaultDocs.Count(d => d <= now),
+                dueSoon = vaultDocs.Count(d => d > now && d <= now.AddDays(60))
+            };
+
+            return Ok(new { generatedAt = now, invoices, creditors, debtors, requisitions, remittances, pods, vault, commitmentsMonthly });
+        }
+
         // GET: api/finance/creditors/summary
         [HttpGet("creditors/summary")]
         public async Task<IActionResult> GetCreditorsSummary()

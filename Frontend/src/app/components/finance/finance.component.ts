@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -57,12 +58,27 @@ interface RequestedPayment {
   supplierName: string;
   departmentName: string;
   departmentId: number;
+  companyName?: string;
   total: number;
   invoiceDate: Date;
   description: string;
   status: string;
   category: string;
   fileName?: string;
+  notes?: string;
+}
+
+interface DebtorCompany { snapshotId: number; company: string; asOfDate: string; customerCount: number; documentCount: number; total: number; current: number; overdue: number; d90plus: number; d120: number; stale: boolean; }
+interface Overview {
+  generatedAt: string;
+  invoices: { total: number; totalAmount: number; unpaid: number; unpaidAmount: number; paid: number; paidThisMonth: number; paymentRequested: number; paymentRequestedAmount: number; overdue: number; submitted: number; };
+  creditors: { totalPayable: number; unpaidInvoices: number; commitmentsMonthly: number; requisitions: number; pendingExpenses: number; };
+  debtors: { total: number; current: number; overdue: number; d90plus: number; d120: number; companiesLoaded: number; oldestAsOf?: string; byCompany: DebtorCompany[] };
+  requisitions: { requested: number; requestedAmount: number; paid: number; rejected: number; total: number };
+  remittances: { new: number; thisMonth: number; thisMonthAmount: number; lastScanAt?: string; lastScanError?: string };
+  pods: { total: number; unlinked: number };
+  vault: { total: number; expired: number; dueSoon: number };
+  commitmentsMonthly: number;
 }
 
 @Component({
@@ -98,33 +114,32 @@ export class FinanceComponent implements OnInit {
   tabIndex = 0;
   private approvalsLoaded = false;
 
-  // ── POD / Vault headline numbers for the overview ──
-  podUnlinked = 0;
-  vaultExpiring = 0;
-  vaultExpired = 0;
+  // ── Overview (single server aggregate) ──
+  ov: Overview | null = null;
+  ovLoading = true;
+  ovError = false;
+
+  get podUnlinked(): number { return this.ov?.pods.unlinked ?? 0; }
+  get vaultExpired(): number { return this.ov?.vault.expired ?? 0; }
+  get vaultExpiring(): number { return this.ov?.vault.dueSoon ?? 0; }
+  get creditorsTotal(): number { return this.ov?.creditors.totalPayable ?? 0; }
+  get debtorsTotal(): number { return this.ov?.debtors.total ?? 0; }
+  get commitmentsMonthly(): number { return this.ov?.commitmentsMonthly ?? 0; }
+  get debtorsOverduePct(): number { const d = this.ov?.debtors; return d && d.total > 0 ? Math.round((d.overdue / d.total) * 100) : 0; }
+  get attentionCount(): number {
+    return (this.ov?.invoices.paymentRequested ?? 0) + (this.ov?.requisitions.requested ?? 0) + (this.stationeryCounts.pending || 0)
+      + (this.ov?.remittances.new ?? 0) + (this.ov?.vault.expired ?? 0);
+  }
+  barPct(part: number, whole: number): number { return whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0; }
 
   get approvalsBadge(): number {
-    return (this.stats.requestedPayments || 0) + (this.requisitionCounts.requested || 0) + (this.stationeryCounts.pending || 0);
+    return (this.ov?.invoices.paymentRequested ?? 0) + (this.requisitionCounts.requested || 0) + (this.stationeryCounts.pending || 0);
   }
-
-  stats = {
-    totalInvoices: 0,
-    totalAmount: 0,
-    requestedPayments: 0,
-    pendingPayments: 0,
-    unpaidInvoices: 0,
-    paidInvoices: 0,
-    submittedInvoices: 0
-  };
 
   // Invoice management
   invoices: BookInvoice[] = [];
-  filteredInvoices: BookInvoice[] = [];
   departments: Department[] = [];
   loading = false;
-  commitmentsMonthly = 0;
-  creditorsTotal = 0;
-  debtorsTotal = 0;
   
   // Filters
   selectedDepartment: number | null = null;
@@ -137,11 +152,12 @@ export class FinanceComponent implements OnInit {
   pageIndex = 0;
   totalInvoices = 0;
   
-  displayedColumns = ['invoiceNumber', 'supplierName', 'invoiceDate', 'category', 'total', 'status', 'actions'];
+  displayedColumns = ['invoiceNumber', 'supplierName', 'department', 'invoiceDate', 'category', 'total', 'status', 'actions'];
 
   // ─── Requested Payments Flow ───
   companies = [
-    { name: 'Acess Medical', icon: 'local_hospital' },
+    { name: 'All companies', icon: 'apps' },
+    { name: 'Access Medical', icon: 'local_hospital' },
     { name: 'Promed Technologies', icon: 'biotech' },
     { name: 'Promed Pharmatech', icon: 'science' },
     { name: 'Sebenzani Trading', icon: 'store' },
@@ -173,6 +189,9 @@ export class FinanceComponent implements OnInit {
   requestedPayments: RequestedPayment[] = [];
   previewPayment: RequestedPayment | null = null;
   showPreviewDialog = false;
+  rejectReason = '';
+  previewPdfUrl: string | null = null;
+  deciding = false;
 
   // NOTE: the old frontend-hardcoded per-company passwords were removed.
   // Access is now verified server-side (GET /api/finance/company-access)
@@ -184,15 +203,17 @@ export class FinanceComponent implements OnInit {
     private router: Router,
     private route: ActivatedRoute,
     private toast: ToastService,
-    private tenderService: TenderService
+    private tenderService: TenderService,
+    private sanitizer: DomSanitizer
   ) {}
+
+  safeUrl(u: string): SafeResourceUrl { return this.sanitizer.bypassSecurityTrustResourceUrl(u); }
 
   ngOnInit(): void {
     this.loadDepartments();
-    this.loadStats();
+    this.loadOverview();
     this.loadStationeryCounts();
     this.loadRequisitionCounts();
-    this.loadPodAndVaultCounts();
 
     // Deep link: /finance?tab=pods|vault|approvals|invoices (&section=stationery|requisitions)
     this.route.queryParamMap.subscribe(q => {
@@ -212,6 +233,7 @@ export class FinanceComponent implements OnInit {
       this.loadRequisitions();
       this.loadStationeryRequests();
     }
+    if (tab === 'invoices' && this.invoices.length === 0 && !this.loading) this.loadInvoices();
     this.router.navigate([], { relativeTo: this.route, queryParams: { tab: tab === 'overview' ? null : tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
@@ -220,66 +242,21 @@ export class FinanceComponent implements OnInit {
     if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
   }
 
-  private loadPodAndVaultCounts(): void {
-    this.http.get<any>(`${environment.apiUrl}/PodDocuments/summary`).subscribe({
-      next: s => this.podUnlinked = s?.unlinked || 0,
-      error: () => {}
-    });
-    this.tenderService.getComplianceSummary().subscribe({
-      next: s => { this.vaultExpiring = (s?.expiring || 0) + (s?.warning || 0); this.vaultExpired = s?.expired || 0; },
-      error: () => {}
+  loadOverview(): void {
+    this.ovLoading = true; this.ovError = false;
+    this.http.get<Overview>(`${environment.apiUrl}/finance/overview`).subscribe({
+      next: o => { this.ov = o; this.ovLoading = false; },
+      error: () => { this.ovLoading = false; this.ovError = true; }
     });
   }
+  /** Kept for call-sites that used to refresh individual stats. */
+  loadStats(): void { this.loadOverview(); }
+  loadInvoiceStats(): void { this.loadOverview(); }
 
   loadDepartments(): void {
     this.http.get<Department[]>(`${environment.apiUrl}/departments`).subscribe({
-      next: (depts) => {
-        this.departments = depts;
-        this.selectedDepartment = null;
-      },
-      error: (err) => {
-        console.error('Error loading departments:', err);
-      }
-    });
-  }
-
-  loadStats(): void {
-    this.financeService.getExpenses('Pending').subscribe(expenses => {
-      this.stats.requestedPayments = expenses.length;
-    });
-
-    this.financeService.getPayments('Pending').subscribe(payments => {
-      this.stats.pendingPayments = payments.length;
-    });
-    
-    this.loadInvoiceStats();
-
-    this.http.get<any>(`${environment.apiUrl}/finance/creditors/summary`).subscribe({
-      next: (s) => this.creditorsTotal = s?.totalPayable || 0,
-      error: () => {}
-    });
-    this.http.get<any>(`${environment.apiUrl}/finance/debtors/summary`).subscribe({
-      next: (s) => this.debtorsTotal = s?.totalReceivable || 0,
-      error: () => {}
-    });
-  }
-  
-  loadInvoiceStats(): void {
-    let url = `${environment.apiUrl}/Books/all-invoices-summary`;
-    this.http.get<any>(url).subscribe({
-      next: (summary) => {
-        this.stats.totalInvoices = summary.totalCount || 0;
-        this.stats.totalAmount = summary.totalAmount || 0;
-        this.stats.unpaidInvoices = summary.unpaidCount || 0;
-        this.stats.paidInvoices = summary.paidCount || 0;
-        this.stats.submittedInvoices = summary.submittedCount || 0;
-      },
-      error: (err) => console.error('Error loading invoice stats:', err)
-    });
-
-    this.http.get<any>(`${environment.apiUrl}/finance/recurring-payments/summary`).subscribe({
-      next: (s) => this.commitmentsMonthly = s?.monthlyTotal || 0,
-      error: () => {}
+      next: (depts) => { this.departments = depts; },
+      error: (err) => { console.error('Error loading departments:', err); }
     });
   }
 
@@ -296,49 +273,36 @@ export class FinanceComponent implements OnInit {
   }
 
   onDepartmentChange(): void {
-    if (this.selectedDepartment) {
-      this.pageIndex = 0;
-      this.loadInvoices();
-    } else {
-      this.invoices = [];
-      this.filteredInvoices = [];
-      this.totalInvoices = 0;
-    }
+    this.pageIndex = 0;
+    this.loadInvoices();
   }
 
   loadInvoices(): void {
-    if (!this.selectedDepartment) {
-      return;
-    }
-    
     this.loading = true;
-    let url = `${environment.apiUrl}/Books?departmentId=${this.selectedDepartment}&page=${this.pageIndex + 1}&pageSize=${this.pageSize}`;
-    
+    let url = `${environment.apiUrl}/Books?page=${this.pageIndex + 1}&pageSize=${this.pageSize}`;
+    if (this.selectedDepartment) url += `&departmentId=${this.selectedDepartment}`;
     if (this.searchTerm) url += `&search=${encodeURIComponent(this.searchTerm)}`;
-    if (this.selectedStatus) url += `&status=${this.selectedStatus}`;
+    if (this.selectedStatus) url += `&status=${encodeURIComponent(this.selectedStatus)}`;
     if (this.selectedCategory) url += `&category=${encodeURIComponent(this.selectedCategory)}`;
 
     this.http.get<any>(url).subscribe({
       next: (response) => {
         this.invoices = response.items || response.data || [];
-        this.filteredInvoices = this.invoices;
         this.totalInvoices = response.totalCount || response.total || 0;
         this.loading = false;
-        
-        if (this.invoices.length === 0) {
-          this.toast.info('No invoices found for this department');
-        }
       },
       error: (err) => {
         this.loading = false;
         this.invoices = [];
-        this.filteredInvoices = [];
         this.totalInvoices = 0;
-        
-        const errorMsg = err.error?.message || err.message || 'Error loading invoices';
-        this.toast.error(errorMsg);
+        this.toast.error(err.error?.message || err.error?.error || 'Error loading invoices');
       }
     });
+  }
+
+  clearInvoiceFilters(): void {
+    this.selectedDepartment = null; this.searchTerm = ''; this.selectedStatus = ''; this.selectedCategory = '';
+    this.applyFilters();
   }
 
   applyFilters(): void {
@@ -352,10 +316,20 @@ export class FinanceComponent implements OnInit {
     this.loadInvoices();
   }
 
-  downloadInvoice(invoice: BookInvoice): void {
-    const url = `${environment.apiUrl}/Books/${invoice.id}/download`;
-    window.open(url, '_blank');
+  /** Files sit behind [Authorize]; fetch as a blob so the auth interceptor adds the token. */
+  private fetchFile(url: string, open: boolean, name?: string): void {
+    this.http.get(url, { responseType: 'blob' }).subscribe({
+      next: b => {
+        const href = URL.createObjectURL(b);
+        if (open) { window.open(href, '_blank'); }
+        else { const a = document.createElement('a'); a.href = href; a.download = name || 'invoice.pdf'; a.click(); }
+        setTimeout(() => URL.revokeObjectURL(href), 60_000);
+      },
+      error: () => this.toast.error('The file is missing from storage.')
+    });
   }
+  downloadInvoice(invoice: BookInvoice): void { this.fetchFile(`${environment.apiUrl}/Books/${invoice.id}/download`, false, invoice.fileName); }
+  openInvoiceFile(invoice: BookInvoice): void { this.fetchFile(`${environment.apiUrl}/Books/${invoice.id}/view`, true); }
 
   markPaid(invoice: BookInvoice): void {
     const body = { paymentDate: new Date().toISOString() };
@@ -404,6 +378,8 @@ export class FinanceComponent implements OnInit {
     });
   }
 
+  statusClass(s: string): string { return 'status-' + (s || '').toLowerCase().replace(/\s+/g, '-'); }
+
   // ─── Requested Payments Flow ───
 
   openRequestedPayments(): void {
@@ -437,34 +413,28 @@ export class FinanceComponent implements OnInit {
     this.requestedPaymentsLoading = true;
     this.requestedPayments = [];
 
-    // Load pending invoices across all departments for the selected company
-    this.http.get<any>(`${environment.apiUrl}/Books/all-invoices-summary`).subscribe({
-      next: () => {
-        // Load invoices from all departments with Pending status
-        this.http.get<any>(`${environment.apiUrl}/Books?page=1&pageSize=100&status=Pending`).subscribe({
-          next: (response) => {
-            const items = response.items || response.data || [];
-            // Map to RequestedPayment with company context
-            this.requestedPayments = items.map((inv: any) => ({
-              id: inv.id,
-              invoiceNumber: inv.invoiceNumber || 'N/A',
-              supplierName: inv.supplierName || 'Unknown',
-              departmentName: inv.departmentName || 'Unknown',
-              departmentId: inv.departmentId,
-              total: inv.total || 0,
-              invoiceDate: inv.invoiceDate,
-              description: inv.description || '',
-              status: inv.status || 'Pending',
-              category: inv.category || 'General',
-              fileName: inv.fileName
-            }));
-            this.requestedPaymentsLoading = false;
-          },
-          error: () => {
-            this.requestedPaymentsLoading = false;
-            this.toast.error("Couldn't load requested payments. Try again.");
-          }
-        });
+    // Departments put invoices into "Payment Requested" (PUT /Books/{id}/request-payment).
+    let url = `${environment.apiUrl}/Books?page=1&pageSize=200&status=${encodeURIComponent('Payment Requested')}&sortBy=invoicedate&sortDir=asc`;
+    if (this.selectedCompany && this.selectedCompany !== 'All companies') url += `&company=${encodeURIComponent(this.selectedCompany)}`;
+    this.http.get<any>(url).subscribe({
+      next: (response) => {
+        const items = response.items || response.data || [];
+        this.requestedPayments = items.map((inv: any) => ({
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber || 'N/A',
+          supplierName: inv.supplierName || 'Unknown',
+          departmentName: inv.departmentName || 'Unknown',
+          departmentId: inv.departmentId,
+          companyName: inv.companyName,
+          total: inv.total || 0,
+          invoiceDate: inv.invoiceDate,
+          description: inv.description || '',
+          status: inv.status || 'Payment Requested',
+          category: inv.category || 'General',
+          fileName: inv.originalFileName || inv.fileName,
+          notes: inv.notes
+        }));
+        this.requestedPaymentsLoading = false;
       },
       error: () => {
         this.requestedPaymentsLoading = false;
@@ -473,72 +443,61 @@ export class FinanceComponent implements OnInit {
     });
   }
 
+  get requestedTotal(): number { return this.requestedPayments.reduce((a, p) => a + (p.total || 0), 0); }
+
   closeRequestedPayments(): void {
     this.showRequestedPaymentsPanel = false;
     this.requestedPayments = [];
     this.selectedCompany = '';
-    this.previewPayment = null;
-    this.showPreviewDialog = false;
+    this.closePreviewDialog();
   }
 
   previewRequestedPayment(payment: RequestedPayment): void {
     this.previewPayment = payment;
     this.showPreviewDialog = true;
+    this.rejectReason = '';
+    this.previewPdfUrl = null;
+    if (payment.fileName) {
+      this.http.get(`${environment.apiUrl}/Books/${payment.id}/view`, { responseType: 'blob' }).subscribe({
+        next: b => { if (this.previewPayment?.id === payment.id) this.previewPdfUrl = URL.createObjectURL(b); },
+        error: () => {}
+      });
+    }
   }
 
   closePreviewDialog(): void {
     this.showPreviewDialog = false;
     this.previewPayment = null;
+    if (this.previewPdfUrl) { URL.revokeObjectURL(this.previewPdfUrl); this.previewPdfUrl = null; }
   }
 
-  approvePayment(payment: RequestedPayment): void {
-    // Update invoice status to Submitted/Paid
-    this.http.put(`${environment.apiUrl}/Books/${payment.id}/status`, { status: 'Paid' }).subscribe({
+  private decide(payment: RequestedPayment, status: 'Paid' | 'Rejected', notes?: string): void {
+    if (this.deciding) return;
+    this.deciding = true;
+    this.http.put<any>(`${environment.apiUrl}/Books/${payment.id}/status`, { status, notes: notes || null }).subscribe({
       next: () => {
-        this.toast.done(`Invoice ${payment.invoiceNumber} approved and submitted`);
+        this.deciding = false;
+        this.toast.done(status === 'Paid' ? `Invoice ${payment.invoiceNumber} marked paid` : `Invoice ${payment.invoiceNumber} sent back to ${payment.departmentName}`);
         this.requestedPayments = this.requestedPayments.filter(p => p.id !== payment.id);
         this.closePreviewDialog();
-        this.loadStats();
+        this.loadOverview();
+        if (this.invoices.length) this.loadInvoices();
       },
-      error: () => {
-        // If endpoint doesn't exist yet, just remove from local list
-        this.toast.info(`Invoice ${payment.invoiceNumber} marked as submitted`);
-        this.requestedPayments = this.requestedPayments.filter(p => p.id !== payment.id);
-        this.closePreviewDialog();
-      }
+      error: (err) => { this.deciding = false; this.toast.error(err?.error?.error || `Couldn't update invoice ${payment.invoiceNumber}. Nothing was changed.`); }
     });
   }
-
+  approvePayment(payment: RequestedPayment): void { this.decide(payment, 'Paid'); }
   rejectPayment(payment: RequestedPayment): void {
-    this.http.put(`${environment.apiUrl}/Books/${payment.id}/status`, { status: 'Rejected' }).subscribe({
-      next: () => {
-        this.toast.done(`Invoice ${payment.invoiceNumber} rejected`);
-        this.requestedPayments = this.requestedPayments.filter(p => p.id !== payment.id);
-        this.closePreviewDialog();
-        this.loadStats();
-      },
-      error: () => {
-        this.toast.info(`Invoice ${payment.invoiceNumber} marked as rejected`);
-        this.requestedPayments = this.requestedPayments.filter(p => p.id !== payment.id);
-        this.closePreviewDialog();
-      }
-    });
+    if (!this.showPreviewDialog) { this.previewRequestedPayment(payment); return; } // reason is captured in the preview
+    this.decide(payment, 'Rejected', this.rejectReason.trim());
   }
 
-  downloadRequestedPayment(payment: RequestedPayment): void {
-    const url = `${environment.apiUrl}/Books/${payment.id}/download`;
-    window.open(url, '_blank');
-  }
+  downloadRequestedPayment(payment: RequestedPayment): void { this.fetchFile(`${environment.apiUrl}/Books/${payment.id}/download`, false, payment.fileName); }
 
   // ─── Stationery Requests ───
 
-  private finHeaders(): HttpHeaders {
-    const t = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
-    return new HttpHeaders({ Authorization: `Bearer ${t}` });
-  }
-
   loadStationeryCounts(): void {
-    this.http.get<any>(`${environment.apiUrl}/stationery-requests/counts`, { headers: this.finHeaders() }).subscribe({
+    this.http.get<any>(`${environment.apiUrl}/stationery-requests/counts`).subscribe({
       next: c => this.stationeryCounts = c,
       error: () => {}
     });
@@ -557,7 +516,7 @@ export class FinanceComponent implements OnInit {
   loadStationeryRequests(): void {
     this.stationeryLoading = true;
     const q = this.stationeryFilter !== 'all' ? `?status=${this.stationeryFilter}` : '';
-    this.http.get<any[]>(`${environment.apiUrl}/stationery-requests${q}`, { headers: this.finHeaders() }).subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/stationery-requests${q}`).subscribe({
       next: r => { this.stationeryRequests = r; this.stationeryLoading = false; },
       error: () => { this.stationeryLoading = false; }
     });
@@ -565,10 +524,11 @@ export class FinanceComponent implements OnInit {
 
   reviewStationery(req: any, status: 'Approved' | 'Declined'): void {
     this.http.put(`${environment.apiUrl}/stationery-requests/${req.stationeryRequestId}/review`,
-      { status, notes: null }, { headers: this.finHeaders() }).subscribe({
+      { status, notes: null }).subscribe({
       next: () => {
         req.status = status;
         this.loadStationeryCounts();
+        this.toast.done(`Stationery request ${status.toLowerCase()}`);
       },
       error: () => this.toast.error("Couldn't update the stationery request. Try again.")
     });
@@ -620,6 +580,7 @@ export class FinanceComponent implements OnInit {
       next: () => {
         req.financeStatus = status;
         this.loadRequisitionCounts();
+        this.loadOverview();
         if (this.requisitionFilter !== 'all' && this.requisitionFilter !== status) {
           this.requisitions = this.requisitions.filter(r => r.id !== req.id);
         }

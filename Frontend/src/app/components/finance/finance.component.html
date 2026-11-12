@@ -1,7 +1,7 @@
 <app-navbar></app-navbar>
 <div class="finance-container">
   <app-page-header class="finance-header" [crumbs]="['People and money', 'Finance']" title="Finance"
-                   [subtitle]="(stats.totalAmount | currency:'ZAR':'symbol':'1.0-0') + ' across all invoices'"></app-page-header>
+                   [subtitle]="ov ? ((ov.debtors.total | currency:'ZAR':'R':'1.0-0') + ' owed to us · ' + (ov.creditors.totalPayable | currency:'ZAR':'R':'1.0-0') + ' payable') : 'Loading…'"></app-page-header>
 
   <mat-tab-group class="finance-tabs" animationDuration="150ms" [selectedIndex]="tabIndex" (selectedIndexChange)="onTabChange($event)" mat-stretch-tabs="false">
 
@@ -10,239 +10,165 @@
     <ng-template mat-tab-label><mat-icon class="tab-icon">dashboard</mat-icon> Overview</ng-template>
     <div class="tab-body">
 
-  <!-- Creditors / Debtors split entry -->
-  <div class="split-grid animate-in delay-1">
-    <div class="split-card creditors" (click)="goToCreditors()">
-      <div class="split-icon"><mat-icon>call_made</mat-icon></div>
-      <div class="split-body">
-        <h2>Creditors</h2>
-        <p>Accounts Payable — what we owe</p>
-        <span class="split-value">{{ creditorsTotal | currency:'ZAR':'symbol':'1.0-0' }}</span>
+  @if (ovLoading) {
+    <div class="ov-loading"><mat-spinner diameter="40"></mat-spinner><p>Pulling the numbers together…</p></div>
+  } @else if (ovError || !ov) {
+    <div class="ov-error"><mat-icon>cloud_off</mat-icon><p>Couldn't load the finance overview.</p><button mat-stroked-button (click)="loadOverview()"><mat-icon>refresh</mat-icon> Retry</button></div>
+  } @else {
+
+  <!-- KPI row -->
+  <div class="kpi-grid animate-in delay-1">
+    <button class="kpi kpi-debtors" (click)="goTab('aging')">
+      <div class="kpi-head"><mat-icon>call_received</mat-icon><span>Debtors · owed to us</span></div>
+      <div class="kpi-value">{{ ov.debtors.total | currency:'ZAR':'R':'1.0-0' }}</div>
+      @if (ov.debtors.companiesLoaded > 0) {
+        <div class="kpi-bar"><span class="seg cur" [style.width.%]="barPct(ov.debtors.current, ov.debtors.total)"></span><span class="seg od" [style.width.%]="barPct(ov.debtors.overdue - ov.debtors.d120, ov.debtors.total)"></span><span class="seg old" [style.width.%]="barPct(ov.debtors.d120, ov.debtors.total)"></span></div>
+        <div class="kpi-foot">
+          <span><b>{{ debtorsOverduePct }}%</b> overdue · <b>{{ ov.debtors.d120 | currency:'ZAR':'R':'1.0-0' }}</b> at 120+ days</span>
+          <span class="kpi-sub">{{ ov.debtors.companiesLoaded }} of 4 companies · oldest aging {{ ov.debtors.oldestAsOf | date:'d MMM' }}</span>
+        </div>
+      } @else {
+        <div class="kpi-foot"><span class="kpi-sub">No aging uploaded yet — open the Aging tab to import from Sage</span></div>
+      }
+    </button>
+
+    <button class="kpi kpi-creditors" (click)="goToCreditors()">
+      <div class="kpi-head"><mat-icon>call_made</mat-icon><span>Creditors · payable</span></div>
+      <div class="kpi-value">{{ ov.creditors.totalPayable | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-foot kpi-breakdown">
+        <span>Supplier invoices <b>{{ ov.creditors.unpaidInvoices | currency:'ZAR':'R':'1.0-0' }}</b></span>
+        <span>Requisitions <b>{{ ov.creditors.requisitions | currency:'ZAR':'R':'1.0-0' }}</b></span>
+        <span>Commitments /mo <b>{{ ov.creditors.commitmentsMonthly | currency:'ZAR':'R':'1.0-0' }}</b></span>
+        @if (ov.creditors.pendingExpenses > 0) { <span>Expenses <b>{{ ov.creditors.pendingExpenses | currency:'ZAR':'R':'1.0-0' }}</b></span> }
       </div>
-      <mat-icon class="split-arrow">arrow_forward</mat-icon>
-    </div>
-    <div class="split-card debtors" (click)="goToDebtors()">
-      <div class="split-icon"><mat-icon>call_received</mat-icon></div>
-      <div class="split-body">
-        <h2>Debtors</h2>
-        <p>Accounts Receivable — sales owed to us</p>
-        <span class="split-value">{{ debtorsTotal | currency:'ZAR':'symbol':'1.0-0' }}</span>
+    </button>
+
+    <button class="kpi kpi-requests" [class.hot]="ov.invoices.paymentRequested > 0" (click)="openRequestedPayments()">
+      <div class="kpi-head"><mat-icon>request_quote</mat-icon><span>Payment requests waiting</span></div>
+      <div class="kpi-value">{{ ov.invoices.paymentRequested }}</div>
+      <div class="kpi-foot">
+        <span>{{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }} asked by departments</span>
+        <span class="kpi-sub">{{ ov.invoices.paymentRequested > 0 ? 'Click to review, pay or send back' : 'Nothing waiting on Finance' }}</span>
       </div>
-      <mat-icon class="split-arrow">arrow_forward</mat-icon>
-    </div>
+    </button>
+
+    <button class="kpi kpi-cash" (click)="goTab('remittances')">
+      <div class="kpi-head"><mat-icon>savings</mat-icon><span>This month</span></div>
+      <div class="kpi-value">{{ ov.remittances.thisMonthAmount | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-foot">
+        <span>received on <b>{{ ov.remittances.thisMonth }}</b> remittance{{ ov.remittances.thisMonth === 1 ? '' : 's' }}</span>
+        <span class="kpi-sub">{{ ov.invoices.paidThisMonth | currency:'ZAR':'R':'1.0-0' }} paid out to suppliers</span>
+      </div>
+    </button>
   </div>
 
-  <!-- Stats Cards -->
-  <div class="stats-grid animate-in delay-1">
-    <div class="stat-card-modern invoices-card-stat">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>description</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ stats.totalInvoices }}</span>
-          <span class="stat-title">Total Invoices</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="stat-card-modern unpaid-card-stat">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>pending_actions</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ stats.unpaidInvoices }}</span>
-          <span class="stat-title">Unpaid Invoices</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="stat-card-modern paid-card-stat">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>task_alt</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ stats.paidInvoices }}</span>
-          <span class="stat-title">Paid Invoices</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="stat-card-modern expenses-card-stat is-link" (click)="openRequestedPayments()">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
+  <div class="ov-columns animate-in delay-2">
+    <!-- Needs attention -->
+    <section class="ov-card">
+      <header class="ov-card-head">
+        <h2><mat-icon>notifications_active</mat-icon> Needs attention</h2>
+        @if (attentionCount > 0) { <span class="ov-count">{{ attentionCount }}</span> } @else { <span class="ov-count ok">All clear</span> }
+      </header>
+      <ul class="attn-list">
+        <li class="attn" [class.zero]="ov.invoices.paymentRequested === 0" (click)="openRequestedPayments()">
           <mat-icon>request_quote</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ stats.requestedPayments }}</span>
-          <span class="stat-title">Requested Payments</span>
-        </div>
-        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
-      </div>
-    </div>
-
-    <div class="stat-card-modern is-link pods-card-stat" (click)="goTab('pods')">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>fact_check</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ podUnlinked }}</span>
-          <span class="stat-title">Unlinked PODs</span>
-        </div>
-        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
-      </div>
-    </div>
-
-    <div class="stat-card-modern is-link vault-card-stat" [class.alert]="vaultExpired > 0" (click)="goTab('vault')">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>shield</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ vaultExpiring + vaultExpired }}</span>
-          <span class="stat-title">Vault renewals due</span>
-        </div>
-        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
-      </div>
-    </div>
-
-    <div class="stat-card-modern payments-card-stat">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>credit_card</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ stats.pendingPayments }}</span>
-          <span class="stat-title">Pending Payments</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="stat-card-modern submitted-card-stat">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>send</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ stats.submittedInvoices }}</span>
-          <span class="stat-title">Submitted Invoices</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="stat-card-modern stationery-card-stat is-link" (click)="goTab('approvals', 'stationery')">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
+          <div class="attn-text"><b>{{ ov.invoices.paymentRequested }}</b> supplier invoice{{ ov.invoices.paymentRequested === 1 ? '' : 's' }} awaiting payment decision<small>{{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="ov.requisitions.requested === 0" (click)="goTab('approvals', 'requisitions')">
+          <mat-icon>receipt_long</mat-icon>
+          <div class="attn-text"><b>{{ ov.requisitions.requested }}</b> requisition{{ ov.requisitions.requested === 1 ? '' : 's' }} to pay<small>{{ ov.requisitions.requestedAmount | currency:'ZAR':'R':'1.0-0' }} petty cash / e-wallet / diesel</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="stationeryCounts.pending === 0" (click)="goTab('approvals', 'stationery')">
           <mat-icon>edit_note</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{stationeryCounts.pending}}</span>
-          <span class="stat-title">Stationery Requests</span>
-        </div>
-        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
-      </div>
-    </div>
-
-    <div class="stat-card-modern is-link" (click)="goTab('approvals', 'requisitions')">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>request_quote</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{requisitionCounts.requested}}</span>
-          <span class="stat-title">Requisitions</span>
-        </div>
-        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
-      </div>
-    </div>
-
-    <div class="stat-card-modern is-link" (click)="goToCommitments()">
-      <div class="stat-card-accent"></div>
-      <div class="stat-card-body">
-        <div class="stat-icon-modern">
-          <mat-icon>event_repeat</mat-icon>
-        </div>
-        <div class="stat-detail">
-          <span class="stat-number">{{ commitmentsMonthly | currency:'ZAR':'symbol':'1.0-0' }}</span>
-          <span class="stat-title">Monthly Commitments</span>
-        </div>
-        <mat-icon class="stat-card-arrow">arrow_forward_ios</mat-icon>
-      </div>
-    </div>
-  </div>
-
-  <!-- Quick Actions -->
-  <div class="quick-actions animate-in delay-3">
-    <h2 class="section-label">
-      <mat-icon>bolt</mat-icon>
-      Quick Actions
-    </h2>
-    <div class="actions-grid-modern">
-      <button class="action-card" (click)="goToBooks()">
-        <div class="action-card-icon invoices-action">
-          <mat-icon>description</mat-icon>
-        </div>
-        <span class="action-card-label">Manage Invoices</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" routerLink="/finance/expenses">
-        <div class="action-card-icon expenses-action">
-          <mat-icon>receipt</mat-icon>
-        </div>
-        <span class="action-card-label">Expenses</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" routerLink="/finance/purchase-orders">
-        <div class="action-card-icon po-action">
-          <mat-icon>shopping_cart</mat-icon>
-        </div>
-        <span class="action-card-label">Purchase Orders</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" routerLink="/finance/payments">
-        <div class="action-card-icon payments-action">
-          <mat-icon>payment</mat-icon>
-        </div>
-        <span class="action-card-label">Payments</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" routerLink="/finance/categories">
-        <div class="action-card-icon categories-action">
-          <mat-icon>category</mat-icon>
-        </div>
-        <span class="action-card-label">Categories</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" (click)="goTab('pods')">
-        <div class="action-card-icon pods-action">
+          <div class="attn-text"><b>{{ stationeryCounts.pending }}</b> stationery request{{ stationeryCounts.pending === 1 ? '' : 's' }} to approve</div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="ov.remittances.new === 0" (click)="goTab('remittances')">
+          <mat-icon>payments</mat-icon>
+          <div class="attn-text"><b>{{ ov.remittances.new }}</b> new remittance{{ ov.remittances.new === 1 ? '' : 's' }} to allocate
+            <small>@if (ov.remittances.lastScanError) { <span class="bad">Last mailbox scan failed</span> } @else if (ov.remittances.lastScanAt) { mailbox checked {{ ov.remittances.lastScanAt | date:'d MMM HH:mm' }} } @else { mailbox not scanned yet }</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="ov.pods.unlinked === 0" (click)="goTab('pods')">
           <mat-icon>fact_check</mat-icon>
-        </div>
-        <span class="action-card-label">Proof of Delivery</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-      <button class="action-card" (click)="goTab('vault')">
-        <div class="action-card-icon vault-action">
+          <div class="attn-text"><b>{{ ov.pods.unlinked }}</b> POD{{ ov.pods.unlinked === 1 ? '' : 's' }} not linked to an invoice<small>deliveries we can't prove for collection yet</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="ov.vault.expired + ov.vault.dueSoon === 0" [class.danger]="ov.vault.expired > 0" (click)="goTab('vault')">
           <mat-icon>shield</mat-icon>
-        </div>
-        <span class="action-card-label">Compliance Vault</span>
-        <mat-icon class="action-arrow">arrow_forward</mat-icon>
-      </button>
-    </div>
+          <div class="attn-text">
+            @if (ov.vault.expired > 0) { <b>{{ ov.vault.expired }}</b> compliance document{{ ov.vault.expired === 1 ? '' : 's' }} <span class="bad">expired</span> }
+            @else { <b>{{ ov.vault.dueSoon }}</b> compliance renewal{{ ov.vault.dueSoon === 1 ? '' : 's' }} due }
+            <small>{{ ov.vault.dueSoon }} due within 60 days · tax clearance, B-BBEE, CSD, bank letters</small>
+          </div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Debtors by company -->
+    <section class="ov-card">
+      <header class="ov-card-head">
+        <h2><mat-icon>hourglass_bottom</mat-icon> Debtors by company</h2>
+        <button mat-button (click)="goTab('aging')">Open aging <mat-icon>arrow_forward</mat-icon></button>
+      </header>
+      @if (ov.debtors.byCompany.length === 0) {
+        <div class="ov-empty"><mat-icon>upload_file</mat-icon><p>Upload each company's Sage aging on the Aging tab and the balances will show here.</p></div>
+      } @else {
+        <ul class="co-list">
+          @for (c of ov.debtors.byCompany; track c.company) {
+            <li class="co" (click)="goTab('aging')">
+              <div class="co-top">
+                <span class="co-name">{{ c.company }}</span>
+                <span class="co-total">{{ c.total | currency:'ZAR':'R':'1.0-0' }}</span>
+              </div>
+              <div class="co-bar"><span class="seg cur" [style.width.%]="barPct(c.current, c.total)" matTooltip="Current"></span><span class="seg od" [style.width.%]="barPct(c.overdue - c.d120, c.total)" matTooltip="30–120 days"></span><span class="seg old" [style.width.%]="barPct(c.d120, c.total)" matTooltip="120+ days"></span></div>
+              <div class="co-foot">
+                <span>{{ barPct(c.overdue, c.total) | number:'1.0-0' }}% overdue · {{ c.d120 | currency:'ZAR':'R':'1.0-0' }} at 120+</span>
+                <span class="co-asof" [class.stale]="c.stale" [matTooltip]="c.stale ? 'This aging is more than 2 weeks old — upload a fresh export' : ''">{{ c.customerCount }} customers · as at {{ c.asOfDate | date:'d MMM' }}@if (c.stale) { <mat-icon>update</mat-icon> }</span>
+              </div>
+            </li>
+          }
+        </ul>
+        <div class="legend"><span><i class="cur"></i>Current</span><span><i class="od"></i>30–120 days</span><span><i class="old"></i>120+ days</span></div>
+      }
+    </section>
   </div>
 
+  <!-- Supplier invoices snapshot + quick actions -->
+  <div class="ov-columns animate-in delay-3">
+    <section class="ov-card">
+      <header class="ov-card-head">
+        <h2><mat-icon>description</mat-icon> Supplier invoices</h2>
+        <button mat-button (click)="goTab('invoices')">All invoices <mat-icon>arrow_forward</mat-icon></button>
+      </header>
+      <div class="mini-stats">
+        <button class="mini" (click)="selectedStatus=''; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.total }}</span><span class="l">Total</span></button>
+        <button class="mini warn" (click)="selectedStatus=''; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.unpaid }}</span><span class="l">Unpaid · {{ ov.invoices.unpaidAmount | currency:'ZAR':'R':'1.0-0' }}</span></button>
+        <button class="mini hot" (click)="openRequestedPayments()"><span class="n">{{ ov.invoices.paymentRequested }}</span><span class="l">Payment requested</span></button>
+        <button class="mini bad" (click)="selectedStatus='Overdue'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.overdue }}</span><span class="l">Overdue</span></button>
+        <button class="mini ok" (click)="selectedStatus='Paid'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.paid }}</span><span class="l">Paid</span></button>
+      </div>
+    </section>
+
+    <section class="ov-card">
+      <header class="ov-card-head"><h2><mat-icon>bolt</mat-icon> Go to</h2></header>
+      <div class="qa-grid">
+        <button class="qa" (click)="goToBooks()"><mat-icon>description</mat-icon><span>Books</span></button>
+        <button class="qa" routerLink="/finance/expenses"><mat-icon>receipt</mat-icon><span>Expenses</span></button>
+        <button class="qa" routerLink="/finance/purchase-orders"><mat-icon>shopping_cart</mat-icon><span>Purchase orders</span></button>
+        <button class="qa" routerLink="/finance/payments"><mat-icon>payment</mat-icon><span>Payments</span></button>
+        <button class="qa" (click)="goToCommitments()"><mat-icon>event_repeat</mat-icon><span>Commitments</span></button>
+        <button class="qa" (click)="goToCreditors()"><mat-icon>call_made</mat-icon><span>Creditors</span></button>
+        <button class="qa" (click)="goToDebtors()"><mat-icon>call_received</mat-icon><span>Debtors</span></button>
+        <button class="qa" routerLink="/finance/categories"><mat-icon>category</mat-icon><span>Categories</span></button>
+      </div>
+    </section>
+  </div>
+
+  }
     </div>
   </mat-tab>
 
@@ -260,11 +186,12 @@
       <div class="sp-header">
         <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Requested Payments</h3></div>
         <div class="sp-filters">
-          <span class="sp-filter active">Pending ({{ stats.requestedPayments }})</span>
+          <span class="sp-filter active">Waiting ({{ ov?.invoices?.paymentRequested ?? 0 }})</span>
+          @if (ov?.invoices?.paymentRequestedAmount) { <span class="sp-filter">{{ ov!.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</span> }
         </div>
-        <button mat-stroked-button (click)="openRequestedPayments()"><mat-icon>business</mat-icon> Review by company</button>
+        <button mat-flat-button color="primary" (click)="openRequestedPayments()"><mat-icon>rule</mat-icon> Review payments</button>
       </div>
-      <p class="sp-hint">Invoices departments have asked Finance to pay. Pick a company to review, preview and approve or reject each one.</p>
+      <p class="sp-hint">Supplier invoices departments have marked <b>Payment Requested</b>. Review the PDF, then mark <b>Paid</b> or send it back with a reason.</p>
     </div>
 
     <!-- Requisitions -->
@@ -388,8 +315,8 @@
           <mat-icon>description</mat-icon>
         </div>
         <div>
-          <h2 class="panel-title">Department Invoices</h2>
-          <p class="panel-subtitle">Filter and manage invoices by department</p>
+          <h2 class="panel-title">Supplier Invoices</h2>
+          <p class="panel-subtitle">Every invoice uploaded to Books, across all departments</p>
         </div>
       </div>
       @if (totalInvoices > 0) {
@@ -409,7 +336,7 @@
             Department
           </label>
           <select id="deptSelect" [(ngModel)]="selectedDepartment" (ngModelChange)="onDepartmentChange()">
-            <option [ngValue]="null">-- Select Department --</option>
+            <option [ngValue]="null">All departments</option>
             @for (dept of departments; track dept.departmentId) {
               <option [ngValue]="dept.departmentId">{{ dept.name }}</option>
             }
@@ -422,7 +349,7 @@
             Search
           </label>
           <div class="search-input-wrap">
-            <input type="text" [(ngModel)]="searchTerm" placeholder="Invoice #, supplier, description..." (keyup.enter)="applyFilters()">
+            <input type="search" [(ngModel)]="searchTerm" placeholder="Invoice #, supplier, description, reference…" (keyup.enter)="applyFilters()">
             <mat-icon class="search-icon-inside">search</mat-icon>
           </div>
         </div>
@@ -433,23 +360,28 @@
             Status
           </label>
           <select id="statusSelect" [(ngModel)]="selectedStatus" (ngModelChange)="applyFilters()">
-            <option value="">All Statuses</option>
-            <option value="Draft">Draft</option>
-            <option value="Confirmed">Confirmed</option>
-            <option value="Pending">Pending</option>
+            <option value="">All statuses</option>
             <option value="Payment Requested">Payment Requested</option>
+            <option value="Confirmed">Confirmed (unpaid)</option>
+            <option value="Overdue">Overdue</option>
             <option value="Paid">Paid</option>
             <option value="Submitted">Submitted</option>
-            <option value="Overdue">Overdue</option>
+            <option value="Pending">Pending</option>
+            <option value="Draft">Draft</option>
             <option value="Archived">Archived</option>
           </select>
         </div>
       </div>
 
-      <button class="filter-apply-btn" (click)="applyFilters()" [disabled]="!selectedDepartment">
-        <mat-icon>filter_list</mat-icon>
-        Apply
-      </button>
+      <div class="filter-actions">
+        @if (selectedDepartment || searchTerm || selectedStatus) {
+          <button class="filter-clear-btn" (click)="clearInvoiceFilters()" matTooltip="Clear filters"><mat-icon>filter_alt_off</mat-icon></button>
+        }
+        <button class="filter-apply-btn" (click)="applyFilters()">
+          <mat-icon>filter_list</mat-icon>
+          Apply
+        </button>
+      </div>
     </div>
 
     <!-- Table Area -->
@@ -461,9 +393,9 @@
           </div>
           <p>Loading invoices...</p>
         </div>
-      } @else if (selectedDepartment && !loading && filteredInvoices.length > 0) {
+      } @else if (invoices.length > 0) {
         <div class="table-wrapper">
-          <table mat-table [dataSource]="filteredInvoices" class="modern-table">
+          <table mat-table [dataSource]="invoices" class="modern-table">
             <!-- Invoice Number -->
             <ng-container matColumnDef="invoiceNumber">
               <th mat-header-cell *matHeaderCellDef>Invoice #</th>
@@ -478,9 +410,15 @@
               <td mat-cell *matCellDef="let invoice">
                 <div class="supplier-cell">
                   <div class="supplier-avatar">{{ (invoice.supplierName || '?')[0] }}</div>
-                  <span>{{ invoice.supplierName }}</span>
+                  <div class="supplier-text"><span>{{ invoice.supplierName }}</span>@if (invoice.companyName) { <small>{{ invoice.companyName }}</small> }</div>
                 </div>
               </td>
+            </ng-container>
+
+            <!-- Department -->
+            <ng-container matColumnDef="department">
+              <th mat-header-cell *matHeaderCellDef>Department</th>
+              <td mat-cell *matCellDef="let invoice"><span class="dept-cell">{{ invoice.departmentName || '—' }}</span></td>
             </ng-container>
 
             <!-- Date -->
@@ -488,6 +426,7 @@
               <th mat-header-cell *matHeaderCellDef>Date</th>
               <td mat-cell *matCellDef="let invoice">
                 <span class="date-cell">{{ invoice.invoiceDate | date:'dd MMM yyyy' }}</span>
+                @if (invoice.paymentDate) { <small class="paid-on">paid {{ invoice.paymentDate | date:'dd MMM' }}</small> }
               </td>
             </ng-container>
 
@@ -501,9 +440,9 @@
 
             <!-- Total -->
             <ng-container matColumnDef="total">
-              <th mat-header-cell *matHeaderCellDef>Total</th>
-              <td mat-cell *matCellDef="let invoice">
-                <span class="amount-cell">{{ invoice.total | currency:'ZAR' }}</span>
+              <th mat-header-cell *matHeaderCellDef class="num">Total</th>
+              <td mat-cell *matCellDef="let invoice" class="num">
+                <span class="amount-cell">{{ invoice.total | currency:'ZAR':'R':'1.2-2' }}</span>
               </td>
             </ng-container>
 
@@ -511,7 +450,7 @@
             <ng-container matColumnDef="status">
               <th mat-header-cell *matHeaderCellDef>Status</th>
               <td mat-cell *matCellDef="let invoice">
-                <span class="status-pill" [class]="'status-' + invoice.status.toLowerCase().replace(' ', '-')">
+                <span class="status-pill" [ngClass]="statusClass(invoice.status)">
                   <span class="status-dot"></span>
                   {{ invoice.status }}
                 </span>
@@ -523,11 +462,16 @@
               <th mat-header-cell *matHeaderCellDef>Actions</th>
               <td mat-cell *matCellDef="let invoice">
                 <div class="action-btns">
-                  <button aria-label="View Details" class="action-btn view" (click)="viewInvoice(invoice)" matTooltip="View Details">
-                    <mat-icon>visibility</mat-icon>
-                  </button>
-                  <button aria-label="Download" class="action-btn download" (click)="downloadInvoice(invoice)" matTooltip="Download">
-                    <mat-icon>download</mat-icon>
+                  @if (invoice.fileName) {
+                    <button aria-label="Open PDF" class="action-btn view" (click)="openInvoiceFile(invoice)" matTooltip="Open PDF">
+                      <mat-icon>picture_as_pdf</mat-icon>
+                    </button>
+                    <button aria-label="Download" class="action-btn download" (click)="downloadInvoice(invoice)" matTooltip="Download">
+                      <mat-icon>download</mat-icon>
+                    </button>
+                  }
+                  <button aria-label="Open in Books" class="action-btn view" (click)="viewInvoice(invoice)" matTooltip="Open in Books">
+                    <mat-icon>open_in_new</mat-icon>
                   </button>
                   @if (invoice.status === 'Paid') {
                     <button aria-label="Mark as Unpaid" class="action-btn unpaid" (click)="markUnpaid(invoice)" matTooltip="Mark as Unpaid">
@@ -555,21 +499,14 @@
             showFirstLastButtons>
           </mat-paginator>
         </div>
-      } @else if (selectedDepartment && filteredInvoices.length === 0 && !loading) {
+      } @else {
         <div class="empty-state">
           <div class="empty-icon">
             <mat-icon>search_off</mat-icon>
           </div>
-          <h3>No Invoices Found</h3>
-          <p>No invoices found for the selected department</p>
-        </div>
-      } @else {
-        <div class="empty-state welcome">
-          <div class="empty-icon">
-            <mat-icon>touch_app</mat-icon>
-          </div>
-          <h3>Select a Department</h3>
-          <p>Choose a department from the filter above to view invoices</p>
+          <h3>No invoices match</h3>
+          <p>Try a different department, status or search term.</p>
+          @if (selectedDepartment || searchTerm || selectedStatus) { <button mat-stroked-button (click)="clearInvoiceFilters()">Clear filters</button> }
         </div>
       }
     </div>
@@ -651,8 +588,8 @@
             <mat-icon>business</mat-icon>
           </div>
           <div>
-            <h2>Select Company</h2>
-            <p>Choose a company to view requested payments</p>
+            <h2>Review payment requests</h2>
+            <p>Pick a company, or review everything that's waiting</p>
           </div>
         </div>
         <button aria-label="Close" class="dialog-close" (click)="closeCompanyDialog()">
@@ -691,7 +628,7 @@
           </div>
           <div>
             <h2>Requested Payments</h2>
-            <p>{{ selectedCompany }} — {{ requestedPayments.length }} pending requests</p>
+            <p>{{ selectedCompany }} · {{ requestedPayments.length }} waiting · {{ requestedTotal | currency:'ZAR':'R':'1.0-0' }}</p>
           </div>
         </div>
         <button aria-label="Close" class="dialog-close" (click)="closeRequestedPayments()">
@@ -711,12 +648,12 @@
               <mat-icon>check_circle</mat-icon>
             </div>
             <h3>All Caught Up!</h3>
-            <p>No pending payment requests for {{ selectedCompany }}</p>
+            <p>No payment requests waiting for {{ selectedCompany === 'All companies' ? 'any company' : selectedCompany }}</p>
           </div>
         } @else {
           <div class="rp-list">
             @for (payment of requestedPayments; track payment.id) {
-              <div class="rp-card">
+              <div class="rp-card" (click)="previewRequestedPayment(payment)">
                 <div class="rp-card-left">
                   <div class="rp-avatar">
                     {{ (payment.supplierName || '?')[0] }}
@@ -726,26 +663,30 @@
                     <span class="rp-supplier">{{ payment.supplierName }}</span>
                     <span class="rp-dept">
                       <mat-icon>apartment</mat-icon>
-                      {{ payment.departmentName }}
+                      {{ payment.departmentName }}@if (payment.companyName) { · {{ payment.companyName }} }
                     </span>
+                    @if (payment.description) { <span class="rp-desc">{{ payment.description }}</span> }
                   </div>
                 </div>
                 <div class="rp-card-center">
-                  <span class="rp-amount">{{ payment.total | currency:'ZAR' }}</span>
+                  <span class="rp-amount">{{ payment.total | currency:'ZAR':'R':'1.2-2' }}</span>
                   <span class="rp-date">{{ payment.invoiceDate | date:'dd MMM yyyy' }}</span>
+                  <span class="rp-cat">{{ payment.category }}</span>
                 </div>
-                <div class="rp-card-actions">
-                  <button aria-label="Preview" class="rp-btn preview" (click)="previewRequestedPayment(payment)" matTooltip="Preview">
+                <div class="rp-card-actions" (click)="$event.stopPropagation()">
+                  <button aria-label="Review" class="rp-btn preview" (click)="previewRequestedPayment(payment)" matTooltip="Review PDF">
                     <mat-icon>visibility</mat-icon>
                   </button>
-                  <button aria-label="Download" class="rp-btn download" (click)="downloadRequestedPayment(payment)" matTooltip="Download">
-                    <mat-icon>download</mat-icon>
-                  </button>
-                  <button aria-label="Submit / Approve" class="rp-btn approve" (click)="approvePayment(payment)" matTooltip="Submit / Approve">
+                  @if (payment.fileName) {
+                    <button aria-label="Download" class="rp-btn download" (click)="downloadRequestedPayment(payment)" matTooltip="Download">
+                      <mat-icon>download</mat-icon>
+                    </button>
+                  }
+                  <button aria-label="Mark paid" class="rp-btn approve" (click)="approvePayment(payment)" matTooltip="Mark paid" [disabled]="deciding">
                     <mat-icon>check_circle</mat-icon>
                   </button>
-                  <button aria-label="Reject" class="rp-btn reject" (click)="rejectPayment(payment)" matTooltip="Reject">
-                    <mat-icon>cancel</mat-icon>
+                  <button aria-label="Send back" class="rp-btn reject" (click)="rejectPayment(payment)" matTooltip="Send back with a reason" [disabled]="deciding">
+                    <mat-icon>undo</mat-icon>
                   </button>
                 </div>
               </div>
@@ -778,7 +719,8 @@
         </button>
       </div>
 
-      <div class="preview-body">
+      <div class="preview-body" [class.with-pdf]="!!previewPdfUrl">
+        <div class="preview-main">
         <div class="preview-grid">
           <div class="preview-field">
             <span class="preview-label">Invoice #</span>
@@ -793,16 +735,20 @@
             <span class="preview-value">{{ previewPayment.departmentName }}</span>
           </div>
           <div class="preview-field">
+            <span class="preview-label">Company</span>
+            <span class="preview-value">{{ previewPayment.companyName || '—' }}</span>
+          </div>
+          <div class="preview-field">
             <span class="preview-label">Category</span>
             <span class="preview-value">{{ previewPayment.category }}</span>
           </div>
           <div class="preview-field">
-            <span class="preview-label">Date</span>
+            <span class="preview-label">Invoice date</span>
             <span class="preview-value">{{ previewPayment.invoiceDate | date:'dd MMMM yyyy' }}</span>
           </div>
-          <div class="preview-field">
-            <span class="preview-label">Total Amount</span>
-            <span class="preview-value amount">{{ previewPayment.total | currency:'ZAR' }}</span>
+          <div class="preview-field span2">
+            <span class="preview-label">Total to pay</span>
+            <span class="preview-value amount">{{ previewPayment.total | currency:'ZAR':'R':'1.2-2' }}</span>
           </div>
         </div>
 
@@ -812,25 +758,43 @@
             <p>{{ previewPayment.description }}</p>
           </div>
         }
-
-        @if (previewPayment.fileName) {
-          <div class="preview-attachment">
-            <mat-icon>attach_file</mat-icon>
-            <span>{{ previewPayment.fileName }}</span>
-            <button class="btn-link" (click)="downloadRequestedPayment(previewPayment)">Download</button>
+        @if (previewPayment.notes) {
+          <div class="preview-description">
+            <span class="preview-label">History / notes</span>
+            <pre class="preview-notes">{{ previewPayment.notes }}</pre>
           </div>
         }
 
+        @if (previewPayment.fileName) {
+          <div class="preview-attachment">
+            <mat-icon>picture_as_pdf</mat-icon>
+            <span>{{ previewPayment.fileName }}</span>
+            <button class="btn-link" (click)="downloadRequestedPayment(previewPayment)">Download</button>
+          </div>
+        } @else {
+          <div class="preview-attachment none"><mat-icon>warning_amber</mat-icon><span>No PDF attached to this invoice — check with {{ previewPayment.departmentName }} before paying.</span></div>
+        }
+
+        <div class="preview-reason">
+          <label for="rejectReason">Reason (required to send back, optional when paying)</label>
+          <textarea id="rejectReason" rows="2" [(ngModel)]="rejectReason" placeholder="e.g. Duplicate of INV-1023 · VAT number missing · wrong company"></textarea>
+        </div>
+
         <div class="preview-actions">
-          <button class="btn-reject" (click)="rejectPayment(previewPayment)">
-            <mat-icon>cancel</mat-icon>
-            Rejected
+          <button class="btn-reject" (click)="rejectPayment(previewPayment)" [disabled]="deciding || !rejectReason.trim()" [matTooltip]="rejectReason.trim() ? '' : 'Give the department a reason'">
+            <mat-icon>undo</mat-icon>
+            Send back
           </button>
-          <button class="btn-approve" (click)="approvePayment(previewPayment)">
-            <mat-icon>check_circle</mat-icon>
-            Submitted
+          <button class="btn-approve" (click)="approvePayment(previewPayment)" [disabled]="deciding">
+            <mat-icon>{{ deciding ? 'hourglass_top' : 'check_circle' }}</mat-icon>
+            Mark paid
           </button>
         </div>
+        </div>
+
+        @if (previewPdfUrl) {
+          <div class="preview-pdf"><iframe [src]="safeUrl(previewPdfUrl)" title="Invoice PDF"></iframe></div>
+        }
       </div>
     </div>
   </div>

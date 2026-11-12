@@ -40,7 +40,7 @@ namespace ProjectTracker.API.Controllers
         // ============================================================================
         [HttpGet]
         public async Task<IActionResult> GetAll(
-            [FromQuery] int departmentId,
+            [FromQuery] int? departmentId,
             [FromQuery] string? search,
             [FromQuery] string? supplier,
             [FromQuery] string? category,
@@ -57,7 +57,9 @@ namespace ProjectTracker.API.Controllers
         {
             try
             {
-                var query = _context.BookInvoices.Where(b => b.DepartmentId == departmentId);
+                // departmentId is optional so Finance can see invoices across every department.
+                var query = _context.BookInvoices.AsNoTracking().AsQueryable();
+                if (departmentId.HasValue && departmentId.Value > 0) query = query.Where(b => b.DepartmentId == departmentId.Value);
 
                 // Search across supplier, invoice number, description, notes
                 if (!string.IsNullOrWhiteSpace(search))
@@ -118,6 +120,8 @@ namespace ProjectTracker.API.Controllers
                     .Select(b => new
                     {
                         b.Id,
+                        b.DepartmentId,
+                        DepartmentName = _context.Departments.Where(d => d.DepartmentId == b.DepartmentId).Select(d => d.Name).FirstOrDefault(),
                         b.SupplierName,
                         b.SupplierAccount,
                         b.InvoiceNumber,
@@ -726,6 +730,53 @@ namespace ProjectTracker.API.Controllers
                 _logger.LogError(ex, "Error marking book invoice {Id} as paid", id);
                 return StatusCode(500, new { error = "Failed to mark invoice as paid" });
             }
+        }
+
+        // ============================================================================
+        // PUT: api/Books/{id}/status - Finance decision on an invoice.
+        //   Paid      → status Paid, payment date stamped (optionally method/reference)
+        //   Rejected  → back to Confirmed so the department can fix & re-request; reason kept in Notes
+        //   Confirmed | Submitted | Archived → plain status change
+        // ============================================================================
+        public class InvoiceStatusRequest { public string? Status { get; set; } public string? Notes { get; set; } public string? PaymentMethod { get; set; } public string? PaymentReference { get; set; } }
+
+        [HttpPut("{id}/status")]
+        public async Task<IActionResult> SetStatus(int id, [FromBody] InvoiceStatusRequest request)
+        {
+            var invoice = await _context.BookInvoices.FindAsync(id);
+            if (invoice == null) return NotFound(new { error = "Invoice not found" });
+            var status = request?.Status?.Trim();
+            if (status is not ("Paid" or "Rejected" or "Confirmed" or "Submitted" or "Archived"))
+                return BadRequest(new { error = "Status must be Paid, Rejected, Confirmed, Submitted or Archived." });
+
+            var who = User.FindFirst(ClaimTypes.Name)?.Value ?? User.Identity?.Name ?? "Finance";
+            var stamp = $"[{DateTime.UtcNow:dd MMM yyyy HH:mm} {who}]";
+            switch (status)
+            {
+                case "Paid":
+                    invoice.Status = "Paid";
+                    invoice.PaymentDate = DateTime.UtcNow;
+                    if (!string.IsNullOrWhiteSpace(request!.PaymentMethod)) invoice.PaymentMethod = request.PaymentMethod;
+                    if (!string.IsNullOrWhiteSpace(request.PaymentReference)) invoice.PaymentReference = request.PaymentReference;
+                    if (!string.IsNullOrWhiteSpace(request.Notes)) invoice.Notes = Append(invoice.Notes, $"{stamp} Paid: {request.Notes.Trim()}");
+                    break;
+                case "Rejected":
+                    invoice.Status = "Confirmed";
+                    invoice.PaymentDate = null;
+                    invoice.Notes = Append(invoice.Notes, $"{stamp} Payment request declined by Finance{(string.IsNullOrWhiteSpace(request!.Notes) ? "" : ": " + request.Notes.Trim())}");
+                    break;
+                default:
+                    invoice.Status = status;
+                    if (status != "Paid") invoice.PaymentDate = null;
+                    if (!string.IsNullOrWhiteSpace(request!.Notes)) invoice.Notes = Append(invoice.Notes, $"{stamp} {request.Notes.Trim()}");
+                    break;
+            }
+            invoice.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Book invoice {Id} status → {Status} by {User}", id, invoice.Status, who);
+            return Ok(new { invoice.Id, invoice.Status, invoice.PaymentDate, invoice.Notes });
+
+            static string Append(string? existing, string line) => string.IsNullOrWhiteSpace(existing) ? line : existing.TrimEnd() + "\n" + line;
         }
 
         // ============================================================================
