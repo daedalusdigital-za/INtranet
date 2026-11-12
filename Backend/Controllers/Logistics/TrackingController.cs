@@ -266,12 +266,14 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (load == null) return NotFound(new { message = "Load not found" });
             if (load.VehicleId == null) return Ok(new { loadId, hasData = false, message = "No vehicle assigned to this load" });
 
-            // Window (SAST days): from the earlier of creation / scheduled pickup, to the later of delivery / today.
+            // Window (SAST days): from the scheduled pickup day (falling back to creation day), to the later of
+            // delivery / today. Driving before the pickup day is other work, not this load, so it is excluded
+            // even if the breadcrumb logger tagged those fixes with this load while it sat in "Assigned".
             var sast = TimeSpan.FromHours(2);
             var todayLocal = DateTime.UtcNow.Add(sast).Date;
             var createdLocal = load.CreatedAt.Add(sast).Date;
             var pickupLocal = load.ScheduledPickupDate?.Date ?? createdLocal;
-            var startLocal = createdLocal < pickupLocal ? createdLocal : pickupLocal;
+            var startLocal = pickupLocal;
             var endCandidate = (load.ActualDeliveryDate ?? load.ScheduledDeliveryDate ?? load.ScheduledPickupDate)?.Date ?? todayLocal;
             var endLocal = (endCandidate > todayLocal ? todayLocal : endCandidate);
             if (endLocal < startLocal) endLocal = startLocal;
@@ -280,14 +282,13 @@ namespace ProjectTracker.API.Controllers.Logistics
             var toUtc = endLocal - sast;
 
             var crumbs = await _context.VehiclePositionLogs.AsNoTracking()
-                .Where(p => p.VehicleId == load.VehicleId && (p.LoadId == loadId || (p.RecordedAt >= fromUtc && p.RecordedAt < toUtc)))
+                .Where(p => p.VehicleId == load.VehicleId && p.RecordedAt >= fromUtc && p.RecordedAt < toUtc)
                 .OrderBy(p => p.RecordedAt)
                 .Select(p => new { t = p.RecordedAt, lat = p.Latitude, lng = p.Longitude, speed = p.Speed, address = p.Address })
                 .ToListAsync();
 
             var reg = load.Vehicle?.RegistrationNumber ?? "";
-            // Trip legs only from the scheduled pickup day (driving the day before is other work, not this load)
-            var segStart = pickupLocal > endLocal.AddDays(-1) ? endLocal : pickupLocal;
+            var segStart = startLocal;
             var days = Enumerable.Range(0, Math.Max(0, (int)(endLocal - segStart).TotalDays)).Select(i => segStart.AddDays(i)).ToList();
             var segments = await _context.VehicleMovementHistory.AsNoTracking()
                 .Where(m => (m.VehicleId == load.VehicleId || m.RegistrationNumber == reg) && days.Contains(m.MovementDate))
