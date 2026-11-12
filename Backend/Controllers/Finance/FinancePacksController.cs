@@ -336,7 +336,94 @@ public class FinancePacksController : ControllerBase
             sage, existingPacks = existing,
             ocrAvailable = ServerOcrService.IsAvailable,
             analysis = a,
+            // Trimmed per-page text so the dialog can hand it to "Ask Welly" without a second OCR run.
+            pageTexts = pageTexts.Select(t => t.Length > 4000 ? t[..4000] : t).ToList(),
         };
+    }
+
+    public class AskWellyRequest
+    {
+        public int? PackId { get; set; }
+        public List<string>? PageTexts { get; set; }
+        public PackAnalyzer.Result? Analysis { get; set; }
+        public string? InvoiceNumber { get; set; }
+        public string? Question { get; set; }
+    }
+
+    /// <summary>
+    /// Hand the OCR text + rule results to Welly and ask it to work out what the pack checks missed:
+    /// which page is which, the invoice / order / confirmation numbers, and what the clerk should verify.
+    /// Uses the same provider order as the chat (local LLM → Claude → rule-based summary).
+    /// </summary>
+    [HttpPost("ask-welly")]
+    public async Task<IActionResult> AskWelly([FromBody] AskWellyRequest req, [FromServices] ServerOcrService ocr,
+        [FromServices] ILocalLlmService localLlm, [FromServices] IClaudeAIService claude, [FromServices] IConfiguration cfg, CancellationToken ct)
+    {
+        var pages = req.PageTexts ?? new List<string>();
+        var analysis = req.Analysis;
+        if (pages.Count == 0 && req.PackId is int id)
+        {
+            var p = await _db.InvoicePacks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (p == null) return NotFound();
+            var full = FullPath(p.StoragePath);
+            if (!System.IO.File.Exists(full)) return NotFound(new { error = "Pack file is missing on the server." });
+            (pages, _) = await PageTextsAsync(full, p.ContentType, ocr);
+            analysis ??= PackAnalyzer.Result.FromJson(p.ValidationJson);
+        }
+        if (pages.Count == 0) return BadRequest(new { error = "Nothing to review — no page text was supplied." });
+        analysis ??= PackAnalyzer.Analyze(pages);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("You are Welly, the finance assistant. A clerk scanned an invoice pack (delivery note, tax invoice, order confirmation, customer order e-mail, official order form). Our automatic checker read the pages below with OCR and produced the result that follows. The OCR is noisy: 0/O, 1/I/L, 5/S, 8/B are often swapped, spaces disappear in headers, and logos are not read.");
+        sb.AppendLine("Number formats: invoice IN + 6 digits (e.g. IN024737); customer order OR + 6 digits, written OR000190 or OR-000190; Sage order confirmation ORD + 6 digits; customer number like 01-UCR-001.");
+        sb.AppendLine();
+        sb.AppendLine("=== CHECKER RESULT ===");
+        sb.AppendLine($"Status: {analysis.Status}. Invoice: {analysis.InvoiceNumber ?? "not read"}. Order: {analysis.OrderNumber ?? "not read"}. Confirmation: {analysis.ConfirmationNumber ?? "not read"}. Customer: {analysis.CustomerNumber ?? "not read"}.");
+        foreach (var r in analysis.Rules) sb.AppendLine($"{r.Code} {(r.Pass ? "PASS" : "FAIL")}: {r.Title} — {r.Detail}");
+        foreach (var w in analysis.Warnings) sb.AppendLine("Warning: " + w);
+        sb.AppendLine("Pages: " + string.Join("; ", analysis.Pages.Select(p => $"p{p.Page}={p.Type}")));
+        if (!string.IsNullOrWhiteSpace(req.InvoiceNumber)) sb.AppendLine($"The clerk typed invoice number: {req.InvoiceNumber}.");
+        sb.AppendLine();
+        sb.AppendLine("=== OCR TEXT ===");
+        for (var i = 0; i < pages.Count; i++)
+        {
+            var t = Regex.Replace(pages[i] ?? "", @"[ \t]+", " ").Trim();
+            if (t.Length > 1800) t = t[..1800] + " …";
+            sb.AppendLine($"--- Page {i + 1} ---");
+            sb.AppendLine(t.Length == 0 ? "(no text read)" : t);
+        }
+        sb.AppendLine();
+        sb.AppendLine("=== TASK ===");
+        sb.AppendLine(string.IsNullOrWhiteSpace(req.Question)
+            ? "In plain English, for a finance clerk, in under 180 words: (1) say which page is which document type, correcting the checker where it is wrong; (2) give the invoice number, customer order number and order confirmation number you can read, flagging any you are unsure of; (3) explain each failed check and whether it is a real problem or an OCR miss; (4) list what the clerk should confirm on the paper copy before saving. Use short bullet points."
+            : req.Question);
+
+        var prompt = sb.ToString();
+        string? answer = null; string provider = "rules";
+        try
+        {
+            if (cfg.GetValue<bool>("LocalLlm:Enabled", true) && await localLlm.IsAvailableAsync())
+            { answer = await localLlm.AnalyzeDocumentAsync("You are Welly, the finance assistant. Answer concisely in plain English with short bullet points.", prompt, ct); provider = "local-llm"; }
+            else if (cfg.GetValue<bool>("Claude:Enabled", false) && await claude.IsAvailableAsync())
+            { answer = await claude.ChatAsync(prompt, ct); provider = "claude"; }
+        }
+        catch (Exception ex) { _log.LogWarning(ex, "Ask Welly (packs) LLM call failed"); answer = null; }
+
+        if (string.IsNullOrWhiteSpace(answer))
+        {
+            // No model available — give a structured plain-text summary of what the checker saw.
+            var o = new StringBuilder();
+            o.AppendLine("Welly's model is offline, so here is what the checker could read:");
+            foreach (var p in analysis.Pages)
+                o.AppendLine($"• Page {p.Page}: {(p.Type == "UNK" ? "not recognised" : PackAnalyzer.TypeNames[p.Type])}" +
+                    (p.InvoiceNumber != null ? $", invoice {p.InvoiceNumber}" : "") + (p.OrderNumber != null ? $", order {p.OrderNumber}" : "") + (p.ConfirmationNumber != null ? $", confirmation {p.ConfirmationNumber}" : "") +
+                    (p.TextLength < 40 ? " — almost no text read (faint or image-only page)" : ""));
+            foreach (var r in analysis.Rules.Where(r => !r.Pass)) o.AppendLine($"• {r.Code} failed: {r.Detail}");
+            o.AppendLine("Please confirm the invoice and order numbers against the paper copy before saving.");
+            answer = o.ToString();
+        }
+
+        return Ok(new { answer = answer.Trim(), provider, invoiceNumber = analysis.InvoiceNumber, orderNumber = analysis.OrderNumber, confirmationNumber = analysis.ConfirmationNumber });
     }
 
     /// <summary>

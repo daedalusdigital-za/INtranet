@@ -35,7 +35,7 @@ interface DetectResult {
   invoiceNumber: string | null; candidates: string[]; sageMatches: string[];
   orderNumber: string | null; confirmationNumber: string | null; customerNumber: string | null; company: string | null;
   sage: SageHit | null; existingPacks: { id: number; packNumber: string; uploadedAt: string }[];
-  ocrAvailable: boolean; analysis: Analysis | null;
+  ocrAvailable: boolean; analysis: Analysis | null; pageTexts?: string[];
 }
 
 /**
@@ -145,6 +145,21 @@ interface DetectResult {
             @if (a.status === 'FAIL') { <small>A failed pack can still be saved — it will be flagged for Finance to fix.</small> }
           </div>
         }
+
+        @if (asking() || welly()) {
+          <div class="pk__welly">
+            <div class="pk__welly-head"><mat-icon>smart_toy</mat-icon><b>Welly's review</b>@if (welly()?.provider) { <small>{{ welly()!.provider === 'rules' ? 'model offline — checker summary' : welly()!.provider }}</small> }<span class="pk__sp"></span>@if (!asking()) { <button mat-icon-button type="button" (click)="welly.set(null)" matTooltip="Dismiss"><mat-icon>close</mat-icon></button> }</div>
+            @if (asking()) { <div class="pk__busy"><mat-spinner diameter="18"></mat-spinner> Welly is reading the pages…</div> }
+            @else {
+              <pre class="pk__welly-body">{{ welly()!.answer }}</pre>
+              @if (wellyFills().length) {
+                <div class="pk__cands"><small>Use:</small>
+                  @for (f of wellyFills(); track f.label) { <button type="button" class="pk__cand" (click)="f.apply()">{{ f.label }}</button> }
+                </div>
+              }
+            }
+          </div>
+        }
       </section>
 
       <!-- ───────── RIGHT: confirm + details ───────── -->
@@ -226,6 +241,10 @@ interface DetectResult {
         @else { <mat-icon>check_circle</mat-icon> Ready to save{{ mode() === 'assemble' ? ' — ' + parts().length + ' document(s) become one PDF' : '' }}. }
       </div>
       <button mat-button mat-dialog-close type="button">Cancel</button>
+      <button mat-stroked-button type="button" class="pk__ask" [disabled]="!canAsk()" (click)="askWelly()" matTooltip="Let Welly read the OCR text and explain what the checks missed">
+        @if (asking()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>smart_toy</mat-icon> }
+        Ask Welly
+      </button>
       <button mat-flat-button color="primary" type="button" [disabled]="!canSave() || saving()" (click)="save()">
         @if (saving()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>{{ mode() === 'scan' ? 'cloud_upload' : 'merge' }}</mat-icon> }
         {{ mode() === 'scan' ? 'Save pack' : 'Combine & save' }}
@@ -235,6 +254,10 @@ interface DetectResult {
   `,
   styles: [`
     :host { display:block; }
+    .pk__welly { margin-top:12px; border:1px solid var(--color-line); border-radius:10px; padding:10px 12px; background: color-mix(in srgb, var(--color-primary, #4f46e5) 6%, var(--color-surface, #fff)); }
+    .pk__welly-head { display:flex; align-items:center; gap:8px; font-size:13px; mat-icon { font-size:18px; width:18px; height:18px; color: var(--color-primary, #4f46e5); } small { color: var(--color-text-muted); } .pk__sp { flex:1; } }
+    .pk__welly-body { margin:6px 0 0; white-space:pre-wrap; font: inherit; font-size:12.5px; line-height:1.45; color: var(--color-text); }
+    .pk__ask { margin-right:4px; }
     .mono { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing:.03em; }
     .pk { display:flex; flex-direction:column; height: min(92vh, 900px); }
 
@@ -330,6 +353,7 @@ export class PackUploadDialogComponent {
   detect = signal<DetectResult | null>(null);
   analysis = computed(() => this.detect()?.analysis ?? null);
   invoice = signal(this.data?.invoiceNumber ?? '');
+  private autoInvoice = '';
   verified = signal(false);
   verifying = signal(false);
   lookup = signal<{ invoiceNumber: string; inSage: boolean; sage: SageHit | null; existingPacks: { id: number; packNumber: string; uploadedAt: string }[] } | null>(null);
@@ -342,6 +366,31 @@ export class PackUploadDialogComponent {
 
   saving = signal(false);
   error = signal('');
+
+  asking = signal(false);
+  welly = signal<{ answer: string; provider: string; invoiceNumber: string | null; orderNumber: string | null; confirmationNumber: string | null } | null>(null);
+  canAsk = computed(() => this.hasFiles() && !!this.detect() && !this.detecting() && !this.asking() && (this.detect()!.pageTexts?.length ?? 0) > 0);
+  /** Numbers Welly / the checker read that differ from what is in the form — one click to use them. */
+  wellyFills = computed(() => {
+    const w = this.welly(); if (!w) return [] as { label: string; apply: () => void }[];
+    const out: { label: string; apply: () => void }[] = [];
+    if (w.invoiceNumber && w.invoiceNumber !== this.normalize(this.invoice())) out.push({ label: `Invoice ${w.invoiceNumber}`, apply: () => this.pickCandidate(w.invoiceNumber!) });
+    if (w.orderNumber && w.orderNumber !== this.orderNumber) out.push({ label: `Order ${w.orderNumber}`, apply: () => { this.orderNumber = w.orderNumber!; } });
+    if (w.confirmationNumber && w.confirmationNumber !== this.confirmationNumber) out.push({ label: `Confirmation ${w.confirmationNumber}`, apply: () => { this.confirmationNumber = w.confirmationNumber!; } });
+    return out;
+  });
+
+  async askWelly(): Promise<void> {
+    const d = this.detect(); if (!d || !this.canAsk()) return;
+    this.asking.set(true); this.welly.set(null);
+    try {
+      const r = await firstValueFrom(this.http.post<any>(`${this.api}/finance/packs/ask-welly`, {
+        pageTexts: d.pageTexts, analysis: d.analysis, invoiceNumber: this.invoice() || null,
+      }));
+      this.welly.set(r);
+    } catch (e: any) { this.toast.error(e?.error?.error || 'Welly could not review the pack right now.'); }
+    finally { this.asking.set(false); }
+  }
 
   hasFiles = computed(() => this.mode() === 'scan' ? !!this.scanFile() : this.parts().length > 0);
   invoiceValid = computed(() => /^IN\d{5,7}$/.test(this.normalize(this.invoice())));
@@ -410,12 +459,19 @@ export class PackUploadDialogComponent {
         // Unreadable scan: assume complete and let the user untick.
         this.contents.set(Object.fromEntries(this.kinds.map(k => [k.key, true])));
       }
-      if (r.invoiceNumber && !this.invoice()) this.invoice.set(r.invoiceNumber);
-      if (r.orderNumber && !this.orderNumber) this.orderNumber = r.orderNumber;
-      if (r.confirmationNumber && !this.confirmationNumber) this.confirmationNumber = r.confirmationNumber;
-      if (r.customerNumber && !this.customerNumber) this.customerNumber = r.customerNumber;
+      // Auto-fill: a read number always goes into an empty field; a previously auto-filled value is
+      // replaced too (the user has not typed anything yet). A Sage-matched candidate is preferred.
+      const best = r.invoiceNumber ?? r.candidates.find(c => r.sageMatches.includes(c)) ?? r.candidates[0] ?? r.analysis?.invoiceNumber ?? null;
+      if (best && (!this.invoice() || this.invoice() === this.autoInvoice)) { this.invoice.set(best); this.autoInvoice = best; this.resetVerify(); }
+      const ord = r.orderNumber ?? r.analysis?.orderNumber ?? null;
+      if (ord && !this.orderNumber) this.orderNumber = ord;
+      const conf = r.confirmationNumber ?? r.analysis?.confirmationNumber ?? null;
+      if (conf && !this.confirmationNumber) this.confirmationNumber = conf;
+      const cust = r.customerNumber ?? r.analysis?.customerNumber ?? null;
+      if (cust && !this.customerNumber) this.customerNumber = cust;
       if (r.company && !this.company) this.company = r.company;
       if (r.sage) this.applySage(r.sage);
+      this.welly.set(null);
     } catch (e: any) {
       this.detect.set({ method: 'none', pages: 0, invoiceNumber: null, candidates: [], sageMatches: [], orderNumber: null, confirmationNumber: null, customerNumber: null, company: null, sage: null, existingPacks: [], ocrAvailable: false, analysis: null });
       if (this.mode() === 'scan') this.contents.set(Object.fromEntries(this.kinds.map(k => [k.key, true])));

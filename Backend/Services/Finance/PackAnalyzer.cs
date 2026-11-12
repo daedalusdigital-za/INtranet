@@ -72,7 +72,11 @@ public static class PackAnalyzer
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
     // ───────── patterns ─────────
-    private static readonly Regex InvRx = new(@"\b[I1L][NMH][\s.\-:#]?([0-9OQDILSBZGT]{5,7})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // No leading \b: scanners glue dashes/underscores to the token ("—1N024737", "_IN024737").
+    private static readonly Regex InvRx = new(@"(?<![A-Z0-9])[I1L][NMH][\s.\-:#]?([0-9OQDILSBZGT]{5,7})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Bare 6-digit number near an invoice / delivery-note header (the IN prefix is often a logo glyph).
+    private static readonly Regex BareInvRx = new(@"(?:INVOICE|DELIVERY\s*NOTE)[^\n]{0,40}?(?<![A-Z0-9])(0\d{5})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CustBareRx = new(@"\b(\d{2}-[A-Z]{3}-\d{3})\b", RegexOptions.Compiled);
     private static readonly Regex InvLabelRx = new(@"(?:TAX\s+)?INVOICE\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*([A-Z]{0,2}[\s\-]?[0-9OQDILSBZGT]{5,7})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // OR000190 / OR-000190 / OR 000190
     private static readonly Regex OrRx = new(@"\b[O0Q][R][\s\-.:]?([0-9OQDILSBZGT]{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -88,6 +92,8 @@ public static class PackAnalyzer
         var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-.:#]", "");
         var m = Regex.Match(s, @"^(?:[I1L][NMH])?([0-9OQDILSBZGT]{5,7})$");
         if (!m.Success) return null;
+        // At least 3 real digits so words like "INSOLID" never become invoice numbers.
+        if (m.Groups[1].Value.Count(char.IsDigit) < 3) return null;
         var d = Digits(m.Groups[1].Value);
         return d.Length is >= 5 and <= 7 ? "IN" + d : null;
     }
@@ -124,9 +130,11 @@ public static class PackAnalyzer
     private record Sig(string Type, (string kw, double w)[] Keywords);
     private static readonly Sig[] Signatures =
     {
-        new("DN",  new[] { ("DELIVERY NOTE", 3.0), ("QTY RECEIVED", 1.5), ("QUANTITY RECEIVED", 1.5), ("RECEIVED BY", 1.5), ("BACK ORDER", .5), ("B/O", .3), ("SHIPPED", .5) }),
+        new("DN",  new[] { ("DELIVERY NOTE", 3.0), ("QTY RECEIVED", 1.5), ("QUANTITY RECEIVED", 1.5), ("RECEIVED BY", 1.5), ("RECEIVEL BY", 1.5), ("RECEIVED IN GOOD", 1.0), ("BACK ORDER", .5), ("B/O", .3), ("SHIPPED", .5) }),
         new("INV", new[] { ("TAX INVOICE", 3.0), ("UNIT PRICE", 1.0), ("SUBTOTAL", 1.0), ("SUB TOTAL", 1.0), ("AMOUNT DUE", 1.5), ("VAT", .5), ("BANKING DETAILS", 1.0), ("BANK DETAILS", 1.0), ("ACCOUNT NUMBER", .3), ("PART DELIVERY", .5) }),
-        new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("ORD", .5) }),
+        // The Sage order-confirmation header is usually a graphic, so lean on its table layout:
+        // Salesperson / Ship Via / Order Date / Ord. Shp. B/O columns / Order Discount / Total order.
+        new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("TOTAL ORDER", 2.0), ("ORDER DISCOUNT", 1.5), ("SALESPERSON", 1.0), ("SHIP VIA", 1.0), ("ORDER DATE", 1.0), ("ORD. SHP", 1.5), ("ORD SHP", 1.5), ("SHP. B/O", 1.5), ("REFERENCE PO", .8), ("PO NUMBER", .5) }),
         new("EML", new[] { ("GMAIL", 2.0), ("FROM:", 1.5), ("TO:", 1.0), ("SUBJECT", 1.5), ("SENT:", 1.0), ("@KZNHEALTH.GOV.ZA", 2.0), ("@", .3), ("FORWARDED MESSAGE", 1.5), ("ATTACHMENT", .5), ("OUTLOOK", 1.5) }),
         new("PO",  new[] { ("KZN: HEALTH", 3.0), ("KZN HEALTH", 2.5), ("ORDER\\SERVICE", 2.0), ("ORDER/SERVICE", 2.0), ("ORDER NO", 1.5), ("OFFICIAL ORDER", 2.5), ("PROVINCE OF", 1.0), ("DEPARTMENT OF HEALTH", 1.5), ("AMENDED ORDER", 1.5), ("CSD", .5), ("MAAA", .8), ("DELIVERY DATE", .5) }),
     };
@@ -135,6 +143,9 @@ public static class PackAnalyzer
     {
         var up = (text ?? "").ToUpperInvariant();
         var collapsed = Regex.Replace(up, @"[ \t]+", " ");
+        // OCR frequently drops the space in headers ("DeliveryNote", "TaxInvoice") — match on both.
+        var squashed = Regex.Replace(up, @"\s+", "");
+        bool Has(string kw) => collapsed.Contains(kw) || squashed.Contains(kw.Replace(" ", ""));
         var r = new PageResult { Page = pageNo, TextLength = collapsed.Trim().Length };
 
         // Score each type.
@@ -143,11 +154,21 @@ public static class PackAnalyzer
         {
             double s = 0;
             foreach (var (kw, w) in sig.Keywords)
-                if (collapsed.Contains(kw)) { s += w; if (w >= 1.5) r.Hits.Add(kw); }
+                if (Has(kw)) { s += w; if (w >= 1.5) r.Hits.Add(kw); }
             scores[sig.Type] = s;
         }
-        // Structural hints: an INV must have money words; a DN with "TAX INVOICE" is really an INV.
-        if (scores["DN"] > 0 && scores["INV"] >= 3 && collapsed.Contains("TAX INVOICE") && !collapsed.Contains("DELIVERY NOTE")) scores["DN"] = 0;
+        var isInvHeader = Has("TAX INVOICE");
+        var isDnHeader = Has("DELIVERY NOTE");
+        var isOcHeader = Has("ORDER CONFIRMATION");
+        // Structural hints: the explicit header wins; a Sage INV/DN shares the OC table words, so the
+        // structural OC score only counts when there is no invoice / delivery-note header on the page.
+        // (Scans printed from Gmail carry a "Gmail" footer on every page — that alone must not sway types.)
+        if (isInvHeader && !isDnHeader) scores["DN"] = 0;
+        if (isDnHeader && !isInvHeader) scores["INV"] = Math.Min(scores["INV"], 1.0);
+        if (!isOcHeader && (isInvHeader || isDnHeader)) scores["OC"] = 0;
+        if (isOcHeader) { scores["INV"] = 0; scores["DN"] = 0; }
+        // A page with order-confirmation structure but no invoice header is an OC, not an invoice.
+        if (!isInvHeader && !isDnHeader && scores["OC"] >= 3.5) scores["INV"] = Math.Min(scores["INV"], 1.0);
         var best = scores.OrderByDescending(kv => kv.Value).First();
         if (best.Value >= 1.5) { r.Type = best.Key; r.Confidence = Math.Min(1, best.Value / 5.0); }
 
@@ -155,6 +176,8 @@ public static class PackAnalyzer
         var invs = new List<string>();
         foreach (Match m in InvLabelRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Groups[1].Value); if (n != null) invs.Add(n); }
         foreach (Match m in InvRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Value); if (n != null) invs.Add(n); }
+        if (invs.Count == 0 && (isInvHeader || isDnHeader))
+            foreach (Match m in BareInvRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Groups[1].Value); if (n != null) invs.Add(n); }
         r.InvoiceNumber = invs.GroupBy(x => x).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
 
         var ords = new List<(string norm, string raw)>();
@@ -173,6 +196,7 @@ public static class PackAnalyzer
 
         var cm = CustRx.Match(collapsed);
         if (cm.Success) r.CustomerNumber = cm.Groups[1].Value;
+        else { var cb = CustBareRx.Match(collapsed); if (cb.Success) r.CustomerNumber = cb.Groups[1].Value; }
         var dm = DateRx.Match(collapsed);
         if (dm.Success) r.Date = dm.Groups[1].Value;
 
@@ -198,9 +222,10 @@ public static class PackAnalyzer
             return res;
         }
 
-        // Duplicate pages: same type + same key numbers → count once.
+        // Duplicate pages: same type + same key numbers → count once. E-mails run over several pages, so
+        // they are never treated as duplicates (a pack may well have more than 5 pages).
         var seen = new HashSet<string>();
-        foreach (var p in res.Pages.Where(p => p.Type != "UNK"))
+        foreach (var p in res.Pages.Where(p => p.Type != "UNK" && p.Type != "EML"))
         {
             var key = $"{p.Type}|{p.InvoiceNumber}|{p.OrderNumber}|{p.ConfirmationNumber}|{p.Amended}";
             if (!seen.Add(key)) { p.Duplicate = true; res.Notes.Add($"Page {p.Page} looks like a second copy of a {TypeNames[p.Type].ToLowerInvariant()} — counted once."); }
@@ -219,9 +244,10 @@ public static class PackAnalyzer
         res.TypesMissing = Types.Except(res.TypesFound).ToList();
         res.Amended = docs.Any(p => p.Amended && p.Type is "PO" or "EML");
         res.PartDelivery = docs.Any(p => p.PartDelivery && p.Type is "INV" or "DN");
-        var dn = docs.FirstOrDefault(p => p.Type == "DN");
-        var inv = docs.FirstOrDefault(p => p.Type == "INV");
-        res.ProofOfDelivery = dn != null && (dn.Signed || dn.Stamped);
+        // Prefer the DN / INV page that actually yielded an invoice number.
+        var dn = docs.Where(p => p.Type == "DN").OrderByDescending(p => p.InvoiceNumber != null).FirstOrDefault();
+        var inv = docs.Where(p => p.Type == "INV").OrderByDescending(p => p.InvoiceNumber != null).FirstOrDefault();
+        res.ProofOfDelivery = docs.Any(p => p.Type == "DN" && (p.Signed || p.Stamped));
 
         // Pack-level numbers (most common across documents, INV/DN preferred for invoice).
         res.InvoiceNumber = Vote(docs.Where(p => p.Type is "INV" or "DN").Select(p => p.InvoiceNumber)) ?? Vote(res.Pages.Select(p => p.InvoiceNumber));
@@ -237,10 +263,26 @@ public static class PackAnalyzer
             Detail = h1 ? $"{res.TypesFound.Count} of 5 document types found." : $"Only {res.TypesFound.Count} of 5 documents; missing: {string.Join(", ", res.TypesMissing.Select(t => TypeNames[t]))}.",
         });
 
-        // H2 — DN ↔ INV invoice number match
+        // H2 — DN ↔ INV invoice number match. The IN number is often part of a header graphic that OCR
+        // cannot read on one of the two pages; a single clean read is accepted with a warning — only a
+        // genuine mismatch, or no read at all, fails.
         bool h2; string d2;
         if (dn == null || inv == null) { h2 = false; d2 = dn == null && inv == null ? "Delivery note and tax invoice not found." : dn == null ? "Delivery note not found." : "Tax invoice not found."; }
-        else if (dn.InvoiceNumber == null || inv.InvoiceNumber == null) { h2 = false; d2 = $"Invoice number not readable on the {(dn.InvoiceNumber == null ? "delivery note" : "tax invoice")}."; }
+        else if (dn.InvoiceNumber == null && inv.InvoiceNumber == null)
+        {
+            h2 = res.InvoiceNumber != null;
+            d2 = h2 ? $"Invoice number {res.InvoiceNumber} read elsewhere in the pack but not on the delivery note or tax invoice — confirm by eye."
+                    : "Invoice number could not be read on the delivery note or the tax invoice.";
+            if (h2) res.Warnings.Add(d2);
+        }
+        else if (dn.InvoiceNumber == null || inv.InvoiceNumber == null)
+        {
+            h2 = true;
+            var readOn = dn.InvoiceNumber != null ? $"delivery note (p{dn.Page})" : $"tax invoice (p{inv.Page})";
+            var missingOn = dn.InvoiceNumber != null ? $"tax invoice (p{inv.Page})" : $"delivery note (p{dn.Page})";
+            d2 = $"{dn.InvoiceNumber ?? inv.InvoiceNumber} read on the {readOn}; not legible on the {missingOn} — confirm they match.";
+            res.Warnings.Add(d2);
+        }
         else { h2 = dn.InvoiceNumber == inv.InvoiceNumber; d2 = h2 ? $"Both read {inv.InvoiceNumber}." : $"Invoice mismatch: DN={dn.InvoiceNumber} INV={inv.InvoiceNumber}."; }
         res.Rules.Add(new RuleResult { Code = "H2", Title = "Delivery note and invoice carry the same invoice number", Pass = h2, Detail = d2 });
 
