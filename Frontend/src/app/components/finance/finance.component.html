@@ -519,6 +519,20 @@
     </div>
   </mat-tab>
 
+  <!-- ═══════════ BOOK KEEPING ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">menu_book</mat-icon> Book Keeping
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Book Keeping</h2>
+        <p>Every sales invoice on one line: what we invoiced, whether it went out on a trip sheet, the credit note against it and the date the POD came back. Anything that went out but has no POD is what the branches still need to collect — filter on <b>Went out — POD needed</b> and export the list.</p>
+      </div>
+      @if (tabIndex === 3) { <app-finance-bookkeeping></app-finance-bookkeeping> }
+    </div>
+  </mat-tab>
+
   <!-- ═══════════ PODs ═══════════ -->
   <mat-tab>
     <ng-template mat-tab-label>
@@ -530,7 +544,7 @@
         <h2>Proof of Delivery</h2>
         <p>A signed POD is what lets Finance invoice and collect. Unlinked PODs are deliveries we can't yet bill — link them to their invoice numbers or run Reconcile.</p>
       </div>
-      @if (tabIndex === 3) { <app-finance-pods></app-finance-pods> }
+        @if (tabIndex === 4) { <app-finance-pods></app-finance-pods> }
     </div>
   </mat-tab>
 
@@ -544,7 +558,7 @@
         <h2>Debtors Age Analysis</h2>
         <p>Who owes us, and for how long. Upload the Sage aging workbook for each company; every open invoice is bucketed into Current / 30 / 60 / 90 / 120+ days with drill-down to the documents and whether a POD is on file.</p>
       </div>
-      @if (tabIndex === 4) { <app-finance-aging></app-finance-aging> }
+      @if (tabIndex === 5) { <app-finance-aging></app-finance-aging> }
     </div>
   </mat-tab>
 
@@ -558,7 +572,7 @@
         <h2>Remittance Advices</h2>
         <p>Every night at 00:00 the finance mailbox is checked for remittance / proof-of-payment emails. The email, its PDF attachments and the invoice numbers read from them are listed here and matched against the latest aging so you can see what was paid, what is still open, and whether a POD exists — then mark it Allocated once captured in Sage.</p>
       </div>
-      @if (tabIndex === 5) { <app-finance-remittances></app-finance-remittances> }
+      @if (tabIndex === 6) { <app-finance-remittances></app-finance-remittances> }
     </div>
   </mat-tab>
 
@@ -572,7 +586,7 @@
         <h2>Credit Notes</h2>
         <p>Everything the group has credited, from the Sage sales history, stitched to the original invoice (same customer and products), to the aging (is the credit still unapplied on the debtor's account?) and to the signed authorisation PDF a manager uploaded. A credit with no signed copy is flagged — that's the control Sales and Finance both rely on.</p>
       </div>
-      @if (tabIndex === 6) { <app-finance-credit-notes></app-finance-credit-notes> }
+      @if (tabIndex === 7) { <app-finance-credit-notes></app-finance-credit-notes> }
     </div>
   </mat-tab>
 
@@ -587,7 +601,7 @@
         <h2>Compliance Vault</h2>
         <p>Statutory documents every company must keep current — tax clearance, B-BBEE, CSD, bank confirmation. Finance owns the renewals; the Tenders team reads the same vault.</p>
       </div>
-      @if (tabIndex === 7) { <app-finance-vault></app-finance-vault> }
+      @if (tabIndex === 8) { <app-finance-vault></app-finance-vault> }
     </div>
   </mat-tab>
 
