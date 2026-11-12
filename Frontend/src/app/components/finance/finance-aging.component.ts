@@ -1,6 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -29,8 +30,8 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
             <span class="n">{{ c }}</span>
             @if (latestFor(c); as s) {
               <span class="v">{{ s.totalBalance | currency:'ZAR':'R':'1.0-0' }}</span>
-              <span class="d">as at {{ s.asOfDate | date:'dd MMM yyyy' }}</span>
-            } @else { <span class="d">No aging uploaded yet</span> }
+              <span class="d">as at {{ s.asOfDate | date:'dd MMM yyyy' }} <i class="stale {{ staleLevel(s) }}" [matTooltip]="staleDays(s) + ' days old — amber after 7, red after 14'">{{ staleDays(s) }}d</i></span>
+            } @else { <span class="d"><i class="stale red">No aging uploaded yet</i></span> }
           </button>
         }
       </div>
@@ -90,9 +91,26 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
           </div>
           <label class="ag-check"><input type="checkbox" [ngModel]="onlyOverdue()" (ngModelChange)="onlyOverdue.set($event)" /> Only customers past due</label>
           <label class="ag-check"><input type="checkbox" [ngModel]="hideCredits()" (ngModelChange)="hideCredits.set($event)" /> Hide credit balances</label>
+          <button class="ag-nopod" [class.active]="showNoPod()" (click)="toggleNoPod()" matTooltip="Invoices open 60+ days with no proof of delivery — the collection-dispute pattern"><mat-icon>gavel</mat-icon> 60+ days, no POD @if (noPodForCompany().length) { <span class="n">{{ noPodForCompany().length }}</span> }</button>
           <span class="ag-spacer"></span>
           <small class="muted">{{ visible().length }} of {{ a.customers.length }} customers · aged on document date, 30-day periods</small>
         </div>
+
+        @if (showNoPod()) {
+          <div class="ag-nopod-panel">
+            <div class="h"><mat-icon>gavel</mat-icon><b>Open 60+ days with no POD — {{ company() }}</b><small>These are the invoices a customer can dispute as "never received". Link the POD scan (Finance › PODs) or get the driver's POD attached to the load; the row disappears as soon as one exists.</small><span class="ag-spacer"></span><b class="mono">{{ noPodValue() | currency:'ZAR':'R':'1.0-0' }}</b></div>
+            @if (noPodLoading()) { <div class="ag-inline"><mat-spinner diameter="20"></mat-spinner> Checking PODs…</div> }
+            @else if (noPodForCompany().length === 0) { <div class="ag-inline ok"><mat-icon>verified</mat-icon> Every invoice older than 60 days for {{ company() }} has a POD.</div> }
+            @else {
+              <table class="ag-docs"><thead><tr><th>Invoice</th><th>Customer</th><th>PO</th><th>Doc date</th><th class="num">Age</th><th class="num">Balance</th><th></th></tr></thead><tbody>
+                @for (i of noPodForCompany(); track i.documentNumber) {
+                  <tr><td class="mono"><b>{{ i.documentNumber }}</b></td><td>{{ i.customerName }}<small>{{ i.customerCode }}</small></td><td>{{ i.poNumber || '—' }}</td><td>{{ i.documentDate | date:'dd MMM yy' }}</td><td class="num"><span class="badge danger">{{ i.ageDays }}d</span></td><td class="num">{{ i.balance | number:'1.2-2' }}</td>
+                    <td><button mat-icon-button (click)="open360(i.customerCode)" matTooltip="Customer 360"><mat-icon>hub</mat-icon></button></td></tr>
+                }
+              </tbody></table>
+            }
+          </div>
+        }
 
         <!-- Customer table -->
         <div class="ag-table-wrap">
@@ -123,7 +141,7 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
                   <td class="num danger" [class.zero]="!c.d120">{{ c.d120 | number:'1.2-2' }}</td>
                   <td class="num total" [class.credit]="c.balance < 0">{{ c.balance | number:'1.2-2' }}</td>
                   <td class="num">@if (c.maxDaysOver > 0) { <span class="badge" [class.warn]="c.maxDaysOver <= 60" [class.danger]="c.maxDaysOver > 60">{{ c.maxDaysOver }}d over</span> } @else { <span class="muted">—</span> }</td>
-                  <td class="chev"><mat-icon>{{ expanded() === c.code ? 'expand_less' : 'expand_more' }}</mat-icon></td>
+                  <td class="chev"><button mat-icon-button (click)="open360(c.code); $event.stopPropagation()" matTooltip="Customer 360 — across all companies"><mat-icon>hub</mat-icon></button><mat-icon>{{ expanded() === c.code ? 'expand_less' : 'expand_more' }}</mat-icon></td>
                 </tr>
                 @if (expanded() === c.code) {
                   <tr class="detail"><td colspan="9">
@@ -243,11 +261,21 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
       mat-icon { font-size: 44px; width: 44px; height: 44px; } h3 { margin: 0; color: var(--color-text); } p { margin: 0; max-width: 520px; }
       &.small { padding: var(--space-4); mat-icon { font-size: 28px; width: 28px; height: 28px; } } }
     @media (max-width: 1100px) { .ag-buckets { grid-template-columns: repeat(3, 1fr); } }
+    .stale { font-style:normal; font-size:10px; padding:1px 6px; border-radius:999px; margin-left:4px; background:#dcfce7; color:#166534; &.amber { background:#fef3c7; color:#92400e; } &.red { background:#fee2e2; color:#991b1b; } }
+    .ag-nopod { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--color-line); background: var(--color-surface); border-radius:999px; padding:5px 12px; font: inherit; font-size: var(--text-sm); cursor:pointer; color: var(--color-text-2);
+      mat-icon { font-size:16px; width:16px; height:16px; } .n { background: var(--color-danger); color:#fff; border-radius:999px; padding:0 7px; font-size: var(--text-xs); }
+      &.active { background: #fff1f2; border-color:#fecdd3; color:#9f1239; } }
+    .ag-nopod-panel { border:1px solid #fecdd3; background:#fff7f7; border-radius: var(--radius-lg); padding:12px 14px; margin-bottom: var(--space-3);
+      .h { display:flex; align-items:center; gap:10px; margin-bottom:8px; small { color: var(--color-text-3); max-width:640px; } mat-icon { color:#9f1239; } }
+      .ok { color: var(--color-ok); display:flex; align-items:center; gap:6px; } .mono { font-variant-numeric: tabular-nums; } }
+    .chev { white-space:nowrap; }
   `]
 })
 export class FinanceAgingComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private api = `${environment.apiUrl}/finance/aging`;
 
   companies = signal<string[]>([]);
@@ -285,7 +313,34 @@ export class FinanceAgingComponent implements OnInit {
     return rows;
   });
 
-  ngOnInit(): void { this.loadSnapshots(); }
+  ngOnInit(): void {
+    this.loadSnapshots();
+    if (this.route.snapshot.queryParamMap.get('view') === 'nopod') { this.showNoPod.set(true); this.loadNoPod(); }
+  }
+
+  // ── staleness ──
+  staleDays(s: Snapshot): number { return Math.max(0, Math.floor((Date.now() - new Date(s.asOfDate).getTime()) / 86400000)); }
+  staleLevel(s: Snapshot): string { const d = this.staleDays(s); return d > 14 ? 'red' : d > 7 ? 'amber' : 'ok'; }
+
+  // ── 60+ days, no POD ──
+  showNoPod = signal(false); noPodLoading = signal(false);
+  noPodAll = signal<{ company: string; customerCode: string; customerName: string; documentNumber: string; documentDate?: string; balance: number; ageDays: number; poNumber?: string }[]>([]);
+  noPodForCompany = computed(() => this.noPodAll().filter(i => i.company === this.company()));
+  noPodValue = computed(() => this.noPodForCompany().reduce((s, i) => s + i.balance, 0));
+  toggleNoPod(): void { this.showNoPod.set(!this.showNoPod()); if (this.showNoPod() && this.noPodAll().length === 0) this.loadNoPod(); }
+  loadNoPod(): void {
+    this.noPodLoading.set(true);
+    this.http.get<{ noPodInvoices: { items: any[] } }>(`${environment.apiUrl}/finance/alerts`, { params: { top: 100 } }).subscribe({
+      next: a => { this.noPodAll.set(a.noPodInvoices.items); this.noPodLoading.set(false); },
+      error: () => { this.noPodLoading.set(false); this.toast.error('Could not check PODs'); }
+    });
+  }
+  open360(code: string): void {
+    this.http.get<{ id: number }>(`${environment.apiUrl}/customers/master/resolve`, { params: { company: this.company(), code } }).subscribe({
+      next: r => this.router.navigate(['/customers', r.id]),
+      error: () => this.toast.error('Could not resolve the customer')
+    });
+  }
 
   loadSnapshots(selectLatestFor?: string): void {
     this.http.get<{ companies: string[]; snapshots: Snapshot[] }>(`${this.api}/snapshots`).subscribe({

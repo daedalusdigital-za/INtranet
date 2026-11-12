@@ -491,6 +491,19 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard, moduleGuard], 
       data: { module: 'finance' }
     },
+    // Customer master + Customer 360 (Finance and Sales both use it)
+    {
+      path: 'customers',
+      title: 'Customers',
+      loadComponent: () => import('../components/customers/customers.component').then(m => m.CustomersComponent),
+      canActivate: [authGuard]
+    },
+    {
+      path: 'customers/:id',
+      title: 'Customer 360',
+      loadComponent: () => import('../components/customers/customer-360.component').then(m => m.Customer360Component),
+      canActivate: [authGuard]
+    },
     { 
       path: 'finance/creditors', 
       title: 'Creditors',

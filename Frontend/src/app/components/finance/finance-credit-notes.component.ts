@@ -1,6 +1,7 @@
 import { Component, HostListener, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatIconModule } from '@angular/material/icon';
@@ -23,7 +24,11 @@ interface Detail {
   invoices: InvMatch[]; documents: Doc[];
   remittances: { id: number; subject?: string; fromEmail?: string; receivedAt: string; customerName?: string; totalAmount?: number; status: string }[];
   customerHistory?: { number: string; date: string; value: number; lines: number }[];
+  stockReturn?: { id: number; returnType: string; status: string; warehouseId?: number; confirmedAt?: string; confirmedByName?: string; lines: number; qty: number } | null;
+  reason?: string | null; customerMasterId?: number | null; customerMasterName?: string | null;
 }
+interface RetLine { id: number; productCode: string; productDescription?: string; quantity: number; confirmedQuantity?: number; commodityId?: number; movementId?: number; matched: boolean; }
+interface StockRet { id: number; creditNoteNumber: string; company: string; customerNumber?: string; customerName?: string; returnType: string; status: string; warehouseId?: number; warehouse?: string; notes?: string; createdByName?: string; createdAt: string; confirmedByName?: string; confirmedAt?: string; lines: RetLine[]; totalQty: number; }
 interface Summary {
   totalDocs: number; totalValue: number; thisMonth: { docs: number; value: number }; last30: { docs: number; value: number }; signedDocs: number; unsignedDocs: number; uploadedDocuments: number;
   open: { docs: number; value: number };
@@ -36,7 +41,7 @@ interface Summary {
 @Component({
   selector: 'app-finance-credit-notes',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, RouterModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule],
   template: `
     <!-- ── Summary ───────────────────────────────────────────────── -->
     @if (summary(); as s) {
@@ -82,6 +87,7 @@ interface Summary {
     <div class="cn-subtabs">
       <button [class.active]="view() === 'list'" (click)="view.set('list')"><mat-icon>receipt_long</mat-icon> Credit notes</button>
       <button [class.active]="view() === 'docs'" (click)="view.set('docs'); loadDocs()"><mat-icon>draw</mat-icon> Signed copies <span class="n">{{ summary()?.uploadedDocuments ?? 0 }}</span></button>
+      <button [class.active]="view() === 'returns'" (click)="view.set('returns'); loadReturns()"><mat-icon>assignment_return</mat-icon> Stock returns @if (pendingReturns() > 0) { <span class="n warn-n">{{ pendingReturns() }}</span> }</button>
       <button [class.active]="view() === 'insight'" (click)="view.set('insight')"><mat-icon>insights</mat-icon> Patterns</button>
       <span class="sp"></span>
       <button mat-flat-button color="primary" (click)="openUpload()"><mat-icon>upload_file</mat-icon> Upload signed credit note</button>
@@ -223,6 +229,75 @@ interface Summary {
       </div>
     } }
 
+    <!-- ── STOCK RETURNS ─────────────────────────────────────────── -->
+    @if (view() === 'returns') {
+      <div class="cn-toolbar">
+        <div class="cn-chips">
+          @for (f of returnFilters; track f) { <button class="chip" [class.active]="retStatus() === f" (click)="retStatus.set(f); loadReturns()">{{ f }}</button> }
+        </div>
+        <span class="muted">A credit reasoned <b>Return</b>, <b>Damaged</b> or <b>Expired</b> raises a return here. The branch confirms what came back and where — that confirmation posts the stock ledger movement.</span>
+      </div>
+      @if (retLoading()) { <div class="cn-center"><mat-spinner diameter="36"></mat-spinner></div> }
+      @else if (returns().length === 0) { <div class="cn-empty"><mat-icon>inventory</mat-icon><p>No {{ retStatus() === 'All' ? '' : retStatus().toLowerCase() }} stock returns. Set the reason on a credit note's signed copy to Return / Damaged / Expired to raise one.</p></div> }
+      @else {
+        <div class="cn-tablewrap">
+          <table class="cn-table">
+            <thead><tr><th>Credit note</th><th>Company</th><th>Customer</th><th>Type</th><th class="r">Lines</th><th class="r">Qty</th><th>Status</th><th>Raised</th><th></th></tr></thead>
+            <tbody>
+              @for (r of returns(); track r.id) {
+                <tr (click)="openReturn(r)">
+                  <td class="mono"><b>{{ r.creditNoteNumber }}</b></td>
+                  <td><span class="co-pill">{{ r.company }}</span></td>
+                  <td class="cust"><span [title]="r.customerName">{{ r.customerName }}</span></td>
+                  <td><span class="st" [class.open]="r.returnType !== 'Return'" [class.applied]="r.returnType === 'Return'">{{ r.returnType }}</span></td>
+                  <td class="r">{{ r.lines.length }}</td><td class="r mono">{{ r.totalQty | number:'1.0-2' }}</td>
+                  <td><span class="st" [class.missing]="r.status === 'Pending'" [class.signed]="r.status === 'Confirmed'" [class.neutral]="r.status === 'Rejected'">{{ r.status }}@if (r.warehouse) { · {{ r.warehouse }} }</span></td>
+                  <td>{{ r.createdAt | date:'dd MMM yy' }}<small>{{ r.createdByName }}</small></td>
+                  <td class="acts">@if (r.status === 'Pending') { <button mat-stroked-button (click)="openReturn(r); $event.stopPropagation()">Confirm…</button> }</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ── RETURN CONFIRM PANEL ──────────────────────────────────── -->
+    @if (retOpen(); as r) {
+      <div class="cn-backdrop top" (click)="retOpen.set(null)"></div>
+      <div class="cn-upload">
+        <header><mat-icon>assignment_return</mat-icon><h3>{{ r.returnType }} on {{ r.creditNoteNumber }} <small style="display:inline">{{ r.company }} · {{ r.customerName }}</small></h3><span class="sp"></span><button mat-icon-button (click)="retOpen.set(null)"><mat-icon>close</mat-icon></button></header>
+        @if (r.status === 'Pending') {
+          <p class="hint">Confirm what physically came back. <b>Return</b> puts the quantity back into the warehouse; <b>Damaged / Expired</b> records the goods in and straight out as a write-off so the ledger shows them against this credit.</p>
+          <label class="full" style="display:block;margin-bottom:10px">Warehouse the goods came back to *
+            <select [(ngModel)]="retWarehouse" style="width:100%"><option [ngValue]="null">Choose…</option>@for (w of retWarehouses(); track w.id) { <option [ngValue]="w.id">{{ w.name }}@if (w.province) { · {{ w.province }} }</option> }</select>
+          </label>
+        } @else {
+          <p class="hint">{{ r.status }} by {{ r.confirmedByName }} on {{ r.confirmedAt | date:'dd MMM yyyy HH:mm' }}@if (r.warehouse) { · {{ r.warehouse }} }</p>
+        }
+        <table class="cn-lines"><thead><tr><th>Product</th><th class="r">On credit</th><th class="r">Confirmed</th><th>Stock item</th></tr></thead><tbody>
+          @for (l of r.lines; track l.id) {
+            <tr>
+              <td><b>{{ l.productDescription || l.productCode }}</b><small>{{ l.productCode }}</small></td>
+              <td class="r mono">{{ l.quantity | number:'1.0-2' }}</td>
+              <td class="r">@if (r.status === 'Pending') { <input type="number" step="any" style="width:90px;text-align:right" [(ngModel)]="retQty[l.id]" /> } @else { <span class="mono">{{ l.confirmedQuantity ?? l.quantity | number:'1.0-2' }}</span> }</td>
+              <td>@if (l.matched) { <span class="ok"><mat-icon style="font-size:16px;width:16px;height:16px;vertical-align:middle">link</mat-icon> matched</span> } @else { <span class="warn" matTooltip="This code isn't a stock item yet — create it in Stock first">not a stock item</span> }</td>
+            </tr>
+          }
+        </tbody></table>
+        @if (r.notes) { <p class="hint" style="white-space:pre-line">{{ r.notes }}</p> }
+        @if (r.status === 'Pending') {
+          <label class="full" style="display:block;margin-top:10px">Notes<textarea rows="2" [(ngModel)]="retNotes" placeholder="Condition of goods, GRN number, who received…" style="width:100%"></textarea></label>
+          <footer>
+            <button mat-button color="warn" (click)="rejectReturn(r)" [disabled]="retBusy()">Nothing came back</button>
+            <span class="sp"></span>
+            <button mat-button (click)="retOpen.set(null)">Cancel</button>
+            <button mat-flat-button color="primary" (click)="confirmReturn(r)" [disabled]="retBusy() || !retWarehouse"><mat-icon>{{ retBusy() ? 'hourglass_top' : 'inventory' }}</mat-icon> Confirm &amp; post to stock</button>
+          </footer>
+        }
+      </div>
+    }
+
     <!-- ── DETAIL DRAWER ─────────────────────────────────────────── -->
     @if (detail() || detailLoading()) {
       <div class="cn-backdrop" (click)="closeDetail()"></div>
@@ -249,6 +324,14 @@ interface Summary {
             @if (d.orderNumber) { <span class="st neutral">Order {{ d.orderNumber }}</span> }
             @if (d.hasSignedCopy) { <span class="st signed"><mat-icon>verified</mat-icon> Signed copy on file</span> }
             @else { <button class="st missing" (click)="openUpload(d)"><mat-icon>warning_amber</mat-icon> No signed copy — upload</button> }
+            @if (d.reason) { <span class="st neutral">{{ d.reason }}</span> }
+            @if (d.stockReturn; as sr) {
+              <button class="st" [class.missing]="sr.status === 'Pending'" [class.signed]="sr.status === 'Confirmed'" [class.neutral]="sr.status === 'Rejected'" (click)="view.set('returns'); loadReturns(); openReturnById(sr.id)" matTooltip="Open the stock return">
+                <mat-icon>assignment_return</mat-icon> Stock {{ sr.returnType.toLowerCase() }} {{ sr.status.toLowerCase() }} · {{ sr.qty | number:'1.0-0' }} units
+              </button>
+            }
+            @if (d.customerMasterId) { <a class="st neutral link" [routerLink]="['/customers', d.customerMasterId]" matTooltip="Customer 360 — sales, aging, credits, PODs, backorders, loads across all companies"><mat-icon>hub</mat-icon> Customer 360</a> }
+            @else if (d.customerNumber && d.companyCode) { <button class="st neutral" (click)="goto360(d.companyCode!, d.customerNumber!)"><mat-icon>hub</mat-icon> Customer 360</button> }
           </div>
 
           <section>
@@ -345,7 +428,7 @@ interface Summary {
           <label>Company<select [(ngModel)]="up.company"><option value="">Auto from Sage</option><option value="PMT">Promed Technologies</option><option value="ACM">Access Medical</option><option value="PHT">Promed Pharmatech</option><option value="SBT">Sebenzani Trading</option></select></label>
           <label>Customer<input [(ngModel)]="up.customerName" [placeholder]="upSage()?.customerName || 'Auto from Sage'" /></label>
           <label>Amount<input type="number" step="0.01" [(ngModel)]="up.amount" [placeholder]="upSage() ? (upSage()!.value | number:'1.2-2') : 'Auto from Sage'" /></label>
-          <label>Reason<select [(ngModel)]="up.reason"><option value="">—</option>@for (r of reasons; track r) { <option [value]="r">{{ r }}</option> }</select></label>
+          <label>Reason<select [(ngModel)]="up.reason"><option value="">—</option>@for (r of reasons; track r.reason) { <option [value]="r.reason">{{ r.reason }}{{ r.movesStock ? ' · raises stock return' : '' }}</option> }</select></label>
           <label>Invoice(s) credited<input [(ngModel)]="up.invoiceNumbers" [placeholder]="upSage()?.invoices?.[0]?.number || 'IN148387'" /></label>
           <label>Signed by (manager)<input [(ngModel)]="up.signedBy" placeholder="Name on the signature" /></label>
           <label>Signed on<input type="date" [(ngModel)]="up.signedOn" /></label>
@@ -360,6 +443,9 @@ interface Summary {
           <div class="sage-hit"><mat-icon>link</mat-icon> Found in Sage: <b>{{ sg.customerName }}</b> · {{ sg.company }} · {{ sg.value | currency:'ZAR':'R':'1.2-2' }} · {{ sg.date | date:'dd MMM yyyy' }}@if (sg.hasSignedCopy) { · <span class="warn">already has {{ sg.documents.length }} signed cop{{ sg.documents.length === 1 ? 'y' : 'ies' }}</span> }</div>
         } @else if (upLookedUp() && up.creditNoteNumber) {
           <div class="sage-miss"><mat-icon>info</mat-icon> {{ up.creditNoteNumber | uppercase }} isn't in the imported sales history yet. You can still upload — it will link automatically after the next sales import.</div>
+        }
+        @if (movesStock(up.reason)) {
+          <div class="sage-hit"><mat-icon>assignment_return</mat-icon> <b>{{ up.reason }}</b> means goods came back — a stock return will be raised from the credit note's product lines for the branch to confirm.</div>
         }
         <footer>
           <button mat-button (click)="uploadOpen.set(false)">Cancel</button>
@@ -398,6 +484,8 @@ interface Summary {
         &:hover { background: var(--color-surface-2); } &.active { background: var(--color-primary-soft); color: var(--color-primary); } } }
 
     .cn-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom: var(--space-3); }
+    .warn-n { background: var(--color-warn) !important; color:#fff !important; }
+    .st.link { text-decoration:none; }
     .cn-chips { display:flex; gap:4px; flex-wrap:wrap; }
     .chip { border:1px solid var(--color-line); background: var(--color-surface); border-radius:999px; padding:5px 12px; font: inherit; font-size: var(--text-sm); cursor:pointer; color: var(--color-text-2);
       &.active { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); } }
@@ -477,17 +565,28 @@ export class FinanceCreditNotesComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private sanitizer = inject(DomSanitizer);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private api = `${environment.apiUrl}/finance/credit-notes`;
 
   readonly filters = [
     { key: 'all', label: 'All' }, { key: 'open', label: 'Unapplied on account' }, { key: 'applied', label: 'Applied' },
     { key: 'unsigned', label: 'No signed copy' }, { key: 'signed', label: 'Signed copy on file' }
   ];
-  readonly reasons = ['Returns', 'Pricing error', 'Short delivery', 'Damaged', 'Expired stock', 'Duplicate invoice', 'Wrong product', 'Discount / rebate', 'Other'];
+  readonly reasons: { reason: string; movesStock: boolean }[] = [
+    { reason: 'Return', movesStock: true }, { reason: 'Pricing', movesStock: false }, { reason: 'Short delivery', movesStock: false }, { reason: 'Damaged', movesStock: true },
+    { reason: 'Expired', movesStock: true }, { reason: 'Duplicate', movesStock: false }, { reason: 'Goodwill', movesStock: false }, { reason: 'Other', movesStock: false }
+  ];
+  movesStock(r: string): boolean { return !!this.reasons.find(x => x.reason === r)?.movesStock; }
   readonly pageSize = 50;
 
   summary = signal<Summary | null>(null);
-  view = signal<'list' | 'docs' | 'insight'>('list');
+  view = signal<'list' | 'docs' | 'returns' | 'insight'>('list');
+
+  // stock returns
+  readonly returnFilters = ['Pending', 'Confirmed', 'Rejected', 'All'];
+  returns = signal<StockRet[]>([]); retLoading = signal(false); retStatus = signal('Pending'); pendingReturns = signal(0);
+  retOpen = signal<StockRet | null>(null); retWarehouses = signal<{ id: number; name: string; code?: string; province?: string }[]>([]); retWarehouse: number | null = null; retQty: Record<number, number> = {}; retNotes = ''; retBusy = signal(false);
   company = signal('ALL'); status = signal('all'); search = signal(''); from = signal(''); to = signal(''); page = signal(1);
   loading = signal(false); items = signal<Cn[]>([]); total = signal(0); totalValue = signal(0);
   pages = () => Math.max(1, Math.ceil(this.total() / this.pageSize));
@@ -500,7 +599,59 @@ export class FinanceCreditNotesComponent implements OnInit {
   uploadOpen = signal(false); uploading = signal(false); upFile: File | null = null; upSage = signal<Detail | null>(null); upLookedUp = signal(false);
   up = this.blankUpload();
 
-  ngOnInit(): void { this.loadSummary(); this.load(); }
+  ngOnInit(): void {
+    // Deep link from the Finance alert strip: ?view=unsigned | returns
+    const v = this.route.snapshot.queryParamMap.get('view');
+    if (v === 'unsigned') this.status.set('unsigned');
+    if (v === 'returns') { this.view.set('returns'); this.loadReturns(); }
+    this.loadSummary(); this.load(); this.countPending();
+  }
+
+  // ── stock returns ──────────────────────────────────────────────
+  private retApi = `${environment.apiUrl}/finance/stock-returns`;
+  countPending(): void { this.http.get<StockRet[]>(this.retApi, { params: { status: 'Pending' } }).subscribe({ next: r => this.pendingReturns.set(r.length), error: () => {} }); }
+  loadReturns(): void {
+    this.retLoading.set(true);
+    this.http.get<StockRet[]>(this.retApi, { params: { status: this.retStatus() } }).subscribe({
+      next: r => { this.returns.set(r); this.retLoading.set(false); if (this.retStatus() === 'Pending') this.pendingReturns.set(r.length); },
+      error: () => { this.retLoading.set(false); this.toast.error('Could not load stock returns'); }
+    });
+  }
+  openReturn(r: StockRet): void { this.openReturnById(r.id); }
+  openReturnById(id: number): void {
+    this.http.get<{ ret: StockRet; warehouses: { id: number; name: string; code?: string; province?: string }[] }>(`${this.retApi}/${id}`).subscribe({
+      next: x => {
+        this.retWarehouses.set(x.warehouses); this.retWarehouse = x.ret.warehouseId ?? null; this.retNotes = '';
+        this.retQty = {}; for (const l of x.ret.lines) this.retQty[l.id] = l.confirmedQuantity ?? l.quantity;
+        this.retOpen.set(x.ret);
+      },
+      error: () => this.toast.error('Could not open the return')
+    });
+  }
+  confirmReturn(r: StockRet): void {
+    if (!this.retWarehouse) return;
+    this.retBusy.set(true);
+    const lines = r.lines.map(l => ({ id: l.id, confirmedQuantity: Number(this.retQty[l.id] ?? l.quantity) }));
+    this.http.post<StockRet>(`${this.retApi}/${r.id}/confirm`, { warehouseId: this.retWarehouse, notes: this.retNotes, lines }).subscribe({
+      next: () => { this.retBusy.set(false); this.retOpen.set(null); this.toast.done(`${r.creditNoteNumber} posted to stock`); this.loadReturns(); this.countPending(); if (this.detail()?.number === r.creditNoteNumber) this.open(r.creditNoteNumber, r.company); },
+      error: e => { this.retBusy.set(false); this.toast.error(e?.error?.error || 'Could not confirm the return'); }
+    });
+  }
+  rejectReturn(r: StockRet): void {
+    const reason = prompt('Why did nothing come back? (e.g. pricing credit, goods written off at customer)');
+    if (reason === null) return;
+    this.retBusy.set(true);
+    this.http.post<StockRet>(`${this.retApi}/${r.id}/reject`, { reason }).subscribe({
+      next: () => { this.retBusy.set(false); this.retOpen.set(null); this.toast.done('Return closed without stock movement'); this.loadReturns(); this.countPending(); },
+      error: e => { this.retBusy.set(false); this.toast.error(e?.error?.error || 'Could not close the return'); }
+    });
+  }
+  goto360(company: string, code: string): void {
+    this.http.get<{ id: number }>(`${environment.apiUrl}/customers/master/resolve`, { params: { company, code } }).subscribe({
+      next: r => this.router.navigate(['/customers', r.id]),
+      error: () => this.toast.error('Could not resolve the customer')
+    });
+  }
 
   @HostListener('document:keydown.escape') onEsc(): void {
     if (this.fileUrl()) this.closeFile(); else if (this.uploadOpen()) this.uploadOpen.set(false); else if (this.detail()) this.closeDetail();

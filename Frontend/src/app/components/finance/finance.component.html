@@ -16,6 +16,9 @@
     <div class="ov-error"><mat-icon>cloud_off</mat-icon><p>Couldn't load the finance overview.</p><button mat-stroked-button (click)="loadOverview()"><mat-icon>refresh</mat-icon> Retry</button></div>
   } @else {
 
+  <!-- Control-gap alerts: stale aging, unsigned credits, 60+ days no POD, pending stock returns -->
+  <app-finance-alerts class="animate-in" (go)="onAlertGo($event)"></app-finance-alerts>
+
   <!-- KPI row -->
   <div class="kpi-grid animate-in delay-1">
     <button class="kpi kpi-debtors" (click)="goTab('aging')">

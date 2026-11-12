@@ -279,6 +279,14 @@ namespace ProjectTracker.API.Controllers.Finance
                 .GroupBy(i => i.TransactionNumber).Select(g => new { number = g.Key, date = g.Min(x => x.TransactionDate), value = -g.Sum(x => x.SalesAmount), lines = g.Count() })
                 .OrderByDescending(x => x.date).Take(12).ToListAsync();
 
+            // Stock side: has a return been raised / confirmed for this credit?
+            var stockReturn = code == null ? null : await _db.StockReturns.AsNoTracking().Where(r => r.Company == code && r.CreditNoteNumber == number)
+                .Select(r => new { r.Id, r.ReturnType, r.Status, r.WarehouseId, r.ConfirmedAt, r.ConfirmedByName, lines = r.Lines.Count, qty = r.Lines.Sum(l => l.Quantity) }).FirstOrDefaultAsync();
+
+            // Customer master (cross-company roll-up)
+            var master = head == null ? null : await _db.CustomerAliases.AsNoTracking().Where(a => a.Company == head.SourceCompany && a.CustomerCode == head.CustomerNumber)
+                .Select(a => new { a.CustomerMasterId, name = a.Master.Name }).FirstOrDefaultAsync();
+
             return Ok(new
             {
                 number,
@@ -300,7 +308,11 @@ namespace ProjectTracker.API.Controllers.Finance
                 invoices = matches.TryGetValue(Key(code, number), out var m) ? m : new List<object>(),
                 documents = docs.Select(DocDto),
                 remittances = remits,
-                customerHistory
+                customerHistory,
+                stockReturn,
+                reason = docs.Select(d => d.Reason).FirstOrDefault(r => !string.IsNullOrEmpty(r)),
+                customerMasterId = master?.CustomerMasterId,
+                customerMasterName = master?.name
             });
         }
 
@@ -558,8 +570,19 @@ namespace ProjectTracker.API.Controllers.Finance
             };
             _db.CreditNoteDocuments.Add(doc);
             await _db.SaveChangesAsync();
-            return Ok(new { doc = DocDto(doc), inSage = sage != null, sageValue = sage?.value, warning = sage == null ? $"{number} is not in the Sage sales history yet â€” it will link automatically once the next sales import includes it." : null });
+            // Finance ↔ Stock: a Return / Damaged / Expired credit means goods came back — raise the branch return
+            StockReturn? ret = null;
+            if (doc.Company != null && StockReturnsController.IsPhysical(doc.Reason))
+            {
+                ret = await StockReturnsController.EnsureForCreditNoteAsync(_db, doc.Company, number, doc.Reason!, UserId, UserName, doc.Id);
+                if (ret != null) await _db.SaveChangesAsync();
+            }
+            return Ok(new { doc = DocDto(doc), inSage = sage != null, sageValue = sage?.value, stockReturnId = ret?.Id, warning = sage == null ? $"{number} is not in the Sage sales history yet — it will link automatically once the next sales import includes it." : null });
         }
+
+        /// <summary>GET api/finance/credit-notes/reasons — the credit-reason taxonomy and which reasons move stock.</summary>
+        [HttpGet("reasons")]
+        public IActionResult Reasons() => Ok(StockReturnsController.AllReasons.Select(r => new { reason = r, movesStock = StockReturnsController.IsPhysical(r) }));
 
         [HttpGet("documents/{id:int}/file")]
         public async Task<IActionResult> File(int id, [FromQuery] bool download = false)
@@ -588,6 +611,11 @@ namespace ProjectTracker.API.Controllers.Finance
             if (u.InvoiceNumbers != null) d.InvoiceNumbers = u.InvoiceNumbers.Trim();
             if (u.Amount.HasValue) d.Amount = u.Amount;
             await _db.SaveChangesAsync();
+            if (u.Reason != null && d.Company != null && StockReturnsController.IsPhysical(d.Reason))
+            {
+                var ret = await StockReturnsController.EnsureForCreditNoteAsync(_db, d.Company, d.CreditNoteNumber, d.Reason!, UserId, UserName, d.Id);
+                if (ret != null) await _db.SaveChangesAsync();
+            }
             return Ok(DocDto(d));
         }
 

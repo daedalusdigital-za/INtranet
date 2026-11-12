@@ -25,6 +25,7 @@ import { FinanceVaultComponent } from './finance-vault.component';
 import { FinanceAgingComponent } from './finance-aging.component';
 import { FinanceRemittancesComponent } from './finance-remittances.component';
 import { FinanceCreditNotesComponent } from './finance-credit-notes.component';
+import { FinanceAlertsComponent } from './finance-alerts.component';
 import { TenderService } from '../../services/tender.service';
 
 /** Tab order in finance.component.html */
@@ -106,7 +107,8 @@ interface Overview {
     FinanceVaultComponent,
     FinanceAgingComponent,
     FinanceRemittancesComponent,
-    FinanceCreditNotesComponent
+    FinanceCreditNotesComponent,
+    FinanceAlertsComponent
   ],
   templateUrl: './finance.component.html',
   styleUrls: ['./finance.component.scss']
@@ -242,6 +244,14 @@ export class FinanceComponent implements OnInit {
   goTab(tab: FinanceTab, section?: string): void {
     this.onTabChange(TABS.indexOf(tab));
     if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+  }
+
+  /** Alert strip hints: 'aging' | 'aging:nopod' | 'credit-notes:unsigned' | 'credit-notes:returns' | 'customers' */
+  onAlertGo(hint: string): void {
+    const [tab, view] = hint.split(':');
+    if (tab === 'customers') { this.router.navigate(['/customers']); return; }
+    this.onTabChange(TABS.indexOf(tab as FinanceTab));
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab, view: view || null }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   loadOverview(): void {

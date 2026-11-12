@@ -258,6 +258,10 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Finance.RemittanceAttachment> RemittanceAttachments { get; set; }
         public DbSet<Models.Finance.RemittanceScan> RemittanceScans { get; set; }
         public DbSet<Models.Finance.CreditNoteDocument> CreditNoteDocuments { get; set; }
+        public DbSet<Models.Finance.StockReturn> StockReturns { get; set; }
+        public DbSet<Models.Finance.StockReturnLine> StockReturnLines { get; set; }
+        public DbSet<Models.Finance.CustomerMaster> CustomerMasters { get; set; }
+        public DbSet<Models.Finance.CustomerAlias> CustomerAliases { get; set; }
 
         // Flows (automated business processes)
         public DbSet<Models.Flows.FlowDefinition> FlowDefinitions { get; set; }
