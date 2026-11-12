@@ -10,6 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
+import { companyLogo, companyName } from '../../core/company-logos';
 
 interface Doc { id: number; creditNoteNumber: string; company?: string; companyName: string; customerNumber?: string; customerName?: string; invoiceNumbers?: string; amount?: number; reason?: string; notes?: string; signedBy?: string; signedOn?: string; originalFileName?: string; contentType?: string; size: number; uploadedByName?: string; uploadedAt: string; isPdf: boolean; }
 interface DocRow { doc: Doc; inSage: boolean; sageValue?: number; sageCustomer?: string; sageCompany?: string; sageDate?: string; amountMismatch: boolean; }
@@ -69,14 +70,24 @@ interface Summary {
       </div>
 
       <div class="cn-companies">
+        <button class="cn-co all" [class.active]="company() === 'ALL'" (click)="company.set('ALL'); page.set(1); load()">
+          <span class="cn-logo all-logo"><mat-icon>apps</mat-icon></span>
+          <div class="cn-co-body">
+            <div class="cn-co-top"><b>All companies</b><span>{{ s.totalValue | currency:'ZAR':'R':'1.0-0' }}</span></div>
+            <div class="cn-co-foot"><span>{{ s.totalDocs }} notes</span></div>
+          </div>
+        </button>
         @for (c of s.byCompany; track c.code) {
-          <button class="cn-co" [class.active]="company() === c.code" (click)="company.set(company() === c.code ? 'ALL' : c.code); page.set(1); load()">
-            <div class="cn-co-top"><b>{{ c.name }}</b><span>{{ c.value | currency:'ZAR':'R':'1.0-0' }}</span></div>
-            <div class="cn-co-bar"><i [style.width.%]="barPct(c.value, s.totalValue)"></i></div>
-            <div class="cn-co-foot">
-              <span>{{ c.docs }} notes</span>
-              <span matTooltip="Credits as a percentage of invoiced sales in the same history">{{ c.creditPct }}% of sales</span>
-              @if (c.open > 0) { <span class="warn">{{ c.open }} unapplied · {{ c.openValue | currency:'ZAR':'R':'1.0-0' }}</span> }
+          <button class="cn-co" [class.active]="company() === c.code" [class.dim]="company() !== 'ALL' && company() !== c.code" (click)="company.set(company() === c.code ? 'ALL' : c.code); page.set(1); load()" [attr.aria-pressed]="company() === c.code">
+            <img class="cn-logo" [src]="logo(c.code)" [alt]="c.name">
+            <div class="cn-co-body">
+              <div class="cn-co-top"><b>{{ c.name }}</b><span>{{ c.value | currency:'ZAR':'R':'1.0-0' }}</span></div>
+              <div class="cn-co-bar"><i [style.width.%]="barPct(c.value, s.totalValue)"></i></div>
+              <div class="cn-co-foot">
+                <span>{{ c.docs }} notes</span>
+                <span matTooltip="Credits as a percentage of invoiced sales in the same history">{{ c.creditPct }}% of sales</span>
+                @if (c.open > 0) { <span class="warn">{{ c.open }} unapplied · {{ c.openValue | currency:'ZAR':'R':'1.0-0' }}</span> }
+              </div>
             </div>
           </button>
         }
@@ -124,7 +135,7 @@ interface Summary {
                 <tr (click)="open(c.number, c.companyCode)" [class.sel]="detail()?.number === c.number && detail()?.companyCode === c.companyCode">
                   <td class="mono"><b>{{ c.number }}</b>@if (c.reason) { <small class="reason">{{ c.reason }}</small> }</td>
                   <td>{{ c.date | date:'dd MMM yyyy' }}</td>
-                  <td><span class="co-pill">{{ c.companyCode }}</span></td>
+                  <td><img class="row-logo" [src]="logo(c.companyCode)" [alt]="c.company" [matTooltip]="c.company"></td>
                   <td class="cust"><span>{{ c.customerName }}</span><small>{{ c.customerNumber }}</small></td>
                   <td class="r mono"><b>{{ c.value | currency:'ZAR':'R':'1.2-2' }}</b></td>
                   <td>{{ c.lines }}<small> / {{ c.products }} prod</small></td>
@@ -247,7 +258,7 @@ interface Summary {
               @for (r of returns(); track r.id) {
                 <tr (click)="openReturn(r)">
                   <td class="mono"><b>{{ r.creditNoteNumber }}</b></td>
-                  <td><span class="co-pill">{{ r.company }}</span></td>
+                  <td><img class="row-logo" [src]="logo(r.company)" [alt]="coName(r.company)" [matTooltip]="coName(r.company)"></td>
                   <td class="cust"><span [title]="r.customerName">{{ r.customerName }}</span></td>
                   <td><span class="st" [class.open]="r.returnType !== 'Return'" [class.applied]="r.returnType === 'Return'">{{ r.returnType }}</span></td>
                   <td class="r">{{ r.lines.length }}</td><td class="r mono">{{ r.totalQty | number:'1.0-2' }}</td>
@@ -471,9 +482,14 @@ interface Summary {
       b { font-size: clamp(18px, 2vw, 26px); font-weight:800; white-space:nowrap; }
       &.warn { border-left-color: var(--color-warn); } &.bad { border-left-color: var(--color-danger); b { color: var(--color-danger); } } &.ok { border-left-color: var(--color-ok); b { color: var(--color-ok); } } }
 
-    .cn-companies { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:10px; margin-bottom: var(--space-4); }
-    .cn-co { text-align:left; font: inherit; color: inherit; cursor:pointer; background: var(--color-surface-2); border:1px solid transparent; border-radius: var(--radius-md); padding:10px 12px;
-      &:hover, &.active { border-color: var(--color-primary); background: var(--color-surface); }
+    .cn-companies { display:grid; grid-template-columns: repeat(auto-fit, minmax(250px,1fr)); gap:12px; margin-bottom: var(--space-4); }
+    .cn-co { display:flex; align-items:center; gap:14px; text-align:left; font: inherit; color: inherit; cursor:pointer; background: var(--color-surface); border:2px solid var(--color-line); border-radius: 16px; padding:12px 16px; transition: border-color .15s, box-shadow .15s, opacity .15s, transform .15s;
+      &:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-1px); }
+      &.active { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+      &.dim { opacity:.55; }
+      .cn-logo { width:56px; height:56px; border-radius:50%; object-fit:cover; flex:0 0 56px; background:#f3f4f6; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+      .cn-logo.all-logo { display:inline-flex; align-items:center; justify-content:center; background: linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; mat-icon { font-size:30px; width:30px; height:30px; } }
+      .cn-co-body { flex:1; min-width:0; }
       .cn-co-top { display:flex; justify-content:space-between; gap:8px; b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } span { font-weight:800; white-space:nowrap; } }
       .cn-co-bar { height:8px; border-radius:999px; background: var(--color-surface); overflow:hidden; margin:6px 0; i { display:block; height:100%; background: var(--color-danger); opacity:.75; } }
       .cn-co-foot { display:flex; flex-wrap:wrap; gap:4px 10px; font-size: var(--text-xs); color: var(--color-text-3); } }
@@ -505,6 +521,7 @@ interface Summary {
       .reason { color: var(--color-text-3); }
       .acts { white-space:nowrap; } }
     .co-pill { background: var(--color-surface-2); border-radius:6px; padding:2px 8px; font-weight:700; font-size: var(--text-xs); }
+    .row-logo { width:28px; height:28px; border-radius:50%; object-fit:cover; display:block; box-shadow:0 1px 2px rgba(0,0,0,.15); }
     .inv { display:inline-flex; align-items:center; gap:4px; font-weight:600; mat-icon { font-size:16px; width:16px; height:16px; color: var(--color-primary); } small { display:inline; color: var(--color-text-3); } }
     .st { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:3px 10px; font-size: var(--text-xs); font-weight:700; border:0; font-family: inherit; white-space:nowrap;
       mat-icon { font-size:14px; width:14px; height:14px; }
@@ -588,6 +605,7 @@ export class FinanceCreditNotesComponent implements OnInit {
   returns = signal<StockRet[]>([]); retLoading = signal(false); retStatus = signal('Pending'); pendingReturns = signal(0);
   retOpen = signal<StockRet | null>(null); retWarehouses = signal<{ id: number; name: string; code?: string; province?: string }[]>([]); retWarehouse: number | null = null; retQty: Record<number, number> = {}; retNotes = ''; retBusy = signal(false);
   company = signal('ALL'); status = signal('all'); search = signal(''); from = signal(''); to = signal(''); page = signal(1);
+  logo = companyLogo; coName = companyName;
   loading = signal(false); items = signal<Cn[]>([]); total = signal(0); totalValue = signal(0);
   pages = () => Math.max(1, Math.ceil(this.total() / this.pageSize));
 

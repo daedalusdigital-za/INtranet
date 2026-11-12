@@ -10,6 +10,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
+import { companyLogo } from '../../core/company-logos';
 
 interface Snapshot { id: number; company: string; asOfDate: string; sourceFileName?: string; uploadedAt: string; uploadedBy?: string; customerCount: number; documentCount: number; totalBalance: number; notes?: string; }
 interface Bucket { index: number; label: string; amount: number; pct?: number; }
@@ -26,12 +27,15 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
     <div class="ag-toolbar">
       <div class="ag-companies">
         @for (c of companies(); track c) {
-          <button class="ag-co" [class.active]="company() === c" [class.empty]="!latestFor(c)" (click)="pickCompany(c)">
-            <span class="n">{{ c }}</span>
-            @if (latestFor(c); as s) {
-              <span class="v">{{ s.totalBalance | currency:'ZAR':'R':'1.0-0' }}</span>
-              <span class="d">as at {{ s.asOfDate | date:'dd MMM yyyy' }} <i class="stale {{ staleLevel(s) }}" [matTooltip]="staleDays(s) + ' days old — amber after 7, red after 14'">{{ staleDays(s) }}d</i></span>
-            } @else { <span class="d"><i class="stale red">No aging uploaded yet</i></span> }
+          <button class="ag-co" [class.active]="company() === c" [class.dim]="company() && company() !== c" [class.empty]="!latestFor(c)" (click)="pickCompany(c)" [attr.aria-pressed]="company() === c">
+            <img class="logo" [src]="logo(c)" [alt]="c">
+            <span class="txt">
+              <span class="n">{{ c }}</span>
+              @if (latestFor(c); as s) {
+                <span class="v">{{ s.totalBalance | currency:'ZAR':'R':'1.0-0' }}</span>
+                <span class="d">as at {{ s.asOfDate | date:'dd MMM yyyy' }} <i class="stale {{ staleLevel(s) }}" [matTooltip]="staleDays(s) + ' days old — amber after 7, red after 14'">{{ staleDays(s) }}d</i></span>
+              } @else { <span class="d"><i class="stale red">No aging uploaded yet</i></span> }
+            </span>
           </button>
         }
       </div>
@@ -202,13 +206,16 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
   styles: [`
     :host { display: block; }
     .ag-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--space-3); margin-bottom: var(--space-4); }
-    .ag-companies { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-    .ag-co { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 190px; padding: var(--space-3) var(--space-4); text-align: left; cursor: pointer; font: inherit; color: var(--color-text);
-      background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); transition: border-color .15s, box-shadow .15s;
-      .n { font-weight: 600; } .v { font-size: var(--text-xl); font-weight: 700; } .d { font-size: var(--text-xs); color: var(--color-text-3); }
-      &:hover { border-color: var(--color-primary); box-shadow: var(--shadow-sm); }
-      &.active { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: inset 0 -3px 0 var(--color-primary); }
-      &.empty .n { color: var(--color-text-2); } }
+    .ag-companies { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-3); flex: 1; }
+    .ag-co { display: flex; align-items: center; gap: 14px; padding: 12px 16px; text-align: left; cursor: pointer; font: inherit; color: var(--color-text);
+      background: var(--color-surface); border: 2px solid var(--color-line); border-radius: 16px; transition: border-color .15s, box-shadow .15s, opacity .15s, transform .15s;
+      .logo { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: 0 0 56px; background: #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+      .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .n { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .v { font-size: var(--text-xl); font-weight: 700; line-height: 1.1; } .d { font-size: var(--text-xs); color: var(--color-text-3); }
+      &:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-1px); }
+      &.active { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+      &.dim { opacity: .55; }
+      &.empty .n { color: var(--color-text-2); } &.empty .logo { filter: grayscale(1); opacity: .6; } }
     .ag-spacer { flex: 1; }
     .ag-upload { display: inline-flex; align-items: center; gap: 8px; align-self: center; padding: 0 var(--space-4); height: 40px; cursor: pointer; font-weight: 600; color: #fff; background: var(--color-primary); border-radius: var(--radius-control);
       &:hover { filter: brightness(1.05); } &.busy { opacity: .7; cursor: progress; } }
@@ -355,6 +362,7 @@ export class FinanceAgingComponent implements OnInit {
   }
 
   snapshotsFor(co: string): Snapshot[] { return this.snapshots().filter(s => s.company === co); }
+  logo = companyLogo;
   latestFor(co: string): Snapshot | undefined { return this.snapshotsFor(co)[0]; }
 
   pickCompany(co: string): void {

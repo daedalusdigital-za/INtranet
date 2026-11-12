@@ -12,6 +12,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { environment } from '../../../environments/environment';
+import { companyLogo } from '../../core/company-logos';
 
 interface CreditRef { number: string; date: string; amount: number; }
 interface Row {
@@ -264,10 +265,7 @@ export class FinanceBookkeepingComponent implements OnInit {
   }
 
   stateClass(s: Row['state']): string { return s === 'POD received' ? 'ok' : s === 'Needs POD' ? 'warn' : 'idle'; }
-  logo(code: string): string {
-    const f: Record<string, string> = { PMT: 'promed', ACM: 'access', PHT: 'pharmatech', SBT: 'sebenzani' };
-    return `/logos/${f[code] ?? 'rocket'}-round.png`;
-  }
+  logo = companyLogo;
   openPod(id: number): void {
     this.http.get(`${this.api}/PodDocuments/${id}/view`, { responseType: 'blob' })
       .subscribe({ next: b => window.open(URL.createObjectURL(b), '_blank') });
