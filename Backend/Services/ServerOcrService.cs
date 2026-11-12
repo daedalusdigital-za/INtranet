@@ -120,6 +120,44 @@ public class ServerOcrService
         }
     }
 
+    /// <summary>
+    /// OCR every page separately (used by invoice packs, where each page is a different document type).
+    /// PSM 1 does orientation/script detection so sideways e-mail / order pages still read.
+    /// Falls back to PSM 11 (sparse text) for pages that come back nearly empty.
+    /// </summary>
+    public async Task<List<string>> ExtractPageTextsAsync(string filePath, string? contentType, int maxPages = 20)
+    {
+        if (!_tesseractAvailable)
+            throw new InvalidOperationException("tesseract binary is not available on this host.");
+
+        var isPdf = (contentType?.Contains("pdf", StringComparison.OrdinalIgnoreCase) ?? false)
+                    || filePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+        var workDir = Path.Combine(Path.GetTempPath(), "pack-ocr-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workDir);
+        try
+        {
+            List<string> images;
+            if (isPdf)
+            {
+                if (!_pdftoppmAvailable) throw new InvalidOperationException("pdftoppm (poppler-utils) is required to OCR PDFs but is not installed.");
+                var outPrefix = Path.Combine(workDir, "page");
+                await RunProcessAsync("pdftoppm", $"-png -r 300 \"{filePath}\" \"{outPrefix}\"", 180_000);
+                images = Directory.GetFiles(workDir, "page*.png").OrderBy(p => p).Take(maxPages).ToList();
+            }
+            else images = new List<string> { filePath };
+
+            var texts = new List<string>();
+            foreach (var img in images)
+            {
+                var t = await RunTesseractAsync(img, psm: 1);
+                if (t.Trim().Length < 60) t += "\n" + await RunTesseractAsync(img, psm: 11);
+                texts.Add(t);
+            }
+            return texts;
+        }
+        finally { try { Directory.Delete(workDir, true); } catch { } }
+    }
+
     private async Task<string> RunTesseractAsync(string imagePath, int psm)
     {
         // Output to stdout. -l eng+osd enables orientation/script detection alongside English.

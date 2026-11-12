@@ -27,10 +27,11 @@ import { FinanceRemittancesComponent } from './finance-remittances.component';
 import { FinanceCreditNotesComponent } from './finance-credit-notes.component';
 import { FinanceAlertsComponent } from './finance-alerts.component';
 import { FinanceBookkeepingComponent } from './finance-bookkeeping.component';
+import { FinancePacksComponent } from './finance-packs.component';
 import { TenderService } from '../../services/tender.service';
 
 /** Tab order in finance.component.html */
-const TABS = ['overview', 'approvals', 'invoices', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'vault'] as const;
+const TABS = ['overview', 'approvals', 'invoices', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'packs', 'vault'] as const;
 type FinanceTab = typeof TABS[number];
 
 interface BookInvoice {
@@ -110,7 +111,8 @@ interface Overview {
     FinanceRemittancesComponent,
     FinanceCreditNotesComponent,
     FinanceAlertsComponent,
-    FinanceBookkeepingComponent
+    FinanceBookkeepingComponent,
+    FinancePacksComponent
   ],
   templateUrl: './finance.component.html',
   styleUrls: ['./finance.component.scss']

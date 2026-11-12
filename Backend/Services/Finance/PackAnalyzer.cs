@@ -1,0 +1,275 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+
+namespace ProjectTracker.API.Services.Finance;
+
+/// <summary>
+/// Classifies each page of an invoice pack (DN / INV / OC / EML / PO), extracts the key numbers
+/// and applies the pack validation rules:
+///   H1 minimum documents (4 or 5 distinct types), H2 DN↔INV invoice match,
+///   H3 order number agreement across ≥3 documents.  Soft checks only add warnings.
+/// Pure text logic — OCR / text extraction happens before this is called.
+/// </summary>
+public static class PackAnalyzer
+{
+    public static readonly string[] Types = { "DN", "INV", "OC", "EML", "PO" };
+    public static readonly Dictionary<string, string> TypeNames = new()
+    {
+        ["DN"] = "Delivery note", ["INV"] = "Tax invoice", ["OC"] = "Order confirmation", ["EML"] = "Customer order e-mail", ["PO"] = "Official order",
+    };
+
+    public class PageResult
+    {
+        public int Page { get; set; }
+        public string Type { get; set; } = "UNK";
+        public double Confidence { get; set; }
+        public string? InvoiceNumber { get; set; }
+        public string? OrderNumber { get; set; }
+        public string? OrderNumberRaw { get; set; }
+        public string? ConfirmationNumber { get; set; }
+        public string? CustomerNumber { get; set; }
+        public string? Date { get; set; }
+        public bool Signed { get; set; }
+        public bool Stamped { get; set; }
+        public bool PartDelivery { get; set; }
+        public bool Amended { get; set; }
+        public bool Duplicate { get; set; }
+        public List<string> Hits { get; set; } = new();
+        public int TextLength { get; set; }
+    }
+
+    public class RuleResult
+    {
+        public string Code { get; set; } = "";
+        public string Title { get; set; } = "";
+        public bool Pass { get; set; }
+        public string Detail { get; set; } = "";
+    }
+
+    public class Result
+    {
+        /// <summary>PASS | FAIL | REVIEW | UNKNOWN (no text could be read).</summary>
+        public string Status { get; set; } = "UNKNOWN";
+        public List<PageResult> Pages { get; set; } = new();
+        public List<string> TypesFound { get; set; } = new();
+        public List<string> TypesMissing { get; set; } = new();
+        public List<RuleResult> Rules { get; set; } = new();
+        public List<string> Warnings { get; set; } = new();
+        public List<string> Notes { get; set; } = new();
+        public string? InvoiceNumber { get; set; }
+        public string? OrderNumber { get; set; }
+        public string? ConfirmationNumber { get; set; }
+        public string? CustomerNumber { get; set; }
+        public bool ProofOfDelivery { get; set; }
+        public bool PartDelivery { get; set; }
+        public bool Amended { get; set; }
+
+        public string ToJson() => JsonSerializer.Serialize(this, JsonOpts);
+        public static Result? FromJson(string? s) { try { return s == null ? null : JsonSerializer.Deserialize<Result>(s, JsonOpts); } catch { return null; } }
+    }
+
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
+    // ───────── patterns ─────────
+    private static readonly Regex InvRx = new(@"\b[I1L][NMH][\s.\-:#]?([0-9OQDILSBZGT]{5,7})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex InvLabelRx = new(@"(?:TAX\s+)?INVOICE\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*([A-Z]{0,2}[\s\-]?[0-9OQDILSBZGT]{5,7})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // OR000190 / OR-000190 / OR 000190
+    private static readonly Regex OrRx = new(@"\b[O0Q][R][\s\-.:]?([0-9OQDILSBZGT]{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // ORD107038
+    private static readonly Regex OrdRx = new(@"\b[O0Q]RD[\s\-.:]?([0-9OQDILSBZGT]{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex PoLabelRx = new(@"(?:CUSTOMER\s+)?(?:P\.?O\.?|PURCHASE\s+ORDER|ORDER)\s*(?:NO|NUMBER|#|REF)?\.?\s*[:.\-]?\s*([A-Z]{1,3}[\s\-]?\d{5,8}|\d{6,10})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CustRx = new(@"(?:CUSTOMER|ACCOUNT|ACC|DEBTOR)\s*(?:NO|NUMBER|CODE|#)?\.?\s*[:.\-]?\s*(\d{2}-[A-Z]{3}-\d{3}|[A-Z]{2,4}\d{3,6}|\d{2}[A-Z]{3}\d{3})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex DateRx = new(@"\b(\d{1,2}[\/\-.\s](?:\d{1,2}|[A-Z]{3,9})[\/\-.\s]\d{2,4}|\d{4}[\/\-.]\d{2}[\/\-.]\d{2})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    public static string? NormalizeInvoice(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-.:#]", "");
+        var m = Regex.Match(s, @"^(?:[I1L][NMH])?([0-9OQDILSBZGT]{5,7})$");
+        if (!m.Success) return null;
+        var d = Digits(m.Groups[1].Value);
+        return d.Length is >= 5 and <= 7 ? "IN" + d : null;
+    }
+
+    /// <summary>"OR-000190", "OR000190", "or 000190" → "OR000190".</summary>
+    public static string? NormalizeOrder(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-.:#]", "");
+        var m = Regex.Match(s, @"^[O0Q]R([0-9OQDILSBZGT]{6})$");
+        if (m.Success) return "OR" + Digits(m.Groups[1].Value);
+        m = Regex.Match(s, @"^([A-Z]{1,3})(\d{5,8})$");
+        if (m.Success) return m.Groups[1].Value + m.Groups[2].Value;
+        return Regex.IsMatch(s, @"^\d{6,10}$") ? s : null;
+    }
+
+    public static string? NormalizeConfirmation(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-.:#]", "");
+        var m = Regex.Match(s, @"^[O0Q]RD([0-9OQDILSBZGT]{6})$");
+        return m.Success ? "ORD" + Digits(m.Groups[1].Value) : null;
+    }
+
+    private static string Digits(string s)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in s) sb.Append(ch switch { 'O' or 'Q' or 'D' => '0', 'I' or 'L' => '1', 'Z' => '2', 'S' => '5', 'B' => '8', 'G' => '6', 'T' => '7', _ => ch });
+        return sb.ToString();
+    }
+
+    // ───────── classification ─────────
+
+    private record Sig(string Type, (string kw, double w)[] Keywords);
+    private static readonly Sig[] Signatures =
+    {
+        new("DN",  new[] { ("DELIVERY NOTE", 3.0), ("QTY RECEIVED", 1.5), ("QUANTITY RECEIVED", 1.5), ("RECEIVED BY", 1.5), ("BACK ORDER", .5), ("B/O", .3), ("SHIPPED", .5) }),
+        new("INV", new[] { ("TAX INVOICE", 3.0), ("UNIT PRICE", 1.0), ("SUBTOTAL", 1.0), ("SUB TOTAL", 1.0), ("AMOUNT DUE", 1.5), ("VAT", .5), ("BANKING DETAILS", 1.0), ("BANK DETAILS", 1.0), ("ACCOUNT NUMBER", .3), ("PART DELIVERY", .5) }),
+        new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("ORD", .5) }),
+        new("EML", new[] { ("GMAIL", 2.0), ("FROM:", 1.5), ("TO:", 1.0), ("SUBJECT", 1.5), ("SENT:", 1.0), ("@KZNHEALTH.GOV.ZA", 2.0), ("@", .3), ("FORWARDED MESSAGE", 1.5), ("ATTACHMENT", .5), ("OUTLOOK", 1.5) }),
+        new("PO",  new[] { ("KZN: HEALTH", 3.0), ("KZN HEALTH", 2.5), ("ORDER\\SERVICE", 2.0), ("ORDER/SERVICE", 2.0), ("ORDER NO", 1.5), ("OFFICIAL ORDER", 2.5), ("PROVINCE OF", 1.0), ("DEPARTMENT OF HEALTH", 1.5), ("AMENDED ORDER", 1.5), ("CSD", .5), ("MAAA", .8), ("DELIVERY DATE", .5) }),
+    };
+
+    public static PageResult AnalyzePage(int pageNo, string text)
+    {
+        var up = (text ?? "").ToUpperInvariant();
+        var collapsed = Regex.Replace(up, @"[ \t]+", " ");
+        var r = new PageResult { Page = pageNo, TextLength = collapsed.Trim().Length };
+
+        // Score each type.
+        var scores = new Dictionary<string, double>();
+        foreach (var sig in Signatures)
+        {
+            double s = 0;
+            foreach (var (kw, w) in sig.Keywords)
+                if (collapsed.Contains(kw)) { s += w; if (w >= 1.5) r.Hits.Add(kw); }
+            scores[sig.Type] = s;
+        }
+        // Structural hints: an INV must have money words; a DN with "TAX INVOICE" is really an INV.
+        if (scores["DN"] > 0 && scores["INV"] >= 3 && collapsed.Contains("TAX INVOICE") && !collapsed.Contains("DELIVERY NOTE")) scores["DN"] = 0;
+        var best = scores.OrderByDescending(kv => kv.Value).First();
+        if (best.Value >= 1.5) { r.Type = best.Key; r.Confidence = Math.Min(1, best.Value / 5.0); }
+
+        // Numbers.
+        var invs = new List<string>();
+        foreach (Match m in InvLabelRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Groups[1].Value); if (n != null) invs.Add(n); }
+        foreach (Match m in InvRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Value); if (n != null) invs.Add(n); }
+        r.InvoiceNumber = invs.GroupBy(x => x).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
+
+        var ords = new List<(string norm, string raw)>();
+        foreach (Match m in OrRx.Matches(collapsed)) { var n = NormalizeOrder(m.Value); if (n != null) ords.Add((n, m.Value.Trim())); }
+        if (ords.Count == 0)
+            foreach (Match m in PoLabelRx.Matches(collapsed))
+            {
+                var n = NormalizeOrder(m.Groups[1].Value);
+                // don't confuse an invoice number or ORD confirmation with the order number
+                if (n != null && NormalizeInvoice(m.Groups[1].Value) == null && !n.StartsWith("ORD")) ords.Add((n, m.Groups[1].Value.Trim()));
+            }
+        var bestOrd = ords.GroupBy(x => x.norm).OrderByDescending(g => g.Count()).FirstOrDefault();
+        if (bestOrd != null) { r.OrderNumber = bestOrd.Key; r.OrderNumberRaw = bestOrd.First().raw; }
+
+        foreach (Match m in OrdRx.Matches(collapsed)) { var n = NormalizeConfirmation(m.Value); if (n != null) { r.ConfirmationNumber = n; break; } }
+
+        var cm = CustRx.Match(collapsed);
+        if (cm.Success) r.CustomerNumber = cm.Groups[1].Value;
+        var dm = DateRx.Match(collapsed);
+        if (dm.Success) r.Date = dm.Groups[1].Value;
+
+        r.Signed = Regex.IsMatch(collapsed, @"RECEIVED\s+BY|SIGNATURE|SIGNED");
+        r.Stamped = Regex.IsMatch(collapsed, @"\bSTAMP|RECEIVED\s+\d{1,2}|HOSPITAL|STORES?\b|RECEIVING");
+        r.PartDelivery = collapsed.Contains("PART DELIVERY") || collapsed.Contains("PARTIAL DELIVERY") || collapsed.Contains("BACK ORDER") || collapsed.Contains("BACKORDER");
+        r.Amended = collapsed.Contains("AMENDED");
+        return r;
+    }
+
+    // ───────── validation ─────────
+
+    public static Result Analyze(IList<string> pageTexts)
+    {
+        var res = new Result();
+        for (var i = 0; i < pageTexts.Count; i++) res.Pages.Add(AnalyzePage(i + 1, pageTexts[i]));
+
+        var readable = res.Pages.Where(p => p.TextLength >= 40).ToList();
+        if (readable.Count == 0)
+        {
+            res.Status = "UNKNOWN";
+            res.Notes.Add("No text could be read from the document — the invoice number must be typed in and the pack checked by eye.");
+            return res;
+        }
+
+        // Duplicate pages: same type + same key numbers → count once.
+        var seen = new HashSet<string>();
+        foreach (var p in res.Pages.Where(p => p.Type != "UNK"))
+        {
+            var key = $"{p.Type}|{p.InvoiceNumber}|{p.OrderNumber}|{p.ConfirmationNumber}|{p.Amended}";
+            if (!seen.Add(key)) { p.Duplicate = true; res.Notes.Add($"Page {p.Page} looks like a second copy of a {TypeNames[p.Type].ToLowerInvariant()} — counted once."); }
+        }
+        var docs = res.Pages.Where(p => p.Type != "UNK" && !p.Duplicate).ToList();
+
+        // Amended PO: if both original and amended exist, use the amended one.
+        var pos = docs.Where(p => p.Type == "PO").ToList();
+        if (pos.Count > 1 && pos.Any(p => p.Amended))
+        {
+            foreach (var p in pos.Where(p => !p.Amended)) { p.Duplicate = true; res.Notes.Add($"Page {p.Page}: original order superseded by the amended order."); }
+            docs = docs.Where(p => !p.Duplicate).ToList();
+        }
+
+        res.TypesFound = Types.Where(t => docs.Any(d => d.Type == t)).ToList();
+        res.TypesMissing = Types.Except(res.TypesFound).ToList();
+        res.Amended = docs.Any(p => p.Amended && p.Type is "PO" or "EML");
+        res.PartDelivery = docs.Any(p => p.PartDelivery && p.Type is "INV" or "DN");
+        var dn = docs.FirstOrDefault(p => p.Type == "DN");
+        var inv = docs.FirstOrDefault(p => p.Type == "INV");
+        res.ProofOfDelivery = dn != null && (dn.Signed || dn.Stamped);
+
+        // Pack-level numbers (most common across documents, INV/DN preferred for invoice).
+        res.InvoiceNumber = Vote(docs.Where(p => p.Type is "INV" or "DN").Select(p => p.InvoiceNumber)) ?? Vote(res.Pages.Select(p => p.InvoiceNumber));
+        res.OrderNumber = Vote(docs.Select(p => p.OrderNumber)) ?? Vote(res.Pages.Select(p => p.OrderNumber));
+        res.ConfirmationNumber = Vote(docs.Select(p => p.ConfirmationNumber));
+        res.CustomerNumber = Vote(docs.Select(p => p.CustomerNumber));
+
+        // H1 — minimum documents
+        var h1 = res.TypesFound.Count >= 4;
+        res.Rules.Add(new RuleResult
+        {
+            Code = "H1", Title = "Minimum documents (4 of 5)", Pass = h1,
+            Detail = h1 ? $"{res.TypesFound.Count} of 5 document types found." : $"Only {res.TypesFound.Count} of 5 documents; missing: {string.Join(", ", res.TypesMissing.Select(t => TypeNames[t]))}.",
+        });
+
+        // H2 — DN ↔ INV invoice number match
+        bool h2; string d2;
+        if (dn == null || inv == null) { h2 = false; d2 = dn == null && inv == null ? "Delivery note and tax invoice not found." : dn == null ? "Delivery note not found." : "Tax invoice not found."; }
+        else if (dn.InvoiceNumber == null || inv.InvoiceNumber == null) { h2 = false; d2 = $"Invoice number not readable on the {(dn.InvoiceNumber == null ? "delivery note" : "tax invoice")}."; }
+        else { h2 = dn.InvoiceNumber == inv.InvoiceNumber; d2 = h2 ? $"Both read {inv.InvoiceNumber}." : $"Invoice mismatch: DN={dn.InvoiceNumber} INV={inv.InvoiceNumber}."; }
+        res.Rules.Add(new RuleResult { Code = "H2", Title = "Delivery note and invoice carry the same invoice number", Pass = h2, Detail = d2 });
+
+        // H3 — order number agreement across ≥3 documents
+        var withOrder = docs.Where(p => p.OrderNumber != null).ToList();
+        var distinct = withOrder.Select(p => p.OrderNumber!).Distinct().ToList();
+        bool h3; string d3;
+        if (withOrder.Count < 3) { h3 = false; d3 = $"Order number found on only {withOrder.Count} document(s); need at least 3."; }
+        else if (distinct.Count > 1) { h3 = false; d3 = "Order number mismatch: " + string.Join("; ", withOrder.Select(p => $"{TypeNames[p.Type]} (p{p.Page}) = {p.OrderNumberRaw}")); }
+        else { h3 = true; d3 = $"{withOrder.Count} documents agree on {distinct[0]}."; }
+        res.Rules.Add(new RuleResult { Code = "H3", Title = "Order number agrees across the pack", Pass = h3, Detail = d3 });
+
+        // Soft checks → warnings
+        var ocs = docs.Where(p => p.ConfirmationNumber != null).Select(p => p.ConfirmationNumber!).Distinct().ToList();
+        if (ocs.Count > 1) res.Warnings.Add("Different order-confirmation numbers seen: " + string.Join(", ", ocs) + ".");
+        var custs = docs.Where(p => p.CustomerNumber != null).Select(p => p.CustomerNumber!).Distinct().ToList();
+        if (custs.Count > 1) res.Warnings.Add("Customer number differs between documents: " + string.Join(", ", custs) + ".");
+        if (dn != null && !res.ProofOfDelivery) res.Warnings.Add("No 'Received by' signature or receiving stamp could be read on the delivery note — check the paper copy.");
+        if (res.PartDelivery) res.Notes.Add("Marked as a part delivery — the balance is on back-order.");
+        if (res.Amended) res.Notes.Add("Amended order in the pack — amended values apply.");
+        var unk = res.Pages.Where(p => p.Type == "UNK" && p.TextLength >= 40).Select(p => p.Page).ToList();
+        if (unk.Count > 0) res.Warnings.Add($"Page{(unk.Count > 1 ? "s" : "")} {string.Join(", ", unk)} could not be classified.");
+        var blank = res.Pages.Where(p => p.TextLength < 40).Select(p => p.Page).ToList();
+        if (blank.Count > 0) res.Warnings.Add($"Page{(blank.Count > 1 ? "s" : "")} {string.Join(", ", blank)} returned almost no text (faint scan or image only).");
+
+        res.Status = res.Rules.All(r => r.Pass) ? (res.Warnings.Count > 0 ? "REVIEW" : "PASS") : "FAIL";
+        return res;
+    }
+
+    private static string? Vote(IEnumerable<string?> values) =>
+        values.Where(v => v != null).GroupBy(v => v!).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
+}

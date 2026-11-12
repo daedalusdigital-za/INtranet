@@ -590,6 +590,20 @@
     </div>
   </mat-tab>
 
+  <!-- ═══════════ PACKS ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">inventory_2</mat-icon> Packs
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Invoice Packs</h2>
+        <p>The complete paper trail for a sale in one PDF — delivery note, tax invoice, order confirmation, the customer's order e-mail and the filled-in order form — tracked by invoice number. Upload a scanned pack and we read the invoice number off it for you to confirm; Sage fills in the customer, order and totals. Packs can also be assembled from separate documents, and in time from what the intranet already holds.</p>
+      </div>
+      @if (tabIndex === 8) { <app-finance-packs></app-finance-packs> }
+    </div>
+  </mat-tab>
+
   <!-- ═══════════ VAULT ═══════════ -->
   <mat-tab>
     <ng-template mat-tab-label>
@@ -601,7 +615,7 @@
         <h2>Compliance Vault</h2>
         <p>Statutory documents every company must keep current — tax clearance, B-BBEE, CSD, bank confirmation. Finance owns the renewals; the Tenders team reads the same vault.</p>
       </div>
-      @if (tabIndex === 8) { <app-finance-vault></app-finance-vault> }
+      @if (tabIndex === 9) { <app-finance-vault></app-finance-vault> }
     </div>
   </mat-tab>
 
