@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -21,7 +21,7 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
 @Component({
   selector: 'app-finance-aging',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatMenuModule],
+  imports: [CommonModule, FormsModule, RouterModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatMenuModule],
   template: `
     <!-- Company + snapshot picker -->
     <div class="ag-toolbar">
@@ -39,18 +39,12 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
           </button>
         }
       </div>
-      <span class="ag-spacer"></span>
-      <label class="ag-upload" [class.busy]="uploading()">
-        <mat-icon>{{ uploading() ? 'hourglass_top' : 'upload_file' }}</mat-icon>
-        {{ uploading() ? 'Importing…' : 'Upload Sage aging (.xlsx)' }}
-        <input type="file" accept=".xlsx" (change)="upload($event)" [disabled]="uploading()" hidden />
-      </label>
     </div>
 
     @if (!company()) {
-      <div class="ag-state"><mat-icon>account_balance</mat-icon><h3>Pick a company</h3><p>Choose a company above, then upload its Sage aging workbook (the one with the <i>Customer Transaction</i> sheet).</p></div>
+      <div class="ag-state"><mat-icon>account_balance</mat-icon><h3>Pick a company</h3><p>Choose a company above. Aging workbooks are uploaded under <a routerLink="/settings/data-import">Admin settings › Data import</a>.</p></div>
     } @else if (!snapshot() && !loading()) {
-      <div class="ag-state"><mat-icon>upload_file</mat-icon><h3>No aging for {{ company() }} yet</h3><p>Export the age analysis from Sage to Excel and upload it here. Each upload is kept as a dated snapshot, so you can compare months.</p></div>
+      <div class="ag-state"><mat-icon>upload_file</mat-icon><h3>No aging for {{ company() }} yet</h3><p>Export the age analysis from Sage to Excel and upload it under <a routerLink="/settings/data-import">Admin settings › Data import › Debtors aging</a>. Each upload is kept as a dated snapshot, so you can compare months.</p></div>
     } @else {
       <!-- Snapshot row -->
       <div class="ag-snap">
@@ -206,7 +200,7 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
   styles: [`
     :host { display: block; }
     .ag-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--space-3); margin-bottom: var(--space-4); }
-    .ag-companies { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-3); flex: 1; }
+    .ag-companies { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); flex: 1; @media (max-width: 900px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .ag-co { display: flex; align-items: center; gap: 14px; padding: 12px 16px; text-align: left; cursor: pointer; font: inherit; color: var(--color-text);
       background: var(--color-surface); border: 2px solid var(--color-line); border-radius: 16px; transition: border-color .15s, box-shadow .15s, opacity .15s, transform .15s;
       .logo { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: 0 0 56px; background: #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
@@ -292,7 +286,6 @@ export class FinanceAgingComponent implements OnInit {
   snapshot = computed(() => this.snapshots().find(s => s.id === this.snapshotId()) ?? null);
   aging = signal<{ total: number; overdue: number; buckets: Bucket[]; customers: AgingCustomer[] } | null>(null);
   loading = signal(false);
-  uploading = signal(false);
 
   search = signal('');
   bucketFilter = signal<number | null>(null);
@@ -399,25 +392,6 @@ export class FinanceAgingComponent implements OnInit {
     this.http.get<any>(`${this.api}/snapshots/${this.snapshotId()}/customers/${encodeURIComponent(c.code)}`).subscribe({
       next: r => { this.detail.set(r); this.detailLoading.set(false); },
       error: () => { this.detailLoading.set(false); this.toast.error("Couldn't load this customer's documents."); }
-    });
-  }
-
-  upload(ev: Event): void {
-    const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0]; input.value = '';
-    if (!file) return;
-    const co = this.company() || this.companies()[0];
-    if (!co) { this.toast.error('Pick a company first.'); return; }
-    if (!window.confirm(`Import "${file.name}" as the aging for ${co}?`)) return;
-    const fd = new FormData(); fd.append('file', file); fd.append('company', co);
-    this.uploading.set(true);
-    this.http.post<any>(`${this.api}/import`, fd).subscribe({
-      next: r => {
-        this.uploading.set(false);
-        this.toast.done(`Imported ${r.documentCount} documents for ${r.customerCount} customers · R ${Number(r.totalBalance).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`);
-        this.loadSnapshots(co);
-      },
-      error: e => { this.uploading.set(false); this.toast.error(e?.error?.message || "Couldn't import this workbook."); }
     });
   }
 

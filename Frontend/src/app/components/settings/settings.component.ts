@@ -979,10 +979,43 @@ import * as XLSX from 'xlsx';
                       <small>Import employee records</small>
                     </div>
                   </div>
+                  <div class="import-type-card"
+                       [class.selected]="selectedImportType === 'aging'"
+                       (click)="selectImportType('aging')">
+                    <mat-icon>account_balance</mat-icon>
+                    <div class="type-info">
+                      <span>Debtors aging</span>
+                      <small>Sage age analysis per company (Finance › Aging)</small>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              @if (selectedImportType) {
+              @if (selectedImportType === 'aging') {
+                <div class="company-selector">
+                  <h4><mat-icon>business</mat-icon> Select Company</h4>
+                  <mat-form-field appearance="outline">
+                    <mat-label>Company</mat-label>
+                    <mat-select [(ngModel)]="agingCompany" required>
+                      <mat-option value="Promed Technologies">Promed Technologies (PMT)</mat-option>
+                      <mat-option value="Access Medical">Access Medical (ACM)</mat-option>
+                      <mat-option value="Promed Pharmatech">Promed Pharmatech (PHT)</mat-option>
+                      <mat-option value="Sebenzani Trading">Sebenzani Trading (SBT)</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <p class="import-note"><mat-icon inline>info</mat-icon> Export the age analysis from Sage to Excel (the workbook with the <i>Customer Transaction</i> sheet). Each upload is kept as a dated snapshot — Finance › Aging shows the latest one per company.</p>
+                  <div class="file-drop-zone" style="margin-top:12px">
+                    <mat-icon>upload_file</mat-icon>
+                    <p>{{ agingUploading ? 'Importing…' : 'Choose the Sage aging workbook (.xlsx)' }}</p>
+                    <button mat-raised-button color="primary" [disabled]="!agingCompany || agingUploading" (click)="agingFile.click()">
+                      <mat-icon>folder_open</mat-icon> Browse Files
+                    </button>
+                    <input #agingFile type="file" hidden accept=".xlsx" (change)="uploadAging($event)">
+                  </div>
+                </div>
+              }
+
+              @if (selectedImportType && selectedImportType !== 'aging') {
                 <!-- File Upload Area -->
                 <div class="file-upload-section">
                   <h4>Upload File</h4>
@@ -4823,6 +4856,21 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   // Data Import Methods
+  agingCompany = '';
+  agingUploading = false;
+  uploadAging(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0]; input.value = '';
+    if (!file || !this.agingCompany) return;
+    if (!window.confirm(`Import "${file.name}" as the debtors aging for ${this.agingCompany}?`)) return;
+    const fd = new FormData(); fd.append('file', file); fd.append('company', this.agingCompany);
+    this.agingUploading = true;
+    this.http.post<any>(`${this.apiUrl}/finance/aging/import`, fd).subscribe({
+      next: r => { this.agingUploading = false; this.toast.done(`Imported ${r.documentCount} documents for ${r.customerCount} customers · R ${Number(r.totalBalance).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`); },
+      error: e => { this.agingUploading = false; this.toast.error(e?.error?.message || "Couldn't import this workbook."); }
+    });
+  }
+
   selectImportType(type: string): void {
     this.selectedImportType = type;
     this.resetImport();

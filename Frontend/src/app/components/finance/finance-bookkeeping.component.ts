@@ -41,13 +41,13 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
     @if (summary(); as s) {
       <div class="kpis">
         <button class="kpi" [class.active]="status === 'all'" (click)="setStatus('all')">
-          <span class="k-label">Invoiced</span><b>{{ s.invoices | number }}</b><span class="k-sub">{{ s.amount | currency:'ZAR':'R':'1.0-0' }}</span>
+          <span class="k-label">Invoiced</span><b>{{ s.invoices | number }}</b><span class="k-sub">invoices in range</span>
         </button>
         <button class="kpi" [class.active]="status === 'not-dispatched'" (click)="setStatus('not-dispatched')">
           <span class="k-label">Not on a trip sheet</span><b>{{ s.notDispatched | number }}</b><span class="k-sub">still in branch</span>
         </button>
         <button class="kpi warn" [class.active]="status === 'needs-pod'" (click)="setStatus('needs-pod')">
-          <span class="k-label">Went out — POD needed</span><b>{{ s.needsPod | number }}</b><span class="k-sub">{{ s.needsPodAmount | currency:'ZAR':'R':'1.0-0' }} to collect proof for</span>
+          <span class="k-label">Went out — POD needed</span><b>{{ s.needsPod | number }}</b><span class="k-sub">proof still to be collected</span>
         </button>
         <button class="kpi ok" [class.active]="status === 'has-pod'" (click)="setStatus('has-pod')">
           <span class="k-label">POD received</span><b>{{ s.hasPod | number }}</b><span class="k-sub">{{ s.dispatched ? (s.hasPod / s.dispatched | percent:'1.0-0') : '—' }} of dispatched</span>
@@ -105,7 +105,7 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
           <thead>
             <tr>
               <th>Date</th><th>Invoice No</th><th>Co.</th><th>Customer No</th><th>Province</th><th>Customer Name</th>
-              <th class="num">Amount</th><th>Trip sheet</th><th>Credit Note</th><th>POD Date</th><th>Status</th><th></th>
+              <th>Trip sheet</th><th>Credit Note</th><th>POD Date</th><th>Status</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -117,7 +117,6 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
                 <td class="mono">{{ r.customerNumber }}</td>
                 <td>{{ r.province || '—' }}</td>
                 <td class="name" [title]="r.customerName">{{ r.customerName }}</td>
-                <td class="num">@if (r.amount) { {{ r.amount | currency:'ZAR':'R':'1.2-2' }} } @else { <span class="muted" matTooltip="Imported from the trip sheet without a value">—</span> }</td>
                 <td>
                   @if (r.loadNumber) {
                     <a [routerLink]="['/logistics/loads', r.loadId]" class="link mono">{{ r.loadNumber }}</a>
@@ -279,8 +278,8 @@ export class FinanceBookkeepingComponent implements OnInit {
   exportCsv(): void {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const fmt = (d?: string) => d ? new Date(d).toISOString().slice(0, 10) : '';
-    const head = ['Date', 'Invoice No', 'Company', 'Customer No', 'Province', 'Customer Name', 'Amount', 'Trip Sheet', 'Dispatched', 'Credit Note', 'POD Date', 'POD Source', 'Status', 'Days waiting POD'];
-    const body = this.rows().map(r => [fmt(r.date), r.invoiceNumber, r.company, r.customerNumber, r.province, r.customerName, r.amount.toFixed(2), r.loadNumber, fmt(r.dispatchedAt), r.creditNoteNumbers, fmt(r.podDate), r.podSource, r.state, r.daysWaitingPod ?? ''].map(esc).join(','));
+    const head = ['Date', 'Invoice No', 'Company', 'Customer No', 'Province', 'Customer Name', 'Trip Sheet', 'Dispatched', 'Credit Note', 'POD Date', 'POD Source', 'Status', 'Days waiting POD'];
+    const body = this.rows().map(r => [fmt(r.date), r.invoiceNumber, r.company, r.customerNumber, r.province, r.customerName, r.loadNumber, fmt(r.dispatchedAt), r.creditNoteNumbers, fmt(r.podDate), r.podSource, r.state, r.daysWaitingPod ?? ''].map(esc).join(','));
     const blob = new Blob(['\uFEFF' + [head.map(esc).join(','), ...body].join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
