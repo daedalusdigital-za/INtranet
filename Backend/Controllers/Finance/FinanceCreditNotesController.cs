@@ -33,7 +33,7 @@ namespace ProjectTracker.API.Controllers.Finance
 
         private static readonly Dictionary<string, string> CompanyNames = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["PMT"] = "Promed Technologies", ["ACM"] = "Access Medical", ["PHT"] = "Promed Pharatech", ["SBT"] = "Sebenzani Trading"
+            ["PMT"] = "Promed Technologies", ["ACM"] = "Access Medical", ["PHT"] = "Promed Pharmatech", ["SBT"] = "Sebenzani Trading"
         };
 
         public FinanceCreditNotesController(ApplicationDbContext db, IConfiguration cfg)

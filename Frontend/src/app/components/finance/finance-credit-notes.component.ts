@@ -342,7 +342,7 @@ interface Summary {
         <p class="hint">The signed PDF is the authorisation for the credit. It is matched to the Sage credit note by its <b>CN number</b>, which then links it to the customer, the original invoice and the aging.</p>
         <div class="grid">
           <label>Credit note number *<input [(ngModel)]="up.creditNoteNumber" placeholder="CN103513" (blur)="lookupNumber()" /></label>
-          <label>Company<select [(ngModel)]="up.company"><option value="">Auto from Sage</option><option value="PMT">Promed Technologies</option><option value="ACM">Access Medical</option><option value="PHT">Promed Pharatech</option><option value="SBT">Sebenzani Trading</option></select></label>
+          <label>Company<select [(ngModel)]="up.company"><option value="">Auto from Sage</option><option value="PMT">Promed Technologies</option><option value="ACM">Access Medical</option><option value="PHT">Promed Pharmatech</option><option value="SBT">Sebenzani Trading</option></select></label>
           <label>Customer<input [(ngModel)]="up.customerName" [placeholder]="upSage()?.customerName || 'Auto from Sage'" /></label>
           <label>Amount<input type="number" step="0.01" [(ngModel)]="up.amount" [placeholder]="upSage() ? (upSage()!.value | number:'1.2-2') : 'Auto from Sage'" /></label>
           <label>Reason<select [(ngModel)]="up.reason"><option value="">—</option>@for (r of reasons; track r) { <option [value]="r">{{ r }}</option> }</select></label>

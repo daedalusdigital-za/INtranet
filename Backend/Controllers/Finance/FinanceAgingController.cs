@@ -30,7 +30,7 @@ namespace ProjectTracker.API.Controllers.Finance
 
         private int UserId => int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
 
-        public static readonly string[] Companies = { "Access Medical", "Promed Technologies", "Promed Pharatech", "Sebenzani Trading" };
+        public static readonly string[] Companies = { "Access Medical", "Promed Technologies", "Promed Pharmatech", "Sebenzani Trading" };
         private static readonly string[] BucketLabels = { "Current", "30 days", "60 days", "90 days", "120+ days" };
 
         // ------------------------------------------------------------------ snapshots

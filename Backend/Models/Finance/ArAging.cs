@@ -5,7 +5,7 @@ namespace ProjectTracker.API.Models.Finance
 {
     /// <summary>
     /// One imported Sage "Customer Transaction / Aged Trial Balance" workbook for one company
-    /// (Access Medical, Promed Technologies, Promed Pharatech, Sebenzani Trading…). The report is a
+    /// (Access Medical, Promed Technologies, Promed Pharmatech, Sebenzani Trading…). The report is a
     /// point-in-time list of every open debtor document, so each upload is kept as a snapshot.
     /// </summary>
     [Table("ArAgingSnapshots")]
