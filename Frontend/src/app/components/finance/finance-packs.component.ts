@@ -15,6 +15,7 @@ import { ToastService } from '../../ui/toast.service';
 import { companyLogo, companyName, COMPANY_NAMES } from '../../core/company-logos';
 import { PackUploadDialogComponent, PACK_KINDS, Analysis } from './pack-upload-dialog.component';
 import { InvoiceDetailDialogComponent } from './invoice-detail-dialog.component';
+import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 
 interface PackContents { deliveryNote: boolean; taxInvoice: boolean; orderConfirmation: boolean; orderEmail: boolean; orderForm: boolean; }
 interface Pack {
@@ -145,7 +146,8 @@ interface Summary {
               </td>
               <td><div class="pk-cust"><span>{{ p.uploadedAt | date:'d MMM yyyy' }}</span><small>{{ p.uploadedByName || '' }}</small></div></td>
               <td class="actions">
-                <button mat-icon-button type="button" (click)="view(p)" matTooltip="Open pack PDF"><mat-icon>open_in_new</mat-icon></button>
+                <button mat-icon-button type="button" (click)="preview(p)" matTooltip="Preview pack here"><mat-icon>visibility</mat-icon></button>
+                <button mat-icon-button type="button" (click)="view(p)" matTooltip="Open pack PDF in new tab"><mat-icon>open_in_new</mat-icon></button>
                 <button mat-icon-button type="button" [matMenuTriggerFor]="menu" matTooltip="More"><mat-icon>more_vert</mat-icon></button>
                 <mat-menu #menu="matMenu">
                   <button mat-menu-item (click)="download(p)"><mat-icon>download</mat-icon> Download</button>
@@ -213,7 +215,8 @@ interface Summary {
                       <ul class="pk-files">
                         @for (f of p.files; track f.id) {
                           <li><mat-icon>{{ kindIcon(f.kind) }}</mat-icon> <span>{{ kindLabel(f.kind) }}</span> <small>{{ f.originalFileName }} · {{ fmtSize(f.size) }}</small>
-                            <button mat-icon-button type="button" (click)="viewPart(p, f.id)" matTooltip="Open"><mat-icon>open_in_new</mat-icon></button></li>
+                            <button mat-icon-button type="button" (click)="previewPart(p, f)" matTooltip="Preview"><mat-icon>visibility</mat-icon></button>
+                            <button mat-icon-button type="button" (click)="viewPart(p, f.id)" matTooltip="Open in new tab"><mat-icon>open_in_new</mat-icon></button></li>
                         }
                       </ul>
                     }
@@ -353,6 +356,17 @@ export class FinancePacksComponent implements OnInit {
   upload(): void { PackUploadDialogComponent.open(this.dialog, { mode: 'scan' }).afterClosed().subscribe(r => { if (r) { this.loadSummary(); this.reload(); } }); }
   create(): void { PackUploadDialogComponent.open(this.dialog, { mode: 'assemble' }).afterClosed().subscribe(r => { if (r) { this.loadSummary(); this.reload(); } }); }
 
+  preview(p: Pack): void {
+    PackPreviewDialogComponent.open(this.dialog, {
+      url: `${this.api}/finance/packs/${p.id}/file`,
+      title: `${p.packNumber} · ${p.invoiceNumber}`,
+      subtitle: [p.customerName, p.orderNumber ? `Order ${p.orderNumber}` : null, p.pageCount ? `${p.pageCount} page(s)` : null].filter(Boolean).join(' · '),
+      fileName: p.originalFileName || p.fileName || `${p.invoiceNumber}-pack.pdf`,
+    });
+  }
+  previewPart(p: Pack, f: { id: number; kind: string; originalFileName?: string }): void {
+    PackPreviewDialogComponent.open(this.dialog, { url: `${this.api}/finance/packs/${p.id}/files/${f.id}`, title: `${this.kindLabel(f.kind)} · ${p.invoiceNumber}`, subtitle: f.originalFileName, fileName: f.originalFileName });
+  }
   view(p: Pack): void {
     this.http.get(`${this.api}/finance/packs/${p.id}/file`, { responseType: 'blob' }).subscribe({
       next: b => window.open(URL.createObjectURL(b), '_blank'),
