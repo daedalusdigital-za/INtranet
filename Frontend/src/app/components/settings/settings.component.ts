@@ -4407,8 +4407,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   editUser(user: User): void {
     this.editingUser = user;
-    // Separate module permissions from granular permissions
-    const allPerms = user.permissions ? [...user.permissions] : [];
+    // Separate module permissions from granular permissions (API may return a comma string)
+    const allPerms = UserManagementService.normalizePermissions(user.permissions);
     const moduleKeys = this.modulePermissions.map(m => m.key);
     this.selectedModulePermissions = allPerms.filter(p => moduleKeys.includes(p));
     this.selectedPermissions = allPerms.filter(p => !moduleKeys.includes(p));

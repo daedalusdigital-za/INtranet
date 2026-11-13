@@ -123,9 +123,20 @@ export class UserManagementService {
     });
   }
 
+  /** The API stores permissions as a comma-separated string; always hand callers a clean array. */
+  static normalizePermissions(raw: unknown): string[] {
+    if (Array.isArray(raw)) return raw.map(p => String(p).trim()).filter(p => p.length > 1);
+    if (typeof raw === 'string') return raw.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    return [];
+  }
+  private static normalizeUser<T extends { permissions?: any }>(u: T): T {
+    return { ...u, permissions: UserManagementService.normalizePermissions(u?.permissions) };
+  }
+
   // Get all users
   getUsers(): Observable<User[]> {
     return this.http.get<User[]>(this.apiUrl, { headers: this.getHeaders() }).pipe(
+      map(users => (users ?? []).map(u => UserManagementService.normalizeUser(u))),
       tap(users => this.usersSubject.next(users)),
       catchError(error => {
         console.error('Error fetching users:', error);
@@ -137,6 +148,7 @@ export class UserManagementService {
   // Get user by ID
   getUser(id: number): Observable<User | null> {
     return this.http.get<User>(`${this.apiUrl}/${id}`, { headers: this.getHeaders() }).pipe(
+      map(u => u ? UserManagementService.normalizeUser(u) : u),
       catchError(error => {
         console.error('Error fetching user:', error);
         return of(null);
