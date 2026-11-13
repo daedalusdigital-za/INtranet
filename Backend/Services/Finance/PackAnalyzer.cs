@@ -35,6 +35,7 @@ public static class PackAnalyzer
         public bool PartDelivery { get; set; }
         public bool Amended { get; set; }
         public bool Duplicate { get; set; }
+        public decimal? AmountDue { get; set; }
         public List<string> Hits { get; set; } = new();
         public int TextLength { get; set; }
     }
@@ -61,6 +62,8 @@ public static class PackAnalyzer
         public string? OrderNumber { get; set; }
         public string? ConfirmationNumber { get; set; }
         public string? CustomerNumber { get; set; }
+        /// <summary>Invoice total (incl. VAT) read off the tax invoice / delivery note — used to find the invoice in Sage when the IN number is unreadable.</summary>
+        public decimal? AmountDue { get; set; }
         public bool ProofOfDelivery { get; set; }
         public bool PartDelivery { get; set; }
         public bool Amended { get; set; }
@@ -77,6 +80,7 @@ public static class PackAnalyzer
     // Bare 6-digit number near an invoice / delivery-note header (the IN prefix is often a logo glyph).
     private static readonly Regex BareInvRx = new(@"(?:INVOICE|DELIVERY\s*NOTE)[^\n]{0,40}?(?<![A-Z0-9])(0\d{5})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CustBareRx = new(@"\b(\d{2}-[A-Z]{3}-\d{3})\b", RegexOptions.Compiled);
+    private static readonly Regex AmountRx = new(@"(?:AMOUNT\s+DUE|TOTAL\s+DUE|GRAND\s+TOTAL|INVOICE\s+TOTAL|TOTAL\s+INCL\w*|\bTOTAL)\b[^0-9\n]{0,25}?(\d{1,3}(?:[ ,]\d{3})*\.\d{2}|\d{3,8}\.\d{2})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex InvLabelRx = new(@"(?:TAX\s+)?INVOICE\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*([A-Z]{0,2}[\s\-]?[0-9OQDILSBZGT]{5,7})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // OR000190 / OR-000190 / OR 000190
     private static readonly Regex OrRx = new(@"\b[O0Q][R][\s\-.:]?([0-9OQDILSBZGT]{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -199,6 +203,11 @@ public static class PackAnalyzer
         else { var cb = CustBareRx.Match(collapsed); if (cb.Success) r.CustomerNumber = cb.Groups[1].Value; }
         var dm = DateRx.Match(collapsed);
         if (dm.Success) r.Date = dm.Groups[1].Value;
+        // Largest "total"-style amount on the page ≈ amount due incl. VAT.
+        decimal? amt = null;
+        foreach (Match m in AmountRx.Matches(collapsed))
+            if (decimal.TryParse(m.Groups[1].Value.Replace(" ", "").Replace(",", ""), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) && (amt == null || v > amt)) amt = v;
+        r.AmountDue = amt;
 
         r.Signed = Regex.IsMatch(collapsed, @"RECEIVED\s+BY|SIGNATURE|SIGNED");
         r.Stamped = Regex.IsMatch(collapsed, @"\bSTAMP|RECEIVED\s+\d{1,2}|HOSPITAL|STORES?\b|RECEIVING");
@@ -254,6 +263,7 @@ public static class PackAnalyzer
         res.OrderNumber = Vote(docs.Select(p => p.OrderNumber)) ?? Vote(res.Pages.Select(p => p.OrderNumber));
         res.ConfirmationNumber = Vote(docs.Select(p => p.ConfirmationNumber));
         res.CustomerNumber = Vote(docs.Select(p => p.CustomerNumber));
+        res.AmountDue = (inv ?? dn)?.AmountDue ?? docs.Where(p => p.Type is "INV" or "DN").Select(p => p.AmountDue).FirstOrDefault(a => a != null);
 
         // H1 — minimum documents
         var h1 = res.TypesFound.Count >= 4;

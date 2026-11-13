@@ -32,7 +32,7 @@ interface Part { file: File; kind: string; isPdf: boolean; }
 interface SageHit { company: string | null; customerNumber: string; customerName: string; date: string; total: number; lines: number; loadId: number | null; orderNumber: string | null; pods: number; otherCompanies: string[]; }
 interface DetectResult {
   method: 'text' | 'ocr' | 'none'; pages: number;
-  invoiceNumber: string | null; candidates: string[]; sageMatches: string[];
+  invoiceNumber: string | null; candidates: string[]; sageMatches: string[]; invoiceSource?: 'read' | 'order' | 'amount' | null; amountDue?: number | null;
   orderNumber: string | null; confirmationNumber: string | null; customerNumber: string | null; company: string | null;
   sage: SageHit | null; existingPacks: { id: number; packNumber: string; uploadedAt: string }[];
   ocrAvailable: boolean; analysis: Analysis | null; pageTexts?: string[];
@@ -170,7 +170,9 @@ interface DetectResult {
           @else if (!detect()) { Add the document and we'll read the invoice number off it. }
           @else {
             @if (detect(); as d) {
-              @if (d.invoiceNumber && d.sageMatches.includes(d.invoiceNumber)) { We read <b>{{ d.invoiceNumber }}</b> and it matches a Sage invoice. Confirm it is the number on the paper. }
+              @if (d.invoiceNumber && d.invoiceSource === 'amount') { The invoice number itself wasn't legible, but the total <b>R {{ d.amountDue | number:'1.2-2' }}</b> matches Sage invoice <b>{{ d.invoiceNumber }}</b>{{ d.candidates.length > 1 ? ' (and ' + (d.candidates.length - 1) + ' other' + (d.candidates.length > 2 ? 's' : '') + ')' : '' }}. Check it against the paper. }
+              @else if (d.invoiceNumber && d.invoiceSource === 'order') { The invoice number itself wasn't legible, but the order number points to Sage invoice <b>{{ d.invoiceNumber }}</b>. Check it against the paper. }
+              @else if (d.invoiceNumber && d.sageMatches.includes(d.invoiceNumber)) { We read <b>{{ d.invoiceNumber }}</b> and it matches a Sage invoice. Confirm it is the number on the paper. }
               @else if (d.invoiceNumber) { We read <b>{{ d.invoiceNumber }}</b> but it is not in Sage yet — check it against the paper. }
               @else if (d.method === 'none') { This is a scan and the OCR engine is not available — type the invoice number from the document. }
               @else { No invoice number was found — type it in from the paper copy. }

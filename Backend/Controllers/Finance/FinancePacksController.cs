@@ -320,6 +320,40 @@ public class FinancePacksController : ControllerBase
         var fromName = PackAnalyzer.NormalizeInvoice(Regex.Match(Path.GetFileNameWithoutExtension(fileName), @"[I1L][NMH][\s.\-_]?\d{5,7}", RegexOptions.IgnoreCase).Value);
         if (fromName != null) cands.Add(fromName);
         var ranked = cands.GroupBy(c => c).OrderByDescending(g => g.Count()).ThenBy(g => cands.IndexOf(g.Key)).Select(g => g.Key).Take(8).ToList();
+        string? how = ranked.Count > 0 ? "read" : null;
+
+        // The IN number is often part of a header graphic OCR cannot read. Fall back to Sage:
+        // (1) the aging knows the customer PO / Sage order (ORD) per open invoice;
+        // (2) the invoice total (incl. VAT) is unique enough per customer to pin the invoice down.
+        if (ranked.Count == 0)
+        {
+            var byRef = new List<string>();
+            var refs = new[] { a.OrderNumber, a.ConfirmationNumber }.Where(s => !string.IsNullOrEmpty(s)).Select(s => s!).ToList();
+            if (refs.Count > 0)
+            {
+                var alt = refs.SelectMany(r => new[] { r, Regex.Replace(r, @"^([A-Z]+)(\d+)$", "$1-$2") }).Distinct().ToList();
+                byRef = await _db.ArAgingItems.AsNoTracking()
+                    .Where(x => (x.PoNumber != null && alt.Contains(x.PoNumber)) || (x.OrderNumber != null && alt.Contains(x.OrderNumber)) || (x.Reference != null && alt.Contains(x.Reference)))
+                    .Where(x => x.DocumentNumber.StartsWith("IN"))
+                    .Select(x => x.DocumentNumber).Distinct().Take(5).ToListAsync();
+                if (byRef.Count > 0) { ranked.AddRange(byRef); how = "order"; }
+            }
+            if (ranked.Count == 0 && a.AmountDue is decimal due && due > 0)
+            {
+                var since = DateTime.UtcNow.AddYears(-3);
+                var ex = Math.Round(due / 1.15m, 2);
+                var byAmt = await _db.ImportedInvoices.AsNoTracking()
+                    .Where(i => i.TransactionDate >= since && i.TransactionNumber.StartsWith("IN"))
+                    .GroupBy(i => new { i.TransactionNumber, i.SourceCompany })
+                    .Select(g => new { g.Key.TransactionNumber, g.Key.SourceCompany, total = g.Sum(x => x.SalesAmount), cust = g.Max(x => x.CustomerNumber), date = g.Min(x => x.TransactionDate) })
+                    .Where(g => (g.total >= ex - 0.06m && g.total <= ex + 0.06m) || (g.total >= due - 0.06m && g.total <= due + 0.06m))
+                    .OrderByDescending(g => g.date).Take(12).ToListAsync();
+                if (a.CustomerNumber != null && byAmt.Any(x => x.cust == a.CustomerNumber)) byAmt = byAmt.Where(x => x.cust == a.CustomerNumber).ToList();
+                var co = GuessCompanyFromText(string.Join("\n", pageTexts));
+                if (co != null && byAmt.Any(x => x.SourceCompany == co)) byAmt = byAmt.Where(x => x.SourceCompany == co).ToList();
+                if (byAmt.Count is > 0 and <= 5) { ranked.AddRange(byAmt.Select(x => x.TransactionNumber).Distinct()); how = "amount"; }
+            }
+        }
         var sageHits = ranked.Count == 0 ? new List<string>()
             : await _db.ImportedInvoices.AsNoTracking().Where(i => ranked.Contains(i.TransactionNumber)).Select(i => i.TransactionNumber).Distinct().ToListAsync();
         var best = ranked.FirstOrDefault(c => sageHits.Contains(c)) ?? ranked.FirstOrDefault();
@@ -331,7 +365,7 @@ public class FinancePacksController : ControllerBase
         return new
         {
             method, pages = a.Pages.Count,
-            invoiceNumber = best, candidates = ranked, sageMatches = sageHits,
+            invoiceNumber = best, candidates = ranked, sageMatches = sageHits, invoiceSource = how, amountDue = a.AmountDue,
             orderNumber = a.OrderNumber, confirmationNumber = a.ConfirmationNumber, customerNumber = a.CustomerNumber, company = company ?? sage?.company,
             sage, existingPacks = existing,
             ocrAvailable = ServerOcrService.IsAvailable,
