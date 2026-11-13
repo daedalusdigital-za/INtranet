@@ -118,12 +118,16 @@ public static class PackAnalyzer
         var m = Regex.Match(s, @"^([A-Z]{1,4})([0-9OQDILSBZGT]{5,8})$");
         if (m.Success)
         {
-            var prefix = m.Groups[1].Value;
-            if (NotOrderPrefixes.Contains(prefix)) return null;
-            if (m.Groups[2].Value.Count(char.IsDigit) < 4) return null;
+            var prefix = m.Groups[1].Value; var body = m.Groups[2].Value;
             // OCR often reads the "O" of OR as 0/Q.
             if (prefix is "0R" or "QR") prefix = "OR";
-            return prefix + Digits(m.Groups[2].Value);
+            // A digit read as a letter at the prefix/number boundary ("ORO00190" = OR + O00190): if peeling
+            // trailing confusable letters off the prefix leaves a known prefix, they belong to the digits.
+            while (prefix.Length > 1 && !KnownOrderPrefixes.Contains(prefix) && "OQDILSBZGT".Contains(prefix[^1]) && KnownOrderPrefixes.Any(k => prefix.StartsWith(k)))
+            { body = prefix[^1] + body; prefix = prefix[..^1]; }
+            if (NotOrderPrefixes.Contains(prefix)) return null;
+            if (body.Count(char.IsDigit) < 4 || body.Length > 8) return null;
+            return prefix + Digits(body);
         }
         // Plain numeric order numbers are only accepted when they sit under an order label (see PoLabelRx);
         // long numbers (attachment ids like 5020706054) are never orders.
