@@ -86,6 +86,10 @@ public static class PackAnalyzer
     private static readonly Regex OrRx = new(@"\b[O0Q][R][\s\-.:]?([0-9OQDILSBZGT]{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // ORD107038
     private static readonly Regex OrdRx = new(@"\b[O0Q]RD[\s\-.:]?([0-9OQDILSBZGT]{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Sage sales-order numbers carry a per-company prefix (ORD107038, GL003586, …): 2–3 letters + 6 digits.
+    // Customer orders are OR-###### or plain numbers, invoices IN######, so those prefixes are excluded.
+    private static readonly Regex ConfRx = new(@"(?<![A-Z0-9])(?!(?:OR|IN|TEL|FAX|VAT|REG|CSD|MAA|GST|ABN|BOX|REF)[\s\-.:]?\d)([A-Z]{2,3})[\s\-.:]?([0-9O]{6})(?![A-Z0-9])", RegexOptions.Compiled);
+    private static readonly string[] NotConfPrefixes = { "OR", "IN", "TEL", "FAX", "VAT", "REG", "CSD", "MAA", "GST", "ABN", "BOX", "REF", "PO", "ACC", "NO" };
     private static readonly Regex PoLabelRx = new(@"(?:CUSTOMER\s+)?(?:P\.?O\.?|PURCHASE\s+ORDER|ORDER)\s*(?:NO|NUMBER|#|REF)?\.?\s*[:.\-]?\s*([A-Z]{1,3}[\s\-]?\d{5,8}|\d{6,10})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CustRx = new(@"(?:CUSTOMER|ACCOUNT|ACC|DEBTOR)\s*(?:NO|NUMBER|CODE|#)?\.?\s*[:.\-]?\s*(\d{2}-[A-Z]{3}-\d{3}|[A-Z]{2,4}\d{3,6}|\d{2}[A-Z]{3}\d{3})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex DateRx = new(@"\b(\d{1,2}[\/\-.\s](?:\d{1,2}|[A-Z]{3,9})[\/\-.\s]\d{2,4}|\d{4}[\/\-.]\d{2}[\/\-.]\d{2})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -110,7 +114,7 @@ public static class PackAnalyzer
         var m = Regex.Match(s, @"^[O0Q]R([0-9OQDILSBZGT]{6})$");
         if (m.Success) return "OR" + Digits(m.Groups[1].Value);
         m = Regex.Match(s, @"^([A-Z]{1,3})(\d{5,8})$");
-        if (m.Success) return m.Groups[1].Value + m.Groups[2].Value;
+        if (m.Success) return LooksLikeConfirmation(s) ? null : m.Groups[1].Value + m.Groups[2].Value;
         return Regex.IsMatch(s, @"^\d{6,10}$") ? s : null;
     }
 
@@ -119,8 +123,15 @@ public static class PackAnalyzer
         if (string.IsNullOrWhiteSpace(raw)) return null;
         var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-.:#]", "");
         var m = Regex.Match(s, @"^[O0Q]RD([0-9OQDILSBZGT]{6})$");
-        return m.Success ? "ORD" + Digits(m.Groups[1].Value) : null;
+        if (m.Success) return "ORD" + Digits(m.Groups[1].Value);
+        m = Regex.Match(s, @"^([A-Z]{2,3})([0-9O]{6})$");
+        if (m.Success && !NotConfPrefixes.Contains(m.Groups[1].Value) && m.Groups[2].Value.Count(char.IsDigit) >= 4)
+            return m.Groups[1].Value + Digits(m.Groups[2].Value);
+        return null;
     }
+
+    /// <summary>True when the token looks like a Sage sales-order (confirmation) number rather than a customer order.</summary>
+    public static bool LooksLikeConfirmation(string? raw) => NormalizeConfirmation(raw) != null;
 
     private static string Digits(string s)
     {
@@ -190,13 +201,17 @@ public static class PackAnalyzer
             foreach (Match m in PoLabelRx.Matches(collapsed))
             {
                 var n = NormalizeOrder(m.Groups[1].Value);
-                // don't confuse an invoice number or ORD confirmation with the order number
-                if (n != null && NormalizeInvoice(m.Groups[1].Value) == null && !n.StartsWith("ORD")) ords.Add((n, m.Groups[1].Value.Trim()));
+                // don't confuse an invoice number or a Sage confirmation (ORD/GL…) with the customer order number
+                if (n != null && NormalizeInvoice(m.Groups[1].Value) == null && !LooksLikeConfirmation(m.Groups[1].Value)) ords.Add((n, m.Groups[1].Value.Trim()));
             }
         var bestOrd = ords.GroupBy(x => x.norm).OrderByDescending(g => g.Count()).FirstOrDefault();
         if (bestOrd != null) { r.OrderNumber = bestOrd.Key; r.OrderNumberRaw = bestOrd.First().raw; }
 
-        foreach (Match m in OrdRx.Matches(collapsed)) { var n = NormalizeConfirmation(m.Value); if (n != null) { r.ConfirmationNumber = n; break; } }
+        var confs = new List<string>();
+        foreach (Match m in OrdRx.Matches(collapsed)) { var n = NormalizeConfirmation(m.Value); if (n != null) confs.Add(n); }
+        if (confs.Count == 0)
+            foreach (Match m in ConfRx.Matches(up)) { var n = NormalizeConfirmation(m.Value); if (n != null) confs.Add(n); }
+        r.ConfirmationNumber = confs.GroupBy(x => x).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
 
         var cm = CustRx.Match(collapsed);
         if (cm.Success) r.CustomerNumber = cm.Groups[1].Value;
