@@ -26,6 +26,13 @@
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.10" />
     <PackageReference Include="XstReader.Api" Version="1.0.6" />
+    <PackageReference Include="ZXing.Net" Version="0.16.10" />
+    <PackageReference Include="ZXing.Net.Bindings.ImageSharp.V3" Version="0.16.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Official-order (PO) layout catalogue: add a buyer layout by editing this file, not code. -->
+    <Content Update="Config\PoLayouts.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

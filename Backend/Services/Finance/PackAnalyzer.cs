@@ -36,6 +36,8 @@ public static class PackAnalyzer
         public bool Amended { get; set; }
         public bool Duplicate { get; set; }
         public decimal? AmountDue { get; set; }
+        /// <summary>Official-order detail (layout, order number by label/barcode, totals, handwriting) — PO pages only.</summary>
+        public OfficialOrderReader.Result? OfficialOrder { get; set; }
         public List<string> Hits { get; set; } = new();
         public int TextLength { get; set; }
     }
@@ -64,6 +66,10 @@ public static class PackAnalyzer
         public string? CustomerNumber { get; set; }
         /// <summary>Invoice total (incl. VAT) read off the tax invoice / delivery note — used to find the invoice in Sage when the IN number is unreadable.</summary>
         public decimal? AmountDue { get; set; }
+        /// <summary>Layout id of the official order (A–G or UNKNOWN), when one was found.</summary>
+        public string? PoLayout { get; set; }
+        public string? PoIssuer { get; set; }
+        public decimal? PoTotal { get; set; }
         public bool ProofOfDelivery { get; set; }
         public bool PartDelivery { get; set; }
         public bool Amended { get; set; }
@@ -167,7 +173,14 @@ public static class PackAnalyzer
         // Salesperson / Ship Via / Order Date / Ord. Shp. B/O columns / Order Discount / Total order.
         new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("ORDER CONF", 2.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("TOTAL ORDER", 2.0), ("ORDER DISCOUNT", 1.5), ("SALESPERSON", 1.0), ("SHIP VIA", 1.0), ("ORDER DATE", 1.0), ("ORD. SHP", 1.5), ("ORD SHP", 1.5), ("SHP. B/O", 1.5), ("REFERENCE PO", .8), ("PO NUMBER", .5) }),
         new("EML", new[] { ("GMAIL", 2.0), ("FROM:", 1.5), ("TO:", 1.0), ("SUBJECT", 1.5), ("SENT:", 1.0), ("@KZNHEALTH.GOV.ZA", 2.0), (".GOV.ZA", 1.0), ("@PROMEDTECHNOLOGIES", 1.5), ("@", .3), ("FORWARDED MESSAGE", 1.5), ("ATTACHMENT", .5), ("OUTLOOK", 1.5) }),
-        new("PO",  new[] { ("KZN: HEALTH", 3.0), ("KZN HEALTH", 2.5), (": HEALTH", 2.0), ("ORDER\\SERVICE", 2.0), ("ORDER/SERVICE", 2.0), ("ORDER NO", 1.5), ("OFFICIAL ORDER", 2.5), ("AUTHORISATIONS", 2.0), ("GOVERNMENT CONTRACT", 2.0), ("PROVINCE OF", 1.0), ("DEPARTMENT OF HEALTH", 1.5), ("STORE NUMBER", 1.5), ("SUPPLIER NAME", 1.0), ("AMENDED ORDER", 1.5), ("CSD", .5), ("MAAA", .8), ("DELIVERY DATE", .5) }),
+        new("PO",  new[] { ("KZN: HEALTH", 3.0), ("KZN HEALTH", 2.5), (": HEALTH", 2.0), ("ORDER\\SERVICE", 2.0), ("ORDER/SERVICE", 2.0), ("ORDER NO", 1.5), ("OFFICIAL ORDER", 2.5), ("AUTHORISATIONS", 2.0), ("GOVERNMENT CONTRACT", 2.0), ("PROVINCE OF", 1.0), ("DEPARTMENT OF HEALTH", 1.5), ("STORE NUMBER", 1.5), ("SUPPLIER NAME", 1.0), ("AMENDED ORDER", 1.5), ("CSD", .5), ("MAAA", .8), ("DELIVERY DATE", .5),
+                           // other buyer layouts (B–G)
+                           ("PURCHASE ORDER", 2.5), ("SUPPLIED BY", 1.5), ("ORDERED BY", 1.5), ("AUTHORISER", 1.5), ("EST. COST", 1.0),
+                           ("ORDER FOR MEDICAL GOODS", 3.0), ("PARTICULARS OF REQUIREMENT", 2.0), ("DEMAND NO", 1.0), ("PRINT BATCH", 1.0),
+                           ("GAUTENG PROVINCE", 2.5), ("PO NUMBER", 1.5), ("VENDOR NUMBER", 1.5), ("MATERIAL / SERVICE", 1.0),
+                           ("SUPPLIER ORDER", 2.5), ("MPUMALANGA", 1.5), ("BESKRYWING", 1.5), ("TOTAAL", 1.0), ("PLEASE USE OUR ORDER", 2.0),
+                           ("SOUTH AFRICAN POLICE SERVICE", 3.0), ("FORM CODE 1430", 2.0), ("VERPLIGTING", 1.5), ("COMMITMENT IN RESPECT", 2.0),
+                           ("LIMPOPO", 1.5), ("PROVINCIAL GOVERNMENT", 1.5), ("OUTLET CODE", 1.5), ("OUTLET ORDER", 1.5), ("[BARCODE]", 1.0) }),
     };
 
     public static PageResult AnalyzePage(int pageNo, string text)
@@ -271,7 +284,10 @@ public static class PackAnalyzer
 
     // ───────── validation ─────────
 
-    public static Result Analyze(IList<string> pageTexts)
+    public static Result Analyze(IList<string> pageTexts) => Analyze(pageTexts, null);
+
+    /// <param name="barcodes">Per-page decoded barcode values (same index as <paramref name="pageTexts"/>), when available.</param>
+    public static Result Analyze(IList<string> pageTexts, IList<List<string>>? barcodes)
     {
         var res = new Result();
         for (var i = 0; i < pageTexts.Count; i++) res.Pages.Add(AnalyzePage(i + 1, pageTexts[i]));
@@ -282,6 +298,28 @@ public static class PackAnalyzer
             res.Status = "UNKNOWN";
             res.Notes.Add("No text could be read from the document — the invoice number must be typed in and the pack checked by eye.");
             return res;
+        }
+
+        // Official order: read by layout. Last page first (it is usually the PO), then any other PO page.
+        // The supplier documents' order numbers let an unknown layout still be matched.
+        var supplierOrders = res.Pages.Where(p => p.Type is "DN" or "INV" or "OC" && p.OrderNumber != null).Select(p => p.OrderNumber!).Distinct().ToList();
+        DateTime? packDate = null;
+        foreach (var d in res.Pages.Where(p => p.Type is "INV" or "DN").Select(p => p.Date))
+        { var iso = OfficialOrderReader.DateParser.ToIso(d ?? ""); if (iso != null && DateTime.TryParse(iso, out var dt)) { packDate = dt; break; } }
+        var poPages = res.Pages.Where(p => p.Type == "PO" || (p.Type == "UNK" && p.TextLength >= 80)).OrderByDescending(p => p.Page == res.Pages.Count).ThenBy(p => p.Page).ToList();
+        foreach (var p in poPages)
+        {
+            var codes = barcodes != null && p.Page - 1 < barcodes.Count ? barcodes[p.Page - 1] : null;
+            var oo = OfficialOrderReader.Read(pageTexts[p.Page - 1], codes, supplierOrders, packDate);
+            if (p.Type == "UNK" && !oo.IsOfficialOrder) continue;
+            if (p.Type == "UNK") { p.Type = "PO"; p.Confidence = 0.5; p.Hits.Add("OFFICIAL ORDER (structure)"); }
+            p.OfficialOrder = oo;
+            if (oo.OrderNumber.Has) { p.OrderNumber = oo.OrderNumber.Value; p.OrderNumberRaw = oo.OrderNumber.Raw; }
+            else if (oo.LayoutId != "UNKNOWN") p.OrderNumber = null; // layout known but no number at its label → don't trust a stray token
+            if (oo.HandwrittenOrd.Count > 0 && p.ConfirmationNumber == null) p.ConfirmationNumber = oo.HandwrittenOrd[0];
+            if (oo.HandwrittenCustomerNo.Has && p.CustomerNumber == null) p.CustomerNumber = oo.HandwrittenCustomerNo.Value;
+            if (oo.OrderDate.Has) p.Date = oo.OrderDate.Value;
+            p.Amended |= oo.Amended; p.Signed |= oo.Authorised; p.Stamped |= oo.Stamps.Count > 0;
         }
 
         // Duplicate pages: same type + same key numbers → count once. E-mails run over several pages, so
@@ -366,6 +404,21 @@ public static class PackAnalyzer
         if (dn != null && !res.ProofOfDelivery) res.Warnings.Add("No 'Received by' signature or receiving stamp could be read on the delivery note — check the paper copy.");
         if (res.PartDelivery) res.Notes.Add("Marked as a part delivery — the balance is on back-order.");
         if (res.Amended) res.Notes.Add("Amended order in the pack — amended values apply.");
+
+        // Official-order detail → pack-level fields, warnings and REVIEW triggers.
+        var poDoc = docs.Where(p => p.Type == "PO" && p.OfficialOrder != null).OrderByDescending(p => p.Amended).FirstOrDefault();
+        if (poDoc?.OfficialOrder is { } po)
+        {
+            res.PoLayout = po.LayoutId; res.PoIssuer = po.Issuer; res.PoTotal = po.Total2;
+            if (po.LayoutId == "UNKNOWN") res.Notes.Add($"Official order (p{poDoc.Page}) is in a layout we have not seen before.");
+            else res.Notes.Add($"Official order (p{poDoc.Page}): layout {po.LayoutId} — {po.LayoutName}; order number from {po.OrderNumber.Source ?? "n/a"}.");
+            foreach (var w in po.Warnings) res.Warnings.Add($"Official order: {w}");
+            foreach (var why in po.ReviewReasons) res.Warnings.Add($"Official order: {why}");
+            if (po.HandwrittenOrd.Count > 0 && res.ConfirmationNumber != null && !po.HandwrittenOrd.Contains(res.ConfirmationNumber))
+                res.Warnings.Add($"ORD number written on the official order ({string.Join("/", po.HandwrittenOrd)}) does not match the order confirmation ({res.ConfirmationNumber}).");
+            if (po.Total2 is decimal pt && res.AmountDue is decimal due && !res.PartDelivery && Math.Abs(pt - due) > 0.05m)
+                res.Warnings.Add($"Order total R {pt:N2} differs from the invoice amount due R {due:N2}.");
+        }
         var unk = res.Pages.Where(p => p.Type == "UNK" && p.TextLength >= 40).Select(p => p.Page).ToList();
         if (unk.Count > 0) res.Warnings.Add($"Page{(unk.Count > 1 ? "s" : "")} {string.Join(", ", unk)} could not be classified.");
         var blank = res.Pages.Where(p => p.TextLength < 40).Select(p => p.Page).ToList();

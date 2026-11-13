@@ -1,0 +1,91 @@
+{
+  "_comment": "Official order (PO) layouts for the invoice-pack OCR. Add a buyer layout here, not in code. anchors: fingerprint words (>=3 must match, case-insensitive, space-insensitive). orderNumber.labels: text immediately before the order number. orderNumber.sentence: regex with group 1 = number. orderNumber.pattern: regex (group 1) the value must satisfy after whitespace removal. excludeLabels: labels whose following number is NOT the order number. dateLabels: labels next to the order date. totalLabels: label for the grand total. decimals: 2 | 3 | 4 | mixed | handwritten. barcode: decode barcodes for the order number. alwaysReview: fully handwritten forms.",
+  "layouts": [
+    {
+      "id": "A",
+      "name": "Provincial health ORDER\\SERVICE form",
+      "issuer": "Provincial Department of Health",
+      "anchors": [ ": HEALTH", "ORDER\\SERVICE", "ORDER/SERVICE", "ORDER NO.", "AUTHORISATIONS", "GOVERNMENT CONTRACT", "QUOTE DETAILS", "GRAND TOTAL", "STORE NUMBER", "SUPPLIER NAME" ],
+      "orderNumber": { "labels": [ "ORDER NO.", "ORDER NO", "ORDER NUMBER" ], "pattern": "^[A-Z]{1,4}-?\\d{5,8}$", "source": "label" },
+      "excludeLabels": [ "STORE NUMBER", "SUPPLIER CODE", "CSD", "VAT", "TEL", "FAX" ],
+      "dateLabels": [ "DATE" ],
+      "totalLabels": [ "GRAND TOTAL" ],
+      "decimals": "2",
+      "rotated": true
+    },
+    {
+      "id": "B",
+      "name": "Hospital system Purchase Order",
+      "issuer": "Hospital (e.g. Philadelphia, Mokopane)",
+      "anchors": [ "PURCHASE ORDER", "ORDERED BY", "SUPPLIED BY", "OFFICE", "AUTHORISER", "EST. COST", "EST COST", "VOUCHER" ],
+      "orderNumber": { "labels": [ "NUMBER" ], "pattern": "^[A-Z]{1,4}-?[A-Z]{0,4}/?\\d{2}-?\\d{2}-?\\d{3,6}$", "source": "label", "footer": true },
+      "excludeLabels": [ "VOUCHER", "CODE", "ICN", "TEL", "FAX" ],
+      "dateLabels": [ "DATE" ],
+      "totalLabels": [ "TOTAL", "EST. COST", "EST COST" ],
+      "decimals": "2",
+      "rotated": true
+    },
+    {
+      "id": "C",
+      "name": "Medical Supplies Depot ORDER FOR MEDICAL GOODS/SERVICES",
+      "issuer": "Medical Supplies Depot",
+      "anchors": [ "ORDER FOR MEDICAL GOODS", "GOODS/SERVICES", "PARTICULARS OF REQUIREMENT", "DEMAND NO", "PRINT BATCH NO", "SERIAL NO", "ORIGINAL FOR SUPPLIER" ],
+      "orderNumber": { "labels": [ "ORDER NO.", "ORDER NO" ], "pattern": "^\\d{7}$", "source": "label" },
+      "excludeLabels": [ "SERIAL NO", "DEMAND NO", "LINE NO", "PRINT BATCH NO", "ITEM NO" ],
+      "dateLabels": [ "DATE" ],
+      "totalLabels": [ "TOTAL" ],
+      "decimals": "4",
+      "rotated": true
+    },
+    {
+      "id": "D",
+      "name": "Gauteng Province SAP Purchase Order",
+      "issuer": "Gauteng Provincial Government",
+      "anchors": [ "GAUTENG PROVINCE", "PURCHASE ORDER", "PO NUMBER", "VENDOR NUMBER", "MATERIAL / SERVICE NO", "MATERIAL/SERVICE NO", "TOTAL AMOUNT", "CONTRACT NUMBER" ],
+      "orderNumber": { "labels": [ "PO NUMBER / DATE", "PO NUMBER" ], "pattern": "^\\d{10}$", "source": "label" },
+      "excludeLabels": [ "CONTRACT NUMBER", "VENDOR NUMBER", "MATERIAL", "VAT" ],
+      "dateLabels": [ "PO NUMBER / DATE", "DATE" ],
+      "deliveryDateLabels": [ "DELIVERY DATE" ],
+      "totalLabels": [ "TOTAL AMOUNT" ],
+      "decimals": "mixed",
+      "rotated": false
+    },
+    {
+      "id": "E",
+      "name": "Mpumalanga Department of Health SUPPLIER ORDER",
+      "issuer": "Mpumalanga Department of Health",
+      "anchors": [ "DEPARTMENT OF HEALTH - MPUMALANGA", "MPUMALANGA", "SUPPLIER ORDER", "BESKRYWING", "TOTAAL", "PLEASE USE OUR ORDER NUMBER", "FAKTUURNR" ],
+      "orderNumber": { "labels": [ "ORDER NUMBER", "FAKTUURNR" ], "sentence": "PLEASE\\s+USE\\s+OUR\\s+ORDER\\s+NUMBER\\s*[:.]?\\s*([A-Z]{1,4}/\\d{2}/\\d{3,6})", "pattern": "^[A-Z]{1,4}/?\\d{2}/?\\d{3,6}$", "source": "sentence" },
+      "excludeLabels": [ "YOUR REFERENCE", "OUR REFERENCE", "CONFIRMED AND AUTHORIZED" ],
+      "dateLabels": [ "DATE", "DATUM" ],
+      "totalLabels": [ "TOTAAL", "TOTAL" ],
+      "decimals": "3",
+      "rotated": false
+    },
+    {
+      "id": "F",
+      "name": "SAPS form 1430 Commitment in respect of goods/services",
+      "issuer": "South African Police Service",
+      "anchors": [ "SOUTH AFRICAN POLICE SERVICE", "FORM CODE 1430", "1430", "VERPLIGTING", "COMMITMENT IN RESPECT OF GOODS", "SAPS" ],
+      "orderNumber": { "labels": [], "pattern": "^[A-Z]{2}-?\\d{6}$", "source": "handwritten", "formSerial": true },
+      "excludeLabels": [],
+      "dateLabels": [ "DATE", "DATUM" ],
+      "totalLabels": [ "TOTAL", "TOTAAL" ],
+      "decimals": "handwritten",
+      "rotated": true,
+      "alwaysReview": true
+    },
+    {
+      "id": "G",
+      "name": "Limpopo Provincial Government SUPPLIER ORDER (barcode)",
+      "issuer": "Limpopo Provincial Government, Dept of Health",
+      "anchors": [ "LIMPOPO", "PROVINCIAL GOVERNMENT", "SUPPLIER ORDER", "OUTLET CODE", "OUTLET ORDER NO", "PLEASE USE OUR ORDER NO", "IN ALL CORRESPONDENCE" ],
+      "orderNumber": { "labels": [ "ORDER NO.", "ORDER NO" ], "sentence": "PLEASE\\s+USE\\s+OUR\\s+ORDER\\s+NO\\.?\\s*[:.]?\\s*([A-Z]{1,4}/\\d{2}/\\d{4,8})", "pattern": "^[A-Z]{1,4}/?\\d{2}/?\\d{4,8}$", "source": "barcode", "barcode": true },
+      "excludeLabels": [ "OUTLET ORDER NO", "OUTLET CODE", "AUTHORISATION", "OUR REF" ],
+      "dateLabels": [ "ORDER DATE", "DATE" ],
+      "totalLabels": [ "TOTAL" ],
+      "decimals": "3",
+      "rotated": false
+    }
+  ]
+}

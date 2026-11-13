@@ -285,8 +285,8 @@ public class FinancePacksController : ControllerBase
 
     // ───────────────────────── detect ─────────────────────────
 
-    /// <summary>Per-page text: iText for text PDFs, server OCR (per page, rotation-aware) for scans/images.</summary>
-    private async Task<(List<string> pages, string method)> PageTextsAsync(string path, string? contentType, ServerOcrService ocr)
+    /// <summary>Per-page text: iText for text PDFs, server OCR (per page, rotation-aware, barcodes) for scans/images.</summary>
+    private async Task<(List<string> pages, string method, List<List<string>>? barcodes)> PageTextsAsync(string path, string? contentType, ServerOcrService ocr)
     {
         var isPdf = path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
         var pages = new List<string>();
@@ -304,11 +304,15 @@ public class FinancePacksController : ControllerBase
         var readable = pages.Count(t => t.Trim().Length >= 40);
         if (readable < Math.Max(1, pages.Count / 2))
         {
-            if (!ServerOcrService.IsAvailable) return (pages, "none");
-            try { return (await ocr.ExtractPageTextsAsync(path, contentType), "ocr"); }
-            catch (Exception ex) { _log.LogWarning(ex, "Pack OCR failed for {Path}", path); return (pages, "none"); }
+            if (!ServerOcrService.IsAvailable) return (pages, "none", null);
+            try
+            {
+                var ocrPages = await ocr.ExtractPackPagesAsync(path, contentType);
+                return (ocrPages.Select(p => p.Text).ToList(), "ocr", ocrPages.Select(p => p.Barcodes).ToList());
+            }
+            catch (Exception ex) { _log.LogWarning(ex, "Pack OCR failed for {Path}", path); return (pages, "none", null); }
         }
-        return (pages, "text");
+        return (pages, "text", null);
     }
 
     private async Task<object> BuildDetectResponseAsync(PackAnalyzer.Result a, string method, string fileName, IEnumerable<string> pageTexts)
@@ -401,7 +405,7 @@ public class FinancePacksController : ControllerBase
             if (p == null) return NotFound();
             var full = FullPath(p.StoragePath);
             if (!System.IO.File.Exists(full)) return NotFound(new { error = "Pack file is missing on the server." });
-            (pages, _) = await PageTextsAsync(full, p.ContentType, ocr);
+            (pages, _, _) = await PageTextsAsync(full, p.ContentType, ocr);
             analysis ??= PackAnalyzer.Result.FromJson(p.ValidationJson);
         }
         if (pages.Count == 0) return BadRequest(new { error = "Nothing to review — no page text was supplied." });
@@ -475,8 +479,8 @@ public class FinancePacksController : ControllerBase
         try
         {
             await using (var fs = System.IO.File.Create(tmp)) await file.CopyToAsync(fs);
-            var (pages, method) = await PageTextsAsync(tmp, file.ContentType, ocr);
-            var analysis = PackAnalyzer.Analyze(pages);
+            var (pages, method, codes) = await PageTextsAsync(tmp, file.ContentType, ocr);
+            var analysis = PackAnalyzer.Analyze(pages, codes);
             return Ok(await BuildDetectResponseAsync(analysis, method, file.FileName, pages));
         }
         finally { try { System.IO.File.Delete(tmp); } catch { } }
@@ -490,8 +494,8 @@ public class FinancePacksController : ControllerBase
         if (p == null) return NotFound();
         var full = FullPath(p.StoragePath);
         if (!System.IO.File.Exists(full)) return NotFound(new { error = "Pack file is missing on the server." });
-        var (pages, _) = await PageTextsAsync(full, p.ContentType, ocr);
-        ApplyAnalysis(p, PackAnalyzer.Analyze(pages));
+        var (pages, _, codes) = await PageTextsAsync(full, p.ContentType, ocr);
+        ApplyAnalysis(p, PackAnalyzer.Analyze(pages, codes));
         p.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return Ok(Dto(p));
@@ -572,7 +576,7 @@ public class FinancePacksController : ControllerBase
         }
         else
         {
-            try { var (pages, _) = await PageTextsAsync(full, form.File.ContentType, ocr); ApplyAnalysis(p, PackAnalyzer.Analyze(pages), respectUserChecklist: true); }
+            try { var (pages, _, codes) = await PageTextsAsync(full, form.File.ContentType, ocr); ApplyAnalysis(p, PackAnalyzer.Analyze(pages, codes), respectUserChecklist: true); }
             catch (Exception ex) { _log.LogWarning(ex, "Pack analysis failed for {Inv}", inv); }
         }
         _db.InvoicePacks.Add(p);
@@ -633,7 +637,7 @@ public class FinancePacksController : ControllerBase
         var p = await BuildPackAsync(form, inv, mergedFull, mergedRel, null, "Assembled");
         p.OriginalFileName = $"{inv}-pack.pdf"; p.ContentType = "application/pdf"; p.Size = fi.Length; p.PageCount = pages;
         foreach (var c in comps) p.Files.Add(c);
-        try { var (texts, _) = await PageTextsAsync(mergedFull, "application/pdf", ocr); ApplyAnalysis(p, PackAnalyzer.Analyze(texts), respectUserChecklist: true); }
+        try { var (texts, _, codes) = await PageTextsAsync(mergedFull, "application/pdf", ocr); ApplyAnalysis(p, PackAnalyzer.Analyze(texts, codes), respectUserChecklist: true); }
         catch (Exception ex) { _log.LogWarning(ex, "Pack analysis failed for {Inv}", inv); }
         _db.InvoicePacks.Add(p);
         await _db.SaveChangesAsync();

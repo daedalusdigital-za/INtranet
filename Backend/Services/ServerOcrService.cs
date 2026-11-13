@@ -122,12 +122,27 @@ public class ServerOcrService
         }
     }
 
+    /// <summary>Per-page OCR output for packs: text, detected rotation and any barcodes on the page.</summary>
+    public class PackPage
+    {
+        public string Text { get; set; } = "";
+        public int Rotation { get; set; }
+        public List<string> Barcodes { get; set; } = new();
+    }
+
     /// <summary>
     /// OCR every page separately (used by invoice packs, where each page is a different document type).
     /// PSM 1 does orientation/script detection so sideways e-mail / order pages still read.
     /// Falls back to PSM 11 (sparse text) for pages that come back nearly empty.
     /// </summary>
     public async Task<List<string>> ExtractPageTextsAsync(string filePath, string? contentType, int maxPages = 20)
+        => (await ExtractPackPagesAsync(filePath, contentType, maxPages)).Select(p => p.Text).ToList();
+
+    /// <summary>
+    /// Full pack pass: rotation detection (0/90/180/270 via tesseract OSD), text (PSM 1 + sparse fallback),
+    /// a dedicated header-band read, and barcode decoding (official orders with a barcode, layout G).
+    /// </summary>
+    public async Task<List<PackPage>> ExtractPackPagesAsync(string filePath, string? contentType, int maxPages = 20)
     {
         if (!_tesseractAvailable)
             throw new InvalidOperationException("tesseract binary is not available on this host.");
@@ -148,20 +163,91 @@ public class ServerOcrService
             }
             else images = new List<string> { filePath };
 
-            var texts = new List<string>();
+            var pages = new List<PackPage>();
             foreach (var img in images)
             {
-                var t = await RunTesseractAsync(img, psm: 1);
-                if (t.Trim().Length < 60) t += "\n" + await RunTesseractAsync(img, psm: 11);
+                var page = new PackPage();
+                // Rotation: OSD gives the angle; rotate the bitmap upright so cropping (header band) and
+                // barcode decoding work on a straight page. Tesseract PSM 1 handles rotation for text itself.
+                page.Rotation = await DetectRotationAsync(img);
+                var upright = img;
+                if (page.Rotation != 0)
+                {
+                    try
+                    {
+                        // OSD "Rotate: N" = rotate the image clockwise by N degrees to make it upright.
+                        using var im = await Image.LoadAsync(img);
+                        im.Mutate(x => x.Rotate(page.Rotation switch { 90 => RotateMode.Rotate90, 180 => RotateMode.Rotate180, 270 => RotateMode.Rotate270, _ => RotateMode.None }));
+                        upright = Path.Combine(workDir, Path.GetFileNameWithoutExtension(img) + "_up.png");
+                        await im.SaveAsPngAsync(upright);
+                    }
+                    catch { upright = img; }
+                }
+
+                var t = await RunTesseractAsync(upright, psm: 1);
+                if (upright != img)
+                {
+                    // Safety net: if the rotated read is worse than the original (OSD got it wrong), keep the original.
+                    var t0 = await RunTesseractAsync(img, psm: 1);
+                    if (WordScore(t0) > WordScore(t) * 1.2) { t = t0; upright = img; page.Rotation = 0; }
+                }
+                if (t.Trim().Length < 60) t += "\n" + await RunTesseractAsync(upright, psm: 11);
                 // Sage letterheads print the document title and its number (IN… / ORD…) in white on a dark
-                // header band, which tesseract drops. Re-read the top of the page inverted so that text appears.
-                var band = await ReadInvertedHeaderBandAsync(img, workDir);
+                // header band, which tesseract drops. Re-read the top of the page on its own.
+                var band = await ReadInvertedHeaderBandAsync(upright, workDir);
                 if (!string.IsNullOrWhiteSpace(band)) t += "\n[HEADER] " + band;
-                texts.Add(t);
+                page.Text = t;
+                page.Barcodes = DecodeBarcodes(upright);
+                if (page.Barcodes.Count > 0) page.Text += "\n[BARCODE] " + string.Join(" ", page.Barcodes);
+                pages.Add(page);
             }
-            return texts;
+            return pages;
         }
         finally { try { Directory.Delete(workDir, true); } catch { } }
+    }
+
+    /// <summary>Rough "how much real text is in here" score: count of 3+ letter words.</summary>
+    private static int WordScore(string? t) =>
+        string.IsNullOrEmpty(t) ? 0 : System.Text.RegularExpressions.Regex.Matches(t, @"\b[A-Za-z]{3,}\b").Count;
+
+    /// <summary>Orientation via tesseract OSD ("Rotate: 90"). 0 when undetermined.</summary>
+    private async Task<int> DetectRotationAsync(string imagePath)
+    {
+        try
+        {
+            var osd = await RunProcessAsync("tesseract", $"\"{imagePath}\" stdout --psm 0 -l osd", 60_000);
+            var m = Regex.Match(osd, @"Rotate:\s*(\d+)");
+            var conf = Regex.Match(osd, @"Orientation confidence:\s*([\d.]+)");
+            if (!m.Success) return 0;
+            if (conf.Success && double.TryParse(conf.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var c) && c < 1.0) return 0;
+            return int.Parse(m.Groups[1].Value) % 360;
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>Decode 1-D / 2-D barcodes on the page (ZXing). Tries the full page and the top third.</summary>
+    private List<string> DecodeBarcodes(string imagePath)
+    {
+        var found = new List<string>();
+        try
+        {
+            using var img = Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(imagePath);
+            var reader = new ZXing.ImageSharp.BarcodeReader<SixLabors.ImageSharp.PixelFormats.Rgba32>
+            {
+                AutoRotate = true,
+                Options = new ZXing.Common.DecodingOptions { TryHarder = true, TryInverted = true, PossibleFormats = new List<ZXing.BarcodeFormat> { ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.CODE_93, ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.DATA_MATRIX, ZXing.BarcodeFormat.PDF_417 } },
+            };
+            var results = reader.DecodeMultiple(img);
+            if (results != null) foreach (var r in results) if (!string.IsNullOrWhiteSpace(r.Text) && !found.Contains(r.Text)) found.Add(r.Text.Trim());
+            if (found.Count == 0)
+            {
+                img.Mutate(x => x.Crop(new Rectangle(0, 0, img.Width, Math.Max(1, img.Height / 3))));
+                var r2 = reader.Decode(img);
+                if (r2 != null && !string.IsNullOrWhiteSpace(r2.Text)) found.Add(r2.Text.Trim());
+            }
+        }
+        catch (Exception ex) { _logger.LogDebug(ex, "Barcode decode failed for {Image}", imagePath); }
+        return found;
     }
 
     /// <summary>
