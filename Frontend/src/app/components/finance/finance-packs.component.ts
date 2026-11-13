@@ -14,6 +14,7 @@ import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
 import { companyLogo, companyName, COMPANY_NAMES } from '../../core/company-logos';
 import { PackUploadDialogComponent, PACK_KINDS, Analysis } from './pack-upload-dialog.component';
+import { PackBatchDialogComponent } from './pack-batch-dialog.component';
 import { InvoiceDetailDialogComponent } from './invoice-detail-dialog.component';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 
@@ -81,10 +82,11 @@ interface Summary {
       <option value="">All packs</option><option value="Complete">Complete</option><option value="Incomplete">Missing something</option>
     </select>
     <select class="pk-select" [ngModel]="source()" (ngModelChange)="source.set($event); pageIndex.set(0); reload()">
-      <option value="">Scanned & assembled</option><option value="Scanned">Scanned</option><option value="Assembled">Assembled</option>
+      <option value="">Scanned, assembled & batch</option><option value="Scanned">Scanned</option><option value="Assembled">Assembled</option><option value="Batch">Split from a batch scan</option>
     </select>
     <span class="pk-spacer"></span>
     <button mat-stroked-button type="button" (click)="create()"><mat-icon>auto_awesome_motion</mat-icon> Create pack</button>
+    <button mat-stroked-button type="button" (click)="batch()" matTooltip="One PDF with many packs in it — we split and group the pages, you check and save them all"><mat-icon>call_split</mat-icon> Split multi-pack scan</button>
     <button mat-flat-button color="primary" type="button" (click)="upload()"><mat-icon>upload_file</mat-icon> Upload scanned pack</button>
   </div>
 
@@ -355,6 +357,7 @@ export class FinancePacksComponent implements OnInit {
 
   upload(): void { PackUploadDialogComponent.open(this.dialog, { mode: 'scan' }).afterClosed().subscribe(r => { if (r) { this.loadSummary(); this.reload(); } }); }
   create(): void { PackUploadDialogComponent.open(this.dialog, { mode: 'assemble' }).afterClosed().subscribe(r => { if (r) { this.loadSummary(); this.reload(); } }); }
+  batch(): void { PackBatchDialogComponent.open(this.dialog).afterClosed().subscribe(r => { if (r) { this.loadSummary(); this.reload(); } }); }
 
   preview(p: Pack): void {
     PackPreviewDialogComponent.open(this.dialog, {

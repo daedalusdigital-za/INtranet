@@ -210,6 +210,31 @@ public class ServerOcrService
     private static int WordScore(string? t) =>
         string.IsNullOrEmpty(t) ? 0 : System.Text.RegularExpressions.Regex.Matches(t, @"\b[A-Za-z]{3,}\b").Count;
 
+    public static bool CanRenderPdf => _pdftoppmAvailable;
+
+    /// <summary>
+    /// Render every page of a PDF as a small PNG (longest side = <paramref name="scaleTo"/> px) into
+    /// <paramref name="outDir"/> as page-001.png, page-002.png … Used for the multi-pack splitter preview.
+    /// </summary>
+    public async Task<List<string>> RenderThumbnailsAsync(string pdfPath, string outDir, int scaleTo = 360)
+    {
+        if (!_pdftoppmAvailable) throw new InvalidOperationException("pdftoppm (poppler-utils) is required to render PDF pages but is not installed.");
+        Directory.CreateDirectory(outDir);
+        var prefix = Path.Combine(outDir, "page");
+        await RunProcessAsync("pdftoppm", $"-png -scale-to {scaleTo} \"{pdfPath}\" \"{prefix}\"", 180_000);
+        // pdftoppm zero-pads to the digit count of the page total (page-1.png, page-01.png, page-001.png): normalise.
+        var files = Directory.GetFiles(outDir, "page-*.png").OrderBy(p => int.Parse(System.Text.RegularExpressions.Regex.Match(Path.GetFileNameWithoutExtension(p), @"\d+$").Value)).ToList();
+        var outFiles = new List<string>();
+        for (var i = 0; i < files.Count; i++)
+        {
+            var dest = Path.Combine(outDir, $"p{i + 1:D3}.png");
+            if (File.Exists(dest)) File.Delete(dest);
+            File.Move(files[i], dest);
+            outFiles.Add(dest);
+        }
+        return outFiles;
+    }
+
     /// <summary>Orientation via tesseract OSD ("Rotate: 90"). 0 when undetermined.</summary>
     private async Task<int> DetectRotationAsync(string imagePath)
     {

@@ -286,7 +286,7 @@ public class FinancePacksController : ControllerBase
     // ───────────────────────── detect ─────────────────────────
 
     /// <summary>Per-page text: iText for text PDFs, server OCR (per page, rotation-aware, barcodes) for scans/images.</summary>
-    private async Task<(List<string> pages, string method, List<List<string>>? barcodes)> PageTextsAsync(string path, string? contentType, ServerOcrService ocr)
+    private async Task<(List<string> pages, string method, List<List<string>>? barcodes)> PageTextsAsync(string path, string? contentType, ServerOcrService ocr, int maxPages = 30)
     {
         var isPdf = path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
         var pages = new List<string>();
@@ -295,7 +295,7 @@ public class FinancePacksController : ControllerBase
             try
             {
                 using var pdf = new PdfDocument(new PdfReader(path));
-                for (var i = 1; i <= Math.Min(pdf.GetNumberOfPages(), 30); i++)
+                for (var i = 1; i <= Math.Min(pdf.GetNumberOfPages(), maxPages); i++)
                     pages.Add(PdfTextExtractor.GetTextFromPage(pdf.GetPage(i)) ?? "");
             }
             catch { }
@@ -307,7 +307,7 @@ public class FinancePacksController : ControllerBase
             if (!ServerOcrService.IsAvailable) return (pages, "none", null);
             try
             {
-                var ocrPages = await ocr.ExtractPackPagesAsync(path, contentType);
+                var ocrPages = await ocr.ExtractPackPagesAsync(path, contentType, maxPages);
                 return (ocrPages.Select(p => p.Text).ToList(), "ocr", ocrPages.Select(p => p.Barcodes).ToList());
             }
             catch (Exception ex) { _log.LogWarning(ex, "Pack OCR failed for {Path}", path); return (pages, "none", null); }
@@ -644,6 +644,197 @@ public class FinancePacksController : ControllerBase
         p.PackNumber = $"PK{p.Id:D6}";
         await _db.SaveChangesAsync();
         return Ok(new { pack = Dto(p) });
+    }
+
+    // ───────────────────────── multi-pack batch (one scan, many packs) ─────────────────────────
+
+    private const int BatchMaxPages = 150;
+
+    private string BatchDir(string batchId) => Path.Combine(_root, "finance", "packs", "_batches", batchId);
+
+    private class BatchState
+    {
+        public string FileName { get; set; } = "";
+        public string Method { get; set; } = "none";
+        public int PageCount { get; set; }
+        public List<string> Pages { get; set; } = new();
+        public List<List<string>>? Barcodes { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public int CreatedBy { get; set; }
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions BatchJson = new() { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
+
+    private async Task<BatchState?> LoadBatchAsync(string batchId)
+    {
+        if (!Regex.IsMatch(batchId, @"^[a-f0-9]{32}$")) return null;
+        var f = Path.Combine(BatchDir(batchId), "pages.json");
+        if (!System.IO.File.Exists(f)) return null;
+        try { return System.Text.Json.JsonSerializer.Deserialize<BatchState>(await System.IO.File.ReadAllTextAsync(f), BatchJson); } catch { return null; }
+    }
+
+    private object BatchDto(string batchId, BatchState st, PackSplitter.Result split, List<string>? thumbs)
+    {
+        string? Thumb(int n)
+        {
+            if (thumbs == null || n - 1 >= thumbs.Count) return null;
+            try { return "data:image/png;base64," + Convert.ToBase64String(System.IO.File.ReadAllBytes(thumbs[n - 1])); } catch { return null; }
+        }
+        return new
+        {
+            batchId, fileName = st.FileName, method = st.Method, pageCount = st.PageCount,
+            pages = split.Pages.Select(p => new { p.Number, p.Type, typeName = PackAnalyzer.TypeNames.GetValueOrDefault(p.Type, "Unrecognised"), p.Confidence, p.InvoiceNumber, p.OrderNumber, p.ConfirmationNumber, p.CustomerNumber, p.Date, p.TextLength, p.Continuation, p.Reason, thumb = Thumb(p.Number) }).ToList(),
+            groups = split.Groups.Select(g => new { g.Index, g.Pages, g.InvoiceNumber, g.OrderNumber, g.ConfirmationNumber, g.CustomerNumber, g.Confidence, g.Reasons, g.Analysis, company = GuessCompanyFromText(string.Join("\n", g.Pages.Select(n => n - 1 < st.Pages.Count ? st.Pages[n - 1] : ""))) }).ToList(),
+            unassigned = split.Unassigned, notes = split.Notes,
+            ocrAvailable = ServerOcrService.IsAvailable,
+            // Trimmed per-page text so the dialog can hand it to "Ask Welly" per group without a second OCR run.
+            pageTexts = st.Pages.Select(t => t.Length > 3000 ? t[..3000] : t).ToList(),
+        };
+    }
+
+    /// <summary>
+    /// Upload one scan that holds several packs. Every page is read and classified, the pages are grouped into
+    /// packs by the numbers they carry (invoice / order / confirmation) and by document order, and page
+    /// thumbnails are rendered so the user can check and re-arrange the grouping before committing.
+    /// The source PDF is kept server-side under the returned batchId until commit (or delete).
+    /// </summary>
+    [HttpPost("batch")]
+    [RequestSizeLimit(200_000_000)]
+    public async Task<IActionResult> BatchDetect([FromForm] IFormFile file, [FromServices] ServerOcrService ocr)
+    {
+        if (file == null || file.Length == 0) return BadRequest(new { error = "No file." });
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (ext != ".pdf") return BadRequest(new { error = "A multi-pack scan must be a PDF." });
+
+        var batchId = Guid.NewGuid().ToString("N");
+        var dir = BatchDir(batchId);
+        Directory.CreateDirectory(dir);
+        var src = Path.Combine(dir, "source.pdf");
+        await using (var fs = System.IO.File.Create(src)) await file.CopyToAsync(fs);
+
+        var pageCount = PdfPages(src);
+        if (pageCount == 0) { try { Directory.Delete(dir, true); } catch { } return BadRequest(new { error = "The PDF could not be opened." }); }
+        if (pageCount > BatchMaxPages) { try { Directory.Delete(dir, true); } catch { } return BadRequest(new { error = $"Too many pages ({pageCount}). Split the scan into batches of at most {BatchMaxPages} pages." }); }
+
+        var (pages, method, codes) = await PageTextsAsync(src, "application/pdf", ocr, BatchMaxPages);
+        while (pages.Count < pageCount) pages.Add("");
+        var st = new BatchState { FileName = file.FileName, Method = method, PageCount = pageCount, Pages = pages, Barcodes = codes, CreatedBy = UserId };
+        await System.IO.File.WriteAllTextAsync(Path.Combine(dir, "pages.json"), System.Text.Json.JsonSerializer.Serialize(st, BatchJson));
+
+        List<string>? thumbs = null;
+        if (ServerOcrService.CanRenderPdf)
+        {
+            try { thumbs = await ocr.RenderThumbnailsAsync(src, Path.Combine(dir, "thumbs"), 320); }
+            catch (Exception ex) { _log.LogWarning(ex, "Batch thumbnails failed for {Batch}", batchId); }
+        }
+
+        var split = PackSplitter.Split(pages, codes);
+        return Ok(BatchDto(batchId, st, split, thumbs));
+    }
+
+    public class BatchGroupForm
+    {
+        public List<int> Pages { get; set; } = new();
+        public string InvoiceNumber { get; set; } = "";
+        public string? OrderNumber { get; set; }
+        public string? ConfirmationNumber { get; set; }
+        public string? CustomerNumber { get; set; }
+        public string? CustomerName { get; set; }
+        public string? Company { get; set; }
+        public string? Notes { get; set; }
+        public bool AllowDuplicate { get; set; }
+    }
+    public class BatchCommitForm { public List<BatchGroupForm> Groups { get; set; } = new(); }
+
+    /// <summary>Re-run the page analysis + checks for an arbitrary set of pages of a batch (after the user re-arranges).</summary>
+    [HttpPost("batch/{batchId}/analyse")]
+    public async Task<IActionResult> BatchAnalyse(string batchId, [FromBody] List<int> pages)
+    {
+        var st = await LoadBatchAsync(batchId);
+        if (st == null) return NotFound(new { error = "This batch has expired — upload the scan again." });
+        var valid = (pages ?? new()).Where(n => n >= 1 && n <= st.PageCount).Distinct().OrderBy(n => n).ToList();
+        if (valid.Count == 0) return BadRequest(new { error = "No pages." });
+        var texts = valid.Select(n => st.Pages[n - 1]).ToList();
+        var codes = st.Barcodes == null ? null : valid.Select(n => n - 1 < st.Barcodes.Count ? st.Barcodes[n - 1] : new List<string>()).ToList();
+        var a = PackAnalyzer.Analyze(texts, codes);
+        var company = GuessCompanyFromText(string.Join("\n", texts));
+        var inv = a.InvoiceNumber;
+        var sage = inv != null ? await SageLookupAsync(inv, company) : null;
+        var existing = inv == null ? new() : await _db.InvoicePacks.AsNoTracking().Where(p => p.InvoiceNumber == inv).Select(p => new { p.Id, p.PackNumber, p.UploadedAt }).ToListAsync();
+        return Ok(new { analysis = a, invoiceNumber = inv, orderNumber = a.OrderNumber, confirmationNumber = a.ConfirmationNumber, customerNumber = a.CustomerNumber, company = company ?? sage?.company, sage, existingPacks = existing });
+    }
+
+    /// <summary>
+    /// Save the groups as packs: each group's pages are cut out of the source PDF into their own file
+    /// (in the order given), analysed, and stored as a pack with Source = "Batch". Groups are independent —
+    /// one failing (e.g. duplicate invoice) does not stop the others; failures come back per group.
+    /// </summary>
+    [HttpPost("batch/{batchId}/commit")]
+    public async Task<IActionResult> BatchCommit(string batchId, [FromBody] BatchCommitForm form)
+    {
+        var st = await LoadBatchAsync(batchId);
+        if (st == null) return NotFound(new { error = "This batch has expired — upload the scan again." });
+        if (form.Groups.Count == 0) return BadRequest(new { error = "Nothing to save." });
+        var src = Path.Combine(BatchDir(batchId), "source.pdf");
+        if (!System.IO.File.Exists(src)) return NotFound(new { error = "The batch file is missing on the server." });
+
+        var saved = new List<object>();
+        var errors = new List<object>();
+        var usedPages = new HashSet<int>();
+        for (var gi = 0; gi < form.Groups.Count; gi++)
+        {
+            var g = form.Groups[gi];
+            var pages = g.Pages.Where(n => n >= 1 && n <= st.PageCount).Distinct().ToList();
+            if (pages.Count == 0) { errors.Add(new { index = gi, error = "No pages in this pack." }); continue; }
+            var clash = pages.FirstOrDefault(usedPages.Contains);
+            if (clash != 0) { errors.Add(new { index = gi, error = $"Page {clash} is already used by another pack." }); continue; }
+            var inv = NormalizeInvoice(g.InvoiceNumber);
+            if (inv == null) { errors.Add(new { index = gi, error = "Enter a valid invoice number (IN followed by 5–7 digits)." }); continue; }
+            if (!g.AllowDuplicate && await _db.InvoicePacks.AnyAsync(p => p.InvoiceNumber == inv)) { errors.Add(new { index = gi, error = $"A pack already exists for {inv}. Tick 'Add anyway' to store a second copy." }); continue; }
+
+            try
+            {
+                var (full, rel) = NewStoragePath(inv, ".pdf");
+                using (var reader = new PdfDocument(new PdfReader(src)))
+                using (var writer = new PdfDocument(new PdfWriter(full)))
+                    reader.CopyPagesTo(pages, writer);
+
+                var uf = new UploadForm
+                {
+                    InvoiceNumber = inv, OrderNumber = g.OrderNumber, ConfirmationNumber = g.ConfirmationNumber, CustomerNumber = g.CustomerNumber, CustomerName = g.CustomerName,
+                    Company = g.Company, Notes = g.Notes, InvoiceVerified = true, AllowDuplicate = g.AllowDuplicate,
+                };
+                var p = await BuildPackAsync(uf, inv, full, rel, null, "Batch");
+                p.OriginalFileName = $"{Path.GetFileNameWithoutExtension(st.FileName)}_p{pages.Min()}-{pages.Max()}.pdf";
+                p.ContentType = "application/pdf"; p.Size = new FileInfo(full).Length; p.PageCount = pages.Count;
+                var texts = pages.Select(n => st.Pages[n - 1]).ToList();
+                var codes = st.Barcodes == null ? null : pages.Select(n => n - 1 < st.Barcodes.Count ? st.Barcodes[n - 1] : new List<string>()).ToList();
+                try { ApplyAnalysis(p, PackAnalyzer.Analyze(texts, codes)); } catch (Exception ex) { _log.LogWarning(ex, "Batch pack analysis failed for {Inv}", inv); }
+                _db.InvoicePacks.Add(p);
+                await _db.SaveChangesAsync();
+                p.PackNumber = $"PK{p.Id:D6}";
+                await _db.SaveChangesAsync();
+                foreach (var n in pages) usedPages.Add(n);
+                saved.Add(new { index = gi, pack = Dto(p) });
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Batch commit failed for group {Index} of {Batch}", gi, batchId);
+                errors.Add(new { index = gi, error = "Saving this pack failed: " + ex.Message });
+            }
+        }
+
+        // All done → the source scan is no longer needed. Keep it while anything failed so the user can retry.
+        if (errors.Count == 0) { try { Directory.Delete(BatchDir(batchId), true); } catch (Exception ex) { _log.LogWarning(ex, "Could not remove batch {Batch}", batchId); } }
+        return Ok(new { saved, errors, batchKept = errors.Count > 0 });
+    }
+
+    [HttpDelete("batch/{batchId}")]
+    public IActionResult BatchDiscard(string batchId)
+    {
+        if (!Regex.IsMatch(batchId, @"^[a-f0-9]{32}$")) return BadRequest();
+        try { var d = BatchDir(batchId); if (Directory.Exists(d)) Directory.Delete(d, true); } catch { }
+        return NoContent();
     }
 
     private async Task<InvoicePack> BuildPackAsync(UploadForm form, string inv, string full, string rel, IFormFile? file, string source)
