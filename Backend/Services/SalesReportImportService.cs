@@ -474,6 +474,38 @@ public class SalesReportImportService
     private static readonly string[] CustNameAliases = { "customer name", "cust name", "customer", "account name", "debtor name", "name" };
     private static readonly string[] OrderNoAliases = { "order no", "order number", "ord no", "orderno", "customer order", "po no", "po number" };
 
+    private static readonly HashSet<string> KnownDocTypes = new(StringComparer.OrdinalIgnoreCase)
+        { "IN", "CR", "RT", "QT", "SO", "PO", "GRV", "DN", "CN", "INV", "CRN" };
+
+    /// <summary>
+    /// Returns a clean Sage document type. Accepts a recognised type as-is; otherwise derives it
+    /// from the alphabetic prefix of the transaction number (IN024779 → IN, CR000190 → CR).
+    /// </summary>
+    internal static string? NormaliseDocType(string? rawType, string? transactionNumber)
+    {
+        if (!string.IsNullOrWhiteSpace(rawType))
+        {
+            var t = rawType.Trim();
+            if (KnownDocTypes.Contains(t)) return t.ToUpperInvariant();
+            if (t.Equals("Invoice", StringComparison.OrdinalIgnoreCase)) return "IN";
+            if (t.Equals("Credit Note", StringComparison.OrdinalIgnoreCase)) return "CR";
+        }
+        if (!string.IsNullOrWhiteSpace(transactionNumber))
+        {
+            var tn = transactionNumber.Trim();
+            int n = 0;
+            while (n < tn.Length && n < 3 && char.IsLetter(tn[n])) n++;
+            if (n >= 2)
+            {
+                var prefix = tn.Substring(0, n).ToUpperInvariant();
+                if (prefix == "CN" || prefix == "CRN") return "CR"; // app-wide credit note type is CR
+                if (prefix == "INV") return "IN";
+                if (KnownDocTypes.Contains(prefix)) return prefix;
+            }
+        }
+        return string.IsNullOrWhiteSpace(rawType) ? null : rawType.Trim();
+    }
+
     private static bool MatchesAlias(string headerText, string[] aliases)
     {
         // Prefer exact match, then a whole-token contains to avoid false positives.
@@ -583,6 +615,15 @@ public class SalesReportImportService
             if (!bestMap.ContainsKey("returns")) COL_SALES_RETURNS = -1;
             if (!bestMap.ContainsKey("cost")) COL_COST_OF_SALES = -1;
             if (!bestMap.ContainsKey("percent")) COL_PERCENT = -1;
+            // Same for the descriptive columns: a flat export without Year/Period/Type columns
+            // would otherwise read whatever sits in cols 1-3 (e.g. the product code) as the
+            // transaction Type, which then hides the invoice from Finance (Type != "IN").
+            if (!bestMap.ContainsKey("year")) COL_YEAR = -1;
+            if (!bestMap.ContainsKey("period")) COL_PERIOD = -1;
+            if (!bestMap.ContainsKey("type")) COL_TYPE = -1;
+            if (!bestMap.ContainsKey("salesperson")) COL_SALESPERSON = -1;
+            if (!bestMap.ContainsKey("category")) COL_CATEGORY = -1;
+            if (!bestMap.ContainsKey("location")) COL_LOCATION = -1;
             if (bestMap.TryGetValue("productcode", out var vpcode)) _colProductCode = vpcode;
             if (bestMap.TryGetValue("productdesc", out var vpdesc)) _colProductDescription = vpdesc;
             if (bestMap.TryGetValue("custno", out var vcn)) _colCustomerNumber = vcn;
@@ -591,6 +632,13 @@ public class SalesReportImportService
 
             // Flat format = a customer column exists on each row (no "Customer Number:" markers needed).
             _flatFormat = _colCustomerNumber.HasValue || _colCustomerName.HasValue;
+            if (!_flatFormat)
+            {
+                // Grouped Sage layout relies on cols 1-2 for the "Customer Number:" / product
+                // header markers even when they aren't labelled in the header row.
+                if (COL_YEAR < 0) COL_YEAR = DEFAULT_COL_YEAR;
+                if (COL_PERIOD < 0) COL_PERIOD = DEFAULT_COL_PERIOD;
+            }
 
             var found = new List<string>();
             void Note(string label, int idx) => found.Add($"{label}=col{idx + 1}");
@@ -643,7 +691,7 @@ public class SalesReportImportService
         Guid batchId)
     {
         // Read the Year cell (first column) to determine row type
-        var yearCell = row.Cell(COL_YEAR + 1).GetString()?.Trim() ?? "";
+        var yearCell = COL_YEAR >= 0 ? (row.Cell(COL_YEAR + 1).GetString()?.Trim() ?? "") : "";
 
         // ── Flat format: customer is on every row; no marker/product-header rows ──
         if (_flatFormat)
@@ -805,15 +853,18 @@ public class SalesReportImportService
         }
 
         // Parse Period
-        transaction.Period = row.Cell(COL_PERIOD + 1).GetString()?.Trim();
+        transaction.Period = COL_PERIOD >= 0 ? row.Cell(COL_PERIOD + 1).GetString()?.Trim() : null;
 
-        // Parse Type
-        transaction.Type = row.Cell(COL_TYPE + 1).GetString()?.Trim();
+        // Parse Type — fall back to the document prefix of the transaction number
+        // (IN123456 → IN, CR000123 → CR) when the sheet has no Type column or the
+        // value doesn't look like a Sage document type.
+        var rawType = COL_TYPE >= 0 ? row.Cell(COL_TYPE + 1).GetString()?.Trim() : null;
+        transaction.Type = NormaliseDocType(rawType, transactionNumber);
 
         // Parse numeric fields with validation
-        transaction.Salesperson = ParseNullableInt(row.Cell(COL_SALESPERSON + 1), rowIndex, "Salesperson", issues, batchId);
-        transaction.Category = ParseNullableInt(row.Cell(COL_CATEGORY + 1), rowIndex, "Category", issues, batchId);
-        transaction.Location = ParseNullableInt(row.Cell(COL_LOCATION + 1), rowIndex, "Location", issues, batchId);
+        transaction.Salesperson = COL_SALESPERSON >= 0 ? ParseNullableInt(row.Cell(COL_SALESPERSON + 1), rowIndex, "Salesperson", issues, batchId) : null;
+        transaction.Category = COL_CATEGORY >= 0 ? ParseNullableInt(row.Cell(COL_CATEGORY + 1), rowIndex, "Category", issues, batchId) : null;
+        transaction.Location = COL_LOCATION >= 0 ? ParseNullableInt(row.Cell(COL_LOCATION + 1), rowIndex, "Location", issues, batchId) : null;
         transaction.Quantity = COL_QUANTITY >= 0 ? ParseNullableDecimal(row.Cell(COL_QUANTITY + 1), rowIndex, "Quantity", issues, batchId) : null;
         transaction.SalesAmount = COL_SALES_AMOUNT >= 0 ? ParseNullableDecimal(row.Cell(COL_SALES_AMOUNT + 1), rowIndex, "SalesAmount", issues, batchId) : null;
         transaction.SalesReturns = COL_SALES_RETURNS >= 0 ? ParseNullableDecimal(row.Cell(COL_SALES_RETURNS + 1), rowIndex, "SalesReturns", issues, batchId) : null;

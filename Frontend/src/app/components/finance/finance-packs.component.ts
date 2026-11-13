@@ -17,6 +17,7 @@ import { PackUploadDialogComponent, PACK_KINDS, Analysis } from './pack-upload-d
 import { PackBatchDialogComponent } from './pack-batch-dialog.component';
 import { InvoiceDetailDialogComponent } from './invoice-detail-dialog.component';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
+import { PackEditDialogComponent } from './pack-edit-dialog.component';
 
 interface PackContents { deliveryNote: boolean; taxInvoice: boolean; orderConfirmation: boolean; orderEmail: boolean; orderForm: boolean; }
 interface Pack {
@@ -149,9 +150,11 @@ interface Summary {
               <td><div class="pk-cust"><span>{{ p.uploadedAt | date:'d MMM yyyy' }}</span><small>{{ p.uploadedByName || '' }}</small></div></td>
               <td class="actions">
                 <button mat-icon-button type="button" (click)="preview(p)" matTooltip="Preview pack here"><mat-icon>visibility</mat-icon></button>
+                <button mat-icon-button type="button" (click)="edit(p)" matTooltip="Edit invoice / order / customer / contents"><mat-icon>edit</mat-icon></button>
                 <button mat-icon-button type="button" (click)="view(p)" matTooltip="Open pack PDF in new tab"><mat-icon>open_in_new</mat-icon></button>
                 <button mat-icon-button type="button" [matMenuTriggerFor]="menu" matTooltip="More"><mat-icon>more_vert</mat-icon></button>
                 <mat-menu #menu="matMenu">
+                  <button mat-menu-item (click)="edit(p)"><mat-icon>edit</mat-icon> Edit details</button>
                   <button mat-menu-item (click)="download(p)"><mat-icon>download</mat-icon> Download</button>
                   <button mat-menu-item (click)="toggleExpand(p)"><mat-icon>{{ expanded() === p.id ? 'unfold_less' : 'unfold_more' }}</mat-icon> {{ expanded() === p.id ? 'Hide details' : 'Details & contents' }}</button>
                   <button mat-menu-item (click)="openInvoice(p)"><mat-icon>receipt_long</mat-icon> Invoice details</button>
@@ -390,6 +393,14 @@ export class FinancePacksComponent implements OnInit {
   }
 
   openInvoice(p: Pack): void { InvoiceDetailDialogComponent.open(this.dialog, { number: p.invoiceNumber, company: p.company ?? undefined }); }
+
+  edit(p: Pack): void {
+    PackEditDialogComponent.open(this.dialog, p).afterClosed().subscribe((u: Pack | undefined) => {
+      if (!u) return;
+      this.rows.update(rs => rs.map(x => x.id === p.id ? { ...x, ...u } : x));
+      this.loadSummary();
+    });
+  }
 
   customer360(p: Pack): void {
     this.http.get<{ id: number }>(`${this.api}/customers/master/resolve`, { params: { company: p.company!, code: p.customerNumber! } }).subscribe({
