@@ -28,6 +28,12 @@ namespace ProjectTracker.API.Models.Logistics
         [StringLength(50)]
         public string? Registration { get; set; }
 
+        /// <summary>Fleet vehicle matched by registration (null when not on the fleet list).</summary>
+        public int? VehicleId { get; set; }
+
+        /// <summary>Driver record matched by name / vehicle assignment (null when ambiguous or unknown).</summary>
+        public int? DriverId { get; set; }
+
         /// <summary>Tank capacity in litres (null when non-numeric, e.g. "OIL X 10").</summary>
         [Column(TypeName = "decimal(18,2)")]
         public decimal? Capacity { get; set; }

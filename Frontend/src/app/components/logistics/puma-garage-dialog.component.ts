@@ -16,6 +16,9 @@ interface PumaOrder {
   driverName?: string | null;
   vehicleType?: string | null;
   registration?: string | null;
+  vehicleId?: number | null;
+  driverId?: number | null;
+  linkedDriverName?: string | null;
   capacity?: number | null;
   litersFilled?: number | null;
   value?: number | null;
@@ -230,9 +233,23 @@ interface PumaOrder {
                     }
                   </td>
                   <td class="ref b">{{ o.orderNumber }}</td>
-                  <td>{{ o.driverName || '—' }}</td>
+                  <td>
+                    {{ o.driverName || '—' }}
+                    @if (o.driverId) {
+                      <mat-icon class="link-ok" [matTooltip]="'Linked to driver record: ' + (o.linkedDriverName || '#' + o.driverId)">link</mat-icon>
+                    } @else if (o.driverName) {
+                      <mat-icon class="link-missing" matTooltip="No matching driver record — name is free text">link_off</mat-icon>
+                    }
+                  </td>
                   <td>{{ o.vehicleType || '—' }}</td>
-                  <td class="ref">{{ o.registration || '—' }}</td>
+                  <td class="ref">
+                    {{ o.registration || '—' }}
+                    @if (o.vehicleId) {
+                      <mat-icon class="link-ok" matTooltip="Linked to fleet vehicle">link</mat-icon>
+                    } @else if (o.registration) {
+                      <mat-icon class="link-missing" matTooltip="Registration not on the fleet list">link_off</mat-icon>
+                    }
+                  </td>
                   <td class="num">{{ o.litersFilled != null ? (o.litersFilled | number:'1.0-2') : '—' }}</td>
                   <td class="num b">{{ o.value != null ? ('R ' + (o.value | number:'1.2-2')) : '—' }}</td>
                   <td>{{ o.date ? (o.date | date:'dd MMM yyyy') : '—' }}</td>
@@ -349,6 +366,8 @@ interface PumaOrder {
     .pill.closed { background: color-mix(in srgb, var(--color-ok) 16%, transparent); color: var(--color-ok); }
 
     .slip-cell { white-space: nowrap; }
+    .link-ok, .link-missing { font-size: 15px; width: 15px; height: 15px; vertical-align: -3px; margin-left: 4px; }
+    .link-ok { color: #059669; } .link-missing { color: #d97706; }
     .slip-thumb { border: 1px solid var(--color-line-strong); background: var(--color-surface); border-radius: 8px; width: 34px; height: 34px; display: inline-grid; place-items: center; cursor: pointer; margin-right: 6px; vertical-align: middle; }
     .slip-thumb mat-icon { color: var(--color-primary); }
     .slip-btn { height: 32px; line-height: 32px; font-size: var(--text-xs); }
@@ -588,6 +607,8 @@ export class PumaGarageDialog {
       orderNumber: this.newOrder.orderNumber.trim(),
       registration: (this.newOrder.registration || '').trim().toUpperCase(),
       driverName: (this.newOrder.driverName || '').trim(),
+      vehicleId: this.selectedVehicleId && this.selectedVehicleId > 0 ? this.selectedVehicleId : null,
+      driverId: this.selectedDriverId && this.selectedDriverId > 0 ? this.selectedDriverId : null,
       date: this.newOrder.date || new Date().toISOString().slice(0, 10)
     };
     this.http.post<PumaOrder>(this.base(), payload).subscribe({

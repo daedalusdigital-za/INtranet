@@ -31,6 +31,10 @@ namespace ProjectTracker.API.Controllers.Logistics
             public string? DriverName { get; set; }
             public string? VehicleType { get; set; }
             public string? Registration { get; set; }
+            public int? VehicleId { get; set; }
+            public int? DriverId { get; set; }
+            /// <summary>Full name of the linked driver record, when linked.</summary>
+            public string? LinkedDriverName { get; set; }
             public decimal? Capacity { get; set; }
             public decimal? LitersFilled { get; set; }
             public decimal? Value { get; set; }
@@ -46,13 +50,16 @@ namespace ProjectTracker.API.Controllers.Logistics
             public DateTime CreatedAt { get; set; }
         }
 
-        private static PumaOrderDto ToDto(PumaGarageOrder o) => new PumaOrderDto
+        private static PumaOrderDto ToDto(PumaGarageOrder o, IReadOnlyDictionary<int, string>? driverNames = null) => new PumaOrderDto
         {
             Id = o.Id,
             OrderNumber = o.OrderNumber,
             DriverName = o.DriverName,
             VehicleType = o.VehicleType,
             Registration = o.Registration,
+            VehicleId = o.VehicleId,
+            DriverId = o.DriverId,
+            LinkedDriverName = o.DriverId.HasValue && driverNames != null && driverNames.TryGetValue(o.DriverId.Value, out var dn) ? dn : null,
             Capacity = o.Capacity,
             LitersFilled = o.LitersFilled,
             Value = o.Value,
@@ -115,12 +122,13 @@ namespace ProjectTracker.API.Controllers.Logistics
                     (o.VehicleType != null && o.VehicleType.ToLower().Contains(s)));
             }
 
+            var driverNames = await DriverNamesAsync();
             var orders = (await query
                 .OrderBy(o => o.Status == "Open" ? 0 : 1)
                 .ThenByDescending(o => o.Date)
                 .ThenByDescending(o => o.Id)
                 .ToListAsync())
-                .Select(ToDto)
+                .Select(o => ToDto(o, driverNames))
                 .ToList();
 
             return Ok(orders);
@@ -166,6 +174,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 DriverName = dto.DriverName?.Trim(),
                 VehicleType = dto.VehicleType?.Trim(),
                 Registration = dto.Registration?.Trim(),
+                VehicleId = dto.VehicleId,
+                DriverId = dto.DriverId,
                 Capacity = dto.Capacity,
                 LitersFilled = dto.LitersFilled,
                 Value = dto.Value,
@@ -177,13 +187,14 @@ namespace ProjectTracker.API.Controllers.Logistics
                 CreatedAt = DateTime.UtcNow
             };
 
+            await ResolveLinksAsync(order);
             _context.PumaGarageOrders.Add(order);
             await _context.SaveChangesAsync();
 
             await SyncFuelTransactionAsync(order);
             await _context.SaveChangesAsync();
 
-            return Ok(ToDto(order));
+            return Ok(ToDto(order, await DriverNamesAsync()));
         }
 
         // ── Quick capture from the WhatsApp-style text the garage sends ──
@@ -238,10 +249,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                     CreatedByUserId = userId,
                     CreatedAt = DateTime.UtcNow
                 };
+                await ResolveLinksAsync(order);
                 _context.PumaGarageOrders.Add(order);
                 await _context.SaveChangesAsync();
                 await SyncFuelTransactionAsync(order);
-                created.Add(ToDto(order));
+                created.Add(ToDto(order, await DriverNamesAsync()));
             }
             await _context.SaveChangesAsync();
             return Ok(new { created, skipped });
@@ -332,7 +344,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Puma order {Order}: slip uploaded ({File})", order.OrderNumber, order.SlipFileName);
-            return Ok(ToDto(order));
+            return Ok(ToDto(order, await DriverNamesAsync()));
         }
 
         [HttpGet("{id:int}/slip")]
@@ -359,7 +371,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         {
             var order = await _context.PumaGarageOrders.FirstOrDefaultAsync(o => o.Id == id);
             if (order == null) return NotFound();
-            if (order.Status == "Closed") return Ok(ToDto(order));
+            if (order.Status == "Closed") return Ok(ToDto(order, await DriverNamesAsync()));
             if (string.IsNullOrWhiteSpace(order.SlipStoredFileName))
                 return BadRequest(new { message = "Upload a photo of the filled slip (JPG/PNG) before closing this order." });
 
@@ -375,7 +387,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             await _context.SaveChangesAsync();
             await SyncFuelTransactionAsync(order);
             await _context.SaveChangesAsync();
-            return Ok(ToDto(order));
+            return Ok(ToDto(order, await DriverNamesAsync()));
         }
 
         [HttpPost("{id:int}/reopen")]
@@ -389,7 +401,7 @@ namespace ProjectTracker.API.Controllers.Logistics
             order.ClosedByName = null;
             order.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-            return Ok(ToDto(order));
+            return Ok(ToDto(order, await DriverNamesAsync()));
         }
 
         // ── Bulk paste import ──────────────────────────────────────────────
@@ -494,10 +506,13 @@ namespace ProjectTracker.API.Controllers.Logistics
             _logger.LogInformation("Puma Garage import: {Imported} new, {Updated} updated, {Skipped} skipped",
                 result.Imported, result.Updated, result.Skipped);
 
-            // Mirror every affected order into Fuel History (Source = PUMA) and link vehicles.
+            // Mirror every affected order into Fuel History (Source = PUMA) and link vehicles/drivers.
             var affected = existing.Values.Where(o => o.LitersFilled.HasValue || o.Value.HasValue).ToList();
             foreach (var o in affected)
+            {
+                await ResolveLinksAsync(o);
                 await SyncFuelTransactionAsync(o);
+            }
             await _context.SaveChangesAsync();
 
             return Ok(result);
@@ -514,6 +529,9 @@ namespace ProjectTracker.API.Controllers.Logistics
             order.DriverName = dto.DriverName?.Trim();
             order.VehicleType = dto.VehicleType?.Trim();
             order.Registration = dto.Registration?.Trim();
+            // Explicit ids win; otherwise re-resolve from the (possibly changed) registration / name.
+            order.VehicleId = dto.VehicleId;
+            order.DriverId = dto.DriverId;
             order.Capacity = dto.Capacity;
             order.LitersFilled = dto.LitersFilled;
             order.Value = dto.Value;
@@ -522,10 +540,31 @@ namespace ProjectTracker.API.Controllers.Logistics
             order.Notes = dto.Notes?.Trim();
             order.UpdatedAt = DateTime.UtcNow;
 
+            await ResolveLinksAsync(order);
             await _context.SaveChangesAsync();
             await SyncFuelTransactionAsync(order);
             await _context.SaveChangesAsync();
-            return Ok(ToDto(order));
+            return Ok(ToDto(order, await DriverNamesAsync()));
+        }
+
+        /// <summary>Re-run driver/vehicle matching across all orders (fills gaps only; never overwrites an existing link).</summary>
+        [HttpPost("relink")]
+        public async Task<ActionResult<object>> Relink()
+        {
+            var orders = await _context.PumaGarageOrders.ToListAsync();
+            int vehicles = 0, drivers = 0;
+            var unmatched = new List<string>();
+            foreach (var o in orders)
+            {
+                var hadV = o.VehicleId.HasValue; var hadD = o.DriverId.HasValue;
+                await ResolveLinksAsync(o);
+                if (!hadV && o.VehicleId.HasValue) vehicles++;
+                if (!hadD && o.DriverId.HasValue) drivers++;
+                if (!o.DriverId.HasValue && !string.IsNullOrWhiteSpace(o.DriverName)) unmatched.Add($"{o.OrderNumber}: {o.DriverName}");
+                await SyncFuelTransactionAsync(o);
+            }
+            await _context.SaveChangesAsync();
+            return Ok(new { vehiclesLinked = vehicles, driversLinked = drivers, driversUnmatched = unmatched });
         }
 
         // ── Delete ─────────────────────────────────────────────────────────
@@ -562,6 +601,128 @@ namespace ProjectTracker.API.Controllers.Logistics
         private static string NormalizeReg(string? reg) =>
             (reg ?? string.Empty).ToUpperInvariant().Replace(" ", "").Replace("-", "").Trim();
 
+        private async Task<Dictionary<int, string>> DriverNamesAsync() =>
+            await _context.Drivers.AsNoTracking()
+                .ToDictionaryAsync(d => d.Id, d => $"{d.FirstName} {d.LastName}".Replace(" -", "").Trim());
+
+        /// <summary>
+        /// Link the order to a fleet vehicle (by registration) and a driver record (by name, using the
+        /// vehicle's assigned driver to break ties). Fills in vehicle type / tank size from the fleet
+        /// when the order has none. Existing links are kept; only gaps are filled.
+        /// </summary>
+        private async Task ResolveLinksAsync(PumaGarageOrder order)
+        {
+            Vehicle? vehicle = null;
+            if (order.VehicleId.HasValue)
+                vehicle = await _context.Vehicles.Include(v => v.VehicleType).AsNoTracking().FirstOrDefaultAsync(v => v.Id == order.VehicleId.Value);
+            if (vehicle == null)
+            {
+                var normReg = NormalizeReg(order.Registration);
+                if (normReg.Length >= 4)
+                {
+                    // Prefer the vehicle that has a driver assigned when the fleet list has duplicates of a reg.
+                    var candidates = await _context.Vehicles.Include(v => v.VehicleType).AsNoTracking()
+                        .Where(v => v.RegistrationNumber.ToUpper().Replace(" ", "").Replace("-", "") == normReg)
+                        .ToListAsync();
+                    vehicle = candidates.OrderByDescending(v => v.CurrentDriverId.HasValue).ThenBy(v => v.Id).FirstOrDefault();
+                }
+                order.VehicleId = vehicle?.Id;
+            }
+            if (vehicle != null)
+            {
+                if (string.IsNullOrWhiteSpace(order.VehicleType) && vehicle.VehicleType != null) order.VehicleType = vehicle.VehicleType.Name;
+                if (!order.Capacity.HasValue && vehicle.TankSize.HasValue) order.Capacity = vehicle.TankSize;
+            }
+
+            if (order.DriverId.HasValue || string.IsNullOrWhiteSpace(order.DriverName)) return;
+
+            // Tokenise the free-text name ("MFUNDO CELE", "MIKE/PATRICK") and match whole words against driver names.
+            var tokens = Regex.Split(order.DriverName.ToUpperInvariant(), @"[^A-Z]+")
+                .Where(t => t.Length >= 3).Distinct().ToList();
+            if (tokens.Count == 0) return;
+
+            var drivers = await _context.Drivers.AsNoTracking()
+                .Select(d => new { d.Id, d.FirstName, d.LastName, d.Status }).ToListAsync();
+
+            // First choice: the driver assigned to this vehicle, if the written name plausibly refers to them
+            // ("SBO" on Sbongiseni's truck, "BHEKA" on Bhekizitha's, "PATRICK" for Patric).
+            if (vehicle?.CurrentDriverId != null)
+            {
+                var cur = drivers.FirstOrDefault(d => d.Id == vehicle.CurrentDriverId);
+                if (cur != null)
+                {
+                    var curWords = Regex.Split(($"{cur.FirstName} {cur.LastName}").ToUpperInvariant(), @"[^A-Z]+").Where(w => w.Length > 0).ToList();
+                    if (tokens.Any(t => curWords.Any(w => w.StartsWith(t) || t.StartsWith(w) || FuzzyWord(t, w) || CommonPrefix(t, w) >= 4)))
+                    {
+                        order.DriverId = cur.Id;
+                        return;
+                    }
+                }
+            }
+            // Exact whole-word hits score 2; near-misses (nickname prefix "VUSI"→VUSIMUZI, spelling
+            // "MABHENA"→MABENA, "GAZA"→GASA, "DOVELA"→NDOVELA) score 1.
+            var scored = drivers.Select(d =>
+            {
+                var words = Regex.Split(($"{d.FirstName} {d.LastName}").ToUpperInvariant(), @"[^A-Z]+").Where(w => w.Length > 0).ToList();
+                int score = 0;
+                foreach (var t in tokens)
+                {
+                    if (words.Contains(t)) score += 2;
+                    else if (words.Any(w => FuzzyWord(t, w))) score += 1;
+                }
+                return new { d.Id, d.Status, Score = score };
+            }).Where(x => x.Score > 0).ToList();
+            if (scored.Count == 0) return;
+
+            var best = scored.Max(x => x.Score);
+            var top = scored.Where(x => x.Score == best).ToList();
+            if (top.Count > 1 && vehicle?.CurrentDriverId != null && top.Any(x => x.Id == vehicle.CurrentDriverId))
+                top = top.Where(x => x.Id == vehicle.CurrentDriverId).ToList();
+            if (top.Count > 1 && top.Count(x => x.Status == "Active") == 1)
+                top = top.Where(x => x.Status == "Active").ToList();
+            // Several records for the same person (duplicate entries) → take the one assigned to the vehicle, else lowest id.
+            if (top.Count > 1)
+            {
+                var names = top.Select(x => drivers.First(d => d.Id == x.Id)).Select(d => $"{d.FirstName} {d.LastName}".ToUpperInvariant()).Distinct().Count();
+                if (names == 1) top = top.OrderBy(x => x.Id).Take(1).ToList();
+            }
+            if (top.Count == 1) order.DriverId = top[0].Id;
+        }
+
+        private static int CommonPrefix(string a, string b)
+        {
+            int n = 0;
+            while (n < a.Length && n < b.Length && a[n] == b[n]) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// Loose word match for driver nicknames and spellings: one word is a prefix of the other
+        /// (min 4 chars, e.g. VUSI/VUSIMUZI, PATRIC/PATRICK), or the two words are within a Levenshtein
+        /// distance of 1 (MABHENA/MABENA, GAZA/GASA), or one is the other with a leading letter dropped
+        /// (DOVELA/NDOVELA). Short tokens (&lt;4) never fuzzy-match to avoid false positives.
+        /// </summary>
+        private static bool FuzzyWord(string a, string b)
+        {
+            if (a.Length < 4 || b.Length < 4) return false;
+            if (a.StartsWith(b) || b.StartsWith(a)) return true;
+            if (a.Length > 1 && a.Substring(1) == b) return true;
+            if (b.Length > 1 && b.Substring(1) == a) return true;
+            if (Math.Abs(a.Length - b.Length) > 1) return false;
+            // Levenshtein ≤ 1
+            int i = 0, j = 0, edits = 0;
+            while (i < a.Length && j < b.Length)
+            {
+                if (a[i] == b[j]) { i++; j++; continue; }
+                if (++edits > 1) return false;
+                if (a.Length > b.Length) i++;
+                else if (b.Length > a.Length) j++;
+                else { i++; j++; }
+            }
+            edits += (a.Length - i) + (b.Length - j);
+            return edits <= 1;
+        }
+
         /// <summary>
         /// Create or update a matching Fuel History row (Source = PUMA) for a Puma order,
         /// keyed by "PUMA:{OrderNumber}", and link the vehicle by registration when possible.
@@ -579,10 +740,10 @@ namespace ProjectTracker.API.Controllers.Logistics
                 return;
             }
 
-            // Try to link the vehicle by registration.
-            int? vehicleId = null;
+            // Vehicle link: prefer the resolved link on the order, else match by registration.
+            int? vehicleId = order.VehicleId;
             var normReg = NormalizeReg(order.Registration);
-            if (normReg.Length >= 4)
+            if (!vehicleId.HasValue && normReg.Length >= 4)
             {
                 var vehicle = await _context.Vehicles
                     .FirstOrDefaultAsync(v => v.RegistrationNumber.ToUpper()
