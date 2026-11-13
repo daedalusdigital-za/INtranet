@@ -75,22 +75,22 @@ public static class PackAnalyzer
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
     // ───────── patterns ─────────
-    // No leading \b: scanners glue dashes/underscores to the token ("—1N024737", "_IN024737").
-    private static readonly Regex InvRx = new(@"(?<![A-Z0-9])[I1L][NMH][\s.\-:#]?([0-9OQDILSBZGT]{5,7})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // No leading \b: scanners glue dashes/underscores to the token ("—1N024737", "_IN024737"). IN\d{5,8}.
+    private static readonly Regex InvRx = new(@"(?<![A-Z0-9])[I1L][NMH][\s.\-:#]?([0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // Bare 6-digit number near an invoice / delivery-note header (the IN prefix is often a logo glyph).
-    private static readonly Regex BareInvRx = new(@"(?:INVOICE|DELIVERY\s*NOTE)[^\n]{0,40}?(?<![A-Z0-9])(0\d{5})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex BareInvRx = new(@"(?:INVOICE|DELIVERY\s*NOTE)[^\n]{0,40}?(?<![A-Z0-9])(?<![A-Z][\s\-/])(0\d{5,7})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CustBareRx = new(@"\b(\d{2}-[A-Z]{3}-\d{3})\b", RegexOptions.Compiled);
     private static readonly Regex AmountRx = new(@"(?:AMOUNT\s+DUE|TOTAL\s+DUE|GRAND\s+TOTAL|INVOICE\s+TOTAL|TOTAL\s+INCL\w*|\bTOTAL)\b[^0-9\n]{0,25}?(\d{1,3}(?:[ ,]\d{3})*\.\d{2}|\d{3,8}\.\d{2})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex InvLabelRx = new(@"(?:TAX\s+)?INVOICE\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*([A-Z]{0,2}[\s\-]?[0-9OQDILSBZGT]{5,7})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    // OR000190 / OR-000190 / OR 000190
-    private static readonly Regex OrRx = new(@"\b[O0Q][R][\s\-.:]?([0-9OQDILSBZGT]{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    // ORD107038
-    private static readonly Regex OrdRx = new(@"\b[O0Q]RD[\s\-.:]?([0-9OQDILSBZGT]{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    // Sage sales-order numbers carry a per-company prefix (ORD107038, GL003586, …): 2–3 letters + 6 digits.
-    // Customer orders are OR-###### or plain numbers, invoices IN######, so those prefixes are excluded.
-    private static readonly Regex ConfRx = new(@"(?<![A-Z0-9])(?!(?:OR|IN|TEL|FAX|VAT|REG|CSD|MAA|GST|ABN|BOX|REF)[\s\-.:]?\d)([A-Z]{2,3})[\s\-.:]?([0-9O]{6})(?![A-Z0-9])", RegexOptions.Compiled);
-    private static readonly string[] NotConfPrefixes = { "OR", "IN", "TEL", "FAX", "VAT", "REG", "CSD", "MAA", "GST", "ABN", "BOX", "REF", "PO", "ACC", "NO" };
-    private static readonly Regex PoLabelRx = new(@"(?:CUSTOMER\s+)?(?:P\.?O\.?|PURCHASE\s+ORDER|ORDER)\s*(?:NO|NUMBER|#|REF)?\.?\s*[:.\-]?\s*([A-Z]{1,3}[\s\-]?\d{5,8}|\d{6,10})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex InvLabelRx = new(@"(?:TAX\s+)?INVOICE\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*((?:[I1L][NMH])?[\s\-]?[0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Order confirmation (Sage sales order): strictly ORD + 5–8 digits. Checked BEFORE order numbers.
+    private static readonly Regex OrdRx = new(@"(?<![A-Z0-9])[O0Q]RD[\s\-.:]?([0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Customer order number: 1–4 letter prefix + 5–8 digits, hyphen/space optional (OR-000190 KZN, GL-003586 Limpopo).
+    private static readonly Regex OrderTokenRx = new(@"(?<![A-Z0-9])([A-Z]{1,4})[\s\-/]?([0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.Compiled);
+    /// <summary>Known per-province order prefixes — only used to raise confidence, never to exclude.</summary>
+    public static readonly string[] KnownOrderPrefixes = { "OR", "GL" };
+    // Prefixes that are never a customer order: invoices, confirmations, and labels that sit directly in front of a number.
+    private static readonly HashSet<string> NotOrderPrefixes = new() { "IN", "ORD", "TEL", "FAX", "VAT", "REG", "CSD", "MAAA", "MAA", "GST", "BOX", "REF", "PO", "ACC", "NO", "CELL", "PAGE", "QTY", "RT", "ITEM", "CODE", "DATE", "NR", "NUM", "ID", "TAX", "ABN" };
+    private static readonly Regex PoLabelRx = new(@"(?:CUSTOMER\s+)?(?:P\.?O\.?|PURCHASE\s+ORDER|ORDER)\s*(?:NO|NUMBER|#|REF)?\.?\s*[:.\-]?\s*([A-Z]{1,4}[\s\-/]?\d{5,8}|\d{5,8})(?![0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CustRx = new(@"(?:CUSTOMER|ACCOUNT|ACC|DEBTOR)\s*(?:NO|NUMBER|CODE|#)?\.?\s*[:.\-]?\s*(\d{2}-[A-Z]{3}-\d{3}|[A-Z]{2,4}\d{3,6}|\d{2}[A-Z]{3}\d{3})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex DateRx = new(@"\b(\d{1,2}[\/\-.\s](?:\d{1,2}|[A-Z]{3,9})[\/\-.\s]\d{2,4}|\d{4}[\/\-.]\d{2}[\/\-.]\d{2})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -98,39 +98,47 @@ public static class PackAnalyzer
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
         var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-.:#]", "");
-        var m = Regex.Match(s, @"^(?:[I1L][NMH])?([0-9OQDILSBZGT]{5,7})$");
+        var m = Regex.Match(s, @"^(?:[I1L][NMH])?([0-9OQDILSBZGT]{5,8})$");
         if (!m.Success) return null;
         // At least 3 real digits so words like "INSOLID" never become invoice numbers.
         if (m.Groups[1].Value.Count(char.IsDigit) < 3) return null;
         var d = Digits(m.Groups[1].Value);
-        return d.Length is >= 5 and <= 7 ? "IN" + d : null;
+        return d.Length is >= 5 and <= 8 ? "IN" + d : null;
     }
 
-    /// <summary>"OR-000190", "OR000190", "or 000190" → "OR000190".</summary>
+    /// <summary>
+    /// Customer order number: uppercase, strip spaces / hyphens / slashes, 1–4 letters + 5–8 digits
+    /// ("OR-000190" → OR000190, "GL-003586" → GL003586). OCR swaps are fixed in the digit part only.
+    /// ORD… (confirmation) and IN… (invoice) are never order numbers.
+    /// </summary>
     public static string? NormalizeOrder(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
-        var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-.:#]", "");
-        var m = Regex.Match(s, @"^[O0Q]R([0-9OQDILSBZGT]{6})$");
-        if (m.Success) return "OR" + Digits(m.Groups[1].Value);
-        m = Regex.Match(s, @"^([A-Z]{1,3})(\d{5,8})$");
-        if (m.Success) return LooksLikeConfirmation(s) ? null : m.Groups[1].Value + m.Groups[2].Value;
-        return Regex.IsMatch(s, @"^\d{6,10}$") ? s : null;
+        var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-/.:#]", "");
+        var m = Regex.Match(s, @"^([A-Z]{1,4})([0-9OQDILSBZGT]{5,8})$");
+        if (m.Success)
+        {
+            var prefix = m.Groups[1].Value;
+            if (NotOrderPrefixes.Contains(prefix)) return null;
+            if (m.Groups[2].Value.Count(char.IsDigit) < 4) return null;
+            // OCR often reads the "O" of OR as 0/Q.
+            if (prefix is "0R" or "QR") prefix = "OR";
+            return prefix + Digits(m.Groups[2].Value);
+        }
+        // Plain numeric order numbers are only accepted when they sit under an order label (see PoLabelRx);
+        // long numbers (attachment ids like 5020706054) are never orders.
+        return Regex.IsMatch(s, @"^\d{5,8}$") ? s : null;
     }
 
+    /// <summary>Order confirmation: strictly ORD + 5–8 digits.</summary>
     public static string? NormalizeConfirmation(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
-        var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-.:#]", "");
-        var m = Regex.Match(s, @"^[O0Q]RD([0-9OQDILSBZGT]{6})$");
-        if (m.Success) return "ORD" + Digits(m.Groups[1].Value);
-        m = Regex.Match(s, @"^([A-Z]{2,3})([0-9O]{6})$");
-        if (m.Success && !NotConfPrefixes.Contains(m.Groups[1].Value) && m.Groups[2].Value.Count(char.IsDigit) >= 4)
-            return m.Groups[1].Value + Digits(m.Groups[2].Value);
-        return null;
+        var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-/.:#]", "");
+        var m = Regex.Match(s, @"^[O0Q]RD([0-9OQDILSBZGT]{5,8})$");
+        return m.Success && m.Groups[1].Value.Count(char.IsDigit) >= 3 ? "ORD" + Digits(m.Groups[1].Value) : null;
     }
 
-    /// <summary>True when the token looks like a Sage sales-order (confirmation) number rather than a customer order.</summary>
     public static bool LooksLikeConfirmation(string? raw) => NormalizeConfirmation(raw) != null;
 
     private static string Digits(string s)
@@ -150,8 +158,8 @@ public static class PackAnalyzer
         // The Sage order-confirmation header is usually a graphic, so lean on its table layout:
         // Salesperson / Ship Via / Order Date / Ord. Shp. B/O columns / Order Discount / Total order.
         new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("TOTAL ORDER", 2.0), ("ORDER DISCOUNT", 1.5), ("SALESPERSON", 1.0), ("SHIP VIA", 1.0), ("ORDER DATE", 1.0), ("ORD. SHP", 1.5), ("ORD SHP", 1.5), ("SHP. B/O", 1.5), ("REFERENCE PO", .8), ("PO NUMBER", .5) }),
-        new("EML", new[] { ("GMAIL", 2.0), ("FROM:", 1.5), ("TO:", 1.0), ("SUBJECT", 1.5), ("SENT:", 1.0), ("@KZNHEALTH.GOV.ZA", 2.0), ("@", .3), ("FORWARDED MESSAGE", 1.5), ("ATTACHMENT", .5), ("OUTLOOK", 1.5) }),
-        new("PO",  new[] { ("KZN: HEALTH", 3.0), ("KZN HEALTH", 2.5), ("ORDER\\SERVICE", 2.0), ("ORDER/SERVICE", 2.0), ("ORDER NO", 1.5), ("OFFICIAL ORDER", 2.5), ("PROVINCE OF", 1.0), ("DEPARTMENT OF HEALTH", 1.5), ("AMENDED ORDER", 1.5), ("CSD", .5), ("MAAA", .8), ("DELIVERY DATE", .5) }),
+        new("EML", new[] { ("GMAIL", 2.0), ("FROM:", 1.5), ("TO:", 1.0), ("SUBJECT", 1.5), ("SENT:", 1.0), ("@KZNHEALTH.GOV.ZA", 2.0), (".GOV.ZA", 1.0), ("@PROMEDTECHNOLOGIES", 1.5), ("@", .3), ("FORWARDED MESSAGE", 1.5), ("ATTACHMENT", .5), ("OUTLOOK", 1.5) }),
+        new("PO",  new[] { ("KZN: HEALTH", 3.0), ("KZN HEALTH", 2.5), (": HEALTH", 2.0), ("ORDER\\SERVICE", 2.0), ("ORDER/SERVICE", 2.0), ("ORDER NO", 1.5), ("OFFICIAL ORDER", 2.5), ("AUTHORISATIONS", 2.0), ("GOVERNMENT CONTRACT", 2.0), ("PROVINCE OF", 1.0), ("DEPARTMENT OF HEALTH", 1.5), ("STORE NUMBER", 1.5), ("SUPPLIER NAME", 1.0), ("AMENDED ORDER", 1.5), ("CSD", .5), ("MAAA", .8), ("DELIVERY DATE", .5) }),
     };
 
     public static PageResult AnalyzePage(int pageNo, string text)
@@ -189,29 +197,44 @@ public static class PackAnalyzer
 
         // Numbers.
         var invs = new List<string>();
-        foreach (Match m in InvLabelRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Groups[1].Value); if (n != null) invs.Add(n); }
+        foreach (Match m in InvLabelRx.Matches(collapsed))
+        {
+            var tok = m.Groups[1].Value.Trim();
+            // A labelled value must be IN… or a bare number — never another prefixed token (GL-003586 after "Tax Invoice … PO Number").
+            if (Regex.IsMatch(tok, @"^[A-Z]", RegexOptions.IgnoreCase) && !Regex.IsMatch(tok, @"^[I1L][NMH]", RegexOptions.IgnoreCase)) continue;
+            var n = NormalizeInvoice(tok); if (n != null) invs.Add(n);
+        }
         foreach (Match m in InvRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Value); if (n != null) invs.Add(n); }
         if (invs.Count == 0 && (isInvHeader || isDnHeader))
             foreach (Match m in BareInvRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Groups[1].Value); if (n != null) invs.Add(n); }
         r.InvoiceNumber = invs.GroupBy(x => x).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
 
-        var ords = new List<(string norm, string raw)>();
-        foreach (Match m in OrRx.Matches(collapsed)) { var n = NormalizeOrder(m.Value); if (n != null) ords.Add((n, m.Value.Trim())); }
-        if (ords.Count == 0)
-            foreach (Match m in PoLabelRx.Matches(collapsed))
-            {
-                var n = NormalizeOrder(m.Groups[1].Value);
-                // don't confuse an invoice number or a Sage confirmation (ORD/GL…) with the customer order number
-                if (n != null && NormalizeInvoice(m.Groups[1].Value) == null && !LooksLikeConfirmation(m.Groups[1].Value)) ords.Add((n, m.Groups[1].Value.Trim()));
-            }
-        var bestOrd = ords.GroupBy(x => x.norm).OrderByDescending(g => g.Count()).FirstOrDefault();
-        if (bestOrd != null) { r.OrderNumber = bestOrd.Key; r.OrderNumberRaw = bestOrd.First().raw; }
-
+        // Confirmation (ORD…) is checked first so it can never be mistaken for an order number.
         var confs = new List<string>();
         foreach (Match m in OrdRx.Matches(collapsed)) { var n = NormalizeConfirmation(m.Value); if (n != null) confs.Add(n); }
-        if (confs.Count == 0)
-            foreach (Match m in ConfRx.Matches(up)) { var n = NormalizeConfirmation(m.Value); if (n != null) confs.Add(n); }
         r.ConfirmationNumber = confs.GroupBy(x => x).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
+
+        // Order number: labelled value ("Customer PO Number", "PO Number", "ORDER NO.") counts double;
+        // then any prefixed token anywhere on the page (subject line, attachment name). Known province
+        // prefixes (OR, GL) get extra weight. IN… / ORD… / customer / CSD / VAT numbers are excluded.
+        var ords = new List<(string norm, string raw, double w)>();
+        foreach (Match m in PoLabelRx.Matches(collapsed))
+        {
+            var tok = m.Groups[1].Value;
+            if (NormalizeInvoice(tok) != null && Regex.IsMatch(tok, @"^[I1L][NMH]", RegexOptions.IgnoreCase)) continue;
+            if (LooksLikeConfirmation(tok)) continue;
+            var n = NormalizeOrder(tok); if (n != null) ords.Add((n, tok.Trim(), 2.0));
+        }
+        foreach (Match m in OrderTokenRx.Matches(up))
+        {
+            var tok = m.Value;
+            if (LooksLikeConfirmation(tok) || Regex.IsMatch(tok, @"^[I1L][NMH]")) continue;
+            var n = NormalizeOrder(tok); if (n == null) continue;
+            var prefix = Regex.Match(n, @"^[A-Z]+").Value;
+            ords.Add((n, tok.Trim(), KnownOrderPrefixes.Contains(prefix) ? 1.5 : 0.6));
+        }
+        var bestOrd = ords.GroupBy(x => x.norm).OrderByDescending(g => g.Sum(x => x.w)).FirstOrDefault();
+        if (bestOrd != null) { r.OrderNumber = bestOrd.Key; r.OrderNumberRaw = bestOrd.First().raw; }
 
         var cm = CustRx.Match(collapsed);
         if (cm.Success) r.CustomerNumber = cm.Groups[1].Value;
