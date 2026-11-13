@@ -35,11 +35,32 @@ public static class PackAnalyzer
         public bool PartDelivery { get; set; }
         public bool Amended { get; set; }
         public bool Duplicate { get; set; }
+        /// <summary>Page copied in from another pack that shares the same order (multi-invoice orders).</summary>
+        public bool Shared { get; set; }
+        public int Rotation { get; set; }
         public decimal? AmountDue { get; set; }
+        /// <summary>All order numbers seen on the page (an e-mail may list several orders).</summary>
+        public List<string> OrderNumbers { get; set; } = new();
+        public List<LineItem> Lines { get; set; } = new();
+        /// <summary>Low-confidence read of the confirmation number (faded OC header).</summary>
+        public bool ConfirmationLowConfidence { get; set; }
+        public string? Supplier { get; set; }
+        public string? Customer { get; set; }
         /// <summary>Official-order detail (layout, order number by label/barcode, totals, handwriting) — PO pages only.</summary>
         public OfficialOrderReader.Result? OfficialOrder { get; set; }
         public List<string> Hits { get; set; } = new();
         public int TextLength { get; set; }
+    }
+
+    public class LineItem
+    {
+        public string? ItemNumber { get; set; }
+        public string Description { get; set; } = "";
+        public decimal? QtyOrdered { get; set; }
+        public decimal? QtyShipped { get; set; }
+        public decimal? QtyBackorder { get; set; }
+        public decimal? UnitPrice { get; set; }
+        public decimal? Value { get; set; }
     }
 
     public class RuleResult
@@ -73,6 +94,16 @@ public static class PackAnalyzer
         public bool ProofOfDelivery { get; set; }
         public bool PartDelivery { get; set; }
         public bool Amended { get; set; }
+        public string? Supplier { get; set; }
+        public string? Customer { get; set; }
+        public List<LineItem> Lines { get; set; } = new();
+        /// <summary>Invoice total incl. VAT (from the tax invoice).</summary>
+        public decimal? InvoiceTotal { get; set; }
+        /// <summary>Order total incl. VAT (order confirmation, else official order).</summary>
+        public decimal? OrderTotal { get; set; }
+        /// <summary>Value of lines still on back-order (order total − invoice total when a part delivery; else Σ backorder × price).</summary>
+        public decimal? OutstandingValue { get; set; }
+        public bool ConfirmationLowConfidence { get; set; }
 
         public string ToJson() => JsonSerializer.Serialize(this, JsonOpts);
         public static Result? FromJson(string? s) { try { return s == null ? null : JsonSerializer.Deserialize<Result>(s, JsonOpts); } catch { return null; } }
@@ -86,7 +117,7 @@ public static class PackAnalyzer
     // Bare 6-digit number near an invoice / delivery-note header (the IN prefix is often a logo glyph).
     private static readonly Regex BareInvRx = new(@"(?:INVOICE|DELIVERY\s*NOTE)[^\n]{0,40}?(?<![A-Z0-9])(?<![A-Z][\s\-/])(0\d{5,7})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CustBareRx = new(@"\b(\d{2}-[A-Z]{3}-\d{3})\b", RegexOptions.Compiled);
-    private static readonly Regex AmountRx = new(@"(?:AMOUNT\s+DUE|TOTAL\s+DUE|GRAND\s+TOTAL|INVOICE\s+TOTAL|TOTAL\s+INCL\w*|\bTOTAL)\b[^0-9\n]{0,25}?(\d{1,3}(?:[ ,]\d{3})*\.\d{2}|\d{3,8}\.\d{2})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex AmountRx = new(@"(?:AMOUNT\s+DUE|TOTAL\s+DUE|GRAND\s+TOTAL|INVOICE\s+TOTAL|TOTAL\s+INCL\w*|TOTAL\s*\(INCL[^)]*\)|\bTOTAL)\b[^0-9\n]{0,25}?(\d{1,3}(?:[ ,.]\d{3})*[.,]\d{2}|\d{3,8}[.,]\d{2})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex InvLabelRx = new(@"(?:TAX\s+)?INVOICE\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*((?:[I1L][NMH])?[\s\-]?[0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // Order confirmation (Sage sales order): strictly ORD + 5–8 digits. Checked BEFORE order numbers.
     private static readonly Regex OrdRx = new(@"(?<![A-Z0-9])[O0Q]RD[\s\-.:]?([0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -95,7 +126,7 @@ public static class PackAnalyzer
     private static readonly Regex HeaderOrdRx = new(@"(?<![A-Z])[O0Q]?RD[\s\-.:]?(\d{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex HeaderInvRx = new(@"(?<![A-Z0-9])(?:[I1L]?[NMH]|[I1L][NMH]?)[\s\-.:]?(0\d{5,7})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // Customer order number: 1–4 letter prefix + 5–8 digits, hyphen/space optional (OR-000190 KZN, GL-003586 Limpopo).
-    private static readonly Regex OrderTokenRx = new(@"(?<![A-Z0-9])([A-Z]{1,4})[\s\-/]?([0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.Compiled);
+    private static readonly Regex OrderTokenRx = new(@"(?<![A-Z0-9])([A-Z]{1,4})[ \t\-/]?([0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.Compiled);
     /// <summary>Known per-province order prefixes — only used to raise confidence, never to exclude.</summary>
     public static readonly string[] KnownOrderPrefixes = { "OR", "GL" };
     // Prefixes that are never a customer order: invoices, confirmations, and labels that sit directly in front of a number.
@@ -103,6 +134,15 @@ public static class PackAnalyzer
     private static readonly Regex PoLabelRx = new(@"(?:CUSTOMER\s+)?(?:P\.?O\.?|PURCHASE\s+ORDER|ORDER)\s*(?:NO|NUMBER|#|REF)?\.?\s*[:.\-]?\s*([A-Z]{1,4}[\s\-/]?\d{5,8}|\d{5,8})(?![0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CustRx = new(@"(?:CUSTOMER|ACCOUNT|ACC|DEBTOR)\s*(?:NO|NUMBER|CODE|#)?\.?\s*[:.\-]?\s*(\d{2}-[A-Z]{3}-\d{3}|[A-Z]{2,4}\d{3,6}|\d{2}[A-Z]{3}\d{3})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex DateRx = new(@"\b(\d{1,2}[\/\-.\s](?:\d{1,2}|[A-Z]{3,9})[\/\-.\s]\d{2,4}|\d{4}[\/\-.]\d{2}[\/\-.]\d{2})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Hospital-issued long order numbers: PT-ORD/26-07-36872, PH-ORD/26-10-0011, MK-ORD/26-05-0174, LE-ORD/26-10-1754.
+    private static readonly Regex LongOrderRx = new(@"(?<![A-Z0-9])([A-Z]{2,4})\s?[-\u2013/]\s?ORD\s?[\/\-]\s?(\d{2})\s?[-\u2013]\s?(\d{2})\s?[-\u2013]\s?(\d{3,6})(?![0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // E-mail shorthand: a line that is just "-36872" (or "- 36872") takes the prefix of the long number above it.
+    private static readonly Regex ShorthandRx = new(@"(?:^|(?<=\s))[-\u2013]\s?(\d{3,6})(?=\s|$|[,.;:)])", RegexOptions.Multiline | RegexOptions.Compiled);
+    // Sage line: item number, description, Ord/Shp/B-O quantities, unit price, amount — tolerant of OCR gaps.
+    private static readonly Regex SageLineRx = new(@"^\s*(\d{5,9}|[A-Z]{1,3}\d{2,4}-?\d{2,6})\s+(.{4,70}?)\s+(\d{1,5})\s+(\d{1,5})\s+(\d{1,5})\s+(?:EA|EACH|BAG|BOX|PK|PKT|UNIT|CS|CASE|KG|\d*\s?KG\s?BAG)?\s*R?\s?(\d{1,3}(?:[ ,]\d{3})*[.,]\d{2}|\d+[.,]\d{2})\s+R?\s?(\d{1,3}(?:[ ,]\d{3})*[.,]\d{2}|\d+[.,]\d{2})\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex MoneyRx = new(@"R?\s?(\d{1,3}(?:[ ,]\d{3})*[.,]\d{2}|\d{3,8}[.,]\d{2})", RegexOptions.Compiled);
+    private static readonly Regex SupplierRx = new(@"(SEBENZANI\s+TRADING(?:\s+622)?(?:\s*\(PTY\)\s*LTD)?|PROMED\s+TECHNOLOGIES(?:\s*\(PTY\)\s*LTD)?|ACCESS\s+MEDICAL(?:\s+SUPPLIES)?(?:\s*\(PTY\)\s*LTD)?|PHARMATECH(?:\s*\(PTY\)\s*LTD)?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CustomerRx = new(@"(?:SOLD\s+TO|BILL\s+TO|CUSTOMER|SHIP\s+TO|DELIVER(?:Y)?\s+TO)\s*[:.\-]?\s*\n?\s*([A-Z][A-Z0-9 &'.\-]{5,70}?(?:HOSPITAL|CLINIC|CENTRE|CENTER|DEPOT|HC|CHC|HEALTH[A-Z ]{0,30}|PHARMACY|STORES?))\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static string? NormalizeInvoice(string? raw)
     {
@@ -124,7 +164,12 @@ public static class PackAnalyzer
     public static string? NormalizeOrder(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
+        // Long hospital format first: PT-ORD/26-07-36872 → PTORD260736872 (letters + ORD + all digits).
+        var lm = LongOrderRx.Match(raw.ToUpperInvariant());
+        if (lm.Success && lm.Index == 0) return $"{lm.Groups[1].Value}ORD{lm.Groups[2].Value}{lm.Groups[3].Value}{lm.Groups[4].Value}";
         var s = Regex.Replace(raw.ToUpperInvariant(), @"[\s\-/.:#]", "");
+        var lm2 = Regex.Match(s, @"^([A-Z]{2,4})ORD(\d{7,10})$");
+        if (lm2.Success) return s;
         var m = Regex.Match(s, @"^([A-Z]{1,4})([0-9OQDILSBZGT]{5,8})$");
         if (m.Success)
         {
@@ -162,6 +207,17 @@ public static class PackAnalyzer
         return sb.ToString();
     }
 
+    /// <summary>"R5 865,60" / "77,601,00" / "21,180.65" → decimal. Last separator is the decimal point when 2 digits follow it.</summary>
+    public static decimal? Money(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        var t = Regex.Replace(s.ToUpperInvariant(), @"[R\s]", "");
+        var m = Regex.Match(t, @"^(.*?)[.,](\d{2})$");
+        if (!m.Success) return decimal.TryParse(Regex.Replace(t, @"[^\d]", ""), out var w) ? w : null;
+        var whole = Regex.Replace(m.Groups[1].Value, @"[^\d]", "");
+        return decimal.TryParse(whole + "." + m.Groups[2].Value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+    }
+
     // ───────── classification ─────────
 
     private record Sig(string Type, (string kw, double w)[] Keywords);
@@ -171,8 +227,8 @@ public static class PackAnalyzer
         new("INV", new[] { ("TAX INVOICE", 3.0), ("UNIT PRICE", 1.0), ("SUBTOTAL", 1.0), ("SUB TOTAL", 1.0), ("AMOUNT DUE", 1.5), ("VAT", .5), ("BANKING DETAILS", 1.0), ("BANK DETAILS", 1.0), ("ACCOUNT NUMBER", .3), ("PART DELIVERY", .5) }),
         // The Sage order-confirmation header is usually a graphic, so lean on its table layout:
         // Salesperson / Ship Via / Order Date / Ord. Shp. B/O columns / Order Discount / Total order.
-        new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("ORDER CONF", 2.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("TOTAL ORDER", 2.0), ("ORDER DISCOUNT", 1.5), ("SALESPERSON", 1.0), ("SHIP VIA", 1.0), ("ORDER DATE", 1.0), ("ORD. SHP", 1.5), ("ORD SHP", 1.5), ("SHP. B/O", 1.5), ("REFERENCE PO", .8), ("PO NUMBER", .5) }),
-        new("EML", new[] { ("GMAIL", 2.0), ("FROM:", 1.5), ("TO:", 1.0), ("SUBJECT", 1.5), ("SENT:", 1.0), ("@KZNHEALTH.GOV.ZA", 2.0), (".GOV.ZA", 1.0), ("@PROMEDTECHNOLOGIES", 1.5), ("@", .3), ("FORWARDED MESSAGE", 1.5), ("ATTACHMENT", .5), ("OUTLOOK", 1.5) }),
+        new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("ORDER CONF", 2.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("TOTAL ORDER", 2.0), ("ORDER DISCOUNT", 1.5), ("SALESPERSON", 1.0), ("SHIP VIA", 1.0), ("ORDER DATE", 1.0), ("ORD. SHP", 1.5), ("ORD SHP", 1.5), ("SHP. B/O", 1.5), ("REFERENCE PO", .8), ("PO NUMBER", .5), ("INCLUDED TAX", 1.5), ("REFERENCE", .5) }),
+        new("EML", new[] { ("GMAIL", 2.0), ("FROM:", 1.5), ("TO:", 1.0), ("SUBJECT", 1.5), ("SENT:", 1.0), ("@KZNHEALTH.GOV.ZA", 2.0), (".GOV.ZA", 1.0), ("@PROMEDTECHNOLOGIES", 1.5), ("@", .3), ("FORWARDED MESSAGE", 1.5), ("ATTACHMENT", .5), ("OUTLOOK", 1.5), ("@GMAIL.COM", 1.5), ("OUTLET ORDER NO", 1.0), ("CC:", .8), ("WROTE:", 1.0) }),
         new("PO",  new[] { ("KZN: HEALTH", 3.0), ("KZN HEALTH", 2.5), (": HEALTH", 2.0), ("ORDER\\SERVICE", 2.0), ("ORDER/SERVICE", 2.0), ("ORDER NO", 1.5), ("OFFICIAL ORDER", 2.5), ("AUTHORISATIONS", 2.0), ("GOVERNMENT CONTRACT", 2.0), ("PROVINCE OF", 1.0), ("DEPARTMENT OF HEALTH", 1.5), ("STORE NUMBER", 1.5), ("SUPPLIER NAME", 1.0), ("AMENDED ORDER", 1.5), ("CSD", .5), ("MAAA", .8), ("DELIVERY DATE", .5),
                            // other buyer layouts (B–G)
                            ("PURCHASE ORDER", 2.5), ("SUPPLIED BY", 1.5), ("ORDERED BY", 1.5), ("AUTHORISER", 1.5), ("EST. COST", 1.0),
@@ -216,6 +272,13 @@ public static class PackAnalyzer
         if (isOcHeader) { scores["INV"] = 0; scores["DN"] = 0; }
         // A page with order-confirmation structure but no invoice header is an OC, not an invoice.
         if (!isInvHeader && !isDnHeader && scores["OC"] >= 3.5) scores["INV"] = Math.Min(scores["INV"], 1.0);
+        // OC with a blank header band (title + ORD number lost in the scan): recognise it from the body alone —
+        // supplier letterhead + Reference / PO Number / Salesperson / Ship Via / Included Tax / Total order.
+        if (!isInvHeader && !isDnHeader && !isOcHeader && SupplierRx.IsMatch(collapsed))
+        {
+            var body = new[] { "REFERENCE", "PO NUMBER", "SALESPERSON", "SHIP VIA", "INCLUDED TAX", "TOTAL ORDER" }.Count(Has);
+            if (body >= 3) { scores["OC"] = Math.Max(scores["OC"], 3.0 + body * 0.5); r.Hits.Add("OC body (no header band)"); }
+        }
         var best = scores.OrderByDescending(kv => kv.Value).First();
         if (best.Value >= 1.5) { r.Type = best.Key; r.Confidence = Math.Min(1, best.Value / 5.0); }
 
@@ -246,6 +309,25 @@ public static class PackAnalyzer
         // then any prefixed token anywhere on the page (subject line, attachment name). Known province
         // prefixes (OR, GL) get extra weight. IN… / ORD… / customer / CSD / VAT numbers are excluded.
         var ords = new List<(string norm, string raw, double w)>();
+        // Long hospital numbers (PT-ORD/26-07-36872) anywhere on the page, and e-mail shorthand "-36872" lines
+        // that borrow the prefix of the nearest long number above them. Also bare numbers that follow a
+        // long number on the same line (attachment lists: "36831 36829 36904").
+        string? lastLongPrefix = null;
+        foreach (var line in collapsed.Split('\n'))
+        {
+            var any = false;
+            foreach (Match lm in LongOrderRx.Matches(line))
+            {
+                var n = NormalizeOrder(lm.Value); if (n == null) continue;
+                ords.Add((n, lm.Value.Trim(), 2.5)); any = true;
+                lastLongPrefix = $"{lm.Groups[1].Value.ToUpperInvariant()}ORD{lm.Groups[2].Value}{lm.Groups[3].Value}";
+            }
+            if (lastLongPrefix != null)
+            {
+                foreach (Match sm in ShorthandRx.Matches(line))
+                    ords.Add((lastLongPrefix + sm.Groups[1].Value, sm.Value.Trim(), 1.2));
+            }
+        }
         foreach (Match m in PoLabelRx.Matches(collapsed))
         {
             var tok = m.Groups[1].Value;
@@ -263,6 +345,24 @@ public static class PackAnalyzer
         }
         var bestOrd = ords.GroupBy(x => x.norm).OrderByDescending(g => g.Sum(x => x.w)).FirstOrDefault();
         if (bestOrd != null) { r.OrderNumber = bestOrd.Key; r.OrderNumberRaw = bestOrd.First().raw; }
+        // Every order the page mentions with reasonable weight (e-mails list several); used by the splitter.
+        r.OrderNumbers = ords.GroupBy(x => x.norm).Where(g => g.Sum(x => x.w) >= 1.0 || g.Key == r.OrderNumber).Select(g => g.Key).ToList();
+
+        // Sage line items (INV / DN / OC): item, description, Ord Shp B/O, unit price, amount.
+        foreach (Match m in SageLineRx.Matches(collapsed))
+        {
+            var li = new LineItem { ItemNumber = m.Groups[1].Value, Description = Regex.Replace(m.Groups[2].Value.Trim(), @"\s{2,}", " "), UnitPrice = Money(m.Groups[6].Value), Value = Money(m.Groups[7].Value) };
+            if (decimal.TryParse(m.Groups[3].Value, out var q1)) li.QtyOrdered = q1;
+            if (decimal.TryParse(m.Groups[4].Value, out var q2)) li.QtyShipped = q2;
+            if (decimal.TryParse(m.Groups[5].Value, out var q3)) li.QtyBackorder = q3;
+            // Sanity: ordered = shipped + backorder, or price × qty ≈ value; otherwise it is probably not a line.
+            var arith = (li.QtyOrdered == li.QtyShipped + li.QtyBackorder) || (li.UnitPrice is decimal price && li.Value is decimal v && (Math.Abs(price * (li.QtyShipped ?? 0) - v) < 0.05m || Math.Abs(price * (li.QtyOrdered ?? 0) - v) < 0.05m));
+            if (arith) r.Lines.Add(li);
+        }
+        var sup = SupplierRx.Match(collapsed);
+        if (sup.Success) r.Supplier = Regex.Replace(sup.Value.Trim(), @"\s+", " ");
+        var cu = CustomerRx.Match(collapsed);
+        if (cu.Success) r.Customer = Regex.Replace(cu.Groups[1].Value.Trim(), @"\s+", " ");
 
         var cm = CustRx.Match(collapsed);
         if (cm.Success) r.CustomerNumber = cm.Groups[1].Value;
@@ -272,7 +372,7 @@ public static class PackAnalyzer
         // Largest "total"-style amount on the page ≈ amount due incl. VAT.
         decimal? amt = null;
         foreach (Match m in AmountRx.Matches(collapsed))
-            if (decimal.TryParse(m.Groups[1].Value.Replace(" ", "").Replace(",", ""), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) && (amt == null || v > amt)) amt = v;
+            if (Money(m.Groups[1].Value) is decimal v && (amt == null || v > amt)) amt = v;
         r.AmountDue = amt;
 
         r.Signed = Regex.IsMatch(collapsed, @"RECEIVED\s+BY|SIGNATURE|SIGNED");
@@ -287,10 +387,20 @@ public static class PackAnalyzer
     public static Result Analyze(IList<string> pageTexts) => Analyze(pageTexts, null);
 
     /// <param name="barcodes">Per-page decoded barcode values (same index as <paramref name="pageTexts"/>), when available.</param>
-    public static Result Analyze(IList<string> pageTexts, IList<List<string>>? barcodes)
+    public static Result Analyze(IList<string> pageTexts, IList<List<string>>? barcodes) => Analyze(pageTexts, barcodes, null);
+
+    /// <param name="rotations">Per-page rotation applied by the OCR step (0/90/180/270), for the page report.</param>
+    /// <param name="shared">Per-page flag: page copied in from another pack of the same order.</param>
+    public static Result Analyze(IList<string> pageTexts, IList<List<string>>? barcodes, IList<int>? rotations, IList<bool>? shared = null)
     {
         var res = new Result();
-        for (var i = 0; i < pageTexts.Count; i++) res.Pages.Add(AnalyzePage(i + 1, pageTexts[i]));
+        for (var i = 0; i < pageTexts.Count; i++)
+        {
+            var pr = AnalyzePage(i + 1, pageTexts[i]);
+            if (rotations != null && i < rotations.Count) pr.Rotation = rotations[i];
+            if (shared != null && i < shared.Count) pr.Shared = shared[i];
+            res.Pages.Add(pr);
+        }
 
         var readable = res.Pages.Where(p => p.TextLength >= 40).ToList();
         if (readable.Count == 0)
@@ -355,6 +465,33 @@ public static class PackAnalyzer
         res.ConfirmationNumber = Vote(docs.Select(p => p.ConfirmationNumber));
         res.CustomerNumber = Vote(docs.Select(p => p.CustomerNumber));
         res.AmountDue = (inv ?? dn)?.AmountDue ?? docs.Where(p => p.Type is "INV" or "DN").Select(p => p.AmountDue).FirstOrDefault(a => a != null);
+        res.Supplier = Vote(docs.Where(p => p.Type is "INV" or "DN" or "OC").Select(p => p.Supplier)) ?? Vote(res.Pages.Select(p => p.Supplier));
+        res.Customer = Vote(docs.Where(p => p.Type is "INV").Select(p => p.Customer)) ?? Vote(docs.Select(p => p.Customer));
+        // Low confidence when the OC number was not read on the order confirmation itself (blank header band)
+        // but taken from a handwritten note on another document (typically "ORD 107040" written on the PO).
+        var ocHasConf = docs.Any(p => p.Type == "OC" && p.ConfirmationNumber == res.ConfirmationNumber);
+        res.ConfirmationLowConfidence = res.ConfirmationNumber != null && !ocHasConf && docs.Any(p => p.Type == "OC");
+        if (res.ConfirmationLowConfidence) res.Warnings.Add($"Order confirmation number {res.ConfirmationNumber} was not readable on the confirmation itself — taken from a handwritten note; check it on the paper copy.");
+
+        // Lines: the order confirmation carries the full order (Ord / Shp / B-O); the invoice carries what was shipped.
+        var ocPage = docs.Where(p => p.Type == "OC").OrderByDescending(p => p.Lines.Count).FirstOrDefault();
+        var lineSrc = (ocPage?.Lines.Count ?? 0) > 0 ? ocPage! : (inv?.Lines.Count ?? 0) > 0 ? inv! : (dn?.Lines.Count ?? 0) > 0 ? dn! : null;
+        if (lineSrc != null)
+        {
+            foreach (var l in lineSrc.Lines)
+            {
+                var li = new LineItem { ItemNumber = l.ItemNumber, Description = l.Description, QtyOrdered = l.QtyOrdered, QtyShipped = l.QtyShipped, QtyBackorder = l.QtyBackorder, UnitPrice = l.UnitPrice, Value = l.Value };
+                // Shipped / back-order from the DN or INV override the OC when the same item is on them.
+                var shipped = (inv ?? dn)?.Lines.FirstOrDefault(x => x.ItemNumber == l.ItemNumber && lineSrc.Type == "OC");
+                if (shipped != null) { li.QtyShipped = shipped.QtyShipped; li.QtyBackorder = shipped.QtyBackorder; }
+                res.Lines.Add(li);
+            }
+        }
+        res.InvoiceTotal = inv?.AmountDue ?? dn?.AmountDue;
+        res.OrderTotal = ocPage?.AmountDue ?? docs.Where(p => p.Type == "PO" && p.OfficialOrder?.Total2 != null).Select(p => p.OfficialOrder!.Total2).FirstOrDefault();
+        var bo = res.Lines.Where(l => l.QtyBackorder > 0 && l.UnitPrice != null).Sum(l => l.QtyBackorder!.Value * l.UnitPrice!.Value);
+        if (bo > 0) res.OutstandingValue = Math.Round(bo * (res.OrderTotal is decimal ot && res.Lines.Sum(l => l.Value ?? 0) > 0 && Math.Abs(ot - res.Lines.Sum(l => l.Value ?? 0) * 1.15m) < 1m ? 1.15m : 1m), 2);
+        else if (res.PartDelivery && res.OrderTotal is decimal o && res.InvoiceTotal is decimal it && o > it) res.OutstandingValue = Math.Round(o - it, 2);
 
         // H1 — minimum documents
         var h1 = res.TypesFound.Count >= 4;
@@ -387,13 +524,16 @@ public static class PackAnalyzer
         else { h2 = dn.InvoiceNumber == inv.InvoiceNumber; d2 = h2 ? $"Both read {inv.InvoiceNumber}." : $"Invoice mismatch: DN={dn.InvoiceNumber} INV={inv.InvoiceNumber}."; }
         res.Rules.Add(new RuleResult { Code = "H2", Title = "Delivery note and invoice carry the same invoice number", Pass = h2, Detail = d2 });
 
-        // H3 — order number agreement across ≥3 documents
+        // H3 — order number agreement across ≥3 documents. A page that lists several orders (an e-mail covering
+        // two orders, an attachment list) agrees when any of them is the pack's order.
         var withOrder = docs.Where(p => p.OrderNumber != null).ToList();
+        var packOrder = res.OrderNumber ?? withOrder.Select(p => p.OrderNumber!).GroupBy(o => o).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
+        var disagree = withOrder.Where(p => p.OrderNumber != packOrder && !(p.OrderNumbers?.Contains(packOrder ?? "") ?? false)).ToList();
         var distinct = withOrder.Select(p => p.OrderNumber!).Distinct().ToList();
         bool h3; string d3;
         if (withOrder.Count < 3) { h3 = false; d3 = $"Order number found on only {withOrder.Count} document(s); need at least 3."; }
-        else if (distinct.Count > 1) { h3 = false; d3 = "Order number mismatch: " + string.Join("; ", withOrder.Select(p => $"{TypeNames[p.Type]} (p{p.Page}) = {p.OrderNumberRaw}")); }
-        else { h3 = true; d3 = $"{withOrder.Count} documents agree on {distinct[0]}."; }
+        else if (disagree.Count > 0) { h3 = false; d3 = "Order number mismatch: " + string.Join("; ", withOrder.Select(p => $"{TypeNames[p.Type]} (p{p.Page}) = {p.OrderNumberRaw}")); }
+        else { h3 = true; d3 = distinct.Count > 1 ? $"{withOrder.Count} documents agree on {packOrder} (one page also lists other orders)." : $"{withOrder.Count} documents agree on {distinct[0]}."; }
         res.Rules.Add(new RuleResult { Code = "H3", Title = "Order number agrees across the pack", Pass = h3, Detail = d3 });
 
         // Soft checks → warnings
@@ -402,8 +542,10 @@ public static class PackAnalyzer
         var custs = docs.Where(p => p.CustomerNumber != null).Select(p => p.CustomerNumber!).Distinct().ToList();
         if (custs.Count > 1) res.Warnings.Add("Customer number differs between documents: " + string.Join(", ", custs) + ".");
         if (dn != null && !res.ProofOfDelivery) res.Warnings.Add("No 'Received by' signature or receiving stamp could be read on the delivery note — check the paper copy.");
-        if (res.PartDelivery) res.Notes.Add("Marked as a part delivery — the balance is on back-order.");
+        if (res.PartDelivery) res.Notes.Add("Marked as a part delivery — the balance is on back-order." + (res.OutstandingValue is decimal ov ? $" Outstanding ≈ R {ov:N2}." : ""));
         if (res.Amended) res.Notes.Add("Amended order in the pack — amended values apply.");
+        var sharedPages = res.Pages.Where(p => p.Shared).Select(p => p.Page).ToList();
+        if (sharedPages.Count > 0) res.Notes.Add($"Page{(sharedPages.Count > 1 ? "s" : "")} {string.Join(", ", sharedPages)} shared from another invoice of the same order.");
 
         // Official-order detail → pack-level fields, warnings and REVIEW triggers.
         var poDoc = docs.Where(p => p.Type == "PO" && p.OfficialOrder != null).OrderByDescending(p => p.Amended).FirstOrDefault();

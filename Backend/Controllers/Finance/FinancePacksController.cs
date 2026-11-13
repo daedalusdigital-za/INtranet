@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
 using iText.IO.Image;
@@ -646,21 +646,57 @@ public class FinancePacksController : ControllerBase
         return Ok(new { pack = Dto(p) });
     }
 
-    // ───────────────────────── multi-pack batch (one scan, many packs) ─────────────────────────
+    // ───────────────────────── multi-pack batch (many files → many packs) ─────────────────────────
 
-    private const int BatchMaxPages = 150;
+    private const int BatchMaxPages = 200;
+    private const int BatchMaxFiles = 40;
 
     private string BatchDir(string batchId) => Path.Combine(_root, "finance", "packs", "_batches", batchId);
+
+    private class BatchFile
+    {
+        public int Index { get; set; }
+        public string Name { get; set; } = "";
+        public string ContentType { get; set; } = "";
+        public string StoredName { get; set; } = "";
+        public bool IsPdf { get; set; }
+        /// <summary>OK | ERROR</summary>
+        public string Status { get; set; } = "OK";
+        public string? Error { get; set; }
+        public string Method { get; set; } = "none";
+        public int PageCount { get; set; }
+        /// <summary>Global page number of this file's first page.</summary>
+        public int FirstPage { get; set; }
+    }
+
+    private class BatchPage
+    {
+        public int Number { get; set; }
+        public int FileIndex { get; set; }
+        public int PageInFile { get; set; }
+        public string Text { get; set; } = "";
+        public List<string> Barcodes { get; set; } = new();
+        public int Rotation { get; set; }
+        public double Skew { get; set; }
+        public bool Enhanced { get; set; }
+        public double Confidence { get; set; }
+        public string? ImagePath { get; set; }
+        public bool HasWords { get; set; }
+    }
 
     private class BatchState
     {
         public string FileName { get; set; } = "";
         public string Method { get; set; } = "none";
         public int PageCount { get; set; }
-        public List<string> Pages { get; set; } = new();
-        public List<List<string>>? Barcodes { get; set; }
+        public List<BatchFile> Files { get; set; } = new();
+        public List<BatchPage> Pages { get; set; } = new();
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public int CreatedBy { get; set; }
+
+        public List<string> Texts => Pages.Select(p => p.Text).ToList();
+        public List<List<string>> Codes(IEnumerable<int> nums) => nums.Select(n => Pages[n - 1].Barcodes).ToList();
+        public List<int> Rots(IEnumerable<int> nums) => nums.Select(n => Pages[n - 1].Rotation).ToList();
     }
 
     private static readonly System.Text.Json.JsonSerializerOptions BatchJson = new() { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
@@ -673,68 +709,252 @@ public class FinancePacksController : ControllerBase
         try { return System.Text.Json.JsonSerializer.Deserialize<BatchState>(await System.IO.File.ReadAllTextAsync(f), BatchJson); } catch { return null; }
     }
 
-    private object BatchDto(string batchId, BatchState st, PackSplitter.Result split, List<string>? thumbs)
+    private static PackSplitter.Result RunSplit(BatchState st) =>
+        PackSplitter.Split(st.Pages.Select(p => new PackSplitter.Input(p.Text, p.Barcodes, p.Rotation, p.FileIndex, st.Files[p.FileIndex].Name, p.PageInFile)).ToList());
+
+    /// <summary>Per-pack record in the shape the finance team asked for (also what the summary table / CSV is built from).</summary>
+    private static object PackRecord(string packId, PackSplitter.Group g, BatchState st, string? status = null, string? error = null)
     {
-        string? Thumb(int n)
+        var a = g.Analysis;
+        var found = a?.TypesFound ?? g.Pages.Select(n => st.Pages[n - 1]).Select(p => PackAnalyzer.AnalyzePage(p.Number, p.Text).Type).Where(t => t != "UNK").Distinct().ToList();
+        var all = new[] { "DN", "INV", "OC", "EML", "PO" };
+        var missing = a?.TypesMissing ?? all.Where(t => !found.Contains(t)).ToList();
+        var pageTypes = new Dictionary<int, string>();
+        if (a != null) foreach (var p in a.Pages) { var idx = Math.Clamp(p.Page - 1, 0, g.Pages.Count - 1); pageTypes[g.Pages[idx]] = p.Type; }
+        return new
         {
-            if (thumbs == null || n - 1 >= thumbs.Count) return null;
-            try { return "data:image/png;base64," + Convert.ToBase64String(System.IO.File.ReadAllBytes(thumbs[n - 1])); } catch { return null; }
+            pack_id = packId,
+            source_files = g.SourceFiles,
+            status = status ?? (error != null ? "ERROR" : a?.Status ?? "UNKNOWN"),
+            error,
+            confidence = g.Confidence,
+            needs_review = g.NeedsReview,
+            documents_found = found, documents_missing = missing, doc_count = $"{found.Count} of {all.Length}",
+            invoice_number = g.InvoiceNumber, order_number = g.OrderNumber, oc_number = g.ConfirmationNumber, customer_number = g.CustomerNumber,
+            supplier = g.Supplier, customer = a?.Customer,
+            lines = a?.Lines.Select(l => new { item_number = l.ItemNumber, description = l.Description, qty_ordered = l.QtyOrdered, qty_shipped = l.QtyShipped, qty_backorder = l.QtyBackorder, unit_price = l.UnitPrice }).ToList(),
+            invoice_total = a?.InvoiceTotal ?? a?.AmountDue, order_total = a?.OrderTotal, outstanding_value = a?.OutstandingValue,
+            hard_rules = a?.Rules.ToDictionary(r => r.Code, r => new { result = r.Pass ? "pass" : "fail", r.Title, r.Detail }),
+            warnings = (a?.Warnings ?? new()).Concat(g.Reasons).Distinct().ToList(),
+            pages = g.Pages.Select(n => new { page = n, file = st.Files[st.Pages[n - 1].FileIndex].Name, page_in_file = st.Pages[n - 1].PageInFile, type = pageTypes.GetValueOrDefault(n, "UNK"), rotation = st.Pages[n - 1].Rotation, confidence = st.Pages[n - 1].Confidence, shared = g.SharedPages.Contains(n) }).ToList(),
+        };
+    }
+
+    private object BatchDto(string batchId, BatchState st, PackSplitter.Result split)
+    {
+        string? Thumb(BatchPage p)
+        {
+            if (p.ImagePath == null || !System.IO.File.Exists(p.ImagePath)) return null;
+            try
+            {
+                var thumb = Path.Combine(Path.GetDirectoryName(p.ImagePath)!, Path.GetFileNameWithoutExtension(p.ImagePath) + "_t.png");
+                if (!System.IO.File.Exists(thumb))
+                {
+                    using var im = SixLabors.ImageSharp.Image.Load(p.ImagePath);
+                    var scale = Math.Min(1.0, 320.0 / Math.Max(im.Width, im.Height));
+                    var (tw, th) = ((int)(im.Width * scale), (int)(im.Height * scale));
+                    if (scale < 1) SixLabors.ImageSharp.Processing.ProcessingExtensions.Mutate(im, x => SixLabors.ImageSharp.Processing.ResizeExtensions.Resize(x, tw, th));
+                    SixLabors.ImageSharp.ImageExtensions.SaveAsPng(im, thumb);
+                }
+                return "data:image/png;base64," + Convert.ToBase64String(System.IO.File.ReadAllBytes(thumb));
+            }
+            catch { return null; }
         }
         return new
         {
             batchId, fileName = st.FileName, method = st.Method, pageCount = st.PageCount,
-            pages = split.Pages.Select(p => new { p.Number, p.Type, typeName = PackAnalyzer.TypeNames.GetValueOrDefault(p.Type, "Unrecognised"), p.Confidence, p.InvoiceNumber, p.OrderNumber, p.ConfirmationNumber, p.CustomerNumber, p.Date, p.TextLength, p.Continuation, p.Reason, thumb = Thumb(p.Number) }).ToList(),
-            groups = split.Groups.Select(g => new { g.Index, g.Pages, g.InvoiceNumber, g.OrderNumber, g.ConfirmationNumber, g.CustomerNumber, g.Confidence, g.Reasons, g.Analysis, company = GuessCompanyFromText(string.Join("\n", g.Pages.Select(n => n - 1 < st.Pages.Count ? st.Pages[n - 1] : ""))) }).ToList(),
-            unassigned = split.Unassigned, notes = split.Notes,
+            files = st.Files.Select(f => new { f.Index, f.Name, f.Status, f.Error, f.Method, f.PageCount, f.FirstPage }).ToList(),
+            pages = split.Pages.Select(p => new
+            {
+                p.Number, p.FileIndex, p.FileName, p.PageInFile, p.Type, typeName = PackAnalyzer.TypeNames.GetValueOrDefault(p.Type, "Unrecognised"), p.Confidence,
+                p.InvoiceNumber, p.OrderNumber, p.OrderNumbers, p.ConfirmationNumber, p.CustomerNumber, p.Supplier, p.Date, p.TextLength, p.Continuation, p.Reason, p.Groups,
+                p.Rotation, ocrConfidence = st.Pages[p.Number - 1].Confidence, enhanced = st.Pages[p.Number - 1].Enhanced, hasImage = st.Pages[p.Number - 1].ImagePath != null, hasWords = st.Pages[p.Number - 1].HasWords,
+                thumb = Thumb(st.Pages[p.Number - 1]),
+            }).ToList(),
+            groups = split.Groups.Select(g => new
+            {
+                g.Index, g.Pages, g.SharedPages, g.SourceFiles, g.InvoiceNumber, g.OrderNumber, g.ConfirmationNumber, g.CustomerNumber, g.Supplier, g.Confidence, g.NeedsReview, g.Reasons, g.Analysis,
+                company = GuessCompanyFromText(string.Join("\n", g.Pages.Select(n => st.Pages[n - 1].Text))),
+                record = PackRecord($"draft-{g.Index + 1}", g, st),
+            }).ToList(),
+            unassigned = split.Unassigned,
+            unassignedReasons = split.Unassigned.Select(n => new { page = n, reason = split.Pages[n - 1].Reason }).ToList(),
+            splitLog = split.SplitLog, notes = split.Notes,
             ocrAvailable = ServerOcrService.IsAvailable,
-            // Trimmed per-page text so the dialog can hand it to "Ask Welly" per group without a second OCR run.
-            pageTexts = st.Pages.Select(t => t.Length > 3000 ? t[..3000] : t).ToList(),
+            pageTexts = st.Pages.Select(p => p.Text.Length > 3000 ? p.Text[..3000] : p.Text).ToList(),
         };
     }
 
     /// <summary>
-    /// Upload one scan that holds several packs. Every page is read and classified, the pages are grouped into
-    /// packs by the numbers they carry (invoice / order / confirmation) and by document order, and page
-    /// thumbnails are rendered so the user can check and re-arrange the grouping before committing.
-    /// The source PDF is kept server-side under the returned batchId until commit (or delete).
+    /// Upload one or many files (PDF / JPG / PNG) that together hold several packs. Files are processed in
+    /// parallel — each page is straightened, OCR'd (with word positions and confidence) and classified; a file
+    /// that cannot be read is marked ERROR and the rest of the batch carries on. Pages are then grouped into
+    /// one pack per invoice, supporting documents attached by order number (shared when the same order was
+    /// invoiced more than once), and everything is kept server-side under the returned batchId until commit.
     /// </summary>
     [HttpPost("batch")]
-    [RequestSizeLimit(200_000_000)]
-    public async Task<IActionResult> BatchDetect([FromForm] IFormFile file, [FromServices] ServerOcrService ocr)
+    [RequestSizeLimit(400_000_000)]
+    public async Task<IActionResult> BatchDetect([FromForm] List<IFormFile> files, [FromServices] ServerOcrService ocr)
     {
-        if (file == null || file.Length == 0) return BadRequest(new { error = "No file." });
-        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (ext != ".pdf") return BadRequest(new { error = "A multi-pack scan must be a PDF." });
+        files = (files ?? new()).Where(f => f != null && f.Length > 0).ToList();
+        if (files.Count == 0) return BadRequest(new { error = "No files." });
+        if (files.Count > BatchMaxFiles) return BadRequest(new { error = $"At most {BatchMaxFiles} files per batch." });
+        foreach (var f in files)
+        {
+            var ext = Path.GetExtension(f.FileName).ToLowerInvariant();
+            if (ext is not (".pdf" or ".jpg" or ".jpeg" or ".png")) return BadRequest(new { error = $"{f.FileName}: only PDF, JPG or PNG." });
+        }
 
         var batchId = Guid.NewGuid().ToString("N");
         var dir = BatchDir(batchId);
-        Directory.CreateDirectory(dir);
-        var src = Path.Combine(dir, "source.pdf");
-        await using (var fs = System.IO.File.Create(src)) await file.CopyToAsync(fs);
-
-        var pageCount = PdfPages(src);
-        if (pageCount == 0) { try { Directory.Delete(dir, true); } catch { } return BadRequest(new { error = "The PDF could not be opened." }); }
-        if (pageCount > BatchMaxPages) { try { Directory.Delete(dir, true); } catch { } return BadRequest(new { error = $"Too many pages ({pageCount}). Split the scan into batches of at most {BatchMaxPages} pages." }); }
-
-        var (pages, method, codes) = await PageTextsAsync(src, "application/pdf", ocr, BatchMaxPages);
-        while (pages.Count < pageCount) pages.Add("");
-        var st = new BatchState { FileName = file.FileName, Method = method, PageCount = pageCount, Pages = pages, Barcodes = codes, CreatedBy = UserId };
-        await System.IO.File.WriteAllTextAsync(Path.Combine(dir, "pages.json"), System.Text.Json.JsonSerializer.Serialize(st, BatchJson));
-
-        List<string>? thumbs = null;
-        if (ServerOcrService.CanRenderPdf)
+        Directory.CreateDirectory(Path.Combine(dir, "files"));
+        var st = new BatchState { FileName = files.Count == 1 ? files[0].FileName : $"{files.Count} files", CreatedBy = UserId };
+        for (var i = 0; i < files.Count; i++)
         {
-            try { thumbs = await ocr.RenderThumbnailsAsync(src, Path.Combine(dir, "thumbs"), 320); }
-            catch (Exception ex) { _log.LogWarning(ex, "Batch thumbnails failed for {Batch}", batchId); }
+            var ext = Path.GetExtension(files[i].FileName).ToLowerInvariant();
+            var bf = new BatchFile { Index = i, Name = Path.GetFileName(files[i].FileName), ContentType = files[i].ContentType, StoredName = $"f{i:D2}{ext}", IsPdf = ext == ".pdf" };
+            await using (var fs = System.IO.File.Create(Path.Combine(dir, "files", bf.StoredName))) await files[i].CopyToAsync(fs);
+            st.Files.Add(bf);
         }
 
-        var split = PackSplitter.Split(pages, codes);
-        return Ok(BatchDto(batchId, st, split, thumbs));
+        // Read every file in parallel (bounded — tesseract is CPU-heavy); failures stay with their file.
+        var perFile = new List<BatchPage>[st.Files.Count];
+        var gate = new SemaphoreSlim(Math.Clamp(Environment.ProcessorCount / 2, 1, 4));
+        await Task.WhenAll(st.Files.Select(async bf =>
+        {
+            await gate.WaitAsync();
+            try { perFile[bf.Index] = await ReadBatchFileAsync(bf, dir, ocr); }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Batch file {File} failed", bf.Name);
+                bf.Status = "ERROR"; bf.Error = ex.Message; perFile[bf.Index] = new List<BatchPage>();
+            }
+            finally { gate.Release(); }
+        }));
+
+        var n = 0;
+        foreach (var bf in st.Files)
+        {
+            bf.FirstPage = n + 1;
+            foreach (var p in perFile[bf.Index]) { p.Number = ++n; p.FileIndex = bf.Index; st.Pages.Add(p); }
+            bf.PageCount = perFile[bf.Index].Count;
+        }
+        st.PageCount = n;
+        if (n == 0)
+        {
+            var why = string.Join("; ", st.Files.Where(f => f.Error != null).Select(f => $"{f.Name}: {f.Error}"));
+            try { Directory.Delete(dir, true); } catch { }
+            return BadRequest(new { error = "No pages could be read. " + why });
+        }
+        if (n > BatchMaxPages) { try { Directory.Delete(dir, true); } catch { } return BadRequest(new { error = $"Too many pages ({n}). Split the scan into batches of at most {BatchMaxPages} pages." }); }
+        st.Method = st.Files.Any(f => f.Method == "ocr") ? "ocr" : st.Files.Any(f => f.Method == "text") ? "text" : "none";
+        await System.IO.File.WriteAllTextAsync(Path.Combine(dir, "pages.json"), System.Text.Json.JsonSerializer.Serialize(st, BatchJson));
+
+        return Ok(BatchDto(batchId, st, RunSplit(st)));
+    }
+
+    /// <summary>Read one file of a batch: text layer when the PDF has one, else OCR (deskew / contrast / word boxes). Page previews are kept for the viewer.</summary>
+    private async Task<List<BatchPage>> ReadBatchFileAsync(BatchFile bf, string dir, ServerOcrService ocr)
+    {
+        var src = Path.Combine(dir, "files", bf.StoredName);
+        var imgDir = Path.Combine(dir, "images", $"f{bf.Index:D2}");
+        var wordsDir = Path.Combine(dir, "words");
+        Directory.CreateDirectory(wordsDir);
+        var pages = new List<BatchPage>();
+
+        if (bf.IsPdf)
+        {
+            var count = PdfPages(src);
+            if (count == 0) throw new InvalidOperationException("The PDF could not be opened (damaged or password-protected).");
+            if (count > BatchMaxPages) throw new InvalidOperationException($"Too many pages ({count}).");
+            var texts = new List<string>();
+            try
+            {
+                using var pdf = new PdfDocument(new PdfReader(src));
+                for (var i = 1; i <= count; i++) texts.Add(PdfTextExtractor.GetTextFromPage(pdf.GetPage(i)) ?? "");
+            }
+            catch { texts.Clear(); }
+            var readable = texts.Count(t => t.Trim().Length >= 40);
+            if (texts.Count == count && readable >= Math.Max(1, count / 2))
+            {
+                bf.Method = "text";
+                List<string>? imgs = null;
+                if (ServerOcrService.CanRenderPdf) { try { imgs = await ocr.RenderThumbnailsAsync(src, imgDir, 1400); } catch (Exception ex) { _log.LogDebug(ex, "Render failed for {File}", bf.Name); } }
+                for (var i = 0; i < count; i++)
+                    pages.Add(new BatchPage { PageInFile = i + 1, Text = texts[i], Confidence = 1, ImagePath = imgs != null && i < imgs.Count ? imgs[i] : null });
+                return pages;
+            }
+            if (!ServerOcrService.IsAvailable)
+            {
+                // No OCR on this host: keep the pages (so nothing is lost) but say so.
+                bf.Method = "none";
+                for (var i = 0; i < count; i++) pages.Add(new BatchPage { PageInFile = i + 1, Text = i < texts.Count ? texts[i] : "" });
+                bf.Error = "Scanned PDF but OCR is not available on the server.";
+                return pages;
+            }
+        }
+        else if (!ServerOcrService.IsAvailable)
+        {
+            bf.Method = "none"; bf.Error = "OCR is not available on the server.";
+            Directory.CreateDirectory(imgDir);
+            var dest = Path.Combine(imgDir, "p001.png");
+            using (var im = await SixLabors.ImageSharp.Image.LoadAsync(src)) await SixLabors.ImageSharp.ImageExtensions.SaveAsPngAsync(im, dest);
+            pages.Add(new BatchPage { PageInFile = 1, ImagePath = dest });
+            return pages;
+        }
+
+        bf.Method = "ocr";
+        var ocrPages = await ocr.ExtractPackPagesAsync(src, bf.ContentType, BatchMaxPages, imgDir);
+        for (var i = 0; i < ocrPages.Count; i++)
+        {
+            var op = ocrPages[i];
+            var bp = new BatchPage { PageInFile = i + 1, Text = op.Text, Barcodes = op.Barcodes, Rotation = op.Rotation, Skew = op.Skew, Enhanced = op.Enhanced, Confidence = op.Confidence, ImagePath = op.ImagePath, HasWords = op.Words.Count > 0 };
+            if (op.Words.Count > 0)
+            {
+                try { await System.IO.File.WriteAllTextAsync(Path.Combine(wordsDir, $"f{bf.Index:D2}_p{i + 1:D3}.json"), System.Text.Json.JsonSerializer.Serialize(op.Words, BatchJson)); }
+                catch { bp.HasWords = false; }
+            }
+            pages.Add(bp);
+        }
+        return pages;
+    }
+
+    /// <summary>Full-size preview of one page (straightened, as OCR saw it) for the viewer.</summary>
+    [HttpGet("batch/{batchId}/page/{n:int}/image")]
+    public async Task<IActionResult> BatchPageImage(string batchId, int n)
+    {
+        var st = await LoadBatchAsync(batchId);
+        if (st == null || n < 1 || n > st.PageCount) return NotFound();
+        var p = st.Pages[n - 1];
+        if (p.ImagePath == null || !System.IO.File.Exists(p.ImagePath)) return NotFound(new { error = "No preview for this page." });
+        return PhysicalFile(p.ImagePath, "image/png");
+    }
+
+    /// <summary>OCR words of one page (text, confidence, box as fractions of the page) so the viewer can highlight extracted fields.</summary>
+    [HttpGet("batch/{batchId}/page/{n:int}/words")]
+    public async Task<IActionResult> BatchPageWords(string batchId, int n)
+    {
+        var st = await LoadBatchAsync(batchId);
+        if (st == null || n < 1 || n > st.PageCount) return NotFound();
+        var p = st.Pages[n - 1];
+        var f = Path.Combine(BatchDir(batchId), "words", $"f{p.FileIndex:D2}_p{p.PageInFile:D3}.json");
+        if (!p.HasWords || !System.IO.File.Exists(f)) return Ok(new { words = Array.Empty<object>(), text = p.Text });
+        return Content("{\"text\":" + System.Text.Json.JsonSerializer.Serialize(p.Text) + ",\"words\":" + await System.IO.File.ReadAllTextAsync(f) + "}", "application/json");
+    }
+
+    /// <summary>Re-run the grouping for the whole batch (same result as the upload; handy after the page expired on the client).</summary>
+    [HttpGet("batch/{batchId}")]
+    public async Task<IActionResult> BatchGet(string batchId)
+    {
+        var st = await LoadBatchAsync(batchId);
+        if (st == null) return NotFound(new { error = "This batch has expired — upload the scan again." });
+        return Ok(BatchDto(batchId, st, RunSplit(st)));
     }
 
     public class BatchGroupForm
     {
         public List<int> Pages { get; set; } = new();
+        public List<int>? SharedPages { get; set; }
         public string InvoiceNumber { get; set; } = "";
         public string? OrderNumber { get; set; }
         public string? ConfirmationNumber { get; set; }
@@ -754,20 +974,63 @@ public class FinancePacksController : ControllerBase
         if (st == null) return NotFound(new { error = "This batch has expired — upload the scan again." });
         var valid = (pages ?? new()).Where(n => n >= 1 && n <= st.PageCount).Distinct().OrderBy(n => n).ToList();
         if (valid.Count == 0) return BadRequest(new { error = "No pages." });
-        var texts = valid.Select(n => st.Pages[n - 1]).ToList();
-        var codes = st.Barcodes == null ? null : valid.Select(n => n - 1 < st.Barcodes.Count ? st.Barcodes[n - 1] : new List<string>()).ToList();
-        var a = PackAnalyzer.Analyze(texts, codes);
+        var texts = valid.Select(n => st.Pages[n - 1].Text).ToList();
+        var a = PackAnalyzer.Analyze(texts, st.Codes(valid), st.Rots(valid));
         var company = GuessCompanyFromText(string.Join("\n", texts));
         var inv = a.InvoiceNumber;
         var sage = inv != null ? await SageLookupAsync(inv, company) : null;
         var existing = inv == null ? new() : await _db.InvoicePacks.AsNoTracking().Where(p => p.InvoiceNumber == inv).Select(p => new { p.Id, p.PackNumber, p.UploadedAt }).ToListAsync();
-        return Ok(new { analysis = a, invoiceNumber = inv, orderNumber = a.OrderNumber, confirmationNumber = a.ConfirmationNumber, customerNumber = a.CustomerNumber, company = company ?? sage?.company, sage, existingPacks = existing });
+        var g = new PackSplitter.Group { Pages = valid, InvoiceNumber = inv, OrderNumber = a.OrderNumber, ConfirmationNumber = a.ConfirmationNumber, CustomerNumber = a.CustomerNumber, Supplier = a.Supplier, Analysis = a, SourceFiles = valid.Select(n => st.Files[st.Pages[n - 1].FileIndex].Name).Distinct().ToList(), Confidence = inv != null ? "medium" : "low" };
+        return Ok(new { analysis = a, invoiceNumber = inv, orderNumber = a.OrderNumber, confirmationNumber = a.ConfirmationNumber, customerNumber = a.CustomerNumber, supplier = a.Supplier, company = company ?? sage?.company, sage, existingPacks = existing, record = PackRecord("draft", g, st) });
     }
 
+    /// <summary>Write the chosen pages (from any of the batch's files, in the order given) into one PDF.</summary>
+    private static void AssemblePagesPdf(BatchState st, string dir, List<int> pages, string outPath)
+    {
+        var readers = new Dictionary<int, PdfDocument>();
+        try
+        {
+            using var writer = new PdfDocument(new PdfWriter(outPath));
+            foreach (var n in pages)
+            {
+                var bp = st.Pages[n - 1];
+                var bf = st.Files[bp.FileIndex];
+                var src = Path.Combine(dir, "files", bf.StoredName);
+                if (bf.IsPdf)
+                {
+                    if (!readers.TryGetValue(bf.Index, out var r)) { r = new PdfDocument(new PdfReader(src)); readers[bf.Index] = r; }
+                    r.CopyPagesTo(bp.PageInFile, bp.PageInFile, writer);
+                }
+                else
+                {
+                    // Image → one A4 page, scaled to fit, rotated upright when OCR found it on its side.
+                    using var ms = new MemoryStream();
+                    using (var w = new PdfWriter(ms)) using (var tmpPdf = new PdfDocument(w))
+                    {
+                        var size = iText.Kernel.Geom.PageSize.A4;
+                        tmpPdf.SetDefaultPageSize(size);
+                        using var doc = new Document(tmpPdf, size, false);
+                        doc.SetMargins(18, 18, 18, 18);
+                        var img = new Image(ImageDataFactory.Create(src));
+                        if (bp.Rotation != 0) img.SetRotationAngle(-bp.Rotation * Math.PI / 180);
+                        img.SetAutoScale(true);
+                        doc.Add(img);
+                    }
+                    using var one = new PdfDocument(new PdfReader(new MemoryStream(ms.ToArray())));
+                    one.CopyPagesTo(1, one.GetNumberOfPages(), writer);
+                }
+            }
+        }
+        finally { foreach (var r in readers.Values) { try { r.Close(); } catch { } } }
+    }
+
+    private static string SafeFilePart(string? s) => string.IsNullOrWhiteSpace(s) ? "unknown" : Regex.Replace(s.Trim(), @"[^A-Za-z0-9\-]+", "-").Trim('-');
+
     /// <summary>
-    /// Save the groups as packs: each group's pages are cut out of the source PDF into their own file
-    /// (in the order given), analysed, and stored as a pack with Source = "Batch". Groups are independent —
-    /// one failing (e.g. duplicate invoice) does not stop the others; failures come back per group.
+    /// Save the groups as packs: each group's pages are cut out of the source files into their own PDF named
+    /// Pack_&lt;invoice&gt;_&lt;order&gt;.pdf (pages shared with another pack are copied into both), analysed, and stored
+    /// with Source = "Batch". Groups are independent — one failing (e.g. duplicate invoice) does not stop the
+    /// others; failures come back per group. A split log and the per-pack records are returned for export.
     /// </summary>
     [HttpPost("batch/{batchId}/commit")]
     public async Task<IActionResult> BatchCommit(string batchId, [FromBody] BatchCommitForm form)
@@ -775,29 +1038,31 @@ public class FinancePacksController : ControllerBase
         var st = await LoadBatchAsync(batchId);
         if (st == null) return NotFound(new { error = "This batch has expired — upload the scan again." });
         if (form.Groups.Count == 0) return BadRequest(new { error = "Nothing to save." });
-        var src = Path.Combine(BatchDir(batchId), "source.pdf");
-        if (!System.IO.File.Exists(src)) return NotFound(new { error = "The batch file is missing on the server." });
+        var dir = BatchDir(batchId);
 
         var saved = new List<object>();
         var errors = new List<object>();
-        var usedPages = new HashSet<int>();
+        var records = new List<object>();
+        var owner = new Dictionary<int, int>(); // page → group index that holds it exclusively
+        var sharedAll = new HashSet<int>(form.Groups.SelectMany(g => g.SharedPages ?? new()));
         for (var gi = 0; gi < form.Groups.Count; gi++)
         {
             var g = form.Groups[gi];
             var pages = g.Pages.Where(n => n >= 1 && n <= st.PageCount).Distinct().ToList();
-            if (pages.Count == 0) { errors.Add(new { index = gi, error = "No pages in this pack." }); continue; }
-            var clash = pages.FirstOrDefault(usedPages.Contains);
-            if (clash != 0) { errors.Add(new { index = gi, error = $"Page {clash} is already used by another pack." }); continue; }
+            var splitGroup = new PackSplitter.Group { Index = gi, Pages = pages, SharedPages = (g.SharedPages ?? new()).Where(pages.Contains).ToList(), InvoiceNumber = NormalizeInvoice(g.InvoiceNumber), OrderNumber = g.OrderNumber, ConfirmationNumber = g.ConfirmationNumber, CustomerNumber = g.CustomerNumber, SourceFiles = pages.Select(n => st.Files[st.Pages[n - 1].FileIndex].Name).Distinct().ToList() };
+            void Fail(string msg) { errors.Add(new { index = gi, error = msg }); records.Add(PackRecord($"group-{gi + 1}", splitGroup, st, "ERROR", msg)); }
+
+            if (pages.Count == 0) { Fail("No pages in this pack."); continue; }
+            var clash = pages.FirstOrDefault(n => owner.ContainsKey(n) && !sharedAll.Contains(n));
+            if (clash != 0) { Fail($"Page {clash} is already used by pack {owner[clash] + 1}. Mark it as shared if both packs need it."); continue; }
             var inv = NormalizeInvoice(g.InvoiceNumber);
-            if (inv == null) { errors.Add(new { index = gi, error = "Enter a valid invoice number (IN followed by 5–7 digits)." }); continue; }
-            if (!g.AllowDuplicate && await _db.InvoicePacks.AnyAsync(p => p.InvoiceNumber == inv)) { errors.Add(new { index = gi, error = $"A pack already exists for {inv}. Tick 'Add anyway' to store a second copy." }); continue; }
+            if (inv == null) { Fail("Enter a valid invoice number (IN followed by 5–7 digits)."); continue; }
+            if (!g.AllowDuplicate && await _db.InvoicePacks.AnyAsync(p => p.InvoiceNumber == inv)) { Fail($"A pack already exists for {inv}. Tick 'Add anyway' to store a second copy."); continue; }
 
             try
             {
                 var (full, rel) = NewStoragePath(inv, ".pdf");
-                using (var reader = new PdfDocument(new PdfReader(src)))
-                using (var writer = new PdfDocument(new PdfWriter(full)))
-                    reader.CopyPagesTo(pages, writer);
+                AssemblePagesPdf(st, dir, pages, full);
 
                 var uf = new UploadForm
                 {
@@ -805,28 +1070,41 @@ public class FinancePacksController : ControllerBase
                     Company = g.Company, Notes = g.Notes, InvoiceVerified = true, AllowDuplicate = g.AllowDuplicate,
                 };
                 var p = await BuildPackAsync(uf, inv, full, rel, null, "Batch");
-                p.OriginalFileName = $"{Path.GetFileNameWithoutExtension(st.FileName)}_p{pages.Min()}-{pages.Max()}.pdf";
                 p.ContentType = "application/pdf"; p.Size = new FileInfo(full).Length; p.PageCount = pages.Count;
-                var texts = pages.Select(n => st.Pages[n - 1]).ToList();
-                var codes = st.Barcodes == null ? null : pages.Select(n => n - 1 < st.Barcodes.Count ? st.Barcodes[n - 1] : new List<string>()).ToList();
-                try { ApplyAnalysis(p, PackAnalyzer.Analyze(texts, codes)); } catch (Exception ex) { _log.LogWarning(ex, "Batch pack analysis failed for {Inv}", inv); }
+                var texts = pages.Select(n => st.Pages[n - 1].Text).ToList();
+                var shared = pages.Select(n => splitGroup.SharedPages.Contains(n)).ToList();
+                try { splitGroup.Analysis = PackAnalyzer.Analyze(texts, st.Codes(pages), st.Rots(pages), shared); ApplyAnalysis(p, splitGroup.Analysis); }
+                catch (Exception ex) { _log.LogWarning(ex, "Batch pack analysis failed for {Inv}", inv); }
+                p.OriginalFileName = $"Pack_{inv}_{SafeFilePart(p.OrderNumber ?? g.OrderNumber)}.pdf";
+                splitGroup.Supplier = splitGroup.Analysis?.Supplier;
+                if (st.Files.Count > 1 || splitGroup.SourceFiles.Count > 1)
+                    p.Notes = Trunc(string.Join("\n", new[] { p.Notes, "Source: " + string.Join(", ", splitGroup.SourceFiles) }.Where(s => !string.IsNullOrWhiteSpace(s))), 1000);
                 _db.InvoicePacks.Add(p);
                 await _db.SaveChangesAsync();
                 p.PackNumber = $"PK{p.Id:D6}";
                 await _db.SaveChangesAsync();
-                foreach (var n in pages) usedPages.Add(n);
+                foreach (var n in pages) owner.TryAdd(n, gi);
                 saved.Add(new { index = gi, pack = Dto(p) });
+                records.Add(PackRecord(p.PackNumber, splitGroup, st));
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "Batch commit failed for group {Index} of {Batch}", gi, batchId);
-                errors.Add(new { index = gi, error = "Saving this pack failed: " + ex.Message });
+                Fail("Saving this pack failed: " + ex.Message);
             }
         }
 
-        // All done → the source scan is no longer needed. Keep it while anything failed so the user can retry.
-        if (errors.Count == 0) { try { Directory.Delete(BatchDir(batchId), true); } catch (Exception ex) { _log.LogWarning(ex, "Could not remove batch {Batch}", batchId); } }
-        return Ok(new { saved, errors, batchKept = errors.Count > 0 });
+        // Split log for the batch: where every page went (saved packs) and what stayed behind.
+        var placed = form.Groups.SelectMany((g, gi) => g.Pages.Select(n => (n, gi))).GroupBy(x => x.n).ToDictionary(x => x.Key, x => x.Select(y => y.gi).ToList());
+        var log = st.Pages.Select(p => new
+        {
+            page = p.Number, file = st.Files[p.FileIndex].Name, pageInFile = p.PageInFile,
+            placed = placed.TryGetValue(p.Number, out var gis) ? string.Join(" + ", gis.Select(gi => saved.Any(s => (int)s.GetType().GetProperty("index")!.GetValue(s)! == gi) ? $"Pack {gi + 1}" : $"Pack {gi + 1} (not saved)")) : "UNASSIGNED",
+        }).ToList();
+
+        // All done → the source scans are no longer needed. Keep them while anything failed so the user can retry.
+        if (errors.Count == 0) { try { Directory.Delete(dir, true); } catch (Exception ex) { _log.LogWarning(ex, "Could not remove batch {Batch}", batchId); } }
+        return Ok(new { saved, errors, records, splitLog = log, batchKept = errors.Count > 0 });
     }
 
     [HttpDelete("batch/{batchId}")]

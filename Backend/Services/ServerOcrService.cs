@@ -127,7 +127,29 @@ public class ServerOcrService
     {
         public string Text { get; set; } = "";
         public int Rotation { get; set; }
+        /// <summary>Skew correction applied after rotation, in degrees (positive = page was rotated clockwise to straighten).</summary>
+        public double Skew { get; set; }
+        /// <summary>True when the contrast-enhanced copy read better than the raw scan (faint / light-grey page).</summary>
+        public bool Enhanced { get; set; }
+        /// <summary>Mean word confidence (0–1) from tesseract for the main pass.</summary>
+        public double Confidence { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
         public List<string> Barcodes { get; set; } = new();
+        /// <summary>Words with position (fractions of page width/height) and confidence — for field highlighting.</summary>
+        public List<OcrWord> Words { get; set; } = new();
+        /// <summary>Path of the upright, deskewed page image when <c>keepImagesIn</c> was given.</summary>
+        public string? ImagePath { get; set; }
+    }
+
+    public class OcrWord
+    {
+        public string T { get; set; } = "";
+        public double C { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double W { get; set; }
+        public double H { get; set; }
     }
 
     /// <summary>
@@ -139,10 +161,12 @@ public class ServerOcrService
         => (await ExtractPackPagesAsync(filePath, contentType, maxPages)).Select(p => p.Text).ToList();
 
     /// <summary>
-    /// Full pack pass: rotation detection (0/90/180/270 via tesseract OSD), text (PSM 1 + sparse fallback),
-    /// a dedicated header-band read, and barcode decoding (official orders with a barcode, layout G).
+    /// Full pack pass per page: rotation (tesseract OSD) → deskew (projection profile) → text with word
+    /// boxes + confidence (TSV) → contrast-enhanced retry when the read is poor → sparse-text fallback →
+    /// header-band read → barcodes. When <paramref name="keepImagesIn"/> is set the upright page images are
+    /// kept there (for the splitter's page viewer) instead of being deleted with the work dir.
     /// </summary>
-    public async Task<List<PackPage>> ExtractPackPagesAsync(string filePath, string? contentType, int maxPages = 20)
+    public async Task<List<PackPage>> ExtractPackPagesAsync(string filePath, string? contentType, int maxPages = 20, string? keepImagesIn = null)
     {
         if (!_tesseractAvailable)
             throw new InvalidOperationException("tesseract binary is not available on this host.");
@@ -151,6 +175,7 @@ public class ServerOcrService
                     || filePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
         var workDir = Path.Combine(Path.GetTempPath(), "pack-ocr-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workDir);
+        if (keepImagesIn != null) Directory.CreateDirectory(keepImagesIn);
         try
         {
             List<string> images;
@@ -164,46 +189,182 @@ public class ServerOcrService
             else images = new List<string> { filePath };
 
             var pages = new List<PackPage>();
+            var pageNo = 0;
             foreach (var img in images)
             {
+                pageNo++;
                 var page = new PackPage();
-                // Rotation: OSD gives the angle; rotate the bitmap upright so cropping (header band) and
-                // barcode decoding work on a straight page. Tesseract PSM 1 handles rotation for text itself.
+                // 1. Rotation: OSD gives the angle; rotate the bitmap upright so cropping (header band),
+                //    barcode decoding and word positions all refer to a straight page.
                 page.Rotation = await DetectRotationAsync(img);
                 var upright = img;
-                if (page.Rotation != 0)
+                string? deskewed = null;
+                try
                 {
-                    try
+                    using var im = await Image.LoadAsync(img);
+                    if (page.Rotation != 0)
                     {
-                        // OSD "Rotate: N" = rotate the image clockwise by N degrees to make it upright.
-                        using var im = await Image.LoadAsync(img);
                         im.Mutate(x => x.Rotate(page.Rotation switch { 90 => RotateMode.Rotate90, 180 => RotateMode.Rotate180, 270 => RotateMode.Rotate270, _ => RotateMode.None }));
                         upright = Path.Combine(workDir, Path.GetFileNameWithoutExtension(img) + "_up.png");
                         await im.SaveAsPngAsync(upright);
                     }
-                    catch { upright = img; }
+                    page.Width = im.Width; page.Height = im.Height;
+                    // 2. Deskew: small residual tilt from the feeder (±4°) blurs table rows for OCR. Only when the
+                    //    projection profile is clearly sharper at the new angle; the read is verified below.
+                    page.Skew = EstimateSkew(im);
+                    if (Math.Abs(page.Skew) >= 0.3)
+                    {
+                        im.Mutate(x => x.Rotate((float)-page.Skew).BackgroundColor(Color.White));
+                        deskewed = Path.Combine(workDir, Path.GetFileNameWithoutExtension(img) + "_dsk.png");
+                        await im.SaveAsPngAsync(deskewed);
+                    }
                 }
+                catch { upright = img; deskewed = null; }
 
-                var t = await RunTesseractAsync(upright, psm: 1);
-                if (upright != img)
+                // 3. Main read with word boxes + confidence.
+                var (t, words, conf) = await RunTesseractTsvAsync(upright, psm: 1);
+                if (deskewed != null)
+                {
+                    // Keep the deskewed read only when it is genuinely better; otherwise the tilt estimate was noise.
+                    var (t1, w1, c1) = await RunTesseractTsvAsync(deskewed, psm: 1);
+                    if (WordScore(t1) > WordScore(t) * 1.08 || (WordScore(t1) >= WordScore(t) && c1 > conf + 0.03)) { t = t1; words = w1; conf = c1; upright = deskewed; }
+                    else page.Skew = 0;
+                }
+                if (upright != img && page.Rotation != 0)
                 {
                     // Safety net: if the rotated read is worse than the original (OSD got it wrong), keep the original.
-                    var t0 = await RunTesseractAsync(img, psm: 1);
-                    if (WordScore(t0) > WordScore(t) * 1.2) { t = t0; upright = img; page.Rotation = 0; }
+                    var (t0, w0, c0) = await RunTesseractTsvAsync(img, psm: 1);
+                    if (WordScore(t0) > WordScore(t) * 1.2) { t = t0; words = w0; conf = c0; upright = img; page.Rotation = 0; page.Skew = 0; }
+                }
+                // 4. Faint / light-grey pages (a faded order confirmation, a pale stamp): boost contrast and retry.
+                if (WordScore(t) < 40 || conf < 0.55)
+                {
+                    var enh = await EnhanceAsync(upright, workDir);
+                    if (enh != null)
+                    {
+                        var (t1, w1, c1) = await RunTesseractTsvAsync(enh, psm: 1);
+                        if (WordScore(t1) > WordScore(t) * 1.15 || (WordScore(t1) >= WordScore(t) && c1 > conf + 0.05))
+                        { t = t1; words = w1; conf = c1; page.Enhanced = true; }
+                    }
                 }
                 if (t.Trim().Length < 60) t += "\n" + await RunTesseractAsync(upright, psm: 11);
-                // Sage letterheads print the document title and its number (IN… / ORD…) in white on a dark
-                // header band, which tesseract drops. Re-read the top of the page on its own.
+                // 5. Sage letterheads print the document title and its number (IN… / ORD…) in white on a dark
+                //    header band, which tesseract drops. Re-read the top of the page on its own.
                 var band = await ReadInvertedHeaderBandAsync(upright, workDir);
                 if (!string.IsNullOrWhiteSpace(band)) t += "\n[HEADER] " + band;
                 page.Text = t;
+                page.Words = words;
+                page.Confidence = conf;
                 page.Barcodes = DecodeBarcodes(upright);
                 if (page.Barcodes.Count > 0) page.Text += "\n[BARCODE] " + string.Join(" ", page.Barcodes);
+                if (keepImagesIn != null)
+                {
+                    try
+                    {
+                        // Preview copy, downscaled so the viewer loads quickly; word boxes are fractions so they still fit.
+                        using var im = await Image.LoadAsync(upright);
+                        var scale = Math.Min(1.0, 1400.0 / Math.Max(im.Width, im.Height));
+                        if (scale < 1) im.Mutate(x => x.Resize((int)(im.Width * scale), (int)(im.Height * scale)));
+                        var dest = Path.Combine(keepImagesIn, $"p{pageNo:D3}.png");
+                        await im.SaveAsPngAsync(dest);
+                        page.ImagePath = dest;
+                    }
+                    catch (Exception ex) { _logger.LogDebug(ex, "Could not keep page image {Page}", pageNo); }
+                }
                 pages.Add(page);
             }
             return pages;
         }
         finally { try { Directory.Delete(workDir, true); } catch { } }
+    }
+
+    /// <summary>
+    /// Skew angle (degrees) of the text lines, via projection profile: binarise a downscaled copy and pick the
+    /// rotation (−4°…+4°, 0.25° steps) whose row-ink histogram has the highest variance (sharpest line peaks).
+    /// </summary>
+    private static double EstimateSkew(Image src)
+    {
+        try
+        {
+            using var small = src.CloneAs<SixLabors.ImageSharp.PixelFormats.L8>();
+            var scale = 600.0 / Math.Max(small.Width, small.Height);
+            if (scale < 1) small.Mutate(x => x.Resize((int)(small.Width * scale), (int)(small.Height * scale)));
+            small.Mutate(x => x.BinaryThreshold(0.6f));
+            double bestVar = -1, bestAngle = 0, var0 = 0;
+            for (var a = -4.0; a <= 4.0001; a += 0.25)
+            {
+                using var rot = small.Clone(x => x.Rotate((float)a).BackgroundColor(Color.White));
+                var rows = new double[rot.Height];
+                rot.ProcessPixelRows(acc =>
+                {
+                    for (var y = 0; y < acc.Height; y++)
+                    {
+                        var row = acc.GetRowSpan(y); var ink = 0;
+                        for (var x = 0; x < row.Length; x++) if (row[x].PackedValue < 128) ink++;
+                        rows[y] = ink;
+                    }
+                });
+                var mean = rows.Average();
+                var v = rows.Sum(r => (r - mean) * (r - mean)) / rows.Length;
+                if (Math.Abs(a) < 0.01) var0 = v;
+                if (v > bestVar) { bestVar = v; bestAngle = a; }
+            }
+            // Table rules and letterheads can produce a sharper profile at a wrong angle; demand a clear win over 0°.
+            return bestVar > var0 * 1.15 ? Math.Round(bestAngle, 2) : 0;
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>Grayscale + strong contrast + adaptive threshold copy, for faint pages and light-grey stamps.</summary>
+    private static async Task<string?> EnhanceAsync(string imagePath, string workDir)
+    {
+        try
+        {
+            using var im = await Image.LoadAsync<SixLabors.ImageSharp.PixelFormats.L8>(imagePath);
+            im.Mutate(x => x.Contrast(1.8f).GaussianSharpen(0.8f).AdaptiveThreshold());
+            var dest = Path.Combine(workDir, Path.GetFileNameWithoutExtension(imagePath) + "_enh.png");
+            await im.SaveAsPngAsync(dest);
+            return dest;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Tesseract pass producing both the plain text (same layout as a normal run — the label-distance logic in
+    /// the analysers depends on it) and the TSV word boxes as fractions of the page, plus mean word confidence (0–1).
+    /// One tesseract invocation writes both outputs (`txt tsv` configs).
+    /// </summary>
+    private async Task<(string text, List<OcrWord> words, double conf)> RunTesseractTsvAsync(string imagePath, int psm)
+    {
+        var outBase = Path.Combine(Path.GetDirectoryName(imagePath)!, Path.GetFileNameWithoutExtension(imagePath) + $"_psm{psm}_{Guid.NewGuid():N}");
+        string tsv, text;
+        try
+        {
+            await RunProcessAsync("tesseract", $"\"{imagePath}\" \"{outBase}\" -l eng --oem 1 --psm {psm} txt tsv", 120_000);
+            text = File.Exists(outBase + ".txt") ? await File.ReadAllTextAsync(outBase + ".txt") : "";
+            tsv = File.Exists(outBase + ".tsv") ? await File.ReadAllTextAsync(outBase + ".tsv") : "";
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "tesseract txt+tsv pass failed (psm {Psm}) for {Image}", psm, imagePath); return (await RunTesseractAsync(imagePath, psm), new List<OcrWord>(), 0); }
+        finally { foreach (var f in new[] { outBase + ".txt", outBase + ".tsv" }) { try { if (File.Exists(f)) File.Delete(f); } catch { } } }
+
+        int pw = 0, ph = 0;
+        var words = new List<OcrWord>();
+        double confSum = 0; var confN = 0;
+        foreach (var line in tsv.Split('\n'))
+        {
+            var c = line.TrimEnd('\r').Split('\t');
+            if (c.Length < 12 || c[0] == "level") continue;
+            if (!int.TryParse(c[0], out var level)) continue;
+            if (level == 1) { int.TryParse(c[8], out pw); int.TryParse(c[9], out ph); continue; }
+            if (level != 5) continue;
+            var t = c[11];
+            if (string.IsNullOrWhiteSpace(t)) continue;
+            double.TryParse(c[10], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var conf);
+            if (conf >= 0) { confSum += conf; confN++; }
+            if (pw > 0 && ph > 0 && int.TryParse(c[6], out var x) && int.TryParse(c[7], out var y) && int.TryParse(c[8], out var w) && int.TryParse(c[9], out var h))
+                words.Add(new OcrWord { T = t, C = Math.Round(Math.Max(0, conf) / 100.0, 2), X = Math.Round((double)x / pw, 4), Y = Math.Round((double)y / ph, 4), W = Math.Round((double)w / pw, 4), H = Math.Round((double)h / ph, 4) });
+        }
+        return (text, words, confN > 0 ? Math.Round(confSum / confN / 100.0, 3) : 0);
     }
 
     /// <summary>Rough "how much real text is in here" score: count of 3+ letter words.</summary>

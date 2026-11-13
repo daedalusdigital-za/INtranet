@@ -86,7 +86,7 @@ interface Summary {
     </select>
     <span class="pk-spacer"></span>
     <button mat-stroked-button type="button" (click)="create()"><mat-icon>auto_awesome_motion</mat-icon> Create pack</button>
-    <button mat-stroked-button type="button" (click)="batch()" matTooltip="One PDF with many packs in it — we split and group the pages, you check and save them all"><mat-icon>call_split</mat-icon> Split multi-pack scan</button>
+    <button mat-stroked-button type="button" (click)="batch()" matTooltip="Drop one or many scans (PDF / JPG / PNG) — we split and group the pages into packs, you check the summary and save them all"><mat-icon>call_split</mat-icon> Batch upload</button>
     <button mat-flat-button color="primary" type="button" (click)="upload()"><mat-icon>upload_file</mat-icon> Upload scanned pack</button>
   </div>
 
