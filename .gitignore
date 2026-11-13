@@ -34,6 +34,10 @@ Thumbs.db
 # ===================
 Backend/bin/
 Backend/obj/
+portal-edge/bin/
+portal-edge/obj/
+mcp-logistics/node_modules/
+mcp-logistics/dist/
 *.user
 *.suo
 *.cache
@@ -140,6 +144,8 @@ _sigtest/
 # ===================
 downloads/
 attachments/
+documents/
+reports/
 
 # ===================
 # Secrets & one-off dev artifacts (must never be committed)
