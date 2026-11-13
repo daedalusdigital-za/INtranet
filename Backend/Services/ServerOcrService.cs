@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 
 namespace ProjectTracker.API.Services;
 
@@ -151,11 +153,50 @@ public class ServerOcrService
             {
                 var t = await RunTesseractAsync(img, psm: 1);
                 if (t.Trim().Length < 60) t += "\n" + await RunTesseractAsync(img, psm: 11);
+                // Sage letterheads print the document title and its number (IN… / ORD…) in white on a dark
+                // header band, which tesseract drops. Re-read the top of the page inverted so that text appears.
+                var band = await ReadInvertedHeaderBandAsync(img, workDir);
+                if (!string.IsNullOrWhiteSpace(band)) t += "\n[HEADER] " + band;
                 texts.Add(t);
             }
             return texts;
         }
         finally { try { Directory.Delete(workDir, true); } catch { } }
+    }
+
+    /// <summary>
+    /// Re-read the top ~25% of the page on its own. Sage letterheads print the title and its number
+    /// (IN… / ORD…) in white on a dark band; tesseract skips that region when it segments the whole page,
+    /// but reads it when the strip is presented alone as a single block (PSM 6). An inverted copy is
+    /// tried as well; both results are returned.
+    /// </summary>
+    private async Task<string> ReadInvertedHeaderBandAsync(string imagePath, string workDir)
+    {
+        try
+        {
+            using var image = await Image.LoadAsync<SixLabors.ImageSharp.PixelFormats.L8>(imagePath);
+            var landscape = image.Width > image.Height;
+            var rect = landscape
+                ? new Rectangle(0, 0, Math.Max(1, (int)(image.Width * 0.25)), image.Height)
+                : new Rectangle(0, 0, image.Width, Math.Max(1, (int)(image.Height * 0.25)));
+            image.Mutate(x => x.Crop(rect));
+            var baseName = Path.GetFileNameWithoutExtension(imagePath);
+            var plainPath = Path.Combine(workDir, baseName + "_hdr.png");
+            await image.SaveAsPngAsync(plainPath);
+            var plain = await RunTesseractAsync(plainPath, psm: 6);
+
+            image.Mutate(x => x.Invert().Contrast(1.5f));
+            var invPath = Path.Combine(workDir, baseName + "_hdr_inv.png");
+            await image.SaveAsPngAsync(invPath);
+            var inverted = await RunTesseractAsync(invPath, psm: 6);
+
+            return (plain.Trim() + "\n" + inverted.Trim()).Trim();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Header-band OCR pass failed for {Image}", imagePath);
+            return string.Empty;
+        }
     }
 
     private async Task<string> RunTesseractAsync(string imagePath, int psm)

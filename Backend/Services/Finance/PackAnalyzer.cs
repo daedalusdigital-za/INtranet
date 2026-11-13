@@ -84,6 +84,10 @@ public static class PackAnalyzer
     private static readonly Regex InvLabelRx = new(@"(?:TAX\s+)?INVOICE\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*((?:[I1L][NMH])?[\s\-]?[0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // Order confirmation (Sage sales order): strictly ORD + 5–8 digits. Checked BEFORE order numbers.
     private static readonly Regex OrdRx = new(@"(?<![A-Z0-9])[O0Q]RD[\s\-.:]?([0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // In the dark header band the first glyph is often lost ("Qf RD107038", "N024737"): accept the
+    // tail of the token when it sits in the [HEADER] segment of the page text.
+    private static readonly Regex HeaderOrdRx = new(@"(?<![A-Z])[O0Q]?RD[\s\-.:]?(\d{5,8})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex HeaderInvRx = new(@"(?<![A-Z0-9])(?:[I1L]?[NMH]|[I1L][NMH]?)[\s\-.:]?(0\d{5,7})(?![A-Z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     // Customer order number: 1–4 letter prefix + 5–8 digits, hyphen/space optional (OR-000190 KZN, GL-003586 Limpopo).
     private static readonly Regex OrderTokenRx = new(@"(?<![A-Z0-9])([A-Z]{1,4})[\s\-/]?([0-9OQDILSBZGT]{5,8})(?![A-Z0-9])", RegexOptions.Compiled);
     /// <summary>Known per-province order prefixes — only used to raise confidence, never to exclude.</summary>
@@ -161,7 +165,7 @@ public static class PackAnalyzer
         new("INV", new[] { ("TAX INVOICE", 3.0), ("UNIT PRICE", 1.0), ("SUBTOTAL", 1.0), ("SUB TOTAL", 1.0), ("AMOUNT DUE", 1.5), ("VAT", .5), ("BANKING DETAILS", 1.0), ("BANK DETAILS", 1.0), ("ACCOUNT NUMBER", .3), ("PART DELIVERY", .5) }),
         // The Sage order-confirmation header is usually a graphic, so lean on its table layout:
         // Salesperson / Ship Via / Order Date / Ord. Shp. B/O columns / Order Discount / Total order.
-        new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("TOTAL ORDER", 2.0), ("ORDER DISCOUNT", 1.5), ("SALESPERSON", 1.0), ("SHIP VIA", 1.0), ("ORDER DATE", 1.0), ("ORD. SHP", 1.5), ("ORD SHP", 1.5), ("SHP. B/O", 1.5), ("REFERENCE PO", .8), ("PO NUMBER", .5) }),
+        new("OC",  new[] { ("ORDER CONFIRMATION", 3.0), ("ORDER CONF", 2.0), ("CONFIRMATION NO", 1.5), ("CONFIRMATION NUMBER", 1.5), ("TOTAL ORDER", 2.0), ("ORDER DISCOUNT", 1.5), ("SALESPERSON", 1.0), ("SHIP VIA", 1.0), ("ORDER DATE", 1.0), ("ORD. SHP", 1.5), ("ORD SHP", 1.5), ("SHP. B/O", 1.5), ("REFERENCE PO", .8), ("PO NUMBER", .5) }),
         new("EML", new[] { ("GMAIL", 2.0), ("FROM:", 1.5), ("TO:", 1.0), ("SUBJECT", 1.5), ("SENT:", 1.0), ("@KZNHEALTH.GOV.ZA", 2.0), (".GOV.ZA", 1.0), ("@PROMEDTECHNOLOGIES", 1.5), ("@", .3), ("FORWARDED MESSAGE", 1.5), ("ATTACHMENT", .5), ("OUTLOOK", 1.5) }),
         new("PO",  new[] { ("KZN: HEALTH", 3.0), ("KZN HEALTH", 2.5), (": HEALTH", 2.0), ("ORDER\\SERVICE", 2.0), ("ORDER/SERVICE", 2.0), ("ORDER NO", 1.5), ("OFFICIAL ORDER", 2.5), ("AUTHORISATIONS", 2.0), ("GOVERNMENT CONTRACT", 2.0), ("PROVINCE OF", 1.0), ("DEPARTMENT OF HEALTH", 1.5), ("STORE NUMBER", 1.5), ("SUPPLIER NAME", 1.0), ("AMENDED ORDER", 1.5), ("CSD", .5), ("MAAA", .8), ("DELIVERY DATE", .5) }),
     };
@@ -174,6 +178,9 @@ public static class PackAnalyzer
         var squashed = Regex.Replace(up, @"\s+", "");
         bool Has(string kw) => collapsed.Contains(kw) || squashed.Contains(kw.Replace(" ", ""));
         var r = new PageResult { Page = pageNo, TextLength = collapsed.Trim().Length };
+        // Text from the dedicated header-band OCR pass (see ServerOcrService) — where IN… / ORD… live.
+        var hdrIdx = collapsed.IndexOf("[HEADER]", StringComparison.Ordinal);
+        var header = hdrIdx >= 0 ? collapsed[(hdrIdx + 8)..] : "";
 
         // Score each type.
         var scores = new Dictionary<string, double>();
@@ -211,11 +218,15 @@ public static class PackAnalyzer
         foreach (Match m in InvRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Value); if (n != null) invs.Add(n); }
         if (invs.Count == 0 && (isInvHeader || isDnHeader))
             foreach (Match m in BareInvRx.Matches(collapsed)) { var n = NormalizeInvoice(m.Groups[1].Value); if (n != null) invs.Add(n); }
+        if (invs.Count == 0 && header.Length > 0)
+            foreach (Match m in HeaderInvRx.Matches(header)) { var n = NormalizeInvoice(m.Groups[1].Value); if (n != null) invs.Add(n); }
         r.InvoiceNumber = invs.GroupBy(x => x).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
 
         // Confirmation (ORD…) is checked first so it can never be mistaken for an order number.
         var confs = new List<string>();
         foreach (Match m in OrdRx.Matches(collapsed)) { var n = NormalizeConfirmation(m.Value); if (n != null) confs.Add(n); }
+        if (confs.Count == 0 && header.Length > 0)
+            foreach (Match m in HeaderOrdRx.Matches(header)) confs.Add("ORD" + m.Groups[1].Value);
         r.ConfirmationNumber = confs.GroupBy(x => x).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault();
 
         // Order number: labelled value ("Customer PO Number", "PO Number", "ORDER NO.") counts double;
