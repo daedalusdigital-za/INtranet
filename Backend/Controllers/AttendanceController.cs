@@ -477,8 +477,9 @@ namespace ProjectTracker.API.Controllers
 
         // GET: api/attendance/earliest-today
         [HttpGet("earliest-today")]
-        public async Task<ActionResult<object>> GetEarliestEmployeesToday()
+        public async Task<ActionResult<object>> GetEarliestEmployeesToday([FromQuery] int take = 2)
         {
+            take = Math.Clamp(take, 1, 10);
             // Compute "today" in South Africa time (UTC+2) so it matches the
             // dates written by the biometric clock-in machine. The container
             // runs in UTC, so DateTime.Now can be on the previous/next calendar
@@ -510,10 +511,10 @@ namespace ProjectTracker.API.Controllers
                 });
             }
 
-            // Get top 2 earliest and 2 latest
-            var earliest2 = todayAttendance.Take(2).ToList();
-            var latest2 = todayAttendance.Count > 2 
-                ? todayAttendance.Skip(Math.Max(0, todayAttendance.Count - 2)).ToList()
+            // Get the N earliest and N latest (late birds are the last to clock in, latest first)
+            var earliest2 = todayAttendance.Take(take).ToList();
+            var latest2 = todayAttendance.Count > take
+                ? todayAttendance.Skip(Math.Max(0, todayAttendance.Count - take)).Reverse().ToList()
                 : new List<AttendanceRecord>();
 
             // Get employee details
@@ -524,42 +525,28 @@ namespace ProjectTracker.API.Controllers
                 .ToListAsync();
 
             // Build early birds list
-            var earlyBirdsList = earliest2.Select(attendance =>
+            var workStart = new TimeOnly(7, 30);
+            object? Bird(AttendanceRecord attendance)
             {
                 var employee = employees.FirstOrDefault(e => e.EmpId == attendance.EmpID);
                 if (employee == null) return null;
-
                 var timeInValue = attendance.TimeIn!.Value;
-                
+                var late = timeInValue > workStart;
                 return new
                 {
                     employeeId = employee.EmpId,
                     fullName = (employee.Name + " " + employee.LastName).Trim(),
+                    department = employee.Department ?? "",
                     photoBase64 = employee.Photo != null ? Convert.ToBase64String(employee.Photo) : null,
-                    timeIn = timeInValue.ToString("HH:mm")
+                    timeIn = timeInValue.ToString("HH:mm"),
+                    isLate = late,
+                    lateMinutes = late ? (int)(timeInValue.ToTimeSpan() - workStart.ToTimeSpan()).TotalMinutes : 0
                 };
-            })
-            .Where(e => e != null)
-            .ToList();
+            }
+            var earlyBirdsList = earliest2.Select(Bird).Where(e => e != null).ToList();
 
             // Build late birds list
-            var lateBirdsList = latest2.Select(attendance =>
-            {
-                var employee = employees.FirstOrDefault(e => e.EmpId == attendance.EmpID);
-                if (employee == null) return null;
-
-                var timeInValue = attendance.TimeIn!.Value;
-                
-                return new
-                {
-                    employeeId = employee.EmpId,
-                    fullName = (employee.Name + " " + employee.LastName).Trim(),
-                    photoBase64 = employee.Photo != null ? Convert.ToBase64String(employee.Photo) : null,
-                    timeIn = timeInValue.ToString("HH:mm")
-                };
-            })
-            .Where(e => e != null)
-            .ToList();
+            var lateBirdsList = latest2.Select(Bird).Where(e => e != null).ToList();
 
             return Ok(new
             {

@@ -155,8 +155,23 @@ namespace ProjectTracker.API.Controllers
         public async Task<IActionResult> Catalog()
         {
             var designer = await IsDesignerAsync();
-            var users = await _db.Users.AsNoTracking().Where(u => u.IsActive).OrderBy(u => u.Name).ThenBy(u => u.Surname)
-                .Select(u => new { id = u.UserId, name = u.Name + " " + u.Surname, email = u.Email, role = u.Role, departmentId = u.DepartmentId }).ToListAsync();
+            var userRows = await _db.Users.AsNoTracking().Where(u => u.IsActive).OrderBy(u => u.Name).ThenBy(u => u.Surname)
+                .Select(u => new { id = u.UserId, name = u.Name + " " + u.Surname, email = u.Email, role = u.Role, departmentId = u.DepartmentId, u.Permissions, u.Title }).ToListAsync();
+            // Module keys each person works in (the Cortex map links departments to modules through these).
+            // Permissions are a JSON array or a comma list, entries like "logistics" or "logistics.view" — parsed as auth.service does.
+            static string[] ModulesOf(string? perms)
+            {
+                if (string.IsNullOrWhiteSpace(perms)) return Array.Empty<string>();
+                IEnumerable<string> raw;
+                try { raw = JsonSerializer.Deserialize<string[]>(perms) ?? Array.Empty<string>(); }
+                catch { raw = perms.Split(','); }
+                return raw.Select(p => p.Trim().ToLowerInvariant().Split('.')[0]).Where(p => p.Length > 0).Distinct().ToArray();
+            }
+            var users = userRows.Select(u => new
+            {
+                u.id, u.name, u.email, u.role, u.departmentId, title = u.Title,
+                modules = u.role is "Admin" or "Super Admin" ? new[] { "all" } : ModulesOf(u.Permissions)
+            }).ToList();
             var departments = await _db.Departments.AsNoTracking().OrderBy(d => d.Name).Select(d => new { id = d.DepartmentId, name = d.Name, manager = d.ManagerName }).ToListAsync();
             var roles = users.Select(u => u.role).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct().OrderBy(r => r).ToList();
             // Employee register (clocking system): lets a human flow be pinned to a specific person even when they never log in.

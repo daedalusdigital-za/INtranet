@@ -156,3 +156,9 @@ Backend/runlog.txt
 
 
 *.local.txt
+
+# Local scratch
+.claude/
+tools/*.out
+tools/collisions.json
+

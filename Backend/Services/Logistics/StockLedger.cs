@@ -36,18 +36,22 @@ namespace ProjectTracker.API.Services.Logistics
                 };
                 db.WarehouseInventory.Add(inv);
 
-                db.StockIssues.Add(new StockIssue
+                // Stock arriving at a new line is normal; stock leaving a line that never existed is worth a look
+                if (signedQty < 0)
                 {
-                    WarehouseId = warehouseId,
-                    ItemCode = commodity.Code,
-                    ItemDescription = commodity.Name,
-                    IssueType = "Item not in warehouse stock",
-                    Detail = $"A {movementType} movement was recorded for an item with no stock record at this warehouse. Row auto-created at 0.",
-                    IssueDate = DateTime.UtcNow,
-                    Status = "Open",
-                    CreatedBy = createdBy,
-                    Source = "System"
-                });
+                    db.StockIssues.Add(new StockIssue
+                    {
+                        WarehouseId = warehouseId,
+                        ItemCode = commodity.Code,
+                        ItemDescription = commodity.Name,
+                        IssueType = "Item not in warehouse stock",
+                        Detail = $"A {movementType} movement was recorded for an item with no stock record at this warehouse. Row auto-created at 0.",
+                        IssueDate = DateTime.UtcNow,
+                        Status = "Open",
+                        CreatedBy = createdBy,
+                        Source = "System"
+                    });
+                }
             }
 
             var newBalance = inv.QuantityOnHand + signedQty;
@@ -157,32 +161,216 @@ namespace ProjectTracker.API.Services.Logistics
 
     /// <summary>
     /// Matches sales/tripsheet product codes to stock items. Codes are compared ignoring case, spaces and
-    /// punctuation; a code that normalises to more than one stock item is left unmatched rather than guessed.
+    /// punctuation. The same code can legitimately exist under more than one company (e.g. a Promed casting
+    /// bandage and an Access coverall both coded RT420104300000 in Gauteng), so when a code resolves to several
+    /// stock items the caller's company (Sage code or company name) picks the right one; without a company, or
+    /// when no candidate carries that company, the code is left unmatched rather than guessed.
     /// </summary>
     public static class CommodityCodeMatcher
     {
+        public readonly record struct Candidate(int Id, string Category);
+        public sealed class CodeMap : Dictionary<string, List<Candidate>> { }
+
         public static string Normalize(string? code) =>
             new string((code ?? "").Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
 
-        public static async Task<Dictionary<string, int>> BuildAsync(ApplicationDbContext db, IEnumerable<string?> codes)
+        /// <summary>Sage company code (PMT/ACM/SBT/PHT/KOG) or company name → the name used in Commodities.Category.</summary>
+        public static string NormalizeCompany(string? company) => (company ?? "").Trim().ToUpperInvariant() switch
         {
+            "PMT" or "PROMED" => "PROMED",
+            "ACM" or "ACCESS" or "ACCMED" => "ACCESS",
+            "SBT" or "SEBENZANI" or "SEBENZ" => "SEBENZANI",
+            "PHT" or "PHARMACARE" or "PHARMA" => "PHARMACARE",
+            "KOG" => "KOG",
+            var other => other
+        };
+
+        public static async Task<CodeMap> BuildAsync(ApplicationDbContext db, IEnumerable<string?> codes)
+        {
+            var map = new CodeMap();
             var wanted = codes.Select(Normalize).Where(c => c.Length > 0).ToHashSet();
-            if (wanted.Count == 0) return new Dictionary<string, int>();
+            if (wanted.Count == 0) return map;
 
             var all = await db.Commodities.AsNoTracking()
                 .Where(c => c.Code != null && c.Code != "")
-                .Select(c => new { c.Id, c.Code })
+                .Select(c => new { c.Id, c.Code, c.Category })
                 .ToListAsync();
 
-            return all
-                .Select(c => new { c.Id, Key = Normalize(c.Code) })
-                .Where(c => wanted.Contains(c.Key))
-                .GroupBy(c => c.Key)
-                .Where(g => g.Count() == 1)
-                .ToDictionary(g => g.Key, g => g.First().Id);
+            foreach (var c in all)
+            {
+                var key = Normalize(c.Code);
+                if (!wanted.Contains(key)) continue;
+                if (!map.TryGetValue(key, out var list)) map[key] = list = new List<Candidate>();
+                list.Add(new Candidate(c.Id, NormalizeCompany(c.Category)));
+            }
+            return map;
         }
 
-        public static int? Match(Dictionary<string, int> map, string? code) =>
-            map.TryGetValue(Normalize(code), out var id) ? id : null;
+        /// <summary>Resolve a code; <paramref name="company"/> (Sage code or name) disambiguates codes shared between companies.</summary>
+        public static int? Match(CodeMap map, string? code, string? company = null)
+        {
+            if (!map.TryGetValue(Normalize(code), out var cands) || cands.Count == 0) return null;
+            if (cands.Count == 1) return cands[0].Id;
+            var co = NormalizeCompany(company);
+            if (co.Length == 0) return null;
+            var mine = cands.Where(c => c.Category == co).ToList();
+            return mine.Count == 1 ? mine[0].Id : null;
+        }
+    }
+
+    /// <summary>
+    /// Keeps tripsheet lines connected to stock items so dispatch approval can deduct them.
+    /// Resolution order per line: stored ProductCode → code(s) on the line's invoice(s) (single code, or the one
+    /// whose description matches) → "CODE: Name" comment → exact description match on a Commodity name.
+    /// Any invoice code that has no Commodity yet is created first (code + description), so every invoiced item
+    /// is a mappable stock item. Lines already linked, and loads whose stock is deducted or cancelled, are untouched.
+    /// </summary>
+    public static class StopLineLinker
+    {
+        public record Result(int CommoditiesCreated, int LinesConsidered, int LinesLinked, int StillUnlinked);
+
+        /// <summary>Sage source-company code → company name used in Commodities.Category.</summary>
+        public static string? CompanyName(string? sourceCompany) => sourceCompany?.Trim().ToUpperInvariant() switch
+        {
+            "PMT" => "PROMED",
+            "ACM" => "ACCESS",
+            "SBT" => "SEBENZANI",
+            "PHT" => "PHARMACARE",
+            "" or null => null,
+            var other => other
+        };
+
+        /// <summary>Create Commodities for every distinct invoice product code that has none. Returns how many were created.</summary>
+        public static async Task<int> EnsureCommoditiesForInvoiceCodesAsync(ApplicationDbContext db, IEnumerable<string?>? onlyCodes = null)
+        {
+            var q = db.ImportedInvoices.AsNoTracking().Where(i => i.ProductCode != null && i.ProductCode != "");
+            if (onlyCodes != null)
+            {
+                var wanted = onlyCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!.Trim()).Distinct().ToList();
+                if (wanted.Count == 0) return 0;
+                q = q.Where(i => wanted.Contains(i.ProductCode));
+            }
+            var invoiced = await q
+                .GroupBy(i => i.ProductCode)
+                .Select(g => new { Code = g.Key, Description = g.OrderByDescending(x => x.TransactionDate).Select(x => x.ProductDescription).FirstOrDefault(), Company = g.OrderByDescending(x => x.TransactionDate).Select(x => x.SourceCompany).FirstOrDefault() })
+                .ToListAsync();
+            if (invoiced.Count == 0) return 0;
+
+            var existing = (await db.Commodities.AsNoTracking().Where(c => c.Code != null && c.Code != "").Select(c => c.Code!).ToListAsync())
+                .Select(CommodityCodeMatcher.Normalize).ToHashSet();
+
+            var created = 0;
+            foreach (var inv in invoiced)
+            {
+                var key = CommodityCodeMatcher.Normalize(inv.Code);
+                if (key.Length == 0 || existing.Contains(key)) continue;
+                // "CAT-nn" rows are Sage category sub-totals on the invoice export, not products
+                if (inv.Code!.Trim().StartsWith("CAT-", StringComparison.OrdinalIgnoreCase)) continue;
+                existing.Add(key);
+                db.Commodities.Add(new Models.Logistics.Commodity
+                {
+                    Code = inv.Code!.Trim(),
+                    Name = string.IsNullOrWhiteSpace(inv.Description) ? inv.Code!.Trim() : inv.Description!.Trim(),
+                    Description = "Created from sales invoices",
+                    Category = CompanyName(inv.Company),
+                    UnitOfMeasure = "Each",
+                    CreatedAt = DateTime.UtcNow
+                });
+                created++;
+            }
+            if (created > 0) await db.SaveChangesAsync();
+            return created;
+        }
+
+        /// <summary>Link unlinked lines (optionally only for one load). Saves changes.</summary>
+        public static async Task<Result> LinkAsync(ApplicationDbContext db, int? loadId = null, bool createMissingCommodities = true)
+        {
+            var deductedLoadIds = await db.WarehouseStockMovements
+                .Where(m => m.LoadId != null && m.MovementType == "Dispatch" && m.Status == "Approved" && m.ReversedByMovementId == null)
+                .Select(m => m.LoadId!.Value).Distinct().ToListAsync();
+
+            var lines = await db.StopCommodities
+                .Include(sc => sc.LoadStop)
+                .Where(sc => sc.CommodityId == null
+                             && (loadId == null || sc.LoadStop.LoadId == loadId)
+                             && sc.LoadStop.Load.Status != "Cancelled"
+                             && !deductedLoadIds.Contains(sc.LoadStop.LoadId))
+                .ToListAsync();
+            if (lines.Count == 0) return new Result(0, 0, 0, 0);
+
+            static List<string> InvoiceNumbers(string? s) =>
+                (s ?? "").Split(new[] { ',', ';', '/' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+            var invoiceNumbers = lines.SelectMany(sc => InvoiceNumbers(sc.InvoiceNumber)).Distinct().ToList();
+            var invoiceLines = await db.ImportedInvoices.AsNoTracking()
+                .Where(i => invoiceNumbers.Contains(i.TransactionNumber) && i.ProductCode != null && i.ProductCode != "")
+                .Select(i => new { i.TransactionNumber, i.ProductCode, i.ProductDescription, i.SourceCompany })
+                .ToListAsync();
+            var byInvoice = invoiceLines.ToLookup(i => i.TransactionNumber, StringComparer.OrdinalIgnoreCase);
+
+            // Company for a line: the invoice's Sage company, else a "PROMED"/"ACCESS" style brand on the line
+            string? CompanyFor(Models.Logistics.StopCommodity sc)
+            {
+                var cos = InvoiceNumbers(sc.InvoiceNumber).SelectMany(n => byInvoice[n])
+                    .Select(i => CommodityCodeMatcher.NormalizeCompany(i.SourceCompany))
+                    .Where(c => c.Length > 0).Distinct().ToList();
+                if (cos.Count == 1) return cos[0];
+                var brand = (sc.Brand ?? "").ToUpperInvariant();
+                foreach (var co in new[] { "PROMED", "ACCESS", "SEBENZANI", "PHARMACARE", "KOG" })
+                    if (brand.Contains(co)) return co;
+                return null;
+            }
+
+            string? CodeFor(Models.Logistics.StopCommodity sc)
+            {
+                if (!string.IsNullOrWhiteSpace(sc.ProductCode)) return sc.ProductCode;
+                var candidates = InvoiceNumbers(sc.InvoiceNumber).SelectMany(n => byInvoice[n]).ToList();
+                var described = candidates.Where(c => string.Equals((c.ProductDescription ?? "").Trim(), (sc.Comment ?? "").Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+                foreach (var set in new[] { described, candidates })
+                {
+                    var codes = set.Select(c => c.ProductCode!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    if (codes.Count == 1) return codes[0];
+                }
+                var colon = (sc.Comment ?? "").IndexOf(':');
+                return colon > 0 && colon <= 30 ? sc.Comment![..colon].Trim() : null;
+            }
+
+            var withCodes = lines.Select(sc => new { sc, Code = CodeFor(sc), Company = CompanyFor(sc) }).ToList();
+            foreach (var x in withCodes) if (string.IsNullOrWhiteSpace(x.sc.ProductCode) && x.Code != null) x.sc.ProductCode = x.Code;
+
+            var created = 0;
+            if (createMissingCommodities)
+                created = await EnsureCommoditiesForInvoiceCodesAsync(db, withCodes.Select(x => x.Code));
+
+            var codeMap = await CommodityCodeMatcher.BuildAsync(db, withCodes.Select(x => x.Code));
+            var linked = 0;
+            var byDescription = new List<Models.Logistics.StopCommodity>();
+            foreach (var x in withCodes)
+            {
+                var id = CommodityCodeMatcher.Match(codeMap, x.Code, x.Company);
+                if (id != null) { x.sc.CommodityId = id; linked++; }
+                else if (!string.IsNullOrWhiteSpace(x.sc.Comment)) byDescription.Add(x.sc);
+            }
+
+            // Last resort: a description that is exactly one Commodity's name.
+            if (byDescription.Count > 0)
+            {
+                var names = byDescription.Select(sc => sc.Comment!.Trim().ToLowerInvariant()).Distinct().ToList();
+                var nameMap = (await db.Commodities.AsNoTracking().Where(c => c.Name != "").Select(c => new { c.Id, c.Name, c.Code }).ToListAsync())
+                    .GroupBy(c => c.Name.Trim().ToLowerInvariant())
+                    .Where(g => g.Count() == 1 && names.Contains(g.Key))
+                    .ToDictionary(g => g.Key, g => g.First());
+                foreach (var sc in byDescription)
+                {
+                    if (!nameMap.TryGetValue(sc.Comment!.Trim().ToLowerInvariant(), out var c)) continue;
+                    sc.CommodityId = c.Id;
+                    sc.ProductCode ??= c.Code;
+                    linked++;
+                }
+            }
+
+            await db.SaveChangesAsync();
+            return new Result(created, lines.Count, linked, lines.Count - linked);
+        }
     }
 }

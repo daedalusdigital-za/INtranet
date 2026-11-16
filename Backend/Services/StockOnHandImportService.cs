@@ -599,6 +599,9 @@ public class StockOnHandImportService
             .ToList();
 
         var codeMap = await CommodityCodeMatcher.BuildAsync(_context, counted.Select(c => c.Code));
+        // The batch belongs to one operating company; it decides which stock item a shared code refers to
+        var companyCode = await _context.OperatingCompanies.AsNoTracking()
+            .Where(o => o.OperatingCompanyId == batch.OperatingCompanyId).Select(o => o.Code).FirstOrDefaultAsync();
         var userName = await _context.Users.Where(u => u.UserId == userId).Select(u => u.Name).FirstOrDefaultAsync() ?? "SOH import";
         // "As at" a date means close of that day
         var countedAt = (batch.AsAtDate ?? DateTime.Today).Date.AddDays(1).AddTicks(-1);
@@ -607,7 +610,7 @@ public class StockOnHandImportService
         int adjusted = 0, confirmed = 0, unmatched = 0, newer = 0;
         foreach (var c in counted)
         {
-            var commodityId = CommodityCodeMatcher.Match(codeMap, c.Code);
+            var commodityId = CommodityCodeMatcher.Match(codeMap, c.Code, companyCode);
             if (commodityId == null) { unmatched++; continue; }
 
             var existing = await StockLedger.FindInventoryAsync(_context, c.WarehouseId, commodityId.Value);

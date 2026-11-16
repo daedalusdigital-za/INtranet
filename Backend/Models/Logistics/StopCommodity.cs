@@ -43,6 +43,13 @@ namespace ProjectTracker.API.Models.Logistics
         [MaxLength(100)]
         public string? Brand { get; set; }
 
+        /// <summary>
+        /// Stock code as it appeared on the source invoice / picking slip (Sage product code). Kept even when the line
+        /// could not be matched to a Commodity so the code is visible and the line can be re-matched later.
+        /// </summary>
+        [MaxLength(50)]
+        public string? ProductCode { get; set; }
+
         [MaxLength(500)]
         public string? Comment { get; set; }
 
