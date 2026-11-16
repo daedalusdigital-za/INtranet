@@ -198,6 +198,9 @@ namespace ProjectTracker.API.Extensions
             // Server-side intensive OCR (tesseract) for POD invoice-number extraction
             services.AddScoped<ServerOcrService>();
 
+            // Finance › Creditors payment packs: document reading + automatic checks
+            services.AddScoped<Services.Finance.CreditorChecksService>();
+
             // Electronic signatures (reusable across modules) + requisition-invoice workflow
             services.AddScoped<Services.Signatures.ISignatureService, Services.Signatures.SignatureService>();
 

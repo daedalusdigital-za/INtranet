@@ -422,6 +422,24 @@ Employees submit leave through **Requests › Leave Request** (type: Annual, Sic
 8. **Credit Notes** – list, *Signed copies*, *Stock returns* (**Confirm & post to stock**), *Patterns*; **Upload signed credit note**; detail drawer.
 9. **Packs** – month‑end debtor packs: **Create pack**, **Batch upload**, **Upload scanned pack** (3 steps); per pack **Preview / Edit / Open PDF**, menu **Edit details**, **Download**, **Details**, **Invoice details**, **Re‑run checks**, **Customer 360**, **Delete**.
 10. **Vault** – company certificates/contracts with expiry: **Check alerts**, **Add**, **Renew/update**.
+11. **Creditors** – supplier payment packs (see below).
+
+### Creditors payment packs (Finance › Creditors tab)
+This is how we pay suppliers in a controlled way. One **batch** = one paying company + one payment type (Daily creditor, Monthly creditor, Prepayment, Intercompany, Utility, Staff payment, Credit note) + a list of payments.
+
+**The six steps (shown as a progress bar on every batch):**
+1. **Prepare** (clerk) – **New batch**, pick the company and payment type, **Add payment** for each beneficiary (supplier, amount, invoice numbers, bank details). The screen lists exactly which documents are required for that payment type – for the batch (payment schedule, recon, Sage report) and per payment (tax invoice, quotes, PO, GRV, bank letter, requisition …). Drop PDFs onto the batch or onto a payment; the system reads each one, suggests the document type and you confirm. A required document that truly doesn't apply can be marked **N/A** with a reason. **Submit** stays grey until every required slot is filled.
+2. **Checks** (automatic, on submit) – missing documents, bank letter older than 3 months, bank account on the schedule vs the letter, duplicate invoice numbers (in this or earlier batches), VAT number format, invoice total vs schedule, fewer than 3 quotes, credit note without a GRV, first‑time or changed bank account, same amount paid in the last 7 days, prepayments still open, unreadable/password‑protected PDFs. **FAIL** sends the batch straight back; **REVIEW** items are flagged for the approvers.
+3. **Accountant** (mandatory) – the company's responsible accountant (or back‑up) gets a notification, reviews, and **Approve → director** or **Send back** with a reason. The preparer can never approve their own batch.
+4. **Director** – approves, queries or rejects **each payment** (👍 ❓ 👎), then **Sign batch**: type your full name (and optionally draw a signature). Signing is disabled until the accountant has approved and every payment has a decision. Any queried payment sends the batch back; otherwise the batch becomes **Approved** and is **locked** (files can no longer be removed; replacements need a reason and are versioned). Both approvals are stored as electronic signatures with a tamper‑evidence hash.
+5. **Bank** – the bank user downloads the **Bank file (CSV)** of approved payments only, marks **Loaded on bank**, then **Mark paid**.
+6. **Close** – the clerk uploads **Proof of payment** per payment. For prepayments the batch also waits for the **tax invoice + GRV** after delivery. **Close batch** is refused until those are in.
+
+**Sent back?** The red banner says why. **Reopen & fix**, correct, and **Submit** again.
+
+**Board view:** KPI tiles (Drafts, Sent back, With accountant, With director, To load/pay, Paid·needs POP, Open prepayments), company chips, a control‑alerts strip (new bank details, old letters, duplicates, stale prepayments) and the batch table with checks status and approval ticks. Every batch has a **Trail** of who did what, when.
+
+**Roles** (Settings › Users › Granular Permissions › *Finance › Creditors*): **Prepare payment packs**, **Company accountant**, **Director**, **Bank loading**, **View (read‑only)**, **Creditors admin**. The admin uses **Companies & roles** on the Creditors tab to tick who holds each role and to set each company's accountant, back‑up approver, director and delegate director.
 
 ### Sub‑pages
 **Creditors**, **Debtors** (**Record collection**), **Expenses** (**New expense**, **Approve / Reject / Mark paid**), **Commitments**, **Budgets**, **Purchase orders**, **Payments**, **Categories**.

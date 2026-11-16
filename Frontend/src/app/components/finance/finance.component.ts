@@ -22,6 +22,7 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
 import { environment } from '../../../environments/environment';
 import { FinancePodsComponent } from './finance-pods.component';
 import { FinanceVaultComponent } from './finance-vault.component';
+import { FinanceCreditorsComponent } from './finance-creditors.component';
 import { FinanceAgingComponent } from './finance-aging.component';
 import { FinanceRemittancesComponent } from './finance-remittances.component';
 import { FinanceCreditNotesComponent } from './finance-credit-notes.component';
@@ -31,7 +32,7 @@ import { FinancePacksComponent } from './finance-packs.component';
 import { TenderService } from '../../services/tender.service';
 
 /** Tab order in finance.component.html */
-const TABS = ['overview', 'approvals', 'invoices', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'packs', 'vault'] as const;
+const TABS = ['overview', 'approvals', 'invoices', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'packs', 'vault', 'creditors'] as const;
 type FinanceTab = typeof TABS[number];
 
 interface BookInvoice {
@@ -107,6 +108,7 @@ interface Overview {
     PageHeaderComponent,
     FinancePodsComponent,
     FinanceVaultComponent,
+    FinanceCreditorsComponent,
     FinanceAgingComponent,
     FinanceRemittancesComponent,
     FinanceCreditNotesComponent,

@@ -281,11 +281,43 @@ namespace ProjectTracker.API.Data
         // Personal Home page layouts (widgets + shortcuts)
         public DbSet<UserHomeLayout> UserHomeLayouts { get; set; }
 
+        // Finance › Creditors payment packs
+        public DbSet<Models.Finance.Creditors.CreditorCompany> CreditorCompanies { get; set; }
+        public DbSet<Models.Finance.Creditors.PaymentBatch> PaymentBatches { get; set; }
+        public DbSet<Models.Finance.Creditors.PaymentBatchItem> PaymentBatchItems { get; set; }
+        public DbSet<Models.Finance.Creditors.PaymentBatchDocument> PaymentBatchDocuments { get; set; }
+        public DbSet<Models.Finance.Creditors.PaymentBatchEvent> PaymentBatchEvents { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.Entity<UserHomeLayout>(e => e.HasIndex(l => l.UserId).IsUnique());
+
+            // Creditors payment packs
+            modelBuilder.Entity<Models.Finance.Creditors.CreditorCompany>(e => e.HasIndex(c => c.Code).IsUnique());
+            modelBuilder.Entity<Models.Finance.Creditors.PaymentBatch>(e =>
+            {
+                e.HasIndex(b => b.BatchNumber).IsUnique();
+                e.HasIndex(b => new { b.CompanyCode, b.Status });
+                e.Property(b => b.TotalAmount).HasPrecision(18, 2);
+                e.HasMany(b => b.Items).WithOne(i => i.Batch).HasForeignKey(i => i.BatchId).OnDelete(DeleteBehavior.Cascade);
+                e.HasMany(b => b.Documents).WithOne(d => d.Batch).HasForeignKey(d => d.BatchId).OnDelete(DeleteBehavior.Cascade);
+                e.HasMany(b => b.Events).WithOne(x => x.Batch).HasForeignKey(x => x.BatchId).OnDelete(DeleteBehavior.Cascade);
+            });
+            modelBuilder.Entity<Models.Finance.Creditors.PaymentBatchItem>(e =>
+            {
+                e.HasIndex(i => i.BatchId);
+                e.HasIndex(i => i.AccountNumber);
+                e.Property(i => i.Amount).HasPrecision(18, 2);
+            });
+            modelBuilder.Entity<Models.Finance.Creditors.PaymentBatchDocument>(e =>
+            {
+                e.HasIndex(d => new { d.BatchId, d.DocType });
+                e.HasIndex(d => d.Sha256);
+                e.Property(d => d.ExtractedAmount).HasPrecision(18, 2);
+            });
+            modelBuilder.Entity<Models.Finance.Creditors.PaymentBatchEvent>(e => e.HasIndex(x => x.BatchId));
 
             // Cortex
             modelBuilder.Entity<Models.Cortex.CortexNode>(e =>

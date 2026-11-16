@@ -936,7 +936,13 @@ namespace ProjectTracker.API.Controllers
                 new PermissionDto { Key = "documents.delete", Name = "Delete Documents", Category = "Documents" },
                 new PermissionDto { Key = "messages.send", Name = "Send Messages", Category = "Messages" },
                 new PermissionDto { Key = "kb.manage", Name = "Manage Knowledge Base", Category = "Knowledge Base" },
-                new PermissionDto { Key = "support.manage", Name = "Manage Support Tickets", Category = "Support" }
+                new PermissionDto { Key = "support.manage", Name = "Manage Support Tickets", Category = "Support" },
+                new PermissionDto { Key = "cred.clerk", Name = "Prepare payment packs", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.accountant", Name = "Company accountant (approve packs)", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.director", Name = "Director (sign packs)", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.bank", Name = "Bank loading / mark paid", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.readonly", Name = "View packs (read-only / audit)", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.admin", Name = "Creditors admin (companies & approvers)", Category = "Finance › Creditors" }
             };
             return Ok(permissions);
         }

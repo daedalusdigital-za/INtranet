@@ -619,6 +619,20 @@
     </div>
   </mat-tab>
 
+  <!-- ═══════════ CREDITORS ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">payments</mat-icon> Creditors
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Creditors Payment Packs</h2>
+        <p>Pay suppliers the controlled way. Build a batch per paying company, attach the documents each payment type requires, let the system check them (bank letters, duplicates, VAT numbers, totals), then the company accountant approves, the director decides each payment and signs, the bank user loads and marks paid, and the batch closes with proof of payment. Everything is locked and audited once signed.</p>
+      </div>
+      @if (tabIndex === 10) { <app-finance-creditors></app-finance-creditors> }
+    </div>
+  </mat-tab>
+
   </mat-tab-group>
 </div>
 
