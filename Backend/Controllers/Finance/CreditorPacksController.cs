@@ -205,7 +205,7 @@ public class CreditorPacksController : ControllerBase
         {
             b.Id, b.BatchNumber, b.CompanyCode, b.PaymentType, b.BatchDate, b.Status, statusTitle = CreditorWorkflow.Title(b.Status),
             b.TotalAmount, items = b.Items.Count, documents = b.Documents.Count(d => d.StoragePath != null),
-            b.PreparedByName, b.CreatedAt, b.SubmittedAt, b.ChecksStatus, b.AccountantName, b.AccountantApprovedAt, b.DirectorName, b.DirectorSignedAt,
+            b.PreparedByUserId, b.PreparedByName, b.CreatedAt, b.SubmittedAt, b.UpdatedAt, b.ChecksStatus, b.AccountantName, b.AccountantApprovedAt, b.DirectorName, b.DirectorSignedAt,
             b.PaidAt, b.ClosedAt, b.ReturnReason, openPrepayments = b.Items.Count(i => i.PrepaymentOpen),
             approvedItems = b.Items.Count(i => i.DecisionStatus == "Approved"), queriedItems = b.Items.Count(i => i.DecisionStatus == "Queried"), rejectedItems = b.Items.Count(i => i.DecisionStatus == "Rejected")
         }).ToListAsync();

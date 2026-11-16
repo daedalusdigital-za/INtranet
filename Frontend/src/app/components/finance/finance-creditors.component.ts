@@ -6,53 +6,72 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatMenuModule } from '@angular/material/menu';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorCompany, CreditorAlert, RequiredDoc } from '../../services/creditor-packs.service';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorCompany, CreditorAlert, RequiredDoc, CheckFinding } from '../../services/creditor-packs.service';
 
 type View = 'board' | 'batch' | 'admin';
+interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
 
 const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoiceNumbers: '', description: '', amount: 0, bankName: '', accountNumber: '', branchCode: '', accountHolder: '', paymentReference: '', stockReturned: false };
 
 /**
- * Finance → Creditors. Payment packs per paying company: the clerk builds the schedule and attaches
- * the required documents, the system runs its checks, the company accountant approves, the director
- * decides each payment and signs, the bank user loads and marks paid, the clerk closes with proof of payment.
+ * Finance → Creditors. Payment packs per paying company. The screen is organised around
+ * "what do I need to do next": the board lists batches waiting on you first, and every batch
+ * opens with a plain-language next-step card and the buttons that go with it.
  */
 @Component({
   selector: 'app-finance-creditors',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatMenuModule, MatCheckboxModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule],
   template: `
   @if (!meta()) {
     <div class="cr-state"><mat-spinner diameter="36"></mat-spinner><p>Opening creditors…</p></div>
   } @else {
 
-  <!-- ═══════════ BOARD ═══════════ -->
+  <!-- ═══════════════════════ BOARD ═══════════════════════ -->
   @if (view() === 'board') {
-    <div class="cr-kpis">
-      <button class="cr-kpi" [class.active]="statusFilter() === ''" (click)="statusFilter.set('')"><mat-icon>payments</mat-icon><span class="v">{{ rows().length }}</span><span class="l">Batches</span></button>
-      <button class="cr-kpi muted" [class.active]="statusFilter() === 'Draft'" (click)="statusFilter.set('Draft')"><mat-icon>edit_note</mat-icon><span class="v">{{ count('Draft') }}</span><span class="l">Drafts</span></button>
-      <button class="cr-kpi bad" [class.active]="statusFilter() === 'ChecksFailed'" (click)="statusFilter.set('ChecksFailed')"><mat-icon>report</mat-icon><span class="v">{{ count('ChecksFailed') + count('QueriedByAccountant') + count('QueriedByDirector') }}</span><span class="l">Sent back</span></button>
-      <button class="cr-kpi warn" [class.active]="statusFilter() === 'AwaitingAccountant'" (click)="statusFilter.set('AwaitingAccountant')"><mat-icon>fact_check</mat-icon><span class="v">{{ count('AwaitingAccountant') }}</span><span class="l">With accountant</span></button>
-      <button class="cr-kpi warn" [class.active]="statusFilter() === 'AwaitingDirector'" (click)="statusFilter.set('AwaitingDirector')"><mat-icon>draw</mat-icon><span class="v">{{ count('AwaitingDirector') }}</span><span class="l">With director</span></button>
-      <button class="cr-kpi ok" [class.active]="statusFilter() === 'Approved'" (click)="statusFilter.set('Approved')"><mat-icon>account_balance</mat-icon><span class="v">{{ count('Approved') + count('LoadedOnBank') }}</span><span class="l">To load / pay</span></button>
-      <button class="cr-kpi" [class.active]="statusFilter() === 'Paid'" (click)="statusFilter.set('Paid')"><mat-icon>receipt_long</mat-icon><span class="v">{{ count('Paid') }}</span><span class="l">Paid · needs POP</span></button>
-      <button class="cr-kpi warn2" [class.active]="statusFilter() === 'prepay'" (click)="statusFilter.set('prepay')"><mat-icon>hourglass_top</mat-icon><span class="v">{{ openPrepay() }}</span><span class="l">Open prepayments</span></button>
+
+    <div class="cr-how" [class.open]="howOpen()">
+      <button class="hd" (click)="howOpen.set(!howOpen())"><mat-icon>help_outline</mat-icon> How a payment pack moves <mat-icon class="tw">{{ howOpen() ? 'expand_less' : 'expand_more' }}</mat-icon></button>
+      @if (howOpen()) {
+        <ol>
+          <li><strong>Prepare</strong> — a clerk adds each payment and attaches the documents the list asks for.</li>
+          <li><strong>Checks</strong> — the system reads the PDFs and flags problems (missing docs, old bank letters, duplicates…).</li>
+          <li><strong>Accountant</strong> — the company's accountant approves or sends it back.</li>
+          <li><strong>Director</strong> — approves / queries / rejects each payment, then signs. The pack locks.</li>
+          <li><strong>Bank</strong> — the bank user downloads the bank file, loads it, marks it paid.</li>
+          <li><strong>Close</strong> — proof of payment is attached for every payment and the pack is closed.</li>
+        </ol>
+      }
     </div>
+
+    @if (mine().length) {
+      <section class="cr-mine">
+        <h3><mat-icon>notifications_active</mat-icon> Needs your action <span class="n">{{ mine().length }}</span></h3>
+        <div class="cards">
+          @for (r of mine(); track r.id) {
+            <button [class]="'mcard tone-' + rowStep(r).tone" (click)="open(r.id)">
+              <div class="top"><span class="ref">{{ r.batchNumber }}</span><span class="co">{{ r.companyCode }}</span><span class="amt">R {{ r.totalAmount | number:'1.0-0' }}</span></div>
+              <div class="what"><mat-icon>{{ rowStep(r).icon }}</mat-icon> {{ rowStep(r).title }}</div>
+              <div class="sub">{{ typeTitle(r.paymentType) }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.returnReason && isSentBack(r.status)) { · <em>{{ r.returnReason }}</em> }</div>
+            </button>
+          }
+        </div>
+      </section>
+    }
 
     @if (alerts().length) {
       <div class="cr-alerts">
         <mat-icon>gpp_maybe</mat-icon>
-        <div class="txt"><strong>{{ alerts().length }} control alert{{ alerts().length === 1 ? '' : 's' }}</strong> across open batches — new bank details, old bank letters, duplicates, open prepayments.</div>
+        <div class="txt"><strong>{{ alerts().length }} thing{{ alerts().length === 1 ? '' : 's' }} worth a second look</strong> — new bank details, old bank letters, possible duplicates, prepayments still open.</div>
         <button mat-button (click)="showAlerts.set(!showAlerts())">{{ showAlerts() ? 'Hide' : 'Show' }}</button>
       </div>
       @if (showAlerts()) {
         <div class="cr-alert-list">
           @for (a of alerts(); track $index) {
             <button class="cr-alert" [class.fail]="a.severity === 'FAIL'" (click)="open(a.batchId)">
-              <span class="code">{{ a.code }}</span><span class="b">{{ a.batchNumber }} · {{ a.companyCode }}</span><span class="t">{{ a.title }}</span><span class="d">{{ a.detail }}</span>
+              <span class="b">{{ a.batchNumber }} · {{ a.companyCode }}</span><span class="t">{{ a.title }}</span><span class="d">{{ a.detail }}</span>
             </button>
           }
         </div>
@@ -60,77 +79,79 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     }
 
     <div class="cr-toolbar">
-      <div class="cr-chips">
-        <button class="chip" [class.on]="companyFilter() === ''" (click)="companyFilter.set('')">All companies</button>
-        @for (c of activeCompanies(); track c.code) {
-          <button class="chip" [class.on]="companyFilter() === c.code" (click)="companyFilter.set(c.code)" [matTooltip]="c.name">{{ c.code }}</button>
-        }
+      <div class="cr-seg">
+        <button [class.on]="statusFilter() === ''" (click)="statusFilter.set('')">All <b>{{ rows().length }}</b></button>
+        <button [class.on]="statusFilter() === 'open'" (click)="statusFilter.set('open')">In progress <b>{{ countOpen() }}</b></button>
+        <button [class.on]="statusFilter() === 'back'" (click)="statusFilter.set('back')">Sent back <b>{{ count('ChecksFailed') + count('QueriedByAccountant') + count('QueriedByDirector') }}</b></button>
+        <button [class.on]="statusFilter() === 'pay'" (click)="statusFilter.set('pay')">To pay <b>{{ count('Approved') + count('LoadedOnBank') }}</b></button>
+        <button [class.on]="statusFilter() === 'Paid'" (click)="statusFilter.set('Paid')">Paid · needs POP <b>{{ count('Paid') }}</b></button>
+        <button [class.on]="statusFilter() === 'prepay'" (click)="statusFilter.set('prepay')">Open prepayments <b>{{ openPrepay() }}</b></button>
+        <button [class.on]="statusFilter() === 'Closed'" (click)="statusFilter.set('Closed')">Closed <b>{{ count('Closed') }}</b></button>
       </div>
       <span class="cr-spacer"></span>
+      <select [ngModel]="companyFilter()" (ngModelChange)="companyFilter.set($event)">
+        <option value="">All companies</option>
+        @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} — {{ c.name }}</option> }
+      </select>
       <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
         <option value="">All payment types</option>
         @for (p of meta()!.paymentTypes; track p.key) { <option [value]="p.key">{{ p.title }}</option> }
       </select>
-      <button mat-stroked-button (click)="loadBoard()"><mat-icon>refresh</mat-icon> Refresh</button>
-      @if (meta()!.me.isAdmin) { <button mat-stroked-button (click)="openAdmin()"><mat-icon>admin_panel_settings</mat-icon> Companies & roles</button> }
+      <button mat-icon-button (click)="loadBoard()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
+      @if (meta()!.me.isAdmin) { <button mat-stroked-button (click)="openAdmin()"><mat-icon>admin_panel_settings</mat-icon> Companies & people</button> }
       @if (meta()!.me.clerk) { <button mat-flat-button color="primary" (click)="newOpen.set(true)"><mat-icon>add</mat-icon> New batch</button> }
     </div>
 
     @if (newOpen()) {
       <div class="cr-card cr-new">
-        <h3>New payment batch</h3>
+        <h3>Start a new payment batch</h3>
+        <p class="lead">One batch = one paying company + one kind of payment. You'll add the individual payments on the next screen.</p>
         <div class="row">
-          <label>Paying company
+          <label>Which company is paying?
             <select [(ngModel)]="newBatch.companyCode">
               @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} — {{ c.name }}</option> }
             </select>
           </label>
-          <label>Payment type
+          <label>What kind of payment?
             <select [(ngModel)]="newBatch.paymentType">
               @for (p of meta()!.paymentTypes; track p.key) { <option [value]="p.key">{{ p.title }}</option> }
             </select>
           </label>
           <label>Payment date <input type="date" [(ngModel)]="newBatch.batchDate"></label>
-          <label class="grow">Notes <input type="text" [(ngModel)]="newBatch.notes" placeholder="e.g. Week 46 daily creditors"></label>
+          <label class="grow">Note for the approvers (optional) <input type="text" [(ngModel)]="newBatch.notes" placeholder="e.g. Week 46 daily creditors"></label>
         </div>
         @if (companyFor(newBatch.companyCode); as co) {
           <p class="hint" [class.warn]="!co.accountantUserId">
             <mat-icon>{{ co.accountantUserId ? 'verified_user' : 'warning' }}</mat-icon>
-            Accountant: <strong>{{ co.accountantName || 'not set — any accountant may approve until the admin assigns one' }}</strong>
-            · Director: <strong>{{ co.directorName || 'not set' }}</strong>
+            <span>This pack will go to <strong>{{ co.accountantName || 'any accountant (none assigned yet)' }}</strong> for approval and then to <strong>{{ co.directorName || 'a director (none assigned yet)' }}</strong> to sign.</span>
           </p>
         }
+        <p class="hint"><mat-icon>checklist</mat-icon> <span>Documents needed per payment for <strong>{{ typeTitle(newBatch.paymentType) }}</strong>: {{ rulesSummary(newBatch.paymentType) }}</span></p>
         <div class="actions"><button mat-button (click)="newOpen.set(false)">Cancel</button><button mat-flat-button color="primary" [disabled]="!newBatch.companyCode || busy()" (click)="create()">Create batch</button></div>
       </div>
     }
 
     @if (loading()) { <div class="cr-state"><mat-spinner diameter="32"></mat-spinner></div> }
     @else if (!filteredRows().length) {
-      <div class="cr-state"><mat-icon>inbox</mat-icon><h3>No batches here</h3><p>Create a batch to start a payment pack, or change the filters.</p></div>
+      <div class="cr-state"><mat-icon>inbox</mat-icon><h3>Nothing here</h3><p>No batches match these filters.</p></div>
     } @else {
       <div class="cr-table-wrap">
         <table class="cr-table">
-          <thead><tr><th>Batch</th><th>Company</th><th>Type</th><th>Date</th><th class="num">Amount</th><th>Lines</th><th>Status</th><th>Prepared by</th><th>Approvals</th><th></th></tr></thead>
+          <thead><tr><th>Batch</th><th>Company</th><th>Payment type</th><th class="num">Amount</th><th>Where it is</th><th>Waiting on</th><th>Last change</th><th></th></tr></thead>
           <tbody>
             @for (r of filteredRows(); track r.id) {
-              <tr (click)="open(r.id)" [class]="'st-' + r.status">
-                <td class="ref">{{ r.batchNumber }}</td>
-                <td><strong>{{ r.companyCode }}</strong></td>
+              <tr (click)="open(r.id)">
+                <td><span class="ref">{{ r.batchNumber }}</span><br><small class="muted">{{ r.batchDate | date:'dd MMM' }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
+                <td><strong>{{ r.companyCode }}</strong><br><small class="muted">{{ companyFor(r.companyCode)?.name }}</small></td>
                 <td>{{ typeTitle(r.paymentType) }}</td>
-                <td class="nowrap">{{ r.batchDate | date:'dd MMM yyyy' }}</td>
                 <td class="num">R {{ r.totalAmount | number:'1.2-2' }}</td>
-                <td>{{ r.items }} <small class="muted">· {{ r.documents }} docs</small></td>
                 <td>
-                  <span class="badge" [class]="'badge ' + badge(r.status)">{{ r.statusTitle }}</span>
-                  @if (r.checksStatus && r.status !== 'Draft') { <span class="chk" [class]="'chk ' + r.checksStatus.toLowerCase()" [matTooltip]="'Automatic checks: ' + r.checksStatus">{{ r.checksStatus }}</span> }
-                  @if (r.returnReason && (r.status === 'ChecksFailed' || r.status.startsWith('Queried'))) { <div class="reason">{{ r.returnReason }}</div> }
+                  <span [class]="'badge ' + badge(r.status)">{{ r.statusTitle }}</span>
+                  @if (r.returnReason && isSentBack(r.status)) { <div class="reason">{{ r.returnReason }}</div> }
+                  @if (r.openPrepayments) { <div class="reason warn">{{ r.openPrepayments }} prepayment{{ r.openPrepayments === 1 ? '' : 's' }} awaiting invoice + GRV</div> }
                 </td>
-                <td>{{ r.preparedByName }}</td>
-                <td class="appr">
-                  <span [class.done]="r.accountantApprovedAt" matTooltip="Accountant">{{ r.accountantApprovedAt ? '✓' : '○' }} Acc</span>
-                  <span [class.done]="r.directorSignedAt" matTooltip="Director">{{ r.directorSignedAt ? '✓' : '○' }} Dir</span>
-                  @if (r.openPrepayments) { <span class="pre" matTooltip="Prepayments awaiting invoice + GRV">{{ r.openPrepayments }} open</span> }
-                </td>
+                <td class="who">{{ waitingOn(r) }}</td>
+                <td class="nowrap muted">{{ (r.updatedAt || r.createdAt) | date:'dd MMM HH:mm' }}</td>
                 <td class="actions"><mat-icon>chevron_right</mat-icon></td>
               </tr>
             }
@@ -140,274 +161,323 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     }
   }
 
-  <!-- ═══════════ BATCH ═══════════ -->
+  <!-- ═══════════════════════ BATCH ═══════════════════════ -->
   @if (view() === 'batch' && batch(); as b) {
     <div class="cr-bhead">
-      <button mat-icon-button (click)="back()" aria-label="Back"><mat-icon>arrow_back</mat-icon></button>
+      <button mat-icon-button (click)="back()" aria-label="Back to all batches" matTooltip="All batches"><mat-icon>arrow_back</mat-icon></button>
       <div class="ttl">
-        <h2>{{ b.batchNumber }} <span class="badge" [class]="'badge ' + badge(b.status)">{{ b.statusTitle }}</span>
-          @if (b.lockedAt) { <mat-icon class="lock" matTooltip="Signed and locked — files can't be changed">lock</mat-icon> }
+        <h2>{{ b.batchNumber }} <span [class]="'badge lg ' + badge(b.status)">{{ b.statusTitle }}</span>
+          @if (b.lockedAt) { <mat-icon class="lock" matTooltip="Signed and locked — nothing can be changed">lock</mat-icon> }
         </h2>
-        <p>{{ b.companyName }} ({{ b.companyCode }}) · {{ b.paymentTypeTitle }} · {{ b.batchDate | date:'dd MMM yyyy' }} · prepared by {{ b.preparedByName }}</p>
+        <p><strong>{{ b.companyName }}</strong> is paying · {{ b.paymentTypeTitle }} · dated {{ b.batchDate | date:'dd MMM yyyy' }} · prepared by {{ b.preparedByName }}@if (b.notes) { · “{{ b.notes }}” }</p>
       </div>
-      <div class="sum"><span class="l">Total</span><span class="v">R {{ b.totalAmount | number:'1.2-2' }}</span>
-        @if (b.approvedAmount && b.approvedAmount !== b.totalAmount) { <span class="l">Approved R {{ b.approvedAmount | number:'1.2-2' }}</span> }
+      <div class="sum">
+        @if (b.approvedAmount && b.approvedAmount !== b.totalAmount) {
+          <span class="l">Approved to pay</span><span class="v">R {{ b.approvedAmount | number:'1.2-2' }}</span><span class="l">of R {{ b.totalAmount | number:'1.2-2' }} requested</span>
+        } @else {
+          <span class="l">Total</span><span class="v">R {{ b.totalAmount | number:'1.2-2' }}</span>
+        }
       </div>
     </div>
 
-    <!-- Progress -->
     <ol class="cr-steps">
       @for (s of steps; track s.key) {
         <li [class.done]="stepState(b, s.key) === 'done'" [class.now]="stepState(b, s.key) === 'now'" [class.bad]="stepState(b, s.key) === 'bad'">
-          <mat-icon>{{ s.icon }}</mat-icon><span>{{ s.title }}</span>
+          <span class="dot"><mat-icon>{{ stepState(b, s.key) === 'done' ? 'check' : stepState(b, s.key) === 'bad' ? 'priority_high' : s.icon }}</mat-icon></span><span class="t">{{ s.title }}</span>
         </li>
       }
     </ol>
 
-    @if (b.returnReason && (b.status === 'ChecksFailed' || b.status.startsWith('Queried') || b.status === 'Rejected')) {
-      <div class="cr-banner bad"><mat-icon>undo</mat-icon><div><strong>Sent back:</strong> {{ b.returnReason }}</div>
-        @if (b.can.reopen) { <button mat-stroked-button (click)="setStatus('Draft')">Reopen & fix</button> }
+    @if (nextStep(b); as ns) {
+      <div [class]="'cr-next tone-' + ns.tone">
+        <mat-icon class="big">{{ ns.icon }}</mat-icon>
+        <div class="txt"><h3>{{ ns.title }}</h3><p>{{ ns.body }}</p></div>
+        <div class="btns">
+          @if (b.can.reopen) { <button mat-flat-button color="primary" (click)="setStatus('Draft')"><mat-icon>edit</mat-icon> Reopen & fix</button> }
+          @if (b.can.edit) { <button mat-flat-button color="primary" [disabled]="!b.can.submit || busy()" (click)="submit()"><mat-icon>send</mat-icon> Submit to accountant</button> }
+          @if (b.can.accountant) {
+            <button mat-flat-button color="primary" (click)="accountant('approve')" [disabled]="busy()"><mat-icon>task_alt</mat-icon> Approve</button>
+            <button mat-stroked-button (click)="accountant('query')" [disabled]="busy()"><mat-icon>reply</mat-icon> Send back</button>
+          }
+          @if (b.can.direct) {
+            @if (pendingCount(b) > 0) { <button mat-stroked-button (click)="decideAll('Approved')" [disabled]="busy()"><mat-icon>done_all</mat-icon> Approve all {{ pendingCount(b) }} pending</button> }
+            <button mat-flat-button color="primary" [disabled]="!b.can.sign || busy()" (click)="signOpen.set(true)"><mat-icon>draw</mat-icon> Sign batch</button>
+          }
+          @if (b.can.bankFile) { <button mat-stroked-button (click)="bankFile()"><mat-icon>download</mat-icon> Download bank file</button> }
+          @if (b.can.markLoaded) { <button mat-flat-button color="primary" (click)="setStatus('LoadedOnBank')"><mat-icon>account_balance</mat-icon> Loaded on bank</button> }
+          @if (b.can.markPaid) { <button mat-flat-button color="primary" (click)="setStatus('Paid')"><mat-icon>price_check</mat-icon> Mark as paid</button> }
+          @if (b.can.close) { <button mat-flat-button color="primary" (click)="setStatus('Closed')" [disabled]="missingPop(b) > 0 || openPrepayCount(b) > 0"><mat-icon>inventory</mat-icon> Close batch</button> }
+          @if (b.can.rerunChecks && b.items.length && b.status !== 'Closed') { <button mat-button (click)="rerun()" [disabled]="busy()"><mat-icon>rule</mat-icon> Re-run checks</button> }
+          @if (b.can.edit && b.status === 'Draft') { <button mat-button color="warn" (click)="deleteBatch()"><mat-icon>delete</mat-icon> Delete draft</button> }
+        </div>
       </div>
     }
 
-    <!-- Action bar -->
-    <div class="cr-actions">
-      @if (b.can.rerunChecks && b.items.length) { <button mat-stroked-button (click)="rerun()" [disabled]="busy()"><mat-icon>rule</mat-icon> Run checks</button> }
-      @if (b.can.edit) {
-        <button mat-flat-button color="primary" [disabled]="!b.can.submit || busy()" (click)="submit()" [matTooltip]="b.can.submit ? 'Run the checks and send to the accountant' : 'Add payments and fill every required document first'"><mat-icon>send</mat-icon> Submit to accountant</button>
-        @if (b.status === 'Draft') { <button mat-button color="warn" (click)="deleteBatch()"><mat-icon>delete</mat-icon> Delete draft</button> }
-      }
-      @if (b.can.accountant) {
-        <button mat-flat-button color="primary" (click)="accountant('approve')" [disabled]="busy()"><mat-icon>task_alt</mat-icon> Approve → director</button>
-        <button mat-stroked-button color="warn" (click)="accountant('query')" [disabled]="busy()"><mat-icon>reply</mat-icon> Send back</button>
-      }
-      @if (b.can.direct) {
-        <button mat-stroked-button (click)="decideAll('Approved')" [disabled]="busy()"><mat-icon>done_all</mat-icon> Approve all pending</button>
-        <button mat-flat-button color="primary" [disabled]="!b.can.sign || busy()" (click)="signOpen.set(true)" [matTooltip]="b.accountantApprovedAt ? (b.can.sign ? 'Sign the batch' : 'Decide on every payment first') : 'Waiting for the company accountant'"><mat-icon>draw</mat-icon> Sign batch</button>
-      }
-      @if (b.can.bankFile) { <button mat-stroked-button (click)="bankFile()"><mat-icon>download</mat-icon> Bank file (CSV)</button> }
-      @if (b.can.markLoaded) { <button mat-flat-button color="primary" (click)="setStatus('LoadedOnBank')"><mat-icon>account_balance</mat-icon> Loaded on bank</button> }
-      @if (b.can.markPaid) { <button mat-flat-button color="primary" (click)="setStatus('Paid')"><mat-icon>price_check</mat-icon> Mark paid</button> }
-      @if (b.can.close) { <button mat-flat-button color="primary" (click)="setStatus('Closed')"><mat-icon>inventory</mat-icon> Close batch</button> }
-      <span class="cr-spacer"></span>
-      @if (b.checksStatus) { <span class="chk big" [class]="'chk big ' + b.checksStatus.toLowerCase()">Checks: {{ b.checksStatus }}</span> }
-    </div>
-
-    <!-- Sign dialog -->
     @if (signOpen()) {
       <div class="cr-card cr-sign">
-        <h3><mat-icon>draw</mat-icon> Director sign-off</h3>
-        <p>You are approving <strong>{{ approvedCount(b) }}</strong> payment(s) for <strong>R {{ b.approvedAmount | number:'1.2-2' }}</strong> from {{ b.companyName }}.
-           Accountant approval: <strong>{{ b.accountantName }}</strong> on {{ b.accountantApprovedAt | date:'dd MMM HH:mm' }}. Once signed, the batch and its documents are locked.</p>
-        <label>Type your full name to sign <input type="text" [(ngModel)]="signName" placeholder="Full name as on your profile"></label>
+        <h3><mat-icon>draw</mat-icon> Sign this batch</h3>
+        <ul class="facts">
+          <li><mat-icon>business</mat-icon><span>{{ b.companyName }} pays <strong>R {{ b.approvedAmount | number:'1.2-2' }}</strong> across <strong>{{ approvedCount(b) }}</strong> approved payment{{ approvedCount(b) === 1 ? '' : 's' }}@if (queriedCount(b)) { · <span class="warn">{{ queriedCount(b) }} queried → pack goes back to the preparer</span> }@if (rejectedCount(b)) { · <span class="bad">{{ rejectedCount(b) }} rejected</span> }</span></li>
+          <li><mat-icon>fact_check</mat-icon><span>Accountant <strong>{{ b.accountantName }}</strong> approved on {{ b.accountantApprovedAt | date:'dd MMM HH:mm' }}</span></li>
+          <li><mat-icon>lock</mat-icon><span>After signing, the pack and its documents are locked and the bank file becomes available.</span></li>
+        </ul>
+        <label>Type your full name to sign <input type="text" [(ngModel)]="signName" placeholder="Your full name as on your profile"></label>
         <label>Draw your signature (optional)
           <canvas #sigpad width="520" height="140" class="sigpad" (pointerdown)="padDown($event)" (pointermove)="padMove($event)" (pointerup)="padUp()" (pointerleave)="padUp()"></canvas>
           <button mat-button type="button" (click)="padClear()">Clear</button>
         </label>
-        <label>Comment <input type="text" [(ngModel)]="signComment" placeholder="Optional"></label>
+        <label>Comment (optional) <input type="text" [(ngModel)]="signComment"></label>
         <div class="actions"><button mat-button (click)="signOpen.set(false)">Cancel</button><button mat-flat-button color="primary" [disabled]="!signName || busy()" (click)="sign()">Sign & lock</button></div>
       </div>
     }
 
     <div class="cr-grid">
-      <!-- LEFT: schedule + documents -->
       <div class="cr-main">
-        <!-- Batch-level documents -->
-        <section class="cr-card">
-          <header><h3><mat-icon>folder</mat-icon> Batch documents</h3><small>{{ filledCount(b.requiredBatchDocs) }} of {{ b.requiredBatchDocs.length }} required</small></header>
-          <div class="req">
-            @for (r of b.requiredBatchDocs; track r.docType) {
-              <span class="reqchip" [class.ok]="r.filled" (click)="!r.filled && b.can.edit && pickFor(r.docType, null)"><mat-icon>{{ r.filled ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>{{ r.title }}</span>
-            }
-          </div>
-          <ng-container *ngTemplateOutlet="docList; context: { docs: b.batchDocuments, itemId: null }"></ng-container>
-          @if (b.can.edit || b.can.uploadAfterLock) {
-            <div class="drop" (dragover)="$event.preventDefault()" (drop)="drop($event, null)">
-              <mat-icon>upload_file</mat-icon> Drop PDFs here or <button mat-button (click)="pickFor('', null)">choose files</button>
-              <small>One document per PDF · we'll suggest the type, you confirm</small>
-            </div>
-          }
-        </section>
 
-        <!-- Schedule -->
         <section class="cr-card">
-          <header><h3><mat-icon>list_alt</mat-icon> Payment schedule</h3><small>{{ b.items.length }} payment(s)</small>
-            @if (b.can.edit) { <button mat-stroked-button (click)="startItem()"><mat-icon>add</mat-icon> Add payment</button> }
+          <header>
+            <h3><mat-icon>list_alt</mat-icon> Payments <span class="cnt">{{ b.items.length }}</span></h3>
+            <small>{{ docsFilledItems(b) }} of {{ docsRequiredItems(b) }} required documents attached</small>
+            @if (b.can.edit) { <button mat-flat-button color="primary" (click)="startItem()"><mat-icon>add</mat-icon> Add payment</button> }
           </header>
 
           @if (itemForm()) {
             <div class="cr-itemform">
+              <h4>{{ itemForm() === 'new' ? 'New payment' : 'Edit payment' }}</h4>
               <div class="row">
-                <label class="grow">Supplier / beneficiary <input [(ngModel)]="itemDraft.supplierName" required></label>
-                <label>VAT no. <input [(ngModel)]="itemDraft.supplierVatNumber" placeholder="4xxxxxxxxx"></label>
+                <label class="grow">Who is being paid? <input [(ngModel)]="itemDraft.supplierName" placeholder="Supplier / beneficiary name" required></label>
                 <label>Amount (R) <input type="number" step="0.01" [(ngModel)]="itemDraft.amount"></label>
+                <label>Their VAT number <input [(ngModel)]="itemDraft.supplierVatNumber" placeholder="4xxxxxxxxx"></label>
               </div>
               <div class="row">
-                <label class="grow">Invoice / reference numbers <input [(ngModel)]="itemDraft.invoiceNumbers" placeholder="INV123, INV124"></label>
-                <label class="grow">Description <input [(ngModel)]="itemDraft.description"></label>
+                <label class="grow">Invoice / reference numbers being paid <input [(ngModel)]="itemDraft.invoiceNumbers" placeholder="INV123, INV124"></label>
+                <label class="grow">What is it for? <input [(ngModel)]="itemDraft.description"></label>
               </div>
+              <h5>Bank details (as on the bank letter)</h5>
               <div class="row">
                 <label>Bank <input [(ngModel)]="itemDraft.bankName"></label>
-                <label>Account no. <input [(ngModel)]="itemDraft.accountNumber"></label>
-                <label>Branch <input [(ngModel)]="itemDraft.branchCode"></label>
+                <label>Account number <input [(ngModel)]="itemDraft.accountNumber"></label>
+                <label>Branch code <input [(ngModel)]="itemDraft.branchCode"></label>
                 <label class="grow">Account holder <input [(ngModel)]="itemDraft.accountHolder"></label>
-                <label>Payment ref <input [(ngModel)]="itemDraft.paymentReference"></label>
+                <label>Reference on their statement <input [(ngModel)]="itemDraft.paymentReference"></label>
               </div>
               @if (b.paymentType === 'CreditNote') {
-                <mat-checkbox [(ngModel)]="itemDraft.stockReturned">Stock physically returned (warehouse GRV + collection slip required)</mat-checkbox>
+                <mat-checkbox [(ngModel)]="itemDraft.stockReturned">Stock physically came back (warehouse GRV + collection slip will be required)</mat-checkbox>
               }
-              <div class="actions"><button mat-button (click)="itemForm.set(null)">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy()" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add' : 'Save' }}</button></div>
+              <div class="actions"><button mat-button (click)="itemForm.set(null)">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy()" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button></div>
             </div>
           }
 
-          @if (!b.items.length) { <p class="empty">No payments yet. Add each beneficiary on the schedule, then attach its documents.</p> }
+          @if (!b.items.length) {
+            <div class="cr-empty"><mat-icon>add_card</mat-icon><p><strong>No payments yet.</strong> Click <em>Add payment</em> for each supplier you want to pay in this batch. The required documents will appear under each one.</p></div>
+          }
+
           @for (it of b.items; track it.id) {
             <div [class]="'cr-item dec-' + it.decisionStatus" [class.open]="openItem() === it.id">
               <div class="head" (click)="openItem.set(openItem() === it.id ? 0 : it.id)">
                 <mat-icon class="tw">{{ openItem() === it.id ? 'expand_more' : 'chevron_right' }}</mat-icon>
-                <div class="who"><strong>{{ it.supplierName }}</strong><small>{{ it.invoiceNumbers || it.description || '—' }} · {{ it.bankName || '' }} {{ it.accountNumber || '' }}</small></div>
-                <div class="docs" [matTooltip]="'Required documents for this payment'">
-                  @for (r of it.required; track r.docType) { <mat-icon [class.ok]="r.filled" [matTooltip]="r.title + (r.filled ? ' ✓' : ' — missing')">{{ r.filled ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon> }
+                <div class="who">
+                  <strong>{{ it.supplierName }}</strong>
+                  <small>{{ it.invoiceNumbers || it.description || 'no reference' }}@if (it.bankName) { · {{ it.bankName }} ···{{ (it.accountNumber || '').slice(-4) }} }</small>
                 </div>
-                @if (it.prepaymentOpen && it.paidAt) { <span class="pre">prepayment open</span> }
-                <span class="dec" [class]="'dec ' + it.decisionStatus.toLowerCase()">{{ it.decisionStatus === 'Pending' ? '' : it.decisionStatus }}</span>
+                <span class="docpill" [class.ok]="filledCount(it.required) === it.required.length" [class.none]="!it.required.length" [matTooltip]="missingNames(it.required)">
+                  <mat-icon>{{ filledCount(it.required) === it.required.length ? 'check_circle' : 'description' }}</mat-icon>
+                  {{ filledCount(it.required) }}/{{ it.required.length }} docs
+                </span>
+                @if (findingsFor(it.id).length) { <span class="flag" [class.fail]="hasFail(it.id)" [matTooltip]="findingsFor(it.id).length + ' check(s) to look at'"><mat-icon>flag</mat-icon>{{ findingsFor(it.id).length }}</span> }
+                @if (it.prepaymentOpen && it.paidAt) { <span class="pre">awaiting invoice + GRV</span> }
+                @if (it.decisionStatus !== 'Pending') { <span [class]="'dec ' + it.decisionStatus.toLowerCase()">{{ it.decisionStatus }}</span> }
                 <span class="amt">R {{ it.amount | number:'1.2-2' }}</span>
                 @if (b.can.edit) {
                   <button mat-icon-button (click)="$event.stopPropagation(); startItem(it)" matTooltip="Edit"><mat-icon>edit</mat-icon></button>
                   <button mat-icon-button (click)="$event.stopPropagation(); removeItem(it)" matTooltip="Remove"><mat-icon>delete</mat-icon></button>
                 }
-                @if (b.can.direct) {
-                  <span class="decide" (click)="$event.stopPropagation()">
-                    <button mat-icon-button [class.sel]="it.decisionStatus === 'Approved'" matTooltip="Approve" (click)="decide(it, 'Approved')"><mat-icon>thumb_up</mat-icon></button>
-                    <button mat-icon-button [class.sel]="it.decisionStatus === 'Queried'" matTooltip="Query (send back)" (click)="decide(it, 'Queried')"><mat-icon>help</mat-icon></button>
-                    <button mat-icon-button [class.sel]="it.decisionStatus === 'Rejected'" matTooltip="Reject" (click)="decide(it, 'Rejected')"><mat-icon>thumb_down</mat-icon></button>
-                  </span>
-                }
               </div>
-              @if (it.decisionComment) { <div class="deccomment"><mat-icon>chat</mat-icon> {{ it.decisionComment }}</div> }
+
+              @if (b.can.direct) {
+                <div class="decide">
+                  <span>Your decision:</span>
+                  <button mat-stroked-button [class.sel-ok]="it.decisionStatus === 'Approved'" (click)="decide(it, 'Approved')"><mat-icon>thumb_up</mat-icon> Approve</button>
+                  <button mat-stroked-button [class.sel-warn]="it.decisionStatus === 'Queried'" (click)="decide(it, 'Queried')"><mat-icon>help</mat-icon> Query</button>
+                  <button mat-stroked-button [class.sel-bad]="it.decisionStatus === 'Rejected'" (click)="decide(it, 'Rejected')"><mat-icon>thumb_down</mat-icon> Reject</button>
+                  @if (it.decisionComment) { <em>“{{ it.decisionComment }}”</em> }
+                </div>
+              } @else if (it.decisionComment) { <div class="deccomment"><mat-icon>chat</mat-icon> Director: “{{ it.decisionComment }}”</div> }
+
               @if (openItem() === it.id) {
                 <div class="body">
-                  <div class="req">
-                    @for (r of it.required; track r.docType) {
-                      <span class="reqchip" [class.ok]="r.filled" (click)="!r.filled && (b.can.edit || b.can.uploadAfterLock) && pickFor(r.docType, it.id)">
-                        <mat-icon>{{ r.filled ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>{{ r.title }}
-                        @if (!r.filled && b.can.edit) { <a class="na" (click)="$event.stopPropagation(); markNa(r, it.id)">N/A</a> }
-                      </span>
-                    }
-                  </div>
-                  <ng-container *ngTemplateOutlet="docList; context: { docs: it.documents, itemId: it.id }"></ng-container>
-                  @if (b.can.edit || b.can.uploadAfterLock) {
-                    <div class="drop sm" (dragover)="$event.preventDefault()" (drop)="drop($event, it.id)">
-                      <mat-icon>upload_file</mat-icon> Drop this payment's PDFs here or <button mat-button (click)="pickFor('', it.id)">choose</button>
-                    </div>
-                  }
+                  <h5>Documents for this payment</h5>
+                  <ng-container *ngTemplateOutlet="checklist; context: { required: it.required, docs: it.documents, itemId: it.id }"></ng-container>
                   @if (findingsFor(it.id).length) {
+                    <h5>Checks on this payment</h5>
                     <ul class="cr-findings">
-                      @for (f of findingsFor(it.id); track $index) { <li [class]="f.severity.toLowerCase()"><span class="code">{{ f.code }}</span><strong>{{ f.title }}</strong> <span>{{ f.detail }}</span></li> }
+                      @for (f of findingsFor(it.id); track $index) { <li [class]="f.severity.toLowerCase()"><mat-icon>{{ f.severity === 'FAIL' ? 'cancel' : 'error_outline' }}</mat-icon><div><strong>{{ f.title }}</strong><span>{{ f.detail }}</span></div></li> }
                     </ul>
+                  }
+                  @if (b.can.edit || b.can.uploadAfterLock) {
+                    <div class="drop" (dragover)="$event.preventDefault()" (drop)="drop($event, it.id)">
+                      <mat-icon>upload_file</mat-icon> Drop PDFs for <strong>{{ it.supplierName }}</strong> here, or <button mat-button (click)="pickFor('', it.id)">choose files</button>
+                    </div>
                   }
                 </div>
               }
             </div>
           }
         </section>
+
+        <section class="cr-card">
+          <header><h3><mat-icon>folder</mat-icon> Documents for the whole batch</h3><small>{{ filledCount(b.requiredBatchDocs) }} of {{ b.requiredBatchDocs.length }} attached</small></header>
+          <ng-container *ngTemplateOutlet="checklist; context: { required: b.requiredBatchDocs, docs: b.batchDocuments, itemId: null }"></ng-container>
+          @if (b.can.edit || b.can.uploadAfterLock) {
+            <div class="drop" (dragover)="$event.preventDefault()" (drop)="drop($event, null)">
+              <mat-icon>upload_file</mat-icon> Drop batch PDFs here (schedule, recon, Sage report) or <button mat-button (click)="pickFor('', null)">choose files</button>
+            </div>
+          }
+        </section>
       </div>
 
-      <!-- RIGHT: checks, approvals, trail -->
       <aside class="cr-side">
         <section class="cr-card">
-          <header><h3><mat-icon>rule</mat-icon> Automatic checks</h3>
-            @if (b.checksRunAt) { <small>{{ b.checksRunAt | date:'dd MMM HH:mm' }}</small> }
-          </header>
-          @if (!b.checks) { <p class="empty">Checks run when you submit. You can also run them any time from the toolbar.</p> }
+          <header><h3><mat-icon>rule</mat-icon> System checks</h3>@if (b.checksRunAt) { <small>{{ b.checksRunAt | date:'dd MMM HH:mm' }}</small> }</header>
+          @if (!b.checks) { <p class="empty">Run automatically when you submit. They look for missing documents, old bank letters, duplicate invoices, VAT numbers, mismatched totals and new bank accounts.</p> }
           @else {
-            <div class="chksum"><span class="fail">{{ b.checks.fail }} fail</span><span class="review">{{ b.checks.review }} review</span><span class="pass">{{ b.checks.pass }} pass</span></div>
+            <div [class]="'chk-verdict ' + b.checks.status.toLowerCase()">
+              <mat-icon>{{ b.checks.status === 'FAIL' ? 'cancel' : b.checks.status === 'REVIEW' ? 'error_outline' : 'check_circle' }}</mat-icon>
+              <div>
+                <strong>{{ b.checks.status === 'FAIL' ? 'Must be fixed before it can go further' : b.checks.status === 'REVIEW' ? 'Nothing blocking — a few things for the approvers to eyeball' : 'All clear' }}</strong>
+                <small>{{ b.checks.fail }} blocking · {{ b.checks.review }} to review · {{ b.checks.pass }} passed</small>
+              </div>
+            </div>
             <ul class="cr-findings">
-              @for (f of sortedFindings(b); track $index) {
-                <li [class]="f.severity.toLowerCase()"><span class="code">{{ f.code }}</span><strong>{{ f.title }}</strong>@if (f.supplier) { <em> · {{ f.supplier }}</em> } <span>{{ f.detail }}</span></li>
+              @for (f of visibleFindings(b); track $index) {
+                <li [class]="f.severity.toLowerCase()" (click)="f.itemId && openItem.set(f.itemId)">
+                  <mat-icon>{{ f.severity === 'FAIL' ? 'cancel' : f.severity === 'REVIEW' ? 'error_outline' : 'check_circle' }}</mat-icon>
+                  <div><strong>{{ f.title }}</strong>@if (f.supplier) { <em>{{ f.supplier }}</em> }<span>{{ f.detail }}</span></div>
+                </li>
               }
             </ul>
+            @if (b.checks.pass > 0) { <button mat-button class="link" (click)="showPassed.set(!showPassed())">{{ showPassed() ? 'Hide' : 'Show' }} {{ b.checks.pass }} passed</button> }
           }
         </section>
 
         <section class="cr-card">
           <header><h3><mat-icon>verified</mat-icon> Approvals</h3></header>
-          <div class="appr-row" [class.done]="b.accountantApprovedAt"><mat-icon>{{ b.accountantApprovedAt ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
-            <div><strong>Company accountant</strong><small>{{ b.accountantApprovedAt ? (b.accountantName + ' · ' + (b.accountantApprovedAt | date:'dd MMM HH:mm')) : (responsibleName(b.responsible.accountant) || 'not assigned') }}</small>@if (b.accountantComment) { <small>“{{ b.accountantComment }}”</small> }</div>
+          <div class="appr-row" [class.done]="b.accountantApprovedAt">
+            <mat-icon>{{ b.accountantApprovedAt ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+            <div><strong>1 · Company accountant</strong>
+              <small>@if (b.accountantApprovedAt) { {{ b.accountantName }} · {{ b.accountantApprovedAt | date:'dd MMM HH:mm' }} } @else { {{ responsibleName(b.responsible.accountant) || 'Any accountant' }}@if (responsibleName(b.responsible.backup)) { (back-up {{ responsibleName(b.responsible.backup) }}) } }</small>
+              @if (b.accountantComment) { <small class="q">“{{ b.accountantComment }}”</small> }
+            </div>
           </div>
-          <div class="appr-row" [class.done]="b.directorSignedAt && b.lockedAt"><mat-icon>{{ b.lockedAt ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
-            <div><strong>Director sign-off</strong><small>{{ b.directorSignedAt ? (b.directorName + ' · ' + (b.directorSignedAt | date:'dd MMM HH:mm')) : (responsibleName(b.responsible.director) || 'not assigned') }}</small>@if (b.directorComment) { <small>“{{ b.directorComment }}”</small> }</div>
+          <div class="appr-row" [class.done]="b.lockedAt">
+            <mat-icon>{{ b.lockedAt ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+            <div><strong>2 · Director signature</strong>
+              <small>@if (b.directorSignedAt) { {{ b.directorName }} · {{ b.directorSignedAt | date:'dd MMM HH:mm' }} } @else { {{ responsibleName(b.responsible.director) || 'Any director' }}@if (responsibleName(b.responsible.delegateDirector)) { (or {{ responsibleName(b.responsible.delegateDirector) }}) } }</small>
+              @if (b.directorComment) { <small class="q">“{{ b.directorComment }}”</small> }
+            </div>
           </div>
-          @if (b.lockHash) { <small class="hash" matTooltip="Tamper-evidence hash of the signed batch">lock {{ b.lockHash | slice:0:16 }}…</small> }
-          @for (s of b.signatures; track s.id) {
-            <div class="sig"><mat-icon>{{ s.method === 'Drawn' ? 'gesture' : 'keyboard' }}</mat-icon><span>{{ s.signerName }} · {{ s.context === 'AccountantApproval' ? 'Accountant' : 'Director' }} · {{ s.action }} · {{ s.signedAtUtc | date:'dd MMM HH:mm' }}</span></div>
-          }
+          @if (b.lockHash) { <small class="hash" matTooltip="Fingerprint of the batch at signing — proves nothing changed afterwards">Locked · fingerprint {{ b.lockHash | slice:0:12 }}…</small> }
         </section>
 
         <section class="cr-card">
-          <header><h3><mat-icon>history</mat-icon> Trail</h3></header>
+          <header><h3><mat-icon>history</mat-icon> History</h3></header>
           <ul class="cr-trail">
             @for (e of b.events; track e.id) {
-              <li><span class="when">{{ e.at | date:'dd MMM HH:mm' }}</span><span class="who">{{ e.userName }}</span><span class="what">{{ e.action }}@if (e.toStatus) { → {{ statusTitle(e.toStatus) }} }</span>@if (e.comment) { <span class="cmt">{{ e.comment }}</span> }</li>
+              <li><span class="when">{{ e.at | date:'dd MMM HH:mm' }}</span><span class="what"><strong>{{ e.userName }}</strong> {{ eventText(e) }}</span>@if (e.comment) { <span class="cmt">{{ e.comment }}</span> }</li>
             }
           </ul>
         </section>
       </aside>
     </div>
 
-    <!-- document list template -->
-    <ng-template #docList let-docs="docs" let-itemId="itemId">
-      @if (docs?.length) {
-        <ul class="cr-docs">
-          @for (d of docs; track d.id) {
-            <li [class.na]="d.isNotApplicable">
-              <mat-icon>{{ d.isNotApplicable ? 'block' : 'picture_as_pdf' }}</mat-icon>
-              <div class="info">
-                <div class="top">
-                  @if (b.can.edit && !d.isNotApplicable) {
-                    <select class="type" [ngModel]="d.docType" (ngModelChange)="retype(d, $event)" [class.sugg]="d.suggestedDocType && d.suggestedDocType !== d.docType">
-                      @for (t of docTypesFor(itemId); track t.key) { <option [value]="t.key">{{ t.title }}</option> }
-                    </select>
-                  } @else { <strong>{{ d.title }}</strong> }
-                  @if (d.version > 1) { <span class="ver">v{{ d.version }}</span> }
-                  @if (d.suggestedDocType && d.suggestedDocType !== d.docType && !d.isNotApplicable) { <small class="sugg" matTooltip="The system read it as a different type">looked like {{ docTitle(d.suggestedDocType) }}</small> }
-                </div>
-                <small>
-                  @if (d.isNotApplicable) { N/A — {{ d.naReason }} }
-                  @else { {{ d.originalFileName }} · {{ d.pageCount }}p · {{ d.textMethod }}@if (d.documentDate) { · dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.extractedAmount) { · R {{ d.extractedAmount | number:'1.2-2' }} }@if (d.extractedAccountNumber) { · acc {{ d.extractedAccountNumber }} } }
-                  · {{ d.uploadedByName }} {{ d.uploadedAt | date:'dd MMM' }}
-                </small>
-                @if (d.versionReason) { <small class="vr">Replaced: {{ d.versionReason }}</small> }
+    <ng-template #checklist let-required="required" let-docs="docs" let-itemId="itemId">
+      <ul class="cr-check">
+        @for (r of required; track r.docType) {
+          @if (docsOfType(docs, r.docType); as ds) {
+            <li [class.ok]="r.filled" [class.missing]="!r.filled">
+              <mat-icon class="st">{{ r.filled ? (ds[0]?.isNotApplicable ? 'remove_circle_outline' : 'check_circle') : 'radio_button_unchecked' }}</mat-icon>
+              <div class="name"><strong>{{ r.title }}</strong>
+                @if (!r.filled) { <small class="miss">Missing</small> }
+                @for (d of ds; track d.id) {
+                  <small class="file">
+                    @if (d.isNotApplicable) { Not applicable — {{ d.naReason }} }
+                    @else { {{ d.originalFileName }} · {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}@if (d.documentDate) { · dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.extractedAmount) { · R {{ d.extractedAmount | number:'1.2-2' }} }@if (d.version > 1) { · v{{ d.version }} } }
+                    @if (d.suggestedDocType && d.suggestedDocType !== d.docType && !d.isNotApplicable) { <span class="sugg">looked like {{ docTitle(d.suggestedDocType) }}</span> }
+                    @if (d.versionReason) { <span class="sugg">replaced: {{ d.versionReason }}</span> }
+                  </small>
+                }
               </div>
-              @if (!d.isNotApplicable) { <button mat-icon-button matTooltip="Open" (click)="openDoc(d)"><mat-icon>open_in_new</mat-icon></button> }
-              @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>delete</mat-icon></button> }
-              @else if (b.can.uploadAfterLock && !d.isNotApplicable) { <button mat-icon-button matTooltip="Replace (needs a reason)" (click)="replaceDoc(d)"><mat-icon>published_with_changes</mat-icon></button> }
+              <div class="act">
+                @for (d of ds; track d.id) {
+                  @if (!d.isNotApplicable) { <button mat-icon-button matTooltip="Open" (click)="openDoc(d)"><mat-icon>open_in_new</mat-icon></button> }
+                  @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
+                  @else if (b.can.uploadAfterLock && !d.isNotApplicable) { <button mat-icon-button matTooltip="Replace (reason required)" (click)="replaceDoc(d)"><mat-icon>published_with_changes</mat-icon></button> }
+                }
+                @if (!r.filled && (b.can.edit || b.can.uploadAfterLock)) {
+                  <button mat-stroked-button class="sm" (click)="pickFor(r.docType, itemId)"><mat-icon>upload</mat-icon> Upload</button>
+                  @if (b.can.edit) { <button mat-button class="sm" (click)="markNa(r, itemId)">N/A</button> }
+                }
+              </div>
             </li>
           }
-        </ul>
-      }
+        }
+        @for (d of extraDocs(docs, required); track d.id) {
+          <li class="extra">
+            <mat-icon class="st">attach_file</mat-icon>
+            <div class="name">
+              @if (b.can.edit) {
+                <select class="type" [ngModel]="d.docType" (ngModelChange)="retype(d, $event)">
+                  @for (t of docTypesFor(itemId); track t.key) { <option [value]="t.key">{{ t.title }}</option> }
+                </select>
+                @if (d.suggestedDocType && d.suggestedDocType !== d.docType) { <small class="sugg">System thinks this is a {{ docTitle(d.suggestedDocType) }} — change the type if so</small> }
+              } @else { <strong>{{ d.title }}</strong> }
+              <small class="file">{{ d.originalFileName }} · {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}</small>
+            </div>
+            <div class="act">
+              <button mat-icon-button matTooltip="Open" (click)="openDoc(d)"><mat-icon>open_in_new</mat-icon></button>
+              @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
+            </div>
+          </li>
+        }
+        @if (!required.length && !docs.length) { <li class="none">No documents are required here.</li> }
+      </ul>
     </ng-template>
     <input #fileInput type="file" accept="application/pdf" multiple hidden (change)="filesChosen($event)">
   }
 
-  <!-- ═══════════ ADMIN ═══════════ -->
+  <!-- ═══════════════════════ ADMIN ═══════════════════════ -->
   @if (view() === 'admin') {
     <div class="cr-bhead">
       <button mat-icon-button (click)="back()" aria-label="Back"><mat-icon>arrow_back</mat-icon></button>
-      <div class="ttl"><h2>Companies, approvers & roles</h2><p>Each paying company needs its responsible accountant (mandatory approval step), a back-up, and the director(s) who sign. Roles here are the same keys the Settings › Users screen shows under “Finance › Creditors”.</p></div>
+      <div class="ttl"><h2>Companies & people</h2><p>First tick who may do what. Then, for each paying company, choose its accountant (must approve every pack), a back‑up, and the director(s) who sign.</p></div>
     </div>
+
     <section class="cr-card">
-      <header><h3><mat-icon>business</mat-icon> Paying companies</h3><button mat-stroked-button (click)="addCompanyRow()"><mat-icon>add</mat-icon> Add company</button></header>
+      <header><h3><mat-icon>badge</mat-icon> Step 1 · Who may do what</h3><input class="search" [(ngModel)]="userSearch" (ngModelChange)="loadUsers()" placeholder="Search people…"></header>
       <table class="cr-table admin">
-        <thead><tr><th>Code</th><th>Company</th><th>Accountant *</th><th>Back-up approver</th><th>Director</th><th>Delegate director</th><th>Active</th><th></th></tr></thead>
+        <thead><tr><th>Person</th>@for (r of meta()!.roles; track r.key) { <th [matTooltip]="r.description">{{ r.title }}</th> }</tr></thead>
+        <tbody>
+          @for (u of users(); track u.id) {
+            <tr><td><strong>{{ u.name }}</strong><br><small class="muted">{{ u.email }} · {{ u.role }}</small></td>
+              @for (r of meta()!.roles; track r.key) { <td class="ctr"><mat-checkbox [checked]="hasRole(u, r.key)" (change)="setRole(u, r.key, $event.checked)"></mat-checkbox></td> }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="cr-card">
+      <header><h3><mat-icon>business</mat-icon> Step 2 · Approvers per paying company</h3><button mat-stroked-button (click)="addCompanyRow()"><mat-icon>add</mat-icon> Add company</button></header>
+      <table class="cr-table admin">
+        <thead><tr><th>Code</th><th>Company</th><th>Accountant (required step)</th><th>Back‑up approver</th><th>Director</th><th>Delegate director</th><th>Active</th><th></th></tr></thead>
         <tbody>
           @for (c of adminCompanies(); track c.id ?? $index) {
             <tr>
               <td><input class="code" [(ngModel)]="c.code" maxlength="10"></td>
-              <td><input [(ngModel)]="c.name"><input class="act" [(ngModel)]="c.activity" placeholder="activity"></td>
-              <td><select [(ngModel)]="c.accountantUserId"><option [ngValue]="null">—</option>@for (u of usersWith('cred.accountant'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
+              <td><input [(ngModel)]="c.name"><input class="act" [(ngModel)]="c.activity" placeholder="what the company does"></td>
+              <td><select [(ngModel)]="c.accountantUserId"><option [ngValue]="null">— not set —</option>@for (u of usersWith('cred.accountant'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
               <td><select [(ngModel)]="c.backupApproverUserId"><option [ngValue]="null">—</option>@for (u of usersWith('cred.accountant'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
-              <td><select [(ngModel)]="c.directorUserId"><option [ngValue]="null">—</option>@for (u of usersWith('cred.director'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
+              <td><select [(ngModel)]="c.directorUserId"><option [ngValue]="null">— not set —</option>@for (u of usersWith('cred.director'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
               <td><select [(ngModel)]="c.delegateDirectorUserId"><option [ngValue]="null">—</option>@for (u of usersWith('cred.director'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
               <td><mat-checkbox [(ngModel)]="c.isActive"></mat-checkbox></td>
               <td><button mat-flat-button color="primary" (click)="saveCompany(c)" [disabled]="busy() || !c.code || !c.name">Save</button></td>
@@ -415,21 +485,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           }
         </tbody>
       </table>
-      <p class="hint"><mat-icon>info</mat-icon> Only users who hold the matching role appear in the pickers. Grant roles below first.</p>
-    </section>
-
-    <section class="cr-card">
-      <header><h3><mat-icon>badge</mat-icon> Who does what</h3><input class="search" [(ngModel)]="userSearch" (ngModelChange)="loadUsers()" placeholder="Search people…"></header>
-      <table class="cr-table admin">
-        <thead><tr><th>Person</th>@for (r of meta()!.roles; track r.key) { <th [matTooltip]="r.description">{{ r.title }}</th> }</tr></thead>
-        <tbody>
-          @for (u of users(); track u.id) {
-            <tr><td><strong>{{ u.name }}</strong><small class="muted"> {{ u.email }} · {{ u.role }}</small></td>
-              @for (r of meta()!.roles; track r.key) { <td class="ctr"><mat-checkbox [checked]="hasRole(u, r.key)" (change)="setRole(u, r.key, $event.checked)"></mat-checkbox></td> }
-            </tr>
-          }
-        </tbody>
-      </table>
+      <p class="hint"><mat-icon>info</mat-icon> <span>Only people ticked as Accountant / Director in step 1 appear in these lists. Until a company has an accountant set, any accountant may approve its packs.</span></p>
     </section>
   }
   }
@@ -437,77 +493,117 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
   styles: [`
     :host { display: block; }
     .cr-state { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-8) var(--space-4); color: var(--color-text-3); text-align: center; mat-icon { font-size: 44px; width: 44px; height: 44px; } h3 { margin: 0; color: var(--color-text); } p { margin: 0; } }
-    .cr-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
-    .cr-kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--space-3) var(--space-4); text-align: left; font: inherit; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); cursor: pointer;
-      mat-icon { color: var(--color-primary); margin-bottom: 4px; } .v { font-size: var(--text-3xl); font-weight: 700; line-height: 1.1; } .l { font-size: var(--text-xs); color: var(--color-text-3); }
-      &:hover { border-color: var(--color-primary); } &.active { border-color: var(--color-primary); background: var(--color-primary-soft); }
-      &.ok mat-icon { color: var(--color-ok); } &.warn mat-icon, &.warn2 mat-icon { color: var(--color-warn); } &.bad mat-icon { color: var(--color-danger); } &.muted mat-icon { color: var(--color-text-3); } }
+    .cr-spacer { flex: 1; }
+    .muted { color: var(--color-text-3); } .nowrap { white-space: nowrap; } .ref { font-family: var(--font-mono); font-weight: 600; }
+
+    .cr-how { border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface); margin-bottom: var(--space-3);
+      .hd { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 12px; font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-2); background: none; border: 0; cursor: pointer; text-align: left; mat-icon { color: var(--color-primary); } .tw { margin-left: auto; color: var(--color-text-3); } }
+      ol { margin: 0; padding: 0 16px 12px 36px; font-size: var(--text-sm); color: var(--color-text-2); li { margin: 4px 0; } } }
+
+    .cr-mine { margin-bottom: var(--space-4);
+      h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-2); font-size: var(--text-md); mat-icon { color: var(--color-warn); } .n { font-size: var(--text-xs); background: var(--color-warn); color: #fff; border-radius: 999px; padding: 1px 8px; } }
+      .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-3); }
+      .mcard { text-align: left; font: inherit; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line); border-left: 4px solid var(--color-primary); border-radius: var(--radius-md); padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+        &:hover { box-shadow: var(--shadow-sm); border-color: var(--color-primary); }
+        .top { display: flex; gap: 8px; align-items: baseline; .co { font-weight: 700; } .amt { margin-left: auto; font-family: var(--font-mono); font-weight: 600; } }
+        .what { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: var(--text-sm); mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); } }
+        .sub { font-size: var(--text-xs); color: var(--color-text-3); em { color: var(--color-danger); font-style: normal; } }
+        &.tone-warn { border-left-color: var(--color-warn); .what mat-icon { color: var(--color-warn); } } &.tone-bad { border-left-color: var(--color-danger); .what mat-icon { color: var(--color-danger); } } &.tone-ok { border-left-color: var(--color-ok); .what mat-icon { color: var(--color-ok); } } } }
+
     .cr-alerts { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-md); mat-icon { color: var(--color-warn); } .txt { flex: 1; font-size: var(--text-sm); } }
     .cr-alert-list { display: grid; gap: 4px; margin-bottom: var(--space-3); }
-    .cr-alert { display: grid; grid-template-columns: 44px 160px 1fr; gap: 4px 12px; text-align: left; font: inherit; padding: 8px 12px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm);
-      .code { font-family: var(--font-mono); color: var(--color-text-3); } .b { font-weight: 600; } .d { grid-column: 3; color: var(--color-text-2); font-size: var(--text-xs); } &.fail { border-color: var(--color-danger); } &:hover { border-color: var(--color-primary); } }
+    .cr-alert { display: grid; grid-template-columns: 170px 1fr; gap: 2px 12px; text-align: left; font: inherit; padding: 8px 12px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); .b { font-weight: 600; } .d { grid-column: 2; color: var(--color-text-2); font-size: var(--text-xs); } &.fail { border-color: var(--color-danger); } &:hover { border-color: var(--color-primary); } }
+
     .cr-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3);
-      select, input { height: 40px; padding: 0 var(--space-3); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font: inherit; } }
-    .cr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-    .chip { font: inherit; font-size: var(--text-sm); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--color-line-strong); background: var(--color-surface); color: var(--color-text-2); cursor: pointer; &.on { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary); font-weight: 600; } }
-    .cr-spacer { flex: 1; }
+      select { height: 40px; padding: 0 var(--space-3); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font: inherit; } }
+    .cr-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); overflow: hidden;
+      button { font: inherit; font-size: var(--text-sm); height: 38px; padding: 0 12px; border: 0; border-right: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-text-2); cursor: pointer; b { margin-left: 4px; font-size: var(--text-xs); background: var(--color-surface-3); padding: 1px 6px; border-radius: 999px; }
+        &:last-child { border-right: 0; } &.on { background: var(--color-primary-soft); color: var(--color-primary); font-weight: 600; b { background: var(--color-primary); color: #fff; } } } }
+
     .cr-card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: var(--space-4); margin-bottom: var(--space-4);
-      header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); h3 { margin: 0; font-size: var(--text-md); display: flex; align-items: center; gap: 6px; flex: 1; mat-icon { color: var(--color-primary); } } small { color: var(--color-text-3); } }
+      header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; h3 { margin: 0; font-size: var(--text-md); display: flex; align-items: center; gap: 6px; mat-icon { color: var(--color-primary); } .cnt { font-size: var(--text-xs); background: var(--color-surface-3); padding: 1px 8px; border-radius: 999px; } } small { color: var(--color-text-3); flex: 1; } }
+      h4 { margin: 0 0 var(--space-2); } h5 { margin: var(--space-3) 0 var(--space-1); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); }
+      .lead { margin: -4px 0 var(--space-3); color: var(--color-text-2); font-size: var(--text-sm); }
       .row { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-2); }
-      label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs); color: var(--color-text-3); &.grow { flex: 1; min-width: 200px; } }
-      input, select { height: 38px; padding: 0 var(--space-2); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); }
-      .actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
-      .hint { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--color-text-2); mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-ok); } &.warn mat-icon { color: var(--color-warn); } }
-      .empty { color: var(--color-text-3); font-size: var(--text-sm); margin: 0; } }
+      label { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs); color: var(--color-text-2); font-weight: 600; &.grow { flex: 1; min-width: 220px; } }
+      input, select { height: 38px; padding: 0 var(--space-2); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font: inherit; font-weight: 400; font-size: var(--text-sm); }
+      .actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
+      .hint { display: flex; align-items: flex-start; gap: 6px; font-size: var(--text-sm); color: var(--color-text-2); margin: var(--space-2) 0 0; mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-ok); flex: 0 0 auto; } &.warn mat-icon { color: var(--color-warn); } }
+      .empty { color: var(--color-text-3); font-size: var(--text-sm); margin: 0; }
+      .link { font-size: var(--text-xs); } }
+    .cr-empty { display: flex; gap: var(--space-3); align-items: center; padding: var(--space-4); background: var(--color-surface-2); border-radius: var(--radius-md); color: var(--color-text-2); font-size: var(--text-sm); mat-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-primary); } p { margin: 0; } }
+
     .cr-table-wrap { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); overflow: auto; }
     .cr-table { width: 100%; border-collapse: collapse;
       th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); padding: 10px var(--space-3); background: var(--color-surface-2); border-bottom: 1px solid var(--color-line); }
-      td { padding: var(--row-pad-y) var(--space-3); border-bottom: 1px solid var(--color-line); font-size: var(--text-sm); vertical-align: middle; }
+      td { padding: 10px var(--space-3); border-bottom: 1px solid var(--color-line); font-size: var(--text-sm); vertical-align: top; }
       tbody tr { cursor: pointer; &:hover td { background: var(--color-surface-2); } }
-      .num { text-align: right; font-family: var(--font-mono); } .nowrap { white-space: nowrap; } .ref { font-family: var(--font-mono); } .muted { color: var(--color-text-3); }
-      .reason { font-size: var(--text-xs); color: var(--color-danger); max-width: 320px; }
-      .appr span { display: inline-block; margin-right: 8px; font-size: var(--text-xs); color: var(--color-text-3); &.done { color: var(--color-ok); font-weight: 600; } &.pre { color: var(--color-warn); } }
+      .num { text-align: right; font-family: var(--font-mono); white-space: nowrap; } .who { color: var(--color-text-2); }
+      .reason { font-size: var(--text-xs); color: var(--color-danger); max-width: 320px; margin-top: 2px; &.warn { color: var(--color-warn); } }
       .actions { text-align: right; color: var(--color-text-3); } .ctr { text-align: center; }
-      &.admin { tbody tr { cursor: default; } input, select { height: 34px; width: 100%; min-width: 120px; font-size: var(--text-sm); } input.code { width: 70px; min-width: 0; font-family: var(--font-mono); } input.act { margin-top: 4px; font-size: var(--text-xs); } } }
+      &.admin { tbody tr { cursor: default; } td { vertical-align: middle; } input, select { height: 34px; width: 100%; min-width: 140px; font-size: var(--text-sm); } input.code { width: 70px; min-width: 0; font-family: var(--font-mono); } input.act { margin-top: 4px; font-size: var(--text-xs); } } }
     .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-3); color: var(--color-text-2); vertical-align: middle;
-      &.ok { background: var(--color-ok-soft); color: var(--color-ok); } &.warn { background: var(--color-warn-soft); color: var(--color-warn); } &.bad { background: var(--color-danger-soft); color: var(--color-danger); } &.info { background: var(--color-primary-soft); color: var(--color-primary); } }
-    .chk { display: inline-block; margin-left: 6px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--color-surface-3); &.pass { color: var(--color-ok); } &.review { color: var(--color-warn); } &.fail { color: var(--color-danger); } &.big { font-size: var(--text-xs); padding: 4px 10px; } }
+      &.ok { background: var(--color-ok-soft); color: var(--color-ok); } &.warn { background: var(--color-warn-soft); color: var(--color-warn); } &.bad { background: var(--color-danger-soft); color: var(--color-danger); } &.info { background: var(--color-primary-soft); color: var(--color-primary); } &.lg { font-size: var(--text-sm); padding: 4px 12px; } }
+
     .cr-bhead { display: flex; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-3);
-      .ttl { flex: 1; h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--text-xl); .lock { color: var(--color-ok); } } p { margin: 2px 0 0; color: var(--color-text-2); font-size: var(--text-sm); } }
+      .ttl { flex: 1; h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: var(--text-xl); flex-wrap: wrap; .lock { color: var(--color-ok); } } p { margin: 4px 0 0; color: var(--color-text-2); font-size: var(--text-sm); } }
       .sum { text-align: right; .l { display: block; font-size: var(--text-xs); color: var(--color-text-3); } .v { display: block; font-size: var(--text-2xl); font-weight: 700; font-family: var(--font-mono); } } }
-    .cr-steps { display: flex; list-style: none; margin: 0 0 var(--space-3); padding: 0; gap: 4px; overflow: auto;
-      li { flex: 1; min-width: 100px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: var(--text-xs); color: var(--color-text-3); background: var(--color-surface-2); border-radius: var(--radius-sm); mat-icon { font-size: 16px; width: 16px; height: 16px; }
-        &.done { color: var(--color-ok); background: var(--color-ok-soft); } &.now { color: var(--color-primary); background: var(--color-primary-soft); font-weight: 700; } &.bad { color: var(--color-danger); background: var(--color-danger-soft); } } }
-    .cr-banner { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-3); border-radius: var(--radius-md); font-size: var(--text-sm); div { flex: 1; } &.bad { background: var(--color-danger-soft); border: 1px solid var(--color-danger); mat-icon { color: var(--color-danger); } } }
-    .cr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
-    .cr-sign { border-color: var(--color-primary); h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-2); } label { margin-bottom: var(--space-2); } .sigpad { border: 1px dashed var(--color-line-strong); border-radius: var(--radius-sm); background: #fff; touch-action: none; max-width: 100%; } }
-    .cr-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--space-4); @media (max-width: 1100px) { grid-template-columns: 1fr; } }
-    .req { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--space-2); }
-    .reqchip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); padding: 3px 10px 3px 6px; border-radius: 999px; border: 1px dashed var(--color-line-strong); color: var(--color-text-2); cursor: pointer; mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--color-text-3); }
-      &.ok { border-style: solid; border-color: var(--color-ok); color: var(--color-ok); cursor: default; mat-icon { color: var(--color-ok); } } .na { margin-left: 4px; color: var(--color-primary); text-decoration: underline; } }
-    .drop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: var(--space-3); border: 2px dashed var(--color-line-strong); border-radius: var(--radius-md); color: var(--color-text-3); font-size: var(--text-sm); margin-top: var(--space-2); mat-icon { color: var(--color-primary); } small { flex-basis: 100%; font-size: var(--text-xs); } &.sm { padding: var(--space-2); } }
-    .cr-docs { list-style: none; margin: 0; padding: 0; li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--color-line); &:last-child { border-bottom: 0; } > mat-icon { color: var(--color-danger); } &.na > mat-icon { color: var(--color-text-3); }
-      .info { flex: 1; min-width: 0; .top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } .type { height: 28px; font-size: var(--text-xs); &.sugg { border-color: var(--color-warn); } } .sugg { color: var(--color-warn); } .ver { font-family: var(--font-mono); font-size: 10px; background: var(--color-surface-3); padding: 1px 5px; border-radius: 4px; } .vr { color: var(--color-warn); } } } }
+    .cr-steps { display: flex; list-style: none; margin: 0 0 var(--space-3); padding: 0; overflow: auto;
+      li { flex: 1; min-width: 90px; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; padding: 4px 0; font-size: var(--text-xs); color: var(--color-text-3);
+        &::before { content: ''; position: absolute; top: 18px; left: 50%; right: -50%; height: 2px; background: var(--color-line); z-index: 0; } &:last-child::before { display: none; }
+        .dot { z-index: 1; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--color-surface-2); border: 2px solid var(--color-line); mat-icon { font-size: 16px; width: 16px; height: 16px; } }
+        &.done { color: var(--color-ok); .dot { background: var(--color-ok); border-color: var(--color-ok); color: #fff; } &::before { background: var(--color-ok); } }
+        &.now { color: var(--color-primary); font-weight: 700; .dot { background: var(--color-primary); border-color: var(--color-primary); color: #fff; box-shadow: 0 0 0 4px var(--color-primary-soft); } }
+        &.bad { color: var(--color-danger); font-weight: 700; .dot { background: var(--color-danger); border-color: var(--color-danger); color: #fff; } } } }
+
+    .cr-next { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); border-radius: var(--radius-lg); border: 1px solid var(--color-primary); background: var(--color-primary-soft); flex-wrap: wrap;
+      .big { font-size: 36px; width: 36px; height: 36px; color: var(--color-primary); }
+      .txt { flex: 1; min-width: 240px; h3 { margin: 0; font-size: var(--text-md); } p { margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-text-2); } }
+      .btns { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+      &.tone-warn { border-color: var(--color-warn); background: var(--color-warn-soft); .big { color: var(--color-warn); } }
+      &.tone-bad { border-color: var(--color-danger); background: var(--color-danger-soft); .big { color: var(--color-danger); } }
+      &.tone-ok { border-color: var(--color-ok); background: var(--color-ok-soft); .big { color: var(--color-ok); } }
+      &.tone-muted { border-color: var(--color-line); background: var(--color-surface-2); .big { color: var(--color-text-3); } } }
+
+    .cr-sign { border-color: var(--color-primary); h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-2); }
+      .facts { list-style: none; margin: 0 0 var(--space-3); padding: 0; li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--text-sm); padding: 4px 0; mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); flex: 0 0 auto; } .warn { color: var(--color-warn); } .bad { color: var(--color-danger); } } }
+      label { margin-bottom: var(--space-2); } .sigpad { border: 1px dashed var(--color-line-strong); border-radius: var(--radius-sm); background: #fff; touch-action: none; max-width: 100%; } }
+
+    .cr-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--space-4); @media (max-width: 1100px) { grid-template-columns: 1fr; } }
+
+    .cr-check { list-style: none; margin: 0; padding: 0;
+      li { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--color-line); &:last-child { border-bottom: 0; }
+        .st { color: var(--color-line-strong); flex: 0 0 auto; margin-top: 2px; }
+        .name { flex: 1; min-width: 0; strong { display: block; font-size: var(--text-sm); } small { display: block; font-size: var(--text-xs); color: var(--color-text-3); } .miss { color: var(--color-danger); font-weight: 600; } .sugg { display: inline-block; margin-left: 6px; color: var(--color-warn); } .type { height: 30px; font-size: var(--text-sm); max-width: 260px; } }
+        .act { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; .sm { height: 30px; line-height: 30px; font-size: var(--text-xs); mat-icon { font-size: 16px; width: 16px; height: 16px; } } }
+        &.ok .st { color: var(--color-ok); } &.missing { background: linear-gradient(90deg, var(--color-danger-soft), transparent 40%); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: var(--radius-sm); }
+        &.extra .st { color: var(--color-text-3); } &.none { color: var(--color-text-3); font-size: var(--text-sm); } } }
+    .drop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: var(--space-2) var(--space-3); border: 2px dashed var(--color-line-strong); border-radius: var(--radius-md); color: var(--color-text-3); font-size: var(--text-sm); margin-top: var(--space-3); mat-icon { color: var(--color-primary); } }
+
     .cr-itemform { background: var(--color-surface-2); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3); }
     .cr-item { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-bottom: 8px; overflow: hidden;
-      .head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; &:hover { background: var(--color-surface-2); }
-        .tw { color: var(--color-text-3); } .who { flex: 1; min-width: 0; strong { display: block; font-size: var(--text-sm); } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
-        .docs mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--color-line-strong); &.ok { color: var(--color-ok); } }
-        .amt { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; min-width: 110px; text-align: right; }
-        .dec { font-size: var(--text-xs); font-weight: 700; &.approved { color: var(--color-ok); } &.queried { color: var(--color-warn); } &.rejected { color: var(--color-danger); } }
-        .pre { font-size: var(--text-xs); color: var(--color-warn); }
-        .decide button.sel { background: var(--color-primary-soft); color: var(--color-primary); } }
+      .head { display: flex; align-items: center; gap: 8px; padding: 10px 10px; cursor: pointer; flex-wrap: wrap; &:hover { background: var(--color-surface-2); }
+        .tw { color: var(--color-text-3); } .who { flex: 1; min-width: 160px; strong { display: block; font-size: var(--text-md); } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } }
+        .docpill { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); font-weight: 600; padding: 3px 10px 3px 6px; border-radius: 999px; background: var(--color-danger-soft); color: var(--color-danger); mat-icon { font-size: 16px; width: 16px; height: 16px; } &.ok { background: var(--color-ok-soft); color: var(--color-ok); } &.none { background: var(--color-surface-3); color: var(--color-text-3); } }
+        .flag { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-xs); font-weight: 700; color: var(--color-warn); mat-icon { font-size: 16px; width: 16px; height: 16px; } &.fail { color: var(--color-danger); } }
+        .amt { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; min-width: 120px; text-align: right; font-size: var(--text-md); }
+        .dec { font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: 999px; &.approved { background: var(--color-ok-soft); color: var(--color-ok); } &.queried { background: var(--color-warn-soft); color: var(--color-warn); } &.rejected { background: var(--color-danger-soft); color: var(--color-danger); } }
+        .pre { font-size: var(--text-xs); color: var(--color-warn); font-weight: 600; } }
+      .decide { display: flex; align-items: center; gap: 8px; padding: 6px 12px 10px 40px; font-size: var(--text-sm); color: var(--color-text-2); flex-wrap: wrap; border-top: 1px dashed var(--color-line);
+        button mat-icon { font-size: 16px; width: 16px; height: 16px; } .sel-ok { background: var(--color-ok-soft); border-color: var(--color-ok); color: var(--color-ok); } .sel-warn { background: var(--color-warn-soft); border-color: var(--color-warn); color: var(--color-warn); } .sel-bad { background: var(--color-danger-soft); border-color: var(--color-danger); color: var(--color-danger); } em { color: var(--color-text-3); } }
       .deccomment { display: flex; align-items: center; gap: 6px; padding: 4px 12px 8px 40px; font-size: var(--text-xs); color: var(--color-text-2); mat-icon { font-size: 14px; width: 14px; height: 14px; } }
-      .body { padding: 8px 12px 12px 40px; border-top: 1px solid var(--color-line); background: var(--color-surface); }
-      &.dec-Approved { border-left: 3px solid var(--color-ok); } &.dec-Queried { border-left: 3px solid var(--color-warn); } &.dec-Rejected { border-left: 3px solid var(--color-danger); opacity: .8; } }
-    .chksum { display: flex; gap: 8px; margin-bottom: 8px; span { font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--color-surface-3); &.fail { color: var(--color-danger); } &.review { color: var(--color-warn); } &.pass { color: var(--color-ok); } } }
-    .cr-findings { list-style: none; margin: 0; padding: 0; li { display: flex; flex-wrap: wrap; gap: 4px 6px; padding: 6px 8px; border-left: 3px solid var(--color-line); margin-bottom: 4px; font-size: var(--text-xs); background: var(--color-surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-      .code { font-family: var(--font-mono); color: var(--color-text-3); } strong { color: var(--color-text); } em { color: var(--color-text-2); } > span:last-child { flex-basis: 100%; color: var(--color-text-2); }
-      &.fail { border-color: var(--color-danger); } &.review { border-color: var(--color-warn); } &.pass { border-color: var(--color-ok); opacity: .7; } } }
-    .appr-row { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; mat-icon { color: var(--color-text-3); } &.done mat-icon { color: var(--color-ok); } strong { display: block; font-size: var(--text-sm); } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } }
+      .body { padding: 4px 12px 12px 40px; border-top: 1px solid var(--color-line); background: var(--color-surface); }
+      &.dec-Approved { border-left: 4px solid var(--color-ok); } &.dec-Queried { border-left: 4px solid var(--color-warn); } &.dec-Rejected { border-left: 4px solid var(--color-danger); opacity: .8; } }
+
+    .chk-verdict { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: var(--radius-md); margin-bottom: var(--space-2); strong { display: block; font-size: var(--text-sm); } small { color: var(--color-text-3); font-size: var(--text-xs); }
+      &.fail { background: var(--color-danger-soft); mat-icon { color: var(--color-danger); } } &.review { background: var(--color-warn-soft); mat-icon { color: var(--color-warn); } } &.pass { background: var(--color-ok-soft); mat-icon { color: var(--color-ok); } } }
+    .cr-findings { list-style: none; margin: 0; padding: 0; li { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--color-line); font-size: var(--text-xs); cursor: default; &:last-child { border-bottom: 0; }
+      mat-icon { font-size: 18px; width: 18px; height: 18px; flex: 0 0 auto; } div { min-width: 0; } strong { display: block; font-size: var(--text-sm); } em { display: block; color: var(--color-text-2); font-style: normal; font-weight: 600; } span { display: block; color: var(--color-text-2); }
+      &.fail mat-icon { color: var(--color-danger); } &.review mat-icon { color: var(--color-warn); } &.pass { opacity: .6; mat-icon { color: var(--color-ok); } } } }
+
+    .appr-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; mat-icon { color: var(--color-text-3); } &.done mat-icon { color: var(--color-ok); } strong { display: block; font-size: var(--text-sm); } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } .q { color: var(--color-text-2); font-style: italic; } }
     .hash { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-3); }
-    .sig { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--color-text-2); padding: 4px 0; mat-icon { font-size: 16px; width: 16px; height: 16px; } }
-    .cr-trail { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow: auto; li { display: grid; grid-template-columns: 90px 1fr; gap: 0 8px; padding: 6px 0; border-bottom: 1px solid var(--color-line); font-size: var(--text-xs); .when { color: var(--color-text-3); font-family: var(--font-mono); } .who { font-weight: 600; } .what { grid-column: 2; color: var(--color-text-2); } .cmt { grid-column: 2; color: var(--color-text-3); white-space: pre-wrap; } } }
+    .cr-trail { list-style: none; margin: 0; padding: 0; max-height: 440px; overflow: auto; li { display: grid; grid-template-columns: 86px 1fr; gap: 0 8px; padding: 6px 0; border-bottom: 1px solid var(--color-line); font-size: var(--text-xs); .when { color: var(--color-text-3); font-family: var(--font-mono); } .what { color: var(--color-text-2); } .cmt { grid-column: 2; color: var(--color-text-3); white-space: pre-wrap; } } }
     .search { height: 36px; padding: 0 10px; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); font: inherit; }
   `]
 })
@@ -524,6 +620,8 @@ export class FinanceCreditorsComponent implements OnInit {
   rows = signal<BatchRow[]>([]);
   alerts = signal<CreditorAlert[]>([]);
   showAlerts = signal(false);
+  showPassed = signal(false);
+  howOpen = signal(false);
   openPrepay = signal(0);
   loading = signal(false);
   busy = signal(false);
@@ -548,16 +646,27 @@ export class FinanceCreditorsComponent implements OnInit {
 
   readonly steps = [
     { key: 'Draft', title: 'Prepare', icon: 'edit_note' }, { key: 'Checks', title: 'Checks', icon: 'rule' }, { key: 'AwaitingAccountant', title: 'Accountant', icon: 'fact_check' },
-    { key: 'AwaitingDirector', title: 'Director', icon: 'draw' }, { key: 'Approved', title: 'Approved', icon: 'lock' }, { key: 'LoadedOnBank', title: 'Bank', icon: 'account_balance' },
+    { key: 'AwaitingDirector', title: 'Director', icon: 'draw' }, { key: 'Approved', title: 'Signed', icon: 'lock' }, { key: 'LoadedOnBank', title: 'Bank', icon: 'account_balance' },
     { key: 'Paid', title: 'Paid', icon: 'price_check' }, { key: 'Closed', title: 'Closed', icon: 'inventory' }
   ];
   private readonly order = ['Draft', 'Checks', 'AwaitingAccountant', 'AwaitingDirector', 'Approved', 'LoadedOnBank', 'Paid', 'Closed'];
+  private readonly sentBack = ['ChecksFailed', 'QueriedByAccountant', 'QueriedByDirector'];
 
   activeCompanies = computed(() => (this.meta()?.companies ?? []).filter(c => c.isActive));
   filteredRows = computed(() => {
     const co = this.companyFilter(), st = this.statusFilter(), ty = this.typeFilter();
-    return this.rows().filter(r => (!co || r.companyCode === co) && (!ty || r.paymentType === ty) &&
-      (!st || (st === 'prepay' ? r.openPrepayments > 0 : st === 'ChecksFailed' ? ['ChecksFailed', 'QueriedByAccountant', 'QueriedByDirector'].includes(r.status) : st === 'Approved' ? ['Approved', 'LoadedOnBank'].includes(r.status) : r.status === st)));
+    return this.rows().filter(r => (!co || r.companyCode === co) && (!ty || r.paymentType === ty) && this.matchStatus(r, st));
+  });
+  /** Batches the signed-in user can act on right now. */
+  mine = computed(() => {
+    const me = this.meta()?.me; if (!me) return [];
+    return this.rows().filter(r => {
+      if (me.clerk && (r.status === 'Draft' || this.sentBack.includes(r.status) || r.status === 'Paid') && (r.preparedByUserId === me.userId || me.isAdmin)) return true;
+      if (me.accountant && r.status === 'AwaitingAccountant' && this.responsibleFor(r.companyCode, 'acc')) return true;
+      if (me.director && r.status === 'AwaitingDirector' && this.responsibleFor(r.companyCode, 'dir')) return true;
+      if (me.bank && (r.status === 'Approved' || r.status === 'LoadedOnBank')) return true;
+      return false;
+    }).slice(0, 12);
   });
 
   ngOnInit(): void {
@@ -570,35 +679,128 @@ export class FinanceCreditorsComponent implements OnInit {
 
   loadBoard(): void {
     this.loading.set(true);
-    this.api.list().subscribe({ next: r => { this.rows.set(r); this.loading.set(false); this.openPrepay.set(r.reduce((n, x) => n + x.openPrepayments, 0)); }, error: () => { this.loading.set(false); this.toast.error("Couldn't load batches."); } });
+    this.api.list().subscribe({ next: r => { this.rows.set(r); this.loading.set(false); this.openPrepay.set(r.filter(x => x.openPrepayments > 0).length); }, error: () => { this.loading.set(false); this.toast.error("Couldn't load batches."); } });
     this.api.alerts().subscribe({ next: a => this.alerts.set(a), error: () => {} });
   }
+
+  // ── lookups & text ──
+  private matchStatus(r: BatchRow, st: string): boolean {
+    switch (st) {
+      case '': return true;
+      case 'open': return !['Closed', 'Rejected'].includes(r.status);
+      case 'back': return this.sentBack.includes(r.status);
+      case 'pay': return r.status === 'Approved' || r.status === 'LoadedOnBank';
+      case 'prepay': return r.openPrepayments > 0;
+      default: return r.status === st;
+    }
+  }
+  private responsibleFor(code: string, kind: 'acc' | 'dir'): boolean {
+    const me = this.meta()!.me; if (me.isAdmin) return true;
+    const c = this.companyFor(code); if (!c) return true;
+    return kind === 'acc' ? (!c.accountantUserId && !c.backupApproverUserId) || c.accountantUserId === me.userId || c.backupApproverUserId === me.userId
+                          : (!c.directorUserId && !c.delegateDirectorUserId) || c.directorUserId === me.userId || c.delegateDirectorUserId === me.userId;
+  }
   count(s: string): number { return this.rows().filter(r => r.status === s).length; }
+  countOpen(): number { return this.rows().filter(r => !['Closed', 'Rejected'].includes(r.status)).length; }
+  isSentBack(s: string) { return this.sentBack.includes(s); }
   companyFor(code: string) { return this.meta()?.companies.find(c => c.code === code); }
   typeTitle(k: string) { return this.meta()?.paymentTypes.find(p => p.key === k)?.title ?? k; }
   statusTitle(k: string) { return this.meta()?.statuses.find(s => s.key === k)?.title ?? k; }
   docTitle(k: string) { return this.meta()?.docTypes.find(d => d.key === k)?.title ?? k; }
   docTypesFor(itemId: number | null) { return (this.meta()?.docTypes ?? []).filter(d => itemId ? d.scope === 'item' || d.key === 'Other' : d.scope === 'batch' || d.key === 'Other'); }
-  badge(s: string) { return s === 'Approved' || s === 'Paid' || s === 'Closed' || s === 'LoadedOnBank' ? 'ok' : s.startsWith('Awaiting') ? 'warn' : s === 'ChecksFailed' || s.startsWith('Queried') || s === 'Rejected' ? 'bad' : s === 'Draft' ? '' : 'info'; }
-  responsibleName(id?: number) { if (!id) return ''; const c = this.meta()?.companies ?? []; for (const x of c) { if (x.accountantUserId === id) return x.accountantName ?? ''; if (x.backupApproverUserId === id) return x.backupApproverName ?? ''; if (x.directorUserId === id) return x.directorName ?? ''; if (x.delegateDirectorUserId === id) return x.delegateDirectorName ?? ''; } return ''; }
+  badge(s: string) { return ['Approved', 'Paid', 'Closed', 'LoadedOnBank'].includes(s) ? 'ok' : s.startsWith('Awaiting') ? 'warn' : this.sentBack.includes(s) || s === 'Rejected' ? 'bad' : s === 'Draft' ? '' : 'info'; }
+  rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); return names.length ? names.join(', ') : 'none beyond the batch schedule'; }
+  responsibleName(id?: number) { if (!id) return ''; for (const x of this.meta()?.companies ?? []) { if (x.accountantUserId === id) return x.accountantName ?? ''; if (x.backupApproverUserId === id) return x.backupApproverName ?? ''; if (x.directorUserId === id) return x.directorName ?? ''; if (x.delegateDirectorUserId === id) return x.delegateDirectorName ?? ''; } return ''; }
 
+  waitingOn(r: BatchRow): string {
+    const c = this.companyFor(r.companyCode);
+    switch (r.status) {
+      case 'Draft': case 'ChecksFailed': case 'QueriedByAccountant': case 'QueriedByDirector': return `${r.preparedByName || 'preparer'} (to fix & submit)`;
+      case 'AwaitingAccountant': return c?.accountantName || 'company accountant';
+      case 'AwaitingDirector': return c?.directorName || 'director';
+      case 'Approved': return 'bank user (load on bank)';
+      case 'LoadedOnBank': return 'bank user (mark paid)';
+      case 'Paid': return `${r.preparedByName || 'preparer'} (proof of payment)`;
+      default: return '—';
+    }
+  }
+  rowStep(r: BatchRow): NextStep {
+    switch (r.status) {
+      case 'Draft': return { icon: 'edit_note', tone: 'info', title: 'Finish preparing and submit', body: '' };
+      case 'ChecksFailed': return { icon: 'report', tone: 'bad', title: 'Checks failed — fix and resubmit', body: '' };
+      case 'QueriedByAccountant': return { icon: 'reply', tone: 'bad', title: 'Sent back by the accountant', body: '' };
+      case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: 'Sent back by the director', body: '' };
+      case 'AwaitingAccountant': return { icon: 'fact_check', tone: 'warn', title: 'Review and approve as accountant', body: '' };
+      case 'AwaitingDirector': return { icon: 'draw', tone: 'warn', title: 'Decide each payment and sign', body: '' };
+      case 'Approved': return { icon: 'account_balance', tone: 'ok', title: 'Download bank file and load', body: '' };
+      case 'LoadedOnBank': return { icon: 'price_check', tone: 'ok', title: 'Mark as paid once released', body: '' };
+      case 'Paid': return { icon: 'receipt_long', tone: 'info', title: 'Attach proof of payment and close', body: '' };
+      default: return { icon: 'info', tone: 'muted', title: r.statusTitle, body: '' };
+    }
+  }
+  nextStep(b: BatchDetail): NextStep {
+    const missing = this.docsRequiredItems(b) - this.docsFilledItems(b) + (b.requiredBatchDocs.length - this.filledCount(b.requiredBatchDocs));
+    const acc = this.responsibleName(b.responsible.accountant) || 'the company accountant';
+    const dir = this.responsibleName(b.responsible.director) || 'a director';
+    switch (b.status) {
+      case 'Draft':
+        if (!b.items.length) return { icon: 'add_card', tone: 'info', title: 'Add the payments', body: 'Start by adding each supplier you want to pay. The documents required for each one will appear underneath it.' };
+        if (missing > 0) return { icon: 'upload_file', tone: 'info', title: `${missing} required document${missing === 1 ? '' : 's'} still missing`, body: 'Rows highlighted in red below need a PDF (or an N/A reason). Submit unlocks when everything is attached.' };
+        return { icon: 'send', tone: 'ok', title: 'Ready to submit', body: `All required documents are attached. Submitting runs the system checks and sends the pack to ${acc}.` };
+      case 'ChecksFailed': return { icon: 'report', tone: 'bad', title: 'The system checks found blocking problems', body: 'See the red items under System checks and on each payment. Click Reopen & fix, correct them, then submit again.' };
+      case 'QueriedByAccountant': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.accountantName || 'the accountant'}`, body: b.returnReason || 'Reopen, fix what was asked, and submit again.' };
+      case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.directorName || 'the director'}`, body: b.returnReason || 'The queried payments are marked below. Reopen, fix, and submit again — it will go back through the accountant.' };
+      case 'AwaitingAccountant': return b.can.accountant
+        ? { icon: 'fact_check', tone: 'warn', title: 'Your approval is needed', body: `Check the schedule against the recon and the supporting documents. Approve to send it to ${dir}, or send it back with a note.` }
+        : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${acc} to approve`, body: 'Nothing for you to do here right now.' };
+      case 'AwaitingDirector': return b.can.direct
+        ? { icon: 'draw', tone: 'warn', title: this.pendingCount(b) > 0 ? `Decide on ${this.pendingCount(b)} payment${this.pendingCount(b) === 1 ? '' : 's'}, then sign` : 'All decided — sign the batch', body: `${b.accountantName} has approved. Approve, query or reject each payment below. Queried payments send the pack back; the rest are paid once you sign.` }
+        : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${dir} to sign`, body: `Approved by ${b.accountantName}. Nothing for you to do until the director signs.` };
+      case 'Approved': return { icon: 'account_balance', tone: 'ok', title: 'Signed and locked — ready for the bank', body: `${b.directorName} signed. The bank user downloads the bank file (approved payments only), loads it, and marks it loaded.` };
+      case 'LoadedOnBank': return { icon: 'price_check', tone: 'ok', title: 'Loaded on the bank', body: 'Once the payments have been released, mark the batch as paid.' };
+      case 'Paid': { const pop = this.missingPop(b), pre = this.openPrepayCount(b);
+        return { icon: 'receipt_long', tone: 'info', title: pop || pre ? 'Paid — a few things before it can close' : 'Paid — ready to close', body: [pop ? `Proof of payment still needed for ${pop} payment${pop === 1 ? '' : 's'}` : '', pre ? `${pre} prepayment${pre === 1 ? '' : 's'} still waiting for the tax invoice + GRV after delivery` : ''].filter(Boolean).join(' · ') || 'Everything is attached.' }; }
+      case 'Closed': return { icon: 'inventory', tone: 'muted', title: 'Closed', body: `Completed on ${b.closedAt ? new Date(b.closedAt).toLocaleDateString() : '—'}. Everything here is read-only.` };
+      case 'Rejected': return { icon: 'block', tone: 'bad', title: 'Rejected by the director', body: b.returnReason || 'You can reopen it as a draft if it should be reworked.' };
+      default: return { icon: 'info', tone: 'muted', title: b.statusTitle, body: '' };
+    }
+  }
+  eventText(e: { action: string; toStatus?: string; fromStatus?: string }): string {
+    const m: Record<string, string> = { Created: 'created the batch', ItemAdded: 'added a payment', ItemUpdated: 'edited a payment', ItemRemoved: 'removed a payment', DocumentUploaded: 'attached a document', DocumentReplaced: 'replaced a document', DocumentRemoved: 'removed a document', DocumentNA: 'marked a document N/A', Submitted: e.toStatus === 'ChecksFailed' ? 'submitted — checks failed' : 'submitted to the accountant', ChecksRun: 'ran the checks', AccountantApproved: 'approved as accountant', AccountantQueried: 'sent it back', ItemDecision: 'decided on a payment', DirectorSigned: 'signed the batch', DirectorQueried: 'sent it back with queries', DirectorRejected: 'rejected the batch', BankFileExported: 'downloaded the bank file', StatusChanged: `moved it to ${this.statusTitle(e.toStatus || '')}`, Reopened: 'reopened it as a draft', PrepaymentClosed: 'closed a prepayment' };
+    return m[e.action] ?? (e.toStatus ? `${e.action} → ${this.statusTitle(e.toStatus)}` : e.action);
+  }
+
+  // ── derived counts ──
   stepState(b: BatchDetail, key: string): 'done' | 'now' | 'bad' | '' {
     const cur = b.status === 'ChecksFailed' ? 'Checks' : b.status === 'QueriedByAccountant' ? 'AwaitingAccountant' : b.status === 'QueriedByDirector' || b.status === 'Rejected' ? 'AwaitingDirector' : b.status;
     const ci = this.order.indexOf(cur), ki = this.order.indexOf(key);
     if (ki < ci) return 'done';
-    if (ki === ci) return b.status === 'ChecksFailed' || b.status.startsWith('Queried') || b.status === 'Rejected' ? 'bad' : b.status === 'Closed' ? 'done' : 'now';
+    if (ki === ci) return this.sentBack.includes(b.status) || b.status === 'Rejected' ? 'bad' : b.status === 'Closed' ? 'done' : 'now';
     return '';
   }
   approvedCount(b: BatchDetail) { return b.items.filter(i => i.decisionStatus === 'Approved').length; }
+  queriedCount(b: BatchDetail) { return b.items.filter(i => i.decisionStatus === 'Queried').length; }
+  rejectedCount(b: BatchDetail) { return b.items.filter(i => i.decisionStatus === 'Rejected').length; }
+  pendingCount(b: BatchDetail) { return b.items.filter(i => i.decisionStatus === 'Pending').length; }
   filledCount(r: RequiredDoc[]) { return r.filter(x => x.filled).length; }
-  sortedFindings(b: BatchDetail) { const w: Record<string, number> = { FAIL: 0, REVIEW: 1, PASS: 2 }; return [...(b.checks?.findings ?? [])].sort((a, c) => w[a.severity] - w[c.severity]); }
+  missingNames(r: RequiredDoc[]) { const m = r.filter(x => !x.filled).map(x => x.title); return m.length ? 'Missing: ' + m.join(', ') : 'All required documents attached'; }
+  docsRequiredItems(b: BatchDetail) { return b.items.reduce((n, i) => n + i.required.length, 0); }
+  docsFilledItems(b: BatchDetail) { return b.items.reduce((n, i) => n + this.filledCount(i.required), 0); }
+  missingPop(b: BatchDetail) { return b.items.filter(i => i.decisionStatus === 'Approved' && !i.documents.some(d => d.docType === 'ProofOfPayment' && !d.isNotApplicable)).length; }
+  openPrepayCount(b: BatchDetail) { return b.items.filter(i => i.prepaymentOpen && i.decisionStatus === 'Approved').length; }
+  docsOfType(docs: BatchDoc[], t: string) { return docs.filter(d => d.docType === t); }
+  extraDocs(docs: BatchDoc[], required: RequiredDoc[]) { const keys = new Set(required.map(r => r.docType)); return docs.filter(d => !keys.has(d.docType)); }
+  visibleFindings(b: BatchDetail): CheckFinding[] { const w: Record<string, number> = { FAIL: 0, REVIEW: 1, PASS: 2 }; return [...(b.checks?.findings ?? [])].filter(f => this.showPassed() || f.severity !== 'PASS').sort((a, c) => w[a.severity] - w[c.severity]); }
   findingsFor(itemId: number) { return (this.batch()?.checks?.findings ?? []).filter(f => f.itemId === itemId && f.severity !== 'PASS'); }
+  hasFail(itemId: number) { return this.findingsFor(itemId).some(f => f.severity === 'FAIL'); }
 
   // ── navigation ──
   open(id: number): void {
     this.busy.set(true);
     this.api.get(id).subscribe({
-      next: b => { this.batch.set(b); this.view.set('batch'); this.busy.set(false); this.signOpen.set(false); this.itemForm.set(null); this.router.navigate([], { relativeTo: this.route, queryParams: { batch: id }, queryParamsHandling: 'merge', replaceUrl: true }); },
+      next: b => { this.batch.set(b); this.view.set('batch'); this.busy.set(false); this.signOpen.set(false); this.itemForm.set(null); this.showPassed.set(false);
+        if (b.items.length === 1) this.openItem.set(b.items[0].id);
+        this.router.navigate([], { relativeTo: this.route, queryParams: { batch: id }, queryParamsHandling: 'merge', replaceUrl: true }); },
       error: () => { this.busy.set(false); this.toast.error("Couldn't open that batch."); }
     });
   }
@@ -606,24 +808,24 @@ export class FinanceCreditorsComponent implements OnInit {
   private apply = (b: BatchDetail, msg?: string) => { this.batch.set(b); this.busy.set(false); if (msg) this.toast.done(msg); };
   private fail = (e: any, fallback: string) => { this.busy.set(false); this.toast.error(e?.error?.message || fallback); };
 
-  // ── batch ──
+  // ── batch actions ──
   create(): void {
     this.busy.set(true);
-    this.api.create({ ...this.newBatch, notes: this.newBatch.notes || undefined }).subscribe({ next: b => { this.newOpen.set(false); this.apply(b, `${b.batchNumber} created`); this.view.set('batch'); }, error: e => this.fail(e, "Couldn't create the batch.") });
+    this.api.create({ ...this.newBatch, notes: this.newBatch.notes || undefined }).subscribe({ next: b => { this.newOpen.set(false); this.apply(b, `${b.batchNumber} created — now add the payments`); this.view.set('batch'); }, error: e => this.fail(e, "Couldn't create the batch.") });
   }
-  deleteBatch(): void { const b = this.batch()!; if (!confirm(`Delete draft ${b.batchNumber}?`)) return; this.api.delete(b.id).subscribe({ next: () => { this.toast.done('Draft deleted'); this.back(); }, error: e => this.fail(e, "Couldn't delete.") }); }
-  submit(): void { const b = this.batch()!; this.busy.set(true); this.api.submit(b.id).subscribe({ next: r => this.apply(r, r.status === 'ChecksFailed' ? 'Checks failed — see what to fix' : 'Sent to the accountant'), error: e => this.fail(e, "Couldn't submit.") }); }
+  deleteBatch(): void { const b = this.batch()!; if (!confirm(`Delete draft ${b.batchNumber}? This can't be undone.`)) return; this.api.delete(b.id).subscribe({ next: () => { this.toast.done('Draft deleted'); this.back(); }, error: e => this.fail(e, "Couldn't delete.") }); }
+  submit(): void { const b = this.batch()!; this.busy.set(true); this.api.submit(b.id).subscribe({ next: r => this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems — see the red items' : 'Sent to the accountant'), error: e => this.fail(e, "Couldn't submit.") }); }
   rerun(): void { const b = this.batch()!; this.busy.set(true); this.api.rerunChecks(b.id).subscribe({ next: r => this.apply(r, `Checks: ${r.checksStatus}`), error: e => this.fail(e, "Couldn't run the checks.") }); }
   accountant(d: 'approve' | 'query'): void {
-    const b = this.batch()!; const c = prompt(d === 'approve' ? 'Comment (optional):' : 'What needs fixing?'); if (d === 'query' && !c) return; if (c === null && d === 'query') return;
+    const b = this.batch()!; const c = prompt(d === 'approve' ? 'Add a note for the director (optional):' : 'What needs to be fixed before you can approve?'); if (c === null) return; if (d === 'query' && !c.trim()) return;
     this.busy.set(true); this.api.accountant(b.id, d, c || undefined).subscribe({ next: r => this.apply(r, d === 'approve' ? 'Approved — now with the director' : 'Sent back to the preparer'), error: e => this.fail(e, "Couldn't record your decision.") });
   }
   decide(it: BatchItem, d: string): void {
     const b = this.batch()!; let c: string | null = null;
-    if (d !== 'Approved') { c = prompt(d === 'Queried' ? `Why query ${it.supplierName}?` : `Why reject ${it.supplierName}?`); if (!c) return; }
+    if (d !== 'Approved') { c = prompt(d === 'Queried' ? `What do you want checked on ${it.supplierName}?` : `Why is ${it.supplierName} rejected?`); if (!c) return; }
     this.busy.set(true); this.api.decide(b.id, it.id, d, c || undefined).subscribe({ next: r => this.apply(r), error: e => this.fail(e, "Couldn't save the decision.") });
   }
-  decideAll(d: string): void { const b = this.batch()!; const pend = b.items.filter(i => i.decisionStatus === 'Pending'); if (!pend.length) return; this.busy.set(true); let n = 0; for (const it of pend) this.api.decide(b.id, it.id, d).subscribe({ next: r => { if (++n === pend.length) this.apply(r, `${n} payment(s) approved`); }, error: e => this.fail(e, "Couldn't approve all.") }); }
+  decideAll(d: string): void { const b = this.batch()!; const pend = b.items.filter(i => i.decisionStatus === 'Pending'); if (!pend.length) return; this.busy.set(true); let n = 0; for (const it of pend) this.api.decide(b.id, it.id, d).subscribe({ next: r => { if (++n === pend.length) this.apply(r, `${n} payment(s) approved — now sign`); }, error: e => this.fail(e, "Couldn't approve all.") }); }
   sign(): void {
     const b = this.batch()!; const img = this.drew && this.sigpad ? this.sigpad.nativeElement.toDataURL('image/png') : undefined;
     this.busy.set(true); this.api.sign(b.id, this.signName, this.signComment || undefined, img).subscribe({ next: r => { this.signOpen.set(false); this.apply(r, r.status === 'Approved' ? 'Signed and locked' : r.status === 'Rejected' ? 'Batch rejected' : 'Queries sent back to the preparer'); }, error: e => this.fail(e, "Couldn't sign.") });
@@ -638,24 +840,24 @@ export class FinanceCreditorsComponent implements OnInit {
     const req = f === 'new' ? this.api.addItem(b.id, this.itemDraft) : this.api.updateItem(b.id, f as number, this.itemDraft);
     req.subscribe({ next: r => { this.itemForm.set(null); this.apply(r); if (f === 'new') this.openItem.set(r.items[r.items.length - 1]?.id ?? 0); }, error: e => this.fail(e, "Couldn't save the payment.") });
   }
-  removeItem(it: BatchItem): void { const b = this.batch()!; if (!confirm(`Remove ${it.supplierName} and its documents?`)) return; this.busy.set(true); this.api.deleteItem(b.id, it.id).subscribe({ next: r => this.apply(r), error: e => this.fail(e, "Couldn't remove.") }); }
+  removeItem(it: BatchItem): void { const b = this.batch()!; if (!confirm(`Remove ${it.supplierName} and its documents from this batch?`)) return; this.busy.set(true); this.api.deleteItem(b.id, it.id).subscribe({ next: r => this.apply(r), error: e => this.fail(e, "Couldn't remove.") }); }
 
   // ── documents ──
   pickFor(docType: string, itemId: number | null): void { this.pendingType = docType; this.pendingItem = itemId; this.pendingReplace = null; this.fileInput?.nativeElement.click(); }
-  replaceDoc(d: BatchDoc): void { const reason = prompt('Why is this document being replaced? (recorded in the audit trail)'); if (!reason) return; this.pendingType = d.docType; this.pendingItem = d.itemId ?? null; this.pendingReplace = { ...d, versionReason: reason }; this.fileInput?.nativeElement.click(); }
+  replaceDoc(d: BatchDoc): void { const reason = prompt('Why is this document being replaced? (kept in the history)'); if (!reason) return; this.pendingType = d.docType; this.pendingItem = d.itemId ?? null; this.pendingReplace = { ...d, versionReason: reason }; this.fileInput?.nativeElement.click(); }
   filesChosen(e: Event): void { const inp = e.target as HTMLInputElement; const files = Array.from(inp.files ?? []); inp.value = ''; this.uploadAll(files, this.pendingItem, this.pendingType); }
   drop(e: DragEvent, itemId: number | null): void { e.preventDefault(); this.uploadAll(Array.from(e.dataTransfer?.files ?? []), itemId, ''); }
   private uploadAll(files: File[], itemId: number | null, docType: string): void {
     const b = this.batch()!; const pdfs = files.filter(f => /\.pdf$/i.test(f.name)); if (!pdfs.length) { this.toast.warn('PDF files only — one document per file.'); return; }
-    this.busy.set(true); let i = 0;
-    const next = () => { if (i >= pdfs.length) { this.busy.set(false); this.toast.done(`${pdfs.length} file(s) added — confirm the document types`); return; }
+    this.busy.set(true); let i = 0; this.toast.info(pdfs.length === 1 ? 'Reading the document…' : `Reading ${pdfs.length} documents… scanned PDFs take a little longer`);
+    const next = () => { if (i >= pdfs.length) { this.busy.set(false); this.toast.done(docType ? 'Attached' : `${pdfs.length} file(s) attached — check the document type we guessed`); return; }
       const f = pdfs[i++]; const rep = this.pendingReplace;
       this.api.upload(b.id, f, docType || undefined, itemId, rep?.id, rep?.versionReason).subscribe({ next: r => { this.batch.set(r); this.pendingReplace = null; next(); }, error: e => { this.toast.error(`${f.name}: ${e?.error?.message || 'upload failed'}`); next(); } }); };
     next();
   }
   retype(d: BatchDoc, t: string): void { const b = this.batch()!; this.api.updateDoc(b.id, d.id, { docType: t }).subscribe({ next: r => this.batch.set(r), error: e => this.fail(e, "Couldn't change the type.") }); }
   removeDoc(d: BatchDoc): void { const b = this.batch()!; this.api.deleteDoc(b.id, d.id).subscribe({ next: r => this.batch.set(r), error: e => this.fail(e, "Couldn't remove the document.") }); }
-  markNa(r: RequiredDoc, itemId: number | null): void { const b = this.batch()!; const reason = prompt(`Why does "${r.title}" not apply here?`); if (!reason) return; this.api.markNa(b.id, r.docType, itemId, reason).subscribe({ next: x => this.batch.set(x), error: e => this.fail(e, "Couldn't mark N/A.") }); }
+  markNa(r: RequiredDoc, itemId: number | null): void { const b = this.batch()!; const reason = prompt(`Why does "${r.title}" not apply to this payment? (the approvers will see this)`); if (!reason) return; this.api.markNa(b.id, r.docType, itemId, reason).subscribe({ next: x => this.batch.set(x), error: e => this.fail(e, "Couldn't mark N/A.") }); }
   openDoc(d: BatchDoc): void { const b = this.batch()!; this.api.file(b.id, d.id).subscribe({ next: blob => window.open(URL.createObjectURL(blob), '_blank'), error: () => this.toast.error("Couldn't open the file.") }); }
 
   // ── signature pad ──

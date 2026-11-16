@@ -22,7 +22,7 @@ export interface CreditorMeta {
 }
 export interface BatchRow {
   id: number; batchNumber: string; companyCode: string; paymentType: string; batchDate: string; status: string; statusTitle: string;
-  totalAmount: number; items: number; documents: number; preparedByName?: string; createdAt: string; submittedAt?: string; checksStatus?: string;
+  totalAmount: number; items: number; documents: number; preparedByUserId: number; preparedByName?: string; createdAt: string; submittedAt?: string; updatedAt?: string; checksStatus?: string;
   accountantName?: string; accountantApprovedAt?: string; directorName?: string; directorSignedAt?: string; paidAt?: string; closedAt?: string;
   returnReason?: string; openPrepayments: number; approvedItems: number; queriedItems: number; rejectedItems: number;
 }
