@@ -351,6 +351,7 @@
   transition: background-color .2s ease;
   white-space: nowrap;
   mat-icon { font-size: var(--text-xl); width: var(--text-xl); height: var(--text-xl); }
+  mat-icon.caret { margin-left: -4px; opacity: .8; }
   &:hover:not(:disabled) { background: var(--color-primary-hover); }
   &:disabled {
     background: var(--color-surface-3);

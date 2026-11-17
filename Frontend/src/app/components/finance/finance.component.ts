@@ -19,7 +19,9 @@ import { MatDialog } from '@angular/material/dialog';
 import { RequisitionPreviewDialogComponent } from './requisition-preview-dialog.component';
 import { FinancePaymentScheduleComponent } from './finance-payment-schedule.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
 import { FormsModule } from '@angular/forms';
+import * as XLSX from 'xlsx';
 import { FinanceService } from '../../services/finance.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
@@ -127,7 +129,8 @@ interface Overview {
     FinanceAlertsComponent,
     FinanceBookkeepingComponent,
     FinancePacksComponent,
-    FinancePaymentScheduleComponent
+    FinancePaymentScheduleComponent,
+    MatMenuModule
   ],
   templateUrl: './finance.component.html',
   styleUrls: ['./finance.component.scss']
@@ -211,6 +214,7 @@ export class FinanceComponent implements OnInit {
   /** Paying company (Promed Technologies, Access Medical, …) the supplier invoice belongs to. */
   invoiceCompany = '';
   invoiceCompanies: string[] = [];
+  exporting = false;
   
   // Pagination
   pageSize = 20;
@@ -360,14 +364,20 @@ export class FinanceComponent implements OnInit {
     this.loadInvoices();
   }
 
+  /** Query-string for the current invoice filters (no paging). */
+  private invoiceFilterQuery(): string {
+    let q = '';
+    if (this.selectedDepartment) q += `&departmentId=${this.selectedDepartment}`;
+    if (this.searchTerm) q += `&search=${encodeURIComponent(this.searchTerm)}`;
+    if (this.selectedStatus) q += `&status=${encodeURIComponent(this.selectedStatus)}`;
+    if (this.selectedCategory) q += `&category=${encodeURIComponent(this.selectedCategory)}`;
+    if (this.invoiceCompany) q += `&company=${encodeURIComponent(this.invoiceCompany)}`;
+    return q;
+  }
+
   loadInvoices(): void {
     this.loading = true;
-    let url = `${environment.apiUrl}/Books?page=${this.pageIndex + 1}&pageSize=${this.pageSize}`;
-    if (this.selectedDepartment) url += `&departmentId=${this.selectedDepartment}`;
-    if (this.searchTerm) url += `&search=${encodeURIComponent(this.searchTerm)}`;
-    if (this.selectedStatus) url += `&status=${encodeURIComponent(this.selectedStatus)}`;
-    if (this.selectedCategory) url += `&category=${encodeURIComponent(this.selectedCategory)}`;
-    if (this.invoiceCompany) url += `&company=${encodeURIComponent(this.invoiceCompany)}`;
+    const url = `${environment.apiUrl}/Books?page=${this.pageIndex + 1}&pageSize=${this.pageSize}` + this.invoiceFilterQuery();
 
     this.http.get<any>(url).subscribe({
       next: (response) => {
@@ -381,6 +391,44 @@ export class FinanceComponent implements OnInit {
         this.totalInvoices = 0;
         this.toast.error(err.error?.message || err.error?.error || 'Error loading invoices');
       }
+    });
+  }
+
+  /** Export supplier invoices to Excel — everything, or only what the current filters show. */
+  exportInvoices(scope: 'all' | 'filtered'): void {
+    if (this.exporting) return;
+    this.exporting = true;
+    const url = `${environment.apiUrl}/Books?page=1&pageSize=10000` + (scope === 'filtered' ? this.invoiceFilterQuery() : '');
+    this.http.get<any>(url).subscribe({
+      next: (response) => {
+        const rows: BookInvoice[] = response.items || response.data || [];
+        if (!rows.length) { this.exporting = false; this.toast.error('Nothing to export'); return; }
+        const data = rows.map(i => ({
+          'Paying company': i.companyName || '',
+          'Supplier': i.supplierName,
+          'Invoice #': i.invoiceNumber || '',
+          'Invoice date': i.invoiceDate ? new Date(i.invoiceDate).toISOString().slice(0, 10) : '',
+          'Department': i.departmentName || '',
+          'Category': i.category || '',
+          'Description': i.description || '',
+          'VAT': i.vatAmount ?? '',
+          'Total': i.total,
+          'Status': i.status,
+          'Payment date': i.paymentDate ? new Date(i.paymentDate).toISOString().slice(0, 10) : ''
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [22, 28, 16, 12, 18, 16, 40, 12, 14, 18, 12].map(w => ({ wch: w }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Supplier invoices');
+        const parts = ['supplier-invoices', scope === 'filtered' ? 'filtered' : 'all'];
+        if (scope === 'filtered' && this.invoiceCompany) parts.push(this.invoiceCompany.replace(/[^a-z0-9]+/gi, '-').toLowerCase());
+        if (scope === 'filtered' && this.selectedStatus) parts.push(this.selectedStatus.replace(/\s+/g, '-').toLowerCase());
+        parts.push(new Date().toISOString().slice(0, 10));
+        XLSX.writeFile(wb, parts.join('_') + '.xlsx');
+        this.exporting = false;
+        this.toast.done(`Exported ${rows.length} invoice${rows.length === 1 ? '' : 's'}`);
+      },
+      error: (err) => { this.exporting = false; this.toast.error(err.error?.message || 'Export failed'); }
     });
   }
 

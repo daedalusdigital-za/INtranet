@@ -445,15 +445,13 @@
     <div class="filters-bar">
       <div class="filter-group">
         <div class="filter-item">
-          <label for="deptSelect">
-            <mat-icon>business</mat-icon>
-            Department
+          <label for="companySelect">
+            <mat-icon>domain</mat-icon>
+            Paying company
           </label>
-          <select id="deptSelect" [(ngModel)]="selectedDepartment" (ngModelChange)="onDepartmentChange()">
-            <option [ngValue]="null">All departments</option>
-            @for (dept of departments; track dept.departmentId) {
-              <option [ngValue]="dept.departmentId">{{ dept.name }}</option>
-            }
+          <select id="companySelect" [(ngModel)]="invoiceCompany" (ngModelChange)="applyFilters()">
+            <option value="">All companies</option>
+            @for (c of invoiceCompanies; track c) { <option [value]="c">{{ c }}</option> }
           </select>
         </div>
 
@@ -463,19 +461,21 @@
             Search
           </label>
           <div class="search-input-wrap">
-            <input type="search" [(ngModel)]="searchTerm" placeholder="Invoice #, supplier, description, reference…" (keyup.enter)="applyFilters()">
+            <input type="search" [(ngModel)]="searchTerm" placeholder="Invoice #, supplier, description, reference…" (keyup.enter)="applyFilters()" (search)="applyFilters()">
             <mat-icon class="search-icon-inside">search</mat-icon>
           </div>
         </div>
 
         <div class="filter-item">
-          <label for="companySelect">
+          <label for="deptSelect">
             <mat-icon>business</mat-icon>
-            Paying company
+            Department
           </label>
-          <select id="companySelect" [(ngModel)]="invoiceCompany" (ngModelChange)="applyFilters()">
-            <option value="">All companies</option>
-            @for (c of invoiceCompanies; track c) { <option [value]="c">{{ c }}</option> }
+          <select id="deptSelect" [(ngModel)]="selectedDepartment" (ngModelChange)="onDepartmentChange()">
+            <option [ngValue]="null">All departments</option>
+            @for (dept of departments; track dept.departmentId) {
+              <option [ngValue]="dept.departmentId">{{ dept.name }}</option>
+            }
           </select>
         </div>
 
@@ -502,10 +502,15 @@
         @if (selectedDepartment || searchTerm || selectedStatus || invoiceCompany) {
           <button class="filter-clear-btn" (click)="clearInvoiceFilters()" matTooltip="Clear filters"><mat-icon>filter_alt_off</mat-icon></button>
         }
-        <button class="filter-apply-btn" (click)="applyFilters()">
-          <mat-icon>filter_list</mat-icon>
-          Apply
+        <button class="filter-apply-btn" [matMenuTriggerFor]="exportMenu" [disabled]="exporting">
+          <mat-icon>{{ exporting ? 'hourglass_top' : 'download' }}</mat-icon>
+          {{ exporting ? 'Exporting…' : 'Export' }}
+          <mat-icon class="caret">expand_more</mat-icon>
         </button>
+        <mat-menu #exportMenu="matMenu" xPosition="before">
+          <button mat-menu-item (click)="exportInvoices('all')"><mat-icon>table_view</mat-icon>Export all to Excel</button>
+          <button mat-menu-item (click)="exportInvoices('filtered')" [disabled]="!(selectedDepartment || searchTerm || selectedStatus || invoiceCompany)"><mat-icon>filter_alt</mat-icon>Export filtered to Excel</button>
+        </mat-menu>
       </div>
     </div>
 
