@@ -289,7 +289,15 @@ namespace ProjectTracker.API.Controllers.Finance
                     paidDate = r.PaidDate,
                     financeNotes = r.FinanceNotes,
                     periodYear = r.PeriodYear,
-                    periodMonth = r.PeriodMonth
+                    periodMonth = r.PeriodMonth,
+                    // Needed to render the Rocket Freight requisition form (same document Logistics prints)
+                    cellNumber = r.CellNumber,
+                    status = r.Status,
+                    createdAt = r.CreatedAt,
+                    createdByName = _context.Users
+                        .Where(u => u.UserId == r.CreatedByUserId)
+                        .Select(u => (u.Name + " " + u.Surname).Trim())
+                        .FirstOrDefault()
                 })
                 .Take(500)
                 .ToListAsync();

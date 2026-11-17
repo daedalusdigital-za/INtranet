@@ -14,6 +14,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ToastService } from '../../ui/toast.service';
+import { RequisitionFormService } from '../../services/requisition-form.service';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { FinanceService } from '../../services/finance.service';
@@ -241,6 +242,7 @@ export class FinanceComponent implements OnInit {
     private router: Router,
     private route: ActivatedRoute,
     private toast: ToastService,
+    private requisitionForm: RequisitionFormService,
     private tenderService: TenderService,
     private sanitizer: DomSanitizer
   ) {}
@@ -627,6 +629,12 @@ export class FinanceComponent implements OnInit {
       error: () => { this.requisitionsLoading = false; }
     });
   }
+
+  /** Show the Rocket Freight requisition form (same document Logistics prints). */
+  viewRequisitionForm(req: any): void { this.requisitionForm.open(req, false); }
+
+  /** Open the form and trigger the print dialog so it can be saved as PDF. */
+  printRequisitionForm(req: any): void { this.requisitionForm.open(req, true); }
 
   setRequisitionStatus(req: any, status: 'Requested' | 'Paid' | 'Rejected'): void {
     this.http.put(`${environment.apiUrl}/finance/requisitions/${req.id}/status`, { status }).subscribe({

@@ -244,6 +244,10 @@
             </div>
             <div class="sp-right">
               <span class="sp-status" [class]="'spill-' + r.financeStatus.toLowerCase()">{{r.financeStatus}}</span>
+              <div class="sp-actions">
+                <button aria-label="View requisition form" mat-icon-button matTooltip="View requisition form" (click)="viewRequisitionForm(r)"><mat-icon>description</mat-icon></button>
+                <button aria-label="Download / print PDF" mat-icon-button matTooltip="Download / print PDF" (click)="printRequisitionForm(r)"><mat-icon>picture_as_pdf</mat-icon></button>
+              </div>
               @if (r.financeStatus !== 'Paid') {
                 <div class="sp-actions">
                   <button aria-label="Mark Paid" mat-icon-button class="sp-approve" matTooltip="Mark Paid" (click)="setRequisitionStatus(r, 'Paid')"><mat-icon>check_circle</mat-icon></button>
