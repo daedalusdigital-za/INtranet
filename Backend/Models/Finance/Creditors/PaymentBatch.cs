@@ -69,6 +69,8 @@ public class PaymentBatch
     [MaxLength(64)] public string? LockHash { get; set; }
 
     // Bank + close
+    /// <summary>Pay-run this batch is booked on (Mondays and Wednesdays). Set when the director signs; the treasurer may move it.</summary>
+    public DateTime? ScheduledPayDate { get; set; }
     public DateTime? BankExportedAt { get; set; }
     public int? BankExportedByUserId { get; set; }
     public DateTime? PaidAt { get; set; }

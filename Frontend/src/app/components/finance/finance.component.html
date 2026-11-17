@@ -203,6 +203,11 @@
           <div class="attn-text"><b>{{ stationeryCounts.pending }}</b> stationery request{{ stationeryCounts.pending === 1 ? '' : 's' }} to approve</div>
           <mat-icon class="chev">chevron_right</mat-icon>
         </li>
+        <li class="attn" (click)="goTab('schedule')">
+          <mat-icon>event_available</mat-icon>
+          <div class="attn-text"><b>Payment schedule</b> — signed packs booked for the Monday / Wednesday pay-runs<small>treasurer loads, pays, uploads POP and closes</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
         <li class="attn" [class.zero]="ov.invoices.overdue === 0" [class.danger]="ov.invoices.overdue > 0" (click)="selectedStatus='Overdue'; goTab('invoices'); applyFilters()">
           <mat-icon>event_busy</mat-icon>
           <div class="attn-text"><b>{{ ov.invoices.overdue }}</b> supplier invoice{{ ov.invoices.overdue === 1 ? '' : 's' }} overdue<small>late payments cost us supplier goodwill and discounts</small></div>
@@ -397,6 +402,20 @@
     </div>
   </mat-tab>
 
+  <!-- ═══════════ PAYMENT SCHEDULE ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">event_available</mat-icon> Payment schedule
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Payment Schedule</h2>
+        <p>Everything the directors have signed, booked on the next pay-run. We pay on <b>Mondays and Wednesdays</b>. The treasurer downloads the bank file, loads it, releases the payment, marks it paid and uploads each proof of payment — then the batch closes.</p>
+      </div>
+      @if (isTab('schedule')) { <app-finance-payment-schedule></app-finance-payment-schedule> }
+    </div>
+  </mat-tab>
+
   <!-- ═══════════ INVOICES ═══════════ -->
   <mat-tab>
     <ng-template mat-tab-label><mat-icon class="tab-icon">description</mat-icon> Supplier invoices</ng-template>
@@ -450,6 +469,17 @@
         </div>
 
         <div class="filter-item">
+          <label for="companySelect">
+            <mat-icon>business</mat-icon>
+            Paying company
+          </label>
+          <select id="companySelect" [(ngModel)]="invoiceCompany" (ngModelChange)="applyFilters()">
+            <option value="">All companies</option>
+            @for (c of invoiceCompanies; track c) { <option [value]="c">{{ c }}</option> }
+          </select>
+        </div>
+
+        <div class="filter-item">
           <label for="statusSelect">
             <mat-icon>flag</mat-icon>
             Status
@@ -469,7 +499,7 @@
       </div>
 
       <div class="filter-actions">
-        @if (selectedDepartment || searchTerm || selectedStatus) {
+        @if (selectedDepartment || searchTerm || selectedStatus || invoiceCompany) {
           <button class="filter-clear-btn" (click)="clearInvoiceFilters()" matTooltip="Clear filters"><mat-icon>filter_alt_off</mat-icon></button>
         }
         <button class="filter-apply-btn" (click)="applyFilters()">
@@ -601,7 +631,7 @@
           </div>
           <h3>No invoices match</h3>
           <p>Try a different department, status or search term.</p>
-          @if (selectedDepartment || searchTerm || selectedStatus) { <button mat-stroked-button (click)="clearInvoiceFilters()">Clear filters</button> }
+          @if (selectedDepartment || searchTerm || selectedStatus || invoiceCompany) { <button mat-stroked-button (click)="clearInvoiceFilters()">Clear filters</button> }
         </div>
       }
     </div>

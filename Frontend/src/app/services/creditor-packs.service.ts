@@ -113,4 +113,44 @@ export class CreditorPacksService {
   sign(id: number, typedName: string, comment?: string, signatureImageBase64?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/sign`, { typedName, comment, signatureImageBase64 }); }
   bankFile(id: number) { return this.http.get(`${this.base}/batches/${id}/bank-file`, { responseType: 'blob' }); }
   setStatus(id: number, decision: 'LoadedOnBank' | 'Paid' | 'Closed' | 'Draft', comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/status`, { decision, comment }); }
+
+  // ── Payment schedule (treasury) ──
+  schedule() { return this.http.get<PaymentSchedule>(`${this.base}/schedule`); }
+  reschedule(id: number, date: string, comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/schedule`, { date, comment }); }
+
+  // ── Executive (directors) ──
+  executive() { return this.http.get<ExecutiveOverview>(`${this.base}/executive`); }
+}
+
+export interface ScheduleItem {
+  id: number; supplierName: string; amount: number; invoiceNumbers?: string; description?: string; bankName?: string; accountNumber?: string; branchCode?: string;
+  accountHolder?: string; paymentReference?: string; paidAt?: string; prepaymentOpen: boolean; hasPop: boolean; popDocId?: number | null;
+}
+export interface ScheduleBatch {
+  id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; status: string; statusTitle: string;
+  scheduledPayDate: string; overdue: boolean; directorName?: string; directorSignedAt?: string; accountantName?: string; preparedByName?: string; bankExportedAt?: string; paidAt?: string;
+  approvedAmount: number; approvedItems: number; popDone: number; popMissing: number; openPrepayments: number; items: ScheduleItem[];
+  can: { bankFile: boolean; markLoaded: boolean; markPaid: boolean; uploadPop: boolean; close: boolean; reschedule: boolean };
+}
+export interface PaymentSchedule {
+  payDays: string[]; nextPayDay: string; me: { bank: boolean; clerk: boolean };
+  totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number };
+  batches: ScheduleBatch[];
+}
+export interface ExecutiveAwaiting {
+  id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; totalAmount: number; items: number; decided: number;
+  preparedByName?: string; submittedAt?: string; accountantName?: string; accountantApprovedAt?: string; checksStatus?: string; forMe: boolean; waitingDays: number;
+  suppliers: { supplierName: string; amount: number }[];
+}
+export interface ExecutiveOverview {
+  generatedAt: string; me: { userId: number; isDirector: boolean; isAdmin: boolean };
+  awaiting: ExecutiveAwaiting[]; awaitingForMe: number; awaitingAmount: number;
+  pipeline: { status: string; title: string; count: number; amount: number }[];
+  schedule: { date: string; count: number; amount: number; paid: number; loaded: number }[];
+  nextPayDay: string;
+  paidByMonth: { month: string; label: string; total: number; byCompany: { code: string; amount: number }[] }[];
+  spendByType: { type: string; title: string; amount: number; count: number }[];
+  topSuppliers: { supplier: string; amount: number; payments: number; companies: number }[];
+  perCompany: { code: string; name: string; activity?: string; directorName?: string; accountantName?: string; awaitingDirector: number; awaitingDirectorCount: number; inPreparation: number; onSchedule: number; paidThisMonth: number; paidLast90: number; awaitingPop: number }[];
+  signedLast30: number; signedLast30Amount: number; paidThisMonth: number; awaitingPopAmount: number;
 }

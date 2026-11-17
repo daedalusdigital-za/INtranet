@@ -635,6 +635,14 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard]
     },
 
+    // Executive — directors approve & sign supplier payments, company stats. Role-gated server-side.
+    {
+      path: 'executive',
+      title: 'Executive',
+      loadComponent: () => import('../components/executive/executive.component').then(m => m.ExecutiveComponent),
+      canActivate: [authGuard]
+    },
+
     // Collaborative Documents Module
     { 
       path: 'docs', 

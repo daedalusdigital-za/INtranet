@@ -32,6 +32,39 @@ public static class CreditorWorkflow
     /// <summary>Statuses from which the batch is locked (director signed).</summary>
     public static readonly HashSet<string> Locked = new() { Approved, LoadedOnBank, Paid, Closed };
 
+    /// <summary>Statuses that sit on the Payment Schedule: signed and waiting to be loaded / paid / closed with POP.</summary>
+    public static readonly HashSet<string> OnSchedule = new() { Approved, LoadedOnBank, Paid };
+
+    /// <summary>The group pays suppliers on Mondays and Wednesdays.</summary>
+    public static readonly DayOfWeek[] PayDays = { DayOfWeek.Monday, DayOfWeek.Wednesday };
+    private static readonly TimeSpan Sast = TimeSpan.FromHours(2);
+    /// <summary>Cut-off (SAST) after which a same-day pay-run is considered closed.</summary>
+    private const int CutOffHourSast = 10;
+
+    /// <summary>Next pay-run on or after <paramref name="utc"/> (same day only if before the cut-off). Returned as a date (midnight).</summary>
+    public static DateTime NextPayDay(DateTime utc)
+    {
+        var local = utc + Sast;
+        var d = local.Date;
+        for (var i = 0; i < 8; i++)
+        {
+            var c = d.AddDays(i);
+            if (!PayDays.Contains(c.DayOfWeek)) continue;
+            if (i == 0 && local.Hour >= CutOffHourSast) continue;
+            return c;
+        }
+        return d;
+    }
+
+    /// <summary>The next <paramref name="count"/> pay-runs from now.</summary>
+    public static List<DateTime> UpcomingPayDays(DateTime utc, int count)
+    {
+        var list = new List<DateTime>();
+        var d = NextPayDay(utc);
+        while (list.Count < count) { if (PayDays.Contains(d.DayOfWeek)) list.Add(d); d = d.AddDays(1); }
+        return list;
+    }
+
     // Permission keys (Users.Permissions)
     public const string RoleClerk = "cred.clerk";            // creditors clerk: prepare, submit, close
     public const string RoleAccountant = "cred.accountant";  // company accountant (narrowed by CreditorCompany)

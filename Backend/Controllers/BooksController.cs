@@ -892,6 +892,21 @@ namespace ProjectTracker.API.Controllers
         }
 
         // ============================================================================
+        // GET: api/Books/companies - Distinct paying companies captured on invoices
+        // ============================================================================
+        [HttpGet("companies")]
+        public async Task<IActionResult> GetCompanies()
+        {
+            var companies = await _context.BookInvoices
+                .Where(b => b.CompanyName != null && b.CompanyName != "")
+                .Select(b => b.CompanyName!)
+                .Distinct()
+                .OrderBy(c => c)
+                .ToListAsync();
+            return Ok(companies);
+        }
+
+        // ============================================================================
         // GET: api/Books/categories - Get distinct categories
         // ============================================================================
         [HttpGet("categories")]

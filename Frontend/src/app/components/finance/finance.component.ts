@@ -17,6 +17,7 @@ import { ToastService } from '../../ui/toast.service';
 import { RequisitionFormService } from '../../services/requisition-form.service';
 import { MatDialog } from '@angular/material/dialog';
 import { RequisitionPreviewDialogComponent } from './requisition-preview-dialog.component';
+import { FinancePaymentScheduleComponent } from './finance-payment-schedule.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { FinanceService } from '../../services/finance.service';
@@ -40,7 +41,7 @@ import { TenderService } from '../../services/tender.service';
  */
 export type FinanceSide = 'debtors' | 'creditors';
 const DEBTOR_TABS = ['overview', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'packs'] as const;
-const CREDITOR_TABS = ['overview', 'approvals', 'creditors', 'invoices', 'vault'] as const;
+const CREDITOR_TABS = ['overview', 'approvals', 'creditors', 'schedule', 'invoices', 'vault'] as const;
 type FinanceTab = typeof DEBTOR_TABS[number] | typeof CREDITOR_TABS[number];
 const SIDE_OF: Record<FinanceTab, FinanceSide> = Object.fromEntries([
   ...DEBTOR_TABS.map(t => [t, 'debtors']), ...CREDITOR_TABS.map(t => [t, 'creditors'])
@@ -125,7 +126,8 @@ interface Overview {
     FinanceCreditNotesComponent,
     FinanceAlertsComponent,
     FinanceBookkeepingComponent,
-    FinancePacksComponent
+    FinancePacksComponent,
+    FinancePaymentScheduleComponent
   ],
   templateUrl: './finance.component.html',
   styleUrls: ['./finance.component.scss']
@@ -206,6 +208,9 @@ export class FinanceComponent implements OnInit {
   searchTerm = '';
   selectedStatus = '';
   selectedCategory = '';
+  /** Paying company (Promed Technologies, Access Medical, …) the supplier invoice belongs to. */
+  invoiceCompany = '';
+  invoiceCompanies: string[] = [];
   
   // Pagination
   pageSize = 20;
@@ -335,6 +340,7 @@ export class FinanceComponent implements OnInit {
       next: (depts) => { this.departments = depts; },
       error: (err) => { console.error('Error loading departments:', err); }
     });
+    this.http.get<string[]>(`${environment.apiUrl}/Books/companies`).subscribe({ next: c => { this.invoiceCompanies = c || []; }, error: () => {} });
   }
 
   goToCommitments(): void {
@@ -361,6 +367,7 @@ export class FinanceComponent implements OnInit {
     if (this.searchTerm) url += `&search=${encodeURIComponent(this.searchTerm)}`;
     if (this.selectedStatus) url += `&status=${encodeURIComponent(this.selectedStatus)}`;
     if (this.selectedCategory) url += `&category=${encodeURIComponent(this.selectedCategory)}`;
+    if (this.invoiceCompany) url += `&company=${encodeURIComponent(this.invoiceCompany)}`;
 
     this.http.get<any>(url).subscribe({
       next: (response) => {
@@ -378,7 +385,7 @@ export class FinanceComponent implements OnInit {
   }
 
   clearInvoiceFilters(): void {
-    this.selectedDepartment = null; this.searchTerm = ''; this.selectedStatus = ''; this.selectedCategory = '';
+    this.selectedDepartment = null; this.searchTerm = ''; this.selectedStatus = ''; this.selectedCategory = ''; this.invoiceCompany = '';
     this.applyFilters();
   }
 

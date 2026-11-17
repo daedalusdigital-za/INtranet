@@ -206,7 +206,7 @@ public class CreditorPacksController : ControllerBase
             b.Id, b.BatchNumber, b.CompanyCode, b.PaymentType, b.BatchDate, b.Status, statusTitle = CreditorWorkflow.Title(b.Status),
             b.TotalAmount, items = b.Items.Count, documents = b.Documents.Count(d => d.StoragePath != null),
             b.PreparedByUserId, b.PreparedByName, b.CreatedAt, b.SubmittedAt, b.UpdatedAt, b.ChecksStatus, b.AccountantName, b.AccountantApprovedAt, b.DirectorName, b.DirectorSignedAt,
-            b.PaidAt, b.ClosedAt, b.ReturnReason, openPrepayments = b.Items.Count(i => i.PrepaymentOpen),
+            b.PaidAt, b.ClosedAt, b.ReturnReason, b.ScheduledPayDate, openPrepayments = b.Items.Count(i => i.PrepaymentOpen),
             approvedItems = b.Items.Count(i => i.DecisionStatus == "Approved"), queriedItems = b.Items.Count(i => i.DecisionStatus == "Queried"), rejectedItems = b.Items.Count(i => i.DecisionStatus == "Rejected")
         }).ToListAsync();
         return Ok(rows);
@@ -604,9 +604,10 @@ public class CreditorPacksController : ControllerBase
             b.LockedAt = DateTime.UtcNow;
             b.ReturnReason = null;
             b.LockHash = Hash(Snapshot(b));
-            b.Events.Add(Ev("DirectorSigned", from, b.Status, $"{b.Items.Count(i => i.DecisionStatus == "Approved")} payment(s) approved, R{b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount):N2}. Batch locked."));
+            b.ScheduledPayDate = CreditorWorkflow.NextPayDay(DateTime.UtcNow);
+            b.Events.Add(Ev("DirectorSigned", from, b.Status, $"{b.Items.Count(i => i.DecisionStatus == "Approved")} payment(s) approved, R{b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount):N2}. Batch locked. Booked on the {b.ScheduledPayDate:ddd d MMM} pay-run."));
             var bankUsers = await _db.Users.AsNoTracking().Where(u => u.IsActive && u.Permissions != null && u.Permissions.Contains(CreditorWorkflow.RoleBank)).Select(u => (int?)u.UserId).ToListAsync();
-            await NotifyAsync(bankUsers.Append(b.PreparedByUserId), "Payment pack approved — load on bank", $"{b.BatchNumber} · {b.CompanyCode} · R{b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount):N2}", b.Id);
+            await NotifyAsync(bankUsers.Append(b.PreparedByUserId), "Payment pack approved — on the payment schedule", $"{b.BatchNumber} · {b.CompanyCode} · R{b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount):N2} · pay-run {b.ScheduledPayDate:ddd d MMM}", b.Id);
         }
         b.DirectorUserId = UserId; b.DirectorName = UserName; b.DirectorSignedAt = DateTime.UtcNow; b.DirectorComment = dto.Comment;
 
@@ -680,6 +681,170 @@ public class CreditorPacksController : ControllerBase
         return Ok(await DetailAsync(id));
     }
 
+    // ───────────────────────── payment schedule (treasury) ─────────────────────────
+
+    /// <summary>
+    /// Everything that has cleared the pack process (director signed) and still has to be loaded, paid or closed with proof of payment,
+    /// grouped by the pay-run it is booked on. Pay-runs are Mondays and Wednesdays.
+    /// </summary>
+    [HttpGet("schedule")]
+    public async Task<IActionResult> Schedule()
+    {
+        var isBank = await HasAsync(CreditorWorkflow.RoleBank);
+        var isClerk = await HasAsync(CreditorWorkflow.RoleClerk);
+        var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.Name);
+        var batches = await _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
+            .Where(b => CreditorWorkflow.OnSchedule.Contains(b.Status))
+            .OrderBy(b => b.ScheduledPayDate).ThenBy(b => b.Id).ToListAsync();
+
+        var rows = batches.Select(b =>
+        {
+            var approved = b.Items.Where(i => i.DecisionStatus == "Approved").OrderBy(i => i.SortOrder).ToList();
+            bool HasPop(int itemId) => b.Documents.Any(d => d.ItemId == itemId && d.DocType == CreditorDocTypes.ProofOfPayment && d.StoragePath != null);
+            var popDone = approved.Count(i => HasPop(i.Id));
+            var payDate = b.ScheduledPayDate ?? CreditorWorkflow.NextPayDay(b.DirectorSignedAt ?? DateTime.UtcNow);
+            return new
+            {
+                b.Id, b.BatchNumber, b.CompanyCode, companyName = companies.TryGetValue(b.CompanyCode, out var n) ? n : b.CompanyCode,
+                b.PaymentType, paymentTypeTitle = CreditorChecksService.Label(b.PaymentType), b.Status, statusTitle = CreditorWorkflow.Title(b.Status),
+                scheduledPayDate = payDate, overdue = b.Status != CreditorWorkflow.Paid && payDate.Date < (DateTime.UtcNow + TimeSpan.FromHours(2)).Date,
+                b.DirectorName, b.DirectorSignedAt, b.AccountantName, b.PreparedByName, b.BankExportedAt, b.PaidAt,
+                approvedAmount = approved.Sum(i => i.Amount), approvedItems = approved.Count, popDone, popMissing = approved.Count - popDone,
+                openPrepayments = approved.Count(i => i.PrepaymentOpen),
+                items = approved.Select(i => new
+                {
+                    i.Id, i.SupplierName, i.Amount, i.InvoiceNumbers, i.Description, i.BankName, i.AccountNumber, i.BranchCode, i.AccountHolder, i.PaymentReference, i.PaidAt, i.PrepaymentOpen,
+                    hasPop = HasPop(i.Id),
+                    popDocId = b.Documents.Where(d => d.ItemId == i.Id && d.DocType == CreditorDocTypes.ProofOfPayment && d.StoragePath != null).OrderByDescending(d => d.Version).Select(d => (int?)d.Id).FirstOrDefault()
+                }),
+                can = new
+                {
+                    bankFile = isBank, markLoaded = isBank && b.Status == CreditorWorkflow.Approved, markPaid = isBank && b.Status is CreditorWorkflow.Approved or CreditorWorkflow.LoadedOnBank,
+                    uploadPop = isBank || isClerk, close = b.Status == CreditorWorkflow.Paid && (isClerk || isBank), reschedule = (isBank || isClerk) && b.Status != CreditorWorkflow.Paid
+                }
+            };
+        }).ToList();
+
+        return Ok(new
+        {
+            payDays = CreditorWorkflow.UpcomingPayDays(DateTime.UtcNow, 6),
+            nextPayDay = CreditorWorkflow.NextPayDay(DateTime.UtcNow),
+            me = new { bank = isBank, clerk = isClerk },
+            totals = new
+            {
+                toLoad = rows.Where(r => r.Status == CreditorWorkflow.Approved).Sum(r => r.approvedAmount), toLoadCount = rows.Count(r => r.Status == CreditorWorkflow.Approved),
+                loaded = rows.Where(r => r.Status == CreditorWorkflow.LoadedOnBank).Sum(r => r.approvedAmount), loadedCount = rows.Count(r => r.Status == CreditorWorkflow.LoadedOnBank),
+                awaitingPop = rows.Where(r => r.Status == CreditorWorkflow.Paid).Sum(r => r.approvedAmount), awaitingPopCount = rows.Count(r => r.Status == CreditorWorkflow.Paid),
+                overdue = rows.Count(r => r.overdue)
+            },
+            batches = rows
+        });
+    }
+
+    public record ScheduleDto(DateTime Date, string? Comment);
+
+    /// <summary>Move a signed batch to another pay-run (treasurer / clerk).</summary>
+    [HttpPost("batches/{id:int}/schedule")]
+    public async Task<IActionResult> Reschedule(int id, [FromBody] ScheduleDto dto)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (b.Status is not (CreditorWorkflow.Approved or CreditorWorkflow.LoadedOnBank)) return Conflict(new { message = "Only a signed, unpaid batch can be rescheduled." });
+        if (!(await HasAsync(CreditorWorkflow.RoleBank) || await HasAsync(CreditorWorkflow.RoleClerk))) return Forbid();
+        var date = dto.Date.Date;
+        if (!CreditorWorkflow.PayDays.Contains(date.DayOfWeek)) return BadRequest(new { message = "Pay-runs are on Mondays and Wednesdays." });
+        var from = b.ScheduledPayDate;
+        b.ScheduledPayDate = date;
+        b.Events.Add(Ev("Rescheduled", null, null, $"Pay-run moved {(from == null ? "" : $"from {from:ddd d MMM} ")}to {date:ddd d MMM}. {dto.Comment}".Trim()));
+        b.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return Ok(await DetailAsync(id));
+    }
+
+    // ───────────────────────── executive (directors) ─────────────────────────
+
+    /// <summary>Director's view: packs waiting for signature, the pipeline, the next pay-runs, and how each company is paying out.</summary>
+    [HttpGet("executive")]
+    public async Task<IActionResult> Executive()
+    {
+        var isDirector = await HasAsync(CreditorWorkflow.RoleDirector);
+        if (!isDirector && !IsSystemAdmin && UserRole != "Manager") return Forbid();
+
+        var now = DateTime.UtcNow;
+        var companies = await _db.CreditorCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ToListAsync();
+        var all = await _db.PaymentBatches.AsNoTracking().Include(b => b.Items)
+            .Where(b => b.Status != CreditorWorkflow.Rejected && (b.Status != CreditorWorkflow.Closed || b.PaidAt >= now.AddMonths(-7)))
+            .ToListAsync();
+        string Name(string code) => companies.FirstOrDefault(c => c.Code == code)?.Name ?? code;
+        decimal Appr(PaymentBatch b) => b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount);
+
+        var awaiting = all.Where(b => b.Status == CreditorWorkflow.AwaitingDirector).OrderBy(b => b.SubmittedAt).Select(b =>
+        {
+            var c = companies.FirstOrDefault(x => x.Code == b.CompanyCode);
+            var forMe = IsSystemAdmin || c == null || (c.DirectorUserId == null && c.DelegateDirectorUserId == null) || c.DirectorUserId == UserId || c.DelegateDirectorUserId == UserId;
+            return new
+            {
+                b.Id, b.BatchNumber, b.CompanyCode, companyName = Name(b.CompanyCode), b.PaymentType, paymentTypeTitle = CreditorChecksService.Label(b.PaymentType),
+                b.TotalAmount, items = b.Items.Count, decided = b.Items.Count(i => i.DecisionStatus != "Pending"),
+                b.PreparedByName, b.SubmittedAt, b.AccountantName, b.AccountantApprovedAt, b.ChecksStatus, forMe,
+                waitingDays = b.AccountantApprovedAt != null ? (int)(now - b.AccountantApprovedAt.Value).TotalDays : 0,
+                suppliers = b.Items.OrderByDescending(i => i.Amount).Take(4).Select(i => new { i.SupplierName, i.Amount })
+            };
+        }).ToList();
+
+        var pipeline = CreditorWorkflow.Ordered.Concat(new[] { CreditorWorkflow.ChecksFailed, CreditorWorkflow.QueriedByAccountant, CreditorWorkflow.QueriedByDirector })
+            .Select(s => new { status = s, title = CreditorWorkflow.Title(s), count = all.Count(b => b.Status == s), amount = all.Where(b => b.Status == s).Sum(b => CreditorWorkflow.Locked.Contains(s) ? Appr(b) : b.TotalAmount) })
+            .Where(x => x.count > 0).ToList();
+
+        var schedule = all.Where(b => CreditorWorkflow.OnSchedule.Contains(b.Status))
+            .GroupBy(b => (b.ScheduledPayDate ?? CreditorWorkflow.NextPayDay(b.DirectorSignedAt ?? now)).Date)
+            .OrderBy(g => g.Key)
+            .Select(g => new { date = g.Key, count = g.Count(), amount = g.Sum(Appr), paid = g.Where(b => b.Status == CreditorWorkflow.Paid).Sum(Appr), loaded = g.Where(b => b.Status == CreditorWorkflow.LoadedOnBank).Sum(Appr) })
+            .ToList();
+
+        var months = Enumerable.Range(0, 6).Select(i => new DateTime(now.Year, now.Month, 1).AddMonths(-5 + i)).ToList();
+        var paidByMonth = months.Select(m => new
+        {
+            month = m, label = m.ToString("MMM yy"),
+            total = all.Where(b => b.PaidAt != null && b.PaidAt >= m && b.PaidAt < m.AddMonths(1)).Sum(Appr),
+            byCompany = companies.Select(c => new { c.Code, amount = all.Where(b => b.CompanyCode == c.Code && b.PaidAt != null && b.PaidAt >= m && b.PaidAt < m.AddMonths(1)).Sum(Appr) }).Where(x => x.amount > 0)
+        }).ToList();
+
+        var since90 = now.AddDays(-90);
+        var recentItems = all.Where(b => CreditorWorkflow.Locked.Contains(b.Status) && b.DirectorSignedAt >= since90).SelectMany(b => b.Items.Where(i => i.DecisionStatus == "Approved").Select(i => new { b.CompanyCode, b.PaymentType, i.SupplierName, i.Amount })).ToList();
+        var spendByType = recentItems.GroupBy(i => i.PaymentType).Select(g => new { type = g.Key, title = CreditorChecksService.Label(g.Key), amount = g.Sum(i => i.Amount), count = g.Count() }).OrderByDescending(x => x.amount).ToList();
+        var topSuppliers = recentItems.GroupBy(i => i.SupplierName.Trim(), StringComparer.OrdinalIgnoreCase).Select(g => new { supplier = g.Key, amount = g.Sum(i => i.Amount), payments = g.Count(), companies = g.Select(i => i.CompanyCode).Distinct().Count() }).OrderByDescending(x => x.amount).Take(10).ToList();
+
+        var monthStart = new DateTime(now.Year, now.Month, 1);
+        var nameIds = companies.SelectMany(c => new[] { c.DirectorUserId, c.AccountantUserId }).Where(i => i != null).Select(i => i!.Value).Distinct().ToList();
+        var names = await _db.Users.AsNoTracking().Where(u => nameIds.Contains(u.UserId)).ToDictionaryAsync(u => u.UserId, u => (u.Name + " " + u.Surname).Trim());
+        string? N(int? id) => id != null && names.TryGetValue(id.Value, out var n) ? n : null;
+        var perCompany = companies.Select(c =>
+        {
+            var mine = all.Where(b => b.CompanyCode == c.Code).ToList();
+            return new
+            {
+                c.Code, c.Name, c.Activity, directorName = N(c.DirectorUserId), accountantName = N(c.AccountantUserId),
+                awaitingDirector = mine.Where(b => b.Status == CreditorWorkflow.AwaitingDirector).Sum(b => b.TotalAmount), awaitingDirectorCount = mine.Count(b => b.Status == CreditorWorkflow.AwaitingDirector),
+                inPreparation = mine.Where(b => b.Status is CreditorWorkflow.Draft or CreditorWorkflow.ChecksFailed or CreditorWorkflow.AwaitingAccountant or CreditorWorkflow.QueriedByAccountant or CreditorWorkflow.QueriedByDirector).Sum(b => b.TotalAmount),
+                onSchedule = mine.Where(b => b.Status is CreditorWorkflow.Approved or CreditorWorkflow.LoadedOnBank).Sum(Appr),
+                paidThisMonth = mine.Where(b => b.PaidAt >= monthStart).Sum(Appr),
+                paidLast90 = mine.Where(b => b.PaidAt >= since90).Sum(Appr),
+                awaitingPop = mine.Where(b => b.Status == CreditorWorkflow.Paid).Sum(Appr),
+            };
+        }).ToList();
+
+        return Ok(new
+        {
+            generatedAt = now, me = new { userId = UserId, isDirector, isAdmin = IsSystemAdmin },
+            awaiting, awaitingForMe = awaiting.Count(a => a.forMe), awaitingAmount = awaiting.Sum(a => a.TotalAmount),
+            pipeline, schedule, nextPayDay = CreditorWorkflow.NextPayDay(now), paidByMonth, spendByType, topSuppliers, perCompany,
+            signedLast30 = all.Count(b => b.DirectorSignedAt >= now.AddDays(-30) && CreditorWorkflow.Locked.Contains(b.Status)),
+            signedLast30Amount = all.Where(b => b.DirectorSignedAt >= now.AddDays(-30) && CreditorWorkflow.Locked.Contains(b.Status)).Sum(Appr),
+            paidThisMonth = all.Where(b => b.PaidAt >= monthStart).Sum(Appr),
+            awaitingPopAmount = all.Where(b => b.Status == CreditorWorkflow.Paid).Sum(Appr)
+        });
+    }
+
     // ───────────────────────── alerts (fraud & control) ─────────────────────────
 
     [HttpGet("alerts")]
@@ -738,7 +903,7 @@ public class CreditorPacksController : ControllerBase
             b.ChecksRunAt, b.ChecksStatus, checks,
             b.AccountantUserId, b.AccountantName, b.AccountantApprovedAt, b.AccountantComment,
             b.DirectorUserId, b.DirectorName, b.DirectorSignedAt, b.DirectorComment,
-            b.LockedAt, b.LockHash, b.BankExportedAt, b.PaidAt, b.ClosedAt, b.ReturnReason,
+            b.LockedAt, b.LockHash, b.BankExportedAt, b.PaidAt, b.ClosedAt, b.ReturnReason, b.ScheduledPayDate,
             responsible = new { accountant = c?.AccountantUserId, backup = c?.BackupApproverUserId, director = c?.DirectorUserId, delegateDirector = c?.DelegateDirectorUserId },
             items = b.Items.OrderBy(i => i.SortOrder).Select(i => new
             {
