@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed, ElementRef, ViewChild } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, effect, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -14,7 +14,7 @@ import { CompanyBatchesDialogComponent } from './company-batches-dialog.componen
 import { ExplainerDialogComponent } from './explainer-dialog.component';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit } from '../../services/creditor-packs.service';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule } from '../../services/creditor-packs.service';
 
 type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
@@ -383,12 +383,45 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           }
         </section>
 
+        <section class="cr-card cr-sched">
+          <header>
+            <h3><mat-icon>event_repeat</mat-icon> Payment schedule</h3>
+            <small>Generated from the payments below — updates as you add them. Nothing to upload.</small>
+            @if (b.items.length) { <button mat-stroked-button (click)="downloadSchedule()" [disabled]="busy()"><mat-icon>download</mat-icon> Download Excel</button> }
+          </header>
+          @if (schedule(); as s) {
+            @if (s.lines.length) {
+              <div class="meta"><span><b>{{ s.head.company }}</b> · {{ s.head.paymentType }}</span><span>Payment run <b>{{ s.head.paymentRunDate | date:'dd MMM yyyy' }}</b></span><span>{{ s.head.count }} payment{{ s.head.count === 1 ? '' : 's' }}</span>
+                @if (s.head.missingInvoiceDates || s.head.missingDocNumbers) { <span class="gap"><mat-icon>info</mat-icon>@if (s.head.missingDocNumbers) { {{ s.head.missingDocNumbers }} without a document number } @if (s.head.missingInvoiceDates && s.head.missingDocNumbers) { · } @if (s.head.missingInvoiceDates) { {{ s.head.missingInvoiceDates }} without an invoice date } — attach the tax invoice and they fill in</span> }
+              </div>
+              <div class="tbl">
+                <table>
+                  <thead><tr><th>#</th><th>Supplier</th><th>Invoice date</th><th>Document number</th><th>Payable by</th><th class="num">Amount</th></tr></thead>
+                  <tbody>
+                    @for (l of s.lines; track l.itemId) {
+                      <tr [class.rej]="l.decision === 'Rejected'">
+                        <td class="muted">{{ l.no }}</td>
+                        <td><strong>{{ l.supplier }}</strong>@if (l.description) { <small class="muted"> · {{ l.description }}</small> }</td>
+                        <td>{{ l.invoiceDate ? (l.invoiceDate | date:'dd MMM yyyy') : '—' }}</td>
+                        <td class="ref">{{ l.documentNumber || '—' }}</td>
+                        <td>{{ l.payableBy | date:'dd MMM yyyy' }}</td>
+                        <td class="num">R {{ l.amount | number:'1.2-2' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                  <tfoot><tr><td colspan="5">Total</td><td class="num">R {{ s.head.total | number:'1.2-2' }}</td></tr></tfoot>
+                </table>
+              </div>
+            } @else { <p class="empty">Add the first payment and the schedule appears here.</p> }
+          } @else { <p class="empty">Loading…</p> }
+        </section>
+
         <section class="cr-card">
           <header><h3><mat-icon>folder</mat-icon> Documents for the whole batch</h3><small>{{ filledCount(b.requiredBatchDocs) }} of {{ b.requiredBatchDocs.length }} attached</small></header>
           <ng-container *ngTemplateOutlet="checklist; context: { required: b.requiredBatchDocs, recommended: [], docs: b.batchDocuments, itemId: null }"></ng-container>
           @if (b.can.edit || b.can.uploadAfterLock) {
             <div class="drop" (dragover)="$event.preventDefault()" (drop)="drop($event, null)">
-              <mat-icon>upload_file</mat-icon> Drop batch PDFs here (payment schedule, creditors recon) or <button mat-button (click)="pickFor('', null)">choose files</button>
+              <mat-icon>upload_file</mat-icon> Drop batch PDFs here (creditors recon) or <button mat-button (click)="pickFor('', null)">choose files</button>
             </div>
           }
         </section>
@@ -597,6 +630,15 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       .hint { display: flex; align-items: flex-start; gap: 6px; font-size: var(--text-sm); color: var(--color-text-2); margin: var(--space-2) 0 0; mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-ok); flex: 0 0 auto; } &.warn mat-icon { color: var(--color-warn); } }
       .empty { color: var(--color-text-3); font-size: var(--text-sm); margin: 0; }
       .link { font-size: var(--text-xs); } }
+    .cr-sched {
+      .meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--text-sm); color: var(--color-text-2); margin-bottom: var(--space-2); .gap { display: inline-flex; align-items: center; gap: 4px; color: var(--color-warn); mat-icon { font-size: 16px; width: 16px; height: 16px; } } }
+      .tbl { overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); }
+      table { width: 100%; border-collapse: collapse; font-size: var(--text-sm);
+        th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); padding: 8px 12px; background: var(--color-surface-2); border-bottom: 1px solid var(--color-line); }
+        td { padding: 8px 12px; border-bottom: 1px solid var(--color-line); }
+        tbody tr:last-child td { border-bottom: 0; } tr.rej td { text-decoration: line-through; color: var(--color-text-3); }
+        tfoot td { font-weight: 700; border-top: 2px solid var(--color-line); border-bottom: 0; text-align: right; }
+        .num { text-align: right; font-family: var(--font-mono); white-space: nowrap; } .ref { font-family: var(--font-mono); } } }
     .cr-empty { display: flex; gap: var(--space-3); align-items: center; padding: var(--space-4); background: var(--color-surface-2); border-radius: var(--radius-md); color: var(--color-text-2); font-size: var(--text-sm); mat-icon { font-size: 36px; width: 36px; height: 36px; color: var(--color-primary); } p { margin: 0; } }
 
     .cr-table-wrap { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); overflow: auto; }
@@ -722,6 +764,19 @@ export class FinanceCreditorsComponent implements OnInit {
   busy = signal(false);
   view = signal<View>('board');
   batch = signal<BatchDetail | null>(null);
+  /** Generated payment schedule for the open batch; refreshed whenever the batch changes. */
+  schedule = signal<GeneratedSchedule | null>(null);
+  private scheduleFx = effect(() => {
+    const b = this.batch(); if (!b) { this.schedule.set(null); return; }
+    const key = b.id + ':' + b.items.map(i => `${i.id}/${i.amount}/${i.invoiceNumbers}/${i.decisionStatus}/${i.documents.length}`).join(',') + ':' + b.batchDate;
+    if (key === this.scheduleKey) return; this.scheduleKey = key;
+    this.api.generatedSchedule(b.id).subscribe({ next: s => this.schedule.set(s), error: () => this.schedule.set({ head: { batchNumber: b.batchNumber, company: b.companyName ?? b.companyCode, companyCode: b.companyCode, paymentType: b.paymentTypeTitle ?? '', paymentRunDate: b.batchDate, preparedBy: b.preparedByName ?? '', generatedAt: '', total: 0, totalPayable: 0, count: 0, missingInvoiceDates: 0, missingDocNumbers: 0 }, lines: [] }) });
+  }, { allowSignalWrites: true });
+  private scheduleKey = '';
+  downloadSchedule(): void {
+    const b = this.batch()!;
+    this.api.generatedScheduleXlsx(b.id).subscribe({ next: blob => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `Payment-schedule-${b.batchNumber}.xlsx`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }, error: () => this.toast.error("Couldn't build the schedule.") });
+  }
   companyFilter = signal('');
   statusFilter = signal('');
   typeFilter = signal('');

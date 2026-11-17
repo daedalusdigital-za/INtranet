@@ -640,6 +640,88 @@ public class CreditorPacksController : ControllerBase
         return Ok(await DetailAsync(id));
     }
 
+    /// <summary>
+    /// The payment schedule is generated from the payments in the batch rather than uploaded: supplier, invoice date,
+    /// document number (invoice numbers), payable-by (the batch's payment-run date) and amount. JSON for the on-screen
+    /// table; ?format=xlsx for the Excel the director / bank user takes away.
+    /// </summary>
+    [HttpGet("batches/{id:int}/schedule")]
+    public async Task<IActionResult> Schedule(int id, [FromQuery] string? format = null)
+    {
+        var b = await _db.PaymentBatches.AsNoTracking().Include(x => x.Items).FirstOrDefaultAsync(x => x.Id == id);
+        if (b == null) return NotFound();
+        var co = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(c => c.Code == b.CompanyCode);
+        var invoiceDocs = await _db.PaymentBatchDocuments.AsNoTracking()
+            .Where(d => d.BatchId == id && d.ItemId != null && d.DocType == CreditorDocTypes.TaxInvoice && !d.IsNotApplicable)
+            .Select(d => new { d.ItemId, d.DocumentDate, d.ExtractedInvoiceNumber })
+            .ToListAsync();
+        var byItem = invoiceDocs.GroupBy(d => d.ItemId!.Value).ToDictionary(g => g.Key, g => g.ToList());
+
+        var typeTitle = CreditorPaymentTypes.All.FirstOrDefault(p => p.Key == b.PaymentType).Title ?? b.PaymentType;
+        var lines = b.Items.OrderBy(i => i.SortOrder).ThenBy(i => i.Id).Select((i, n) =>
+        {
+            byItem.TryGetValue(i.Id, out var docs);
+            var invDate = docs?.Select(d => d.DocumentDate).Where(d => d.HasValue).Max();
+            var docNo = !string.IsNullOrWhiteSpace(i.InvoiceNumbers) ? i.InvoiceNumbers!.Trim()
+                      : docs?.Select(d => d.ExtractedInvoiceNumber).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? "";
+            var payable = i.DecisionStatus == "Rejected" ? 0m : i.Amount;
+            return new
+            {
+                no = n + 1, itemId = i.Id, supplier = i.SupplierName, invoiceDate = invDate, documentNumber = docNo,
+                description = i.Description, payableBy = b.BatchDate, amount = i.Amount, payable,
+                bank = i.BankName, accountNumber = i.AccountNumber, branchCode = i.BranchCode, reference = i.PaymentReference,
+                decision = i.DecisionStatus, hasInvoice = docs != null && docs.Count > 0
+            };
+        }).ToList();
+
+        var head = new
+        {
+            batchNumber = b.BatchNumber, company = co?.Name ?? b.CompanyCode, companyCode = b.CompanyCode, paymentType = typeTitle,
+            paymentRunDate = b.BatchDate, preparedBy = b.PreparedByName, generatedAt = DateTime.UtcNow,
+            total = lines.Sum(l => l.amount), totalPayable = lines.Sum(l => l.payable), count = lines.Count,
+            missingInvoiceDates = lines.Count(l => l.invoiceDate == null), missingDocNumbers = lines.Count(l => string.IsNullOrEmpty(l.documentNumber))
+        };
+
+        if (!string.Equals(format, "xlsx", StringComparison.OrdinalIgnoreCase)) return Ok(new { head, lines });
+
+        using var wb = new ClosedXML.Excel.XLWorkbook();
+        var ws = wb.Worksheets.Add("Payment schedule");
+        ws.Cell(1, 1).Value = $"{head.company} — Payment schedule"; ws.Cell(1, 1).Style.Font.Bold = true; ws.Cell(1, 1).Style.Font.FontSize = 14;
+        ws.Cell(2, 1).Value = "Batch"; ws.Cell(2, 2).Value = b.BatchNumber;
+        ws.Cell(3, 1).Value = "Payment type"; ws.Cell(3, 2).Value = typeTitle;
+        ws.Cell(4, 1).Value = "Payment run date"; ws.Cell(4, 2).Value = b.BatchDate; ws.Cell(4, 2).Style.DateFormat.Format = "dd MMM yyyy";
+        ws.Cell(5, 1).Value = "Prepared by"; ws.Cell(5, 2).Value = b.PreparedByName;
+        ws.Cell(6, 1).Value = "Generated"; ws.Cell(6, 2).Value = DateTime.UtcNow; ws.Cell(6, 2).Style.DateFormat.Format = "dd MMM yyyy HH:mm";
+        ws.Range(2, 1, 6, 1).Style.Font.Bold = true;
+
+        var r = 8;
+        string[] cols = { "#", "Supplier", "Invoice date", "Document number", "Description", "Payable by", "Amount (R)", "Bank", "Account no.", "Branch", "Reference", "Director decision" };
+        for (var c = 0; c < cols.Length; c++) ws.Cell(r, c + 1).Value = cols[c];
+        var hdr = ws.Range(r, 1, r, cols.Length); hdr.Style.Font.Bold = true; hdr.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#E8EEF7"); hdr.Style.Border.BottomBorder = ClosedXML.Excel.XLBorderStyleValues.Thin;
+        foreach (var l in lines)
+        {
+            r++;
+            ws.Cell(r, 1).Value = l.no; ws.Cell(r, 2).Value = l.supplier;
+            if (l.invoiceDate.HasValue) { ws.Cell(r, 3).Value = l.invoiceDate.Value; ws.Cell(r, 3).Style.DateFormat.Format = "dd MMM yyyy"; }
+            ws.Cell(r, 4).Value = l.documentNumber; ws.Cell(r, 5).Value = l.description ?? "";
+            ws.Cell(r, 6).Value = l.payableBy; ws.Cell(r, 6).Style.DateFormat.Format = "dd MMM yyyy";
+            ws.Cell(r, 7).Value = l.amount; ws.Cell(r, 7).Style.NumberFormat.Format = "#,##0.00";
+            ws.Cell(r, 8).Value = l.bank ?? ""; ws.Cell(r, 9).Value = l.accountNumber ?? ""; ws.Cell(r, 9).Style.NumberFormat.Format = "@";
+            ws.Cell(r, 10).Value = l.branchCode ?? ""; ws.Cell(r, 10).Style.NumberFormat.Format = "@"; ws.Cell(r, 11).Value = l.reference ?? ""; ws.Cell(r, 12).Value = l.decision;
+            if (l.decision == "Rejected") ws.Range(r, 1, r, cols.Length).Style.Font.Strikethrough = true;
+        }
+        r++;
+        ws.Cell(r, 6).Value = "Total"; ws.Cell(r, 6).Style.Font.Bold = true;
+        ws.Cell(r, 7).FormulaA1 = $"SUM(G{9}:G{r - 1})"; ws.Cell(r, 7).Style.NumberFormat.Format = "#,##0.00"; ws.Cell(r, 7).Style.Font.Bold = true;
+        ws.Range(r, 1, r, cols.Length).Style.Border.TopBorder = ClosedXML.Excel.XLBorderStyleValues.Thin;
+        ws.Columns().AdjustToContents(); ws.Column(2).Width = Math.Min(ws.Column(2).Width, 40); ws.Column(5).Width = Math.Min(ws.Column(5).Width, 50);
+        ws.SheetView.FreezeRows(8);
+
+        using var ms = new MemoryStream(); wb.SaveAs(ms);
+        var safeCo = string.Concat((co?.Name ?? b.CompanyCode).Where(ch => char.IsLetterOrDigit(ch) || ch == ' ')).Replace(' ', '-');
+        return File(ms.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"Payment-schedule-{b.BatchNumber}-{safeCo}.xlsx");
+    }
+
     [HttpGet("batches/{id:int}/documents/{docId:int}/file")]
     public async Task<IActionResult> File(int id, int docId, [FromQuery] bool download = false)
     {

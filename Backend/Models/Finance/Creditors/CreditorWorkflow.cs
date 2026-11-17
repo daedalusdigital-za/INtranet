@@ -176,6 +176,7 @@ public static class CreditorDocTypes
 /// Required=false (and no other flag) = recommended: shown as a slot, missing ones raise a REVIEW warning but never block.
 /// AfterDelivery = needed to close a prepayment. IfReturned = mandatory when stock came back (credit notes).
 /// Requisitions / payment requests are handled in their own module and are not part of the pack.
+/// The payment schedule is not an upload either — it is generated from the payments in the batch (GET batches/{id}/schedule).
 /// </summary>
 public static class CreditorDocRules
 {
@@ -188,41 +189,39 @@ public static class CreditorDocRules
     {
         [CreditorPaymentTypes.DailyCreditor] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true),
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
             new Rule(CreditorDocTypes.Quote, false), new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false),
             new Rule(CreditorDocTypes.ProofOfWork, false), new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
         [CreditorPaymentTypes.MonthlyCreditor] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
+            new Rule(CreditorDocTypes.CreditorsRecon, true),
             new Rule(CreditorDocTypes.SupplierStatement, true),
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
             new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
         [CreditorPaymentTypes.Prepayment] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true),
             new Rule(CreditorDocTypes.TaxInvoice, false, AfterDelivery: true), new Rule(CreditorDocTypes.SupplierRecon, false, AfterDelivery: true),
             new Rule(CreditorDocTypes.Quote, false), new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false, AfterDelivery: true),
             new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
         [CreditorPaymentTypes.Intercompany] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
+            new Rule(CreditorDocTypes.CreditorsRecon, true),
             new Rule(CreditorDocTypes.SupplierStatement, true),
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
             new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage, new Rule(CreditorDocTypes.WrittenInstruction, true),
         },
         [CreditorPaymentTypes.Utility] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
+            new Rule(CreditorDocTypes.CreditorsRecon, true),
             new Rule(CreditorDocTypes.SupplierStatement, true),
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true), Sage,
         },
         [CreditorPaymentTypes.StaffPayment] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.BankLetter, false),
+            new Rule(CreditorDocTypes.BankLetter, false),
         },
         [CreditorPaymentTypes.CreditNote] = new[]
         {

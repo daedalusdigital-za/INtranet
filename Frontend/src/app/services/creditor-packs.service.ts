@@ -117,6 +117,9 @@ export class CreditorPacksService {
   file(id: number, docId: number) { return this.http.get(this.fileUrl(id, docId), { responseType: 'blob' }); }
   /** Parsed grid + extracted facts for a spreadsheet document (recon / schedule). */
   sheetUrl(id: number, docId: number) { return `${this.base}/batches/${id}/documents/${docId}/sheet`; }
+  /** Payment schedule generated from the batch's payments (not uploaded). */
+  generatedSchedule(id: number) { return this.http.get<GeneratedSchedule>(`${this.base}/batches/${id}/schedule`); }
+  generatedScheduleXlsx(id: number) { return this.http.get(`${this.base}/batches/${id}/schedule?format=xlsx`, { responseType: 'blob' }); }
 
   submit(id: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, {}); }
   rerunChecks(id: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/checks`, {}); }
@@ -158,6 +161,11 @@ export interface ScheduleBatch {
   scheduledPayDate: string; overdue: boolean; directorName?: string; directorSignedAt?: string; accountantName?: string; preparedByName?: string; bankExportedAt?: string; paidAt?: string;
   approvedAmount: number; approvedItems: number; popDone: number; popMissing: number; openPrepayments: number; items: ScheduleItem[];
   can: { bankFile: boolean; markLoaded: boolean; markPaid: boolean; uploadPop: boolean; close: boolean; reschedule: boolean };
+}
+export interface GeneratedScheduleLine { no: number; itemId: number; supplier: string; invoiceDate?: string | null; documentNumber: string; description?: string | null; payableBy: string; amount: number; payable: number; bank?: string | null; accountNumber?: string | null; branchCode?: string | null; reference?: string | null; decision: string; hasInvoice: boolean; }
+export interface GeneratedSchedule {
+  head: { batchNumber: string; company: string; companyCode: string; paymentType: string; paymentRunDate: string; preparedBy: string; generatedAt: string; total: number; totalPayable: number; count: number; missingInvoiceDates: number; missingDocNumbers: number; };
+  lines: GeneratedScheduleLine[];
 }
 export interface PaymentSchedule {
   payDays: string[]; nextPayDay: string; me: { bank: boolean; clerk: boolean };
