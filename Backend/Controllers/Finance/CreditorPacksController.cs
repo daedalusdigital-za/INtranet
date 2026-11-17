@@ -229,8 +229,9 @@ public class CreditorPacksController : ControllerBase
         if (!await _db.CreditorCompanies.AnyAsync(c => c.Code == dto.CompanyCode && c.IsActive)) return BadRequest(new { message = "Unknown paying company." });
         if (!CreditorPaymentTypes.All.Any(p => p.Key == dto.PaymentType)) return BadRequest(new { message = "Unknown payment type." });
 
+        // One series per paying company per year: CB-PMT-2026-0001, CB-ACM-2026-0001 … (older packs kept the shared CB-2026-xxxx form).
         var year = DateTime.UtcNow.Year;
-        var prefix = $"CB-{year}-";
+        var prefix = $"CB-{dto.CompanyCode.ToUpperInvariant()}-{year}-";
         var last = await _db.PaymentBatches.Where(b => b.BatchNumber.StartsWith(prefix)).OrderByDescending(b => b.BatchNumber).Select(b => b.BatchNumber).FirstOrDefaultAsync();
         var seq = last != null && int.TryParse(last[prefix.Length..], out var n) ? n + 1 : 1;
 

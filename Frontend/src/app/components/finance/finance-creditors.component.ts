@@ -82,26 +82,6 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       }
     }
 
-    <section class="cr-cos" aria-label="Paying companies">
-      <button class="cotile all" [class.on]="companyFilter() === ''" (click)="companyFilter.set('')">
-        <span class="mark"><mat-icon>apartment</mat-icon></span>
-        <span class="lbl"><b>All companies</b><small>{{ rows().length }} batch{{ rows().length === 1 ? '' : 'es' }}</small></span>
-      </button>
-      @for (c of activeCompanies(); track c.code) {
-        <button class="cotile" [class.on]="companyFilter() === c.code" [class.nologo]="!logo(c.code)" (click)="companyFilter.set(companyFilter() === c.code ? '' : c.code)"
-                [matTooltip]="c.name + (logo(c.code) ? '' : ' · logo not uploaded yet')">
-          <span class="mark">
-            @if (logo(c.code); as src) { <img [src]="src" [alt]="c.name"> }
-            @else { <span class="mono" [style.--hue]="hue(c.code)">{{ monogram(c.code, c.name) }}</span> }
-          </span>
-          <span class="lbl"><b>{{ c.code }}</b><small>{{ countFor(c.code) }} batch{{ countFor(c.code) === 1 ? '' : 'es' }}@if (openFor(c.code)) { · {{ openFor(c.code) }} open }</small></span>
-        </button>
-      }
-    </section>
-    @if (meta()!.me.isAdmin && missingLogos().length) {
-      <p class="cr-logo-note"><mat-icon>image_not_supported</mat-icon> Logos still to be added for <strong>{{ missingLogos().join(', ') }}</strong> — the initials are a placeholder until the artwork is uploaded to <code>/logos</code>.</p>
-    }
-
     <div class="cr-toolbar">
       <div class="cr-seg">
         <button [class.on]="statusFilter() === ''" (click)="statusFilter.set('')">All <b>{{ rows().length }}</b></button>
@@ -113,6 +93,10 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <button [class.on]="statusFilter() === 'Closed'" (click)="statusFilter.set('Closed')">Closed <b>{{ count('Closed') }}</b></button>
       </div>
       <span class="cr-spacer"></span>
+      <select [ngModel]="companyFilter()" (ngModelChange)="companyFilter.set($event)">
+        <option value="">All companies</option>
+        @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} — {{ c.name }}</option> }
+      </select>
       <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
         <option value="">All payment types</option>
         @for (p of meta()!.paymentTypes; track p.key) { <option [value]="p.key">{{ p.title }}</option> }
@@ -160,32 +144,44 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     }
 
     @if (loading()) { <div class="cr-state"><mat-spinner diameter="32"></mat-spinner></div> }
-    @else if (!filteredRows().length) {
+    @else if (!groups().length) {
       <div class="cr-state"><mat-icon>inbox</mat-icon><h3>Nothing here</h3><p>No batches match these filters.</p></div>
     } @else {
-      <div class="cr-table-wrap">
-        <table class="cr-table">
-          <thead><tr><th>Batch</th><th>Company</th><th>Payment type</th><th class="num">Amount</th><th>Where it is</th><th>Waiting on</th><th>Last change</th><th></th></tr></thead>
-          <tbody>
-            @for (r of filteredRows(); track r.id) {
-              <tr (click)="open(r.id)">
-                <td><span class="ref">{{ r.batchNumber }}</span><br><small class="muted">{{ r.batchDate | date:'dd MMM' }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
-                <td><div class="cocell"><ng-container *ngTemplateOutlet="coMark; context: { $implicit: r.companyCode, size: 'sm' }"></ng-container><div><strong>{{ r.companyCode }}</strong><br><small class="muted">{{ companyFor(r.companyCode)?.name }}</small></div></div></td>
-                <td>{{ typeTitle(r.paymentType) }}</td>
-                <td class="num">R {{ r.totalAmount | number:'1.2-2' }}</td>
-                <td>
-                  <span [class]="'badge ' + badge(r.status)">{{ r.statusTitle }}</span>
-                  @if (r.returnReason && isSentBack(r.status)) { <div class="reason">{{ r.returnReason }}</div> }
-                  @if (r.openPrepayments) { <div class="reason warn">{{ r.openPrepayments }} prepayment{{ r.openPrepayments === 1 ? '' : 's' }} awaiting invoice + GRV</div> }
-                </td>
-                <td class="who">{{ waitingOn(r) }}</td>
-                <td class="nowrap muted">{{ (r.updatedAt || r.createdAt) | date:'dd MMM HH:mm' }}</td>
-                <td class="actions"><mat-icon>chevron_right</mat-icon></td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+      @for (g of groups(); track g.code) {
+        <section class="cr-co" [class.collapsed]="collapsed().has(g.code)">
+          <header (click)="toggleCo(g.code)">
+            <ng-container *ngTemplateOutlet="coMark; context: { $implicit: g.code, size: 'lg' }"></ng-container>
+            <div class="nm"><h3>{{ g.name }}</h3><small>{{ g.code }} · {{ g.rows.length }} batch{{ g.rows.length === 1 ? '' : 'es' }}@if (g.open) { · <b>{{ g.open }} in progress</b> }@if (g.back) { · <em>{{ g.back }} sent back</em> }</small></div>
+            <div class="tot"><span class="l">Open amount</span><span class="v">R {{ g.openAmount | number:'1.2-2' }}</span></div>
+            <mat-icon class="tw">{{ collapsed().has(g.code) ? 'expand_more' : 'expand_less' }}</mat-icon>
+          </header>
+          @if (!collapsed().has(g.code)) {
+            <table class="cr-table">
+              <thead><tr><th>Batch</th><th>Payment type</th><th class="num">Amount</th><th>Where it is</th><th>Waiting on</th><th>Last change</th><th></th></tr></thead>
+              <tbody>
+                @for (r of g.rows; track r.id) {
+                  <tr (click)="open(r.id)">
+                    <td><span class="ref">{{ r.batchNumber }}</span><br><small class="muted">{{ r.batchDate | date:'dd MMM yyyy' }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
+                    <td>{{ typeTitle(r.paymentType) }}</td>
+                    <td class="num">R {{ r.totalAmount | number:'1.2-2' }}</td>
+                    <td>
+                      <span [class]="'badge ' + badge(r.status)">{{ r.statusTitle }}</span>
+                      @if (r.returnReason && isSentBack(r.status)) { <div class="reason">{{ r.returnReason }}</div> }
+                      @if (r.openPrepayments) { <div class="reason warn">{{ r.openPrepayments }} prepayment{{ r.openPrepayments === 1 ? '' : 's' }} awaiting invoice + GRV</div> }
+                    </td>
+                    <td class="who">{{ waitingOn(r) }}</td>
+                    <td class="nowrap muted">{{ (r.updatedAt || r.createdAt) | date:'dd MMM HH:mm' }}</td>
+                    <td class="actions"><mat-icon>chevron_right</mat-icon></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+      }
+      @if (meta()!.me.isAdmin && missingLogos().length) {
+        <p class="cr-logo-note"><mat-icon>image_not_supported</mat-icon> Logos still to be added for <strong>{{ missingLogos().join(', ') }}</strong> — initials are shown until the artwork is uploaded to <code>/logos</code>.</p>
+      }
     }
   }
 
@@ -621,14 +617,15 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       img { width: 100%; height: 100%; object-fit: contain; padding: 3px; box-sizing: border-box; }
       .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; letter-spacing: .04em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
       &.xs { width: 34px; height: 22px; .mono { font-size: 9px; } } &.sm { width: 56px; height: 34px; .mono { font-size: 11px; } } &.lg { width: 112px; height: 64px; border-radius: var(--radius-md); img { padding: 6px; } .mono { font-size: 20px; } } }
-    .cr-cos { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-2); }
-    .cotile { display: flex; align-items: center; gap: 10px; padding: 8px 10px; font: inherit; text-align: left; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s;
-      .mark { width: 64px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-sm); overflow: hidden; img { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; } mat-icon { color: var(--color-text-3); } }
-      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 13px; letter-spacing: .05em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
-      .lbl { display: flex; flex-direction: column; min-width: 0; b { font-size: var(--text-sm); } small { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
-      &:hover { border-color: var(--color-primary); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-      &.on { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: inset 0 0 0 1px var(--color-primary); }
-      &.nologo .mark { border-style: dashed; } }
+    .cr-co { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); margin-bottom: var(--space-3); overflow: hidden;
+      > header { display: flex; align-items: center; gap: var(--space-3); padding: 12px var(--space-4); cursor: pointer; user-select: none; background: var(--color-surface-2); border-bottom: 1px solid var(--color-line);
+        .nm { flex: 1; min-width: 0; h3 { margin: 0; font-size: var(--text-md); } small { color: var(--color-text-3); font-size: var(--text-xs); b { color: var(--color-primary); font-weight: 600; } em { color: var(--color-danger); font-style: normal; font-weight: 600; } } }
+        .tot { text-align: right; .l { display: block; font-size: var(--text-xs); color: var(--color-text-3); } .v { display: block; font-family: var(--font-mono); font-weight: 700; font-size: var(--text-md); } }
+        .tw { color: var(--color-text-3); }
+        &:hover { background: var(--color-surface-3); } }
+      &.collapsed > header { border-bottom: 0; }
+      .cr-table thead th { background: var(--color-surface); }
+      .cr-table tbody tr:last-child td { border-bottom: 0; } }
     .cr-logo-note { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--color-text-3); mat-icon { font-size: 16px; width: 16px; height: 16px; } code { font-family: var(--font-mono); background: var(--color-surface-3); padding: 0 4px; border-radius: 3px; } }
     .pick-lbl { font-size: var(--text-xs); color: var(--color-text-2); font-weight: 600; margin-bottom: 6px; }
     .cr-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
@@ -809,8 +806,21 @@ export class FinanceCreditorsComponent implements OnInit {
   /** Company branding: full logo where we have artwork, otherwise initials. Admins see which ones still need a file. */
   logo = companyWideLogo; monogram = companyMonogram; hue = companyHue;
   missingLogos = computed(() => this.activeCompanies().filter(c => !companyWideLogo(c.code)).map(c => c.code));
-  countFor(code: string): number { return this.rows().filter(r => r.companyCode === code).length; }
-  openFor(code: string): number { return this.rows().filter(r => r.companyCode === code && r.status !== 'Closed').length; }
+  /** Board grouped by paying company: one section per company, its batches listed underneath (newest first). */
+  groups = computed(() => {
+    const by = new Map<string, BatchRow[]>();
+    for (const r of this.filteredRows()) { (by.get(r.companyCode) ?? by.set(r.companyCode, []).get(r.companyCode)!).push(r); }
+    const order = this.activeCompanies().map(c => c.code);
+    return [...by.entries()]
+      .sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99))
+      .map(([code, rows]) => ({
+        code, name: this.companyFor(code)?.name ?? code, rows: [...rows].sort((a, b) => b.batchNumber.localeCompare(a.batchNumber)),
+        open: rows.filter(r => r.status !== 'Closed').length, back: rows.filter(r => this.isSentBack(r.status)).length,
+        openAmount: rows.filter(r => r.status !== 'Closed').reduce((s, r) => s + (r.totalAmount || 0), 0)
+      }));
+  });
+  collapsed = signal(new Set<string>());
+  toggleCo(code: string): void { const s = new Set(this.collapsed()); s.has(code) ? s.delete(code) : s.add(code); this.collapsed.set(s); }
   filteredRows = computed(() => {
     const co = this.companyFilter(), st = this.statusFilter(), ty = this.typeFilter();
     return this.rows().filter(r => (!co || r.companyCode === co) && (!ty || r.paymentType === ty) && this.matchStatus(r, st));
