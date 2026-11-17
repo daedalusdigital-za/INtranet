@@ -408,23 +408,28 @@ Employees submit leave through **Requests › Leave Request** (type: Annual, Sic
 
 **Header:** "R… owed · R… payable" totals; badges for **Approvals**, **PODs**, **Vault**.
 
-### Tabs
+**Two sides.** Finance is split the same way Company projects is: pick **Debtors** (money owed *to us*) or **Creditors** (money *we owe*) with the two big cards under the header, or straight from the sidebar (Finance › Debtors / Creditors). Each side has its own short tab strip; **Overview** appears on both. Links into Finance (e.g. from Customer 360) land on the right side automatically.
+
+### Debtors tabs
 1. **Overview** – alert strip; KPI tiles (Debtors, Creditors, Payment requests waiting, This month); *Needs attention* list; **Debtors by company** (highlights ageing older than 2 weeks); Supplier invoices snapshot; *Go to* shortcuts.
+2. **Book Keeping** – every sales invoice with its delivery proof state: *All / Not dispatched / Went out – POD needed / Has POD / Credited*. **Open POD**, **Customer 360**, **Export CSV**, **Refresh**.
+3. **PODs** – **Welly scan unlinked**, **Reconcile**, **Upload**; **View / Download**, **Link invoice numbers**, **Remove links**, **Edit notes**.
+4. **Aging** – debtor ageing snapshots (uploaded in *Admin settings › Data import › Debtors aging*). Company & snapshot pickers, **Export**, **Delete snapshot**, toggle **"60+ days, no POD"**, invoice detail dialog.
+5. **Remittances** – mailbox scanned every night at 00:00; **Scan now**; side panel shows attachments, matched invoices, short‑payments and notes; **Mark Allocated**.
+6. **Credit Notes** – list, *Signed copies*, *Stock returns* (**Confirm & post to stock**), *Patterns*; **Upload signed credit note**; detail drawer.
+7. **Packs** – month‑end debtor packs: **Create pack**, **Batch upload**, **Upload scanned pack** (3 steps); per pack **Preview / Edit / Open PDF**, menu **Edit details**, **Download**, **Details**, **Invoice details**, **Re‑run checks**, **Customer 360**, **Delete**.
+
+### Creditors tabs
+1. **Overview** – same shared overview.
 2. **Approvals**
    - **Requested Payments** – choose company → cards: **Review PDF**, **Download**, **Mark paid**, **Send back** (reason required).
    - **Requisitions** (from Logistics) – **Mark Paid**, **Reject**, **Move back**.
    - **Stationery Requests** – **Approve / Decline**, **View Quote**.
-3. **Invoices** – department/search/status filters; **Open PDF**, **Download**, **Open in Books**, **Mark Paid / Unpaid**.
-4. **Book Keeping** – every sales invoice with its delivery proof state: *All / Not dispatched / Went out – POD needed / Has POD / Credited*. **Open POD**, **Customer 360**, **Export CSV**, **Refresh**.
-5. **PODs** – **Welly scan unlinked**, **Reconcile**, **Upload**; **View / Download**, **Link invoice numbers**, **Remove links**, **Edit notes**.
-6. **Aging** – debtor ageing snapshots (uploaded in *Admin settings › Data import › Debtors aging*). Company & snapshot pickers, **Export**, **Delete snapshot**, toggle **"60+ days, no POD"**, invoice detail dialog.
-7. **Remittances** – mailbox scanned every night at 00:00; **Scan now**; side panel shows attachments, matched invoices, short‑payments and notes; **Mark Allocated**.
-8. **Credit Notes** – list, *Signed copies*, *Stock returns* (**Confirm & post to stock**), *Patterns*; **Upload signed credit note**; detail drawer.
-9. **Packs** – month‑end debtor packs: **Create pack**, **Batch upload**, **Upload scanned pack** (3 steps); per pack **Preview / Edit / Open PDF**, menu **Edit details**, **Download**, **Details**, **Invoice details**, **Re‑run checks**, **Customer 360**, **Delete**.
-10. **Vault** – company certificates/contracts with expiry: **Check alerts**, **Add**, **Renew/update**.
-11. **Creditors** – supplier payment packs (see below).
+3. **Payment packs** – supplier payment packs (see below).
+4. **Supplier invoices** – department/search/status filters; **Open PDF**, **Download**, **Open in Books**, **Mark Paid / Unpaid**.
+5. **Vault** – company certificates/contracts with expiry: **Check alerts**, **Add**, **Renew/update**.
 
-### Creditors payment packs (Finance › Creditors tab)
+### Creditors payment packs (Finance › Creditors › Payment packs)
 This is how we pay suppliers in a controlled way. One **batch** = one paying company + one payment type (Daily creditor, Monthly creditor, Prepayment, Intercompany, Utility, Staff payment, Credit note) + a list of payments.
 
 **The six steps (shown as a progress bar on every batch):**

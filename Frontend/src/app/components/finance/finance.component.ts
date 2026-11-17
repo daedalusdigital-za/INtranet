@@ -31,9 +31,17 @@ import { FinanceBookkeepingComponent } from './finance-bookkeeping.component';
 import { FinancePacksComponent } from './finance-packs.component';
 import { TenderService } from '../../services/tender.service';
 
-/** Tab order in finance.component.html */
-const TABS = ['overview', 'approvals', 'invoices', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'packs', 'vault', 'creditors'] as const;
-type FinanceTab = typeof TABS[number];
+/**
+ * Finance is split in two, like Company projects: Debtors (money owed to us) and Creditors (money we owe).
+ * Each side has its own tab strip; Overview is shared. Deep links: /finance?side=creditors&tab=approvals
+ */
+export type FinanceSide = 'debtors' | 'creditors';
+const DEBTOR_TABS = ['overview', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'packs'] as const;
+const CREDITOR_TABS = ['overview', 'approvals', 'creditors', 'invoices', 'vault'] as const;
+type FinanceTab = typeof DEBTOR_TABS[number] | typeof CREDITOR_TABS[number];
+const SIDE_OF: Record<FinanceTab, FinanceSide> = Object.fromEntries([
+  ...DEBTOR_TABS.map(t => [t, 'debtors']), ...CREDITOR_TABS.map(t => [t, 'creditors'])
+]) as Record<FinanceTab, FinanceSide>;
 
 interface BookInvoice {
   id: number;
@@ -120,9 +128,29 @@ interface Overview {
   styleUrls: ['./finance.component.scss']
 })
 export class FinanceComponent implements OnInit {
-  // ── Tabs ──
+  // ── Side + tabs ──
+  side: FinanceSide = 'debtors';
   tabIndex = 0;
   private approvalsLoaded = false;
+  get tabs(): readonly FinanceTab[] { return this.side === 'creditors' ? CREDITOR_TABS : DEBTOR_TABS; }
+  get currentTab(): FinanceTab { return this.tabs[this.tabIndex] ?? 'overview'; }
+  isTab(t: FinanceTab): boolean { return this.currentTab === t; }
+  get sideTitle(): string { return this.side === 'creditors' ? 'Creditors' : 'Debtors'; }
+  get sideSubtitle(): string {
+    if (!this.ov) return 'Loading…';
+    return this.side === 'creditors'
+      ? `${this.fmtR(this.ov.creditors.totalPayable)} payable · ${this.ov.invoices.paymentRequested + this.ov.requisitions.requested} payment${this.ov.invoices.paymentRequested + this.ov.requisitions.requested === 1 ? '' : 's'} awaiting approval`
+      : `${this.fmtR(this.ov.debtors.total)} owed to us · ${this.debtorsOverduePct}% overdue`;
+  }
+  private fmtR(n: number): string { return 'R ' + Math.round(n || 0).toLocaleString('en-ZA'); }
+
+  /** Switch between Debtors and Creditors; lands on that side's overview. */
+  setSide(side: FinanceSide): void {
+    if (side === this.side) return;
+    this.side = side;
+    this.tabIndex = 0;
+    this.router.navigate([], { relativeTo: this.route, queryParams: { side, tab: null, section: null, view: null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
 
   // ── Overview (single server aggregate) ──
   ov: Overview | null = null;
@@ -225,11 +253,15 @@ export class FinanceComponent implements OnInit {
     this.loadStationeryCounts();
     this.loadRequisitionCounts();
 
-    // Deep link: /finance?tab=pods|vault|approvals|invoices (&section=stationery|requisitions)
+    // Deep link: /finance?side=creditors&tab=approvals (&section=stationery|requisitions). A tab alone implies its side.
     this.route.queryParamMap.subscribe(q => {
       const t = (q.get('tab') || '') as FinanceTab;
-      const idx = TABS.indexOf(t);
+      const s = (q.get('side') || '') as FinanceSide;
+      const wantSide: FinanceSide = s === 'creditors' || s === 'debtors' ? s : (SIDE_OF[t] ?? 'debtors');
+      if (wantSide !== this.side) { this.side = wantSide; this.tabIndex = 0; }
+      const idx = this.tabs.indexOf(t);
       if (idx >= 0 && idx !== this.tabIndex) this.onTabChange(idx);
+      else if (idx < 0 && t) this.onTabChange(0);
       const section = q.get('section');
       if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
     });
@@ -237,18 +269,21 @@ export class FinanceComponent implements OnInit {
 
   onTabChange(i: number): void {
     this.tabIndex = i;
-    const tab = TABS[i] ?? 'overview';
+    const tab = this.tabs[i] ?? 'overview';
     if (tab === 'approvals' && !this.approvalsLoaded) {
       this.approvalsLoaded = true;
       this.loadRequisitions();
       this.loadStationeryRequests();
     }
     if (tab === 'invoices' && this.invoices.length === 0 && !this.loading) this.loadInvoices();
-    this.router.navigate([], { relativeTo: this.route, queryParams: { tab: tab === 'overview' ? null : tab }, queryParamsHandling: 'merge', replaceUrl: true });
+    this.router.navigate([], { relativeTo: this.route, queryParams: { side: this.side, tab: tab === 'overview' ? null : tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
+  /** Open a tab, switching side first if it lives on the other one. */
   goTab(tab: FinanceTab, section?: string): void {
-    this.onTabChange(TABS.indexOf(tab));
+    const side = SIDE_OF[tab] ?? this.side;
+    if (side !== this.side) { this.side = side; this.tabIndex = 0; }
+    this.onTabChange(this.tabs.indexOf(tab));
     if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
   }
 
@@ -256,8 +291,8 @@ export class FinanceComponent implements OnInit {
   onAlertGo(hint: string): void {
     const [tab, view] = hint.split(':');
     if (tab === 'customers') { this.router.navigate(['/customers']); return; }
-    this.onTabChange(TABS.indexOf(tab as FinanceTab));
-    this.router.navigate([], { relativeTo: this.route, queryParams: { tab, view: view || null }, queryParamsHandling: 'merge', replaceUrl: true });
+    this.goTab(tab as FinanceTab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { view: view || null }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   loadOverview(): void {

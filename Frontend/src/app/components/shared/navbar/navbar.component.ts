@@ -89,7 +89,7 @@ interface NavGroup {
               </button>
             } @else {
               <a class="sb-item" [class.sb-sub]="item.sub" [routerLink]="item.route" [queryParams]="item.query ?? null"
-                 routerLinkActive="active" [routerLinkActiveOptions]="item.query || item.exact ? exactMatch : subsetMatch"
+                 routerLinkActive="active" [routerLinkActiveOptions]="item.query ? queryMatch : item.exact ? exactMatch : subsetMatch"
                  (click)="mobileOpen = false" [matTooltip]="collapsed ? item.label : ''" matTooltipPosition="right">
                 @if (!item.sub) { <mat-icon>{{ item.icon }}</mat-icon> }
                 <span class="sb-label">{{ item.label }}</span>
@@ -804,6 +804,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
   mobileOpen = false;
 
   readonly exactMatch: IsActiveMatchOptions = { paths: 'exact', queryParams: 'exact', matrixParams: 'ignored', fragment: 'ignored' };
+  /** Sub-items keyed by a query param (?project=, ?side=) stay lit while extra params like ?tab= change. */
+  readonly queryMatch: IsActiveMatchOptions = { paths: 'exact', queryParams: 'subset', matrixParams: 'ignored', fragment: 'ignored' };
   readonly subsetMatch: IsActiveMatchOptions = { paths: 'subset', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' };
 
   /** Navigation grouped by the work people do (design review D-05). */
@@ -828,7 +830,9 @@ export class NavbarComponent implements OnInit, OnDestroy {
     ]},
     { label: 'People and money', items: [
       { label: 'People', icon: 'group', route: '/people', perm: 'human_resource' },
-      { label: 'Finance', icon: 'account_balance', route: '/finance', perm: 'finance' },
+      { label: 'Finance', icon: 'account_balance', route: '/finance', perm: 'finance', exact: true },
+      { label: 'Debtors', route: '/finance', query: { side: 'debtors' }, perm: 'finance', sub: true },
+      { label: 'Creditors', route: '/finance', query: { side: 'creditors' }, perm: 'finance', sub: true },
     ]},
     { label: 'Oversight', items: [
       { label: 'Management', icon: 'insights', route: '/management', perm: 'management' },
@@ -935,7 +939,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
     const pages: PaletteCommand[] = this.visibleNavGroups().flatMap(group =>
       group.items.map(item => ({
         group: 'Pages' as const,
-        label: item.sub ? `Company projects: ${item.label}` : item.label,
+        label: item.sub ? `${item.route === '/finance' ? 'Finance' : 'Company projects'}: ${item.label}` : item.label,
         icon: item.icon || 'factory',
         hint: group.label,
         keywords: item.label === 'People' ? 'hr human resource leave attendance' : undefined,
