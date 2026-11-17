@@ -1,16 +1,16 @@
 import { Component, OnInit, inject, signal, computed, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorCompany, CreditorAlert, RequiredDoc, CheckFinding } from '../../services/creditor-packs.service';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit } from '../../services/creditor-packs.service';
 
-type View = 'board' | 'batch' | 'admin';
+type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
 
 const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoiceNumbers: '', description: '', amount: 0, bankName: '', accountNumber: '', branchCode: '', accountHolder: '', paymentReference: '', stockReturned: false };
@@ -23,7 +23,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 @Component({
   selector: 'app-finance-creditors',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule],
   template: `
   @if (!meta()) {
     <div class="cr-state"><mat-spinner diameter="36"></mat-spinner><p>Opening creditors…</p></div>
@@ -36,7 +36,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       <button class="hd" (click)="howOpen.set(!howOpen())"><mat-icon>help_outline</mat-icon> How a payment pack moves <mat-icon class="tw">{{ howOpen() ? 'expand_less' : 'expand_more' }}</mat-icon></button>
       @if (howOpen()) {
         <ol>
-          <li><strong>Prepare</strong> — a clerk adds each payment and attaches the documents the list asks for.</li>
+          <li><strong>Prepare</strong> — a clerk creates a batch, adds each payment (upload the invoice or link one from Books and the details fill in; suppliers are found from past invoices and payments) and attaches the documents the list asks for.</li>
           <li><strong>Checks</strong> — the system reads the PDFs and flags problems (missing docs, old bank letters, duplicates…).</li>
           <li><strong>Accountant</strong> — the company's accountant approves or sends it back.</li>
           <li><strong>Director</strong> — approves / queries / rejects each payment, then signs. The pack locks.</li>
@@ -98,7 +98,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         @for (p of meta()!.paymentTypes; track p.key) { <option [value]="p.key">{{ p.title }}</option> }
       </select>
       <button mat-icon-button (click)="loadBoard()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
-      @if (meta()!.me.isAdmin) { <button mat-stroked-button (click)="openAdmin()"><mat-icon>admin_panel_settings</mat-icon> Companies & people</button> }
+      @if (meta()!.me.isAdmin) { <a mat-stroked-button routerLink="/settings/payment-approvers" matTooltip="Companies & approvers are managed in Settings"><mat-icon>approval</mat-icon> Approvers</a> }
       @if (meta()!.me.clerk) { <button mat-flat-button color="primary" (click)="newOpen.set(true)"><mat-icon>add</mat-icon> New batch</button> }
     </div>
 
@@ -244,16 +244,66 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           @if (itemForm()) {
             <div class="cr-itemform">
               <h4>{{ itemForm() === 'new' ? 'New payment' : 'Edit payment' }}</h4>
+
+              <h5>1 · Invoice</h5>
+              <div class="inv-src">
+                @if (!pendingInvoiceFile && !pendingLink) {
+                  <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> Upload invoice</button>
+                  <button mat-stroked-button (click)="openPicker()"><mat-icon>link</mat-icon> Link from Books</button>
+                  <small class="muted">We read the PDF and fill in who is being paid, the amount and VAT for you. Or link an invoice already captured in Books.</small>
+                  @if (reading()) { <mat-spinner diameter="18"></mat-spinner> }
+                } @else if (pendingInvoiceFile) {
+                  <span class="chip ok"><mat-icon>picture_as_pdf</mat-icon> {{ pendingInvoiceFile.name }} @if (readInfo()) { · {{ readInfo() }} }</span>
+                  <button mat-icon-button (click)="clearInvoice()" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                } @else if (pendingLink) {
+                  <span class="chip ok"><mat-icon>link</mat-icon> Books #{{ pendingLink.id }} · {{ pendingLink.supplierName }} · {{ pendingLink.invoiceNumber || 'no number' }} · R {{ pendingLink.total | number:'1.2-2' }}</span>
+                  <button mat-icon-button (click)="clearInvoice()" matTooltip="Unlink"><mat-icon>close</mat-icon></button>
+                }
+                <input #invFileInput type="file" accept="application/pdf" hidden (change)="invoiceChosen($event)">
+              </div>
+              @if (picker()) {
+                <div class="picker">
+                  <input [(ngModel)]="pickerQ" (ngModelChange)="searchBooks()" placeholder="Search Books invoices by supplier, number or amount…" autofocus>
+                  <ul>
+                    @for (h of pickerHits(); track h.id) {
+                      <li [class.dis]="h.alreadyLinked" (click)="!h.alreadyLinked && pickBooks(h)">
+                        <strong>{{ h.supplierName }}</strong> <span class="ref">{{ h.invoiceNumber || '—' }}</span> <span class="muted">{{ h.invoiceDate | date:'d MMM yy' }} · {{ h.companyName }} · {{ h.status }}</span>
+                        <span class="amt">R {{ h.total | number:'1.2-2' }}</span>
+                        @if (h.alreadyLinked) { <small>already in a pack</small> } @if (!h.hasPdf) { <small>no PDF</small> }
+                      </li>
+                    } @empty { <li class="none">{{ pickerQ.length < 2 ? 'Type to search…' : 'Nothing found.' }}</li> }
+                  </ul>
+                  <button mat-button (click)="picker.set(false)">Close</button>
+                </div>
+              }
+
+              <h5>2 · Who and how much</h5>
               <div class="row">
-                <label class="grow">Who is being paid? <input [(ngModel)]="itemDraft.supplierName" placeholder="Supplier / beneficiary name" required></label>
-                <label>Amount (R) <input type="number" step="0.01" [(ngModel)]="itemDraft.amount"></label>
+                <label class="grow sup">Who is being paid?
+                  <input [(ngModel)]="itemDraft.supplierName" (ngModelChange)="searchSuppliers($event)" (focus)="searchSuppliers(itemDraft.supplierName)" (blur)="hideSuppliersSoon()" placeholder="Start typing — we search past invoices, Books and payments" required autocomplete="off">
+                  @if (supplierHits().length && showSuppliers()) {
+                    <ul class="ac">
+                      @for (s of supplierHits(); track s.name) {
+                        <li (mousedown)="$event.preventDefault(); pickSupplier(s)">
+                          <strong>{{ s.name }}</strong>
+                          <small>@if (s.vatNumber) { VAT {{ s.vatNumber }} · } @if (s.bankName) { {{ s.bankName }} ···{{ (s.accountNumber || '').slice(-4) }} · } {{ s.payments }} payment{{ s.payments === 1 ? '' : 's' }}, {{ s.invoices }} invoice{{ s.invoices === 1 ? '' : 's' }}</small>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </label>
+                <label>Amount incl. VAT (R) <input type="number" step="0.01" [(ngModel)]="itemDraft.amount"></label>
+                <label>VAT on invoice (R) <input type="number" step="0.01" [(ngModel)]="itemDraftVat" placeholder="from the invoice"></label>
                 <label>Their VAT number <input [(ngModel)]="itemDraft.supplierVatNumber" placeholder="4xxxxxxxxx"></label>
               </div>
+
+              <h5>3 · What is it for</h5>
               <div class="row">
                 <label class="grow">Invoice / reference numbers being paid <input [(ngModel)]="itemDraft.invoiceNumbers" placeholder="INV123, INV124"></label>
-                <label class="grow">What is it for? <input [(ngModel)]="itemDraft.description"></label>
+                <label class="grow">Description <input [(ngModel)]="itemDraft.description" placeholder="e.g. March stock, repairs to bakkie…"></label>
               </div>
-              <h5>Bank details (as on the bank letter)</h5>
+
+              <h5>4 · Bank details (as on the bank letter)</h5>
               <div class="row">
                 <label>Bank <input [(ngModel)]="itemDraft.bankName"></label>
                 <label>Account number <input [(ngModel)]="itemDraft.accountNumber"></label>
@@ -264,7 +314,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               @if (b.paymentType === 'CreditNote') {
                 <mat-checkbox [(ngModel)]="itemDraft.stockReturned">Stock physically came back (warehouse GRV + collection slip will be required)</mat-checkbox>
               }
-              <div class="actions"><button mat-button (click)="itemForm.set(null)">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy()" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button></div>
+              <div class="actions"><button mat-button (click)="cancelItem()">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy()" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button></div>
             </div>
           }
 
@@ -444,50 +494,6 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     </ng-template>
     <input #fileInput type="file" accept="application/pdf" multiple hidden (change)="filesChosen($event)">
   }
-
-  <!-- ═══════════════════════ ADMIN ═══════════════════════ -->
-  @if (view() === 'admin') {
-    <div class="cr-bhead">
-      <button mat-icon-button (click)="back()" aria-label="Back"><mat-icon>arrow_back</mat-icon></button>
-      <div class="ttl"><h2>Companies & people</h2><p>First tick who may do what. Then, for each paying company, choose its accountant (must approve every pack), a back‑up, and the director(s) who sign.</p></div>
-    </div>
-
-    <section class="cr-card">
-      <header><h3><mat-icon>badge</mat-icon> Step 1 · Who may do what</h3><input class="search" [(ngModel)]="userSearch" (ngModelChange)="loadUsers()" placeholder="Search people…"></header>
-      <table class="cr-table admin">
-        <thead><tr><th>Person</th>@for (r of meta()!.roles; track r.key) { <th [matTooltip]="r.description">{{ r.title }}</th> }</tr></thead>
-        <tbody>
-          @for (u of users(); track u.id) {
-            <tr><td><strong>{{ u.name }}</strong><br><small class="muted">{{ u.email }} · {{ u.role }}</small></td>
-              @for (r of meta()!.roles; track r.key) { <td class="ctr"><mat-checkbox [checked]="hasRole(u, r.key)" (change)="setRole(u, r.key, $event.checked)"></mat-checkbox></td> }
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-
-    <section class="cr-card">
-      <header><h3><mat-icon>business</mat-icon> Step 2 · Approvers per paying company</h3><button mat-stroked-button (click)="addCompanyRow()"><mat-icon>add</mat-icon> Add company</button></header>
-      <table class="cr-table admin">
-        <thead><tr><th>Code</th><th>Company</th><th>Accountant (required step)</th><th>Back‑up approver</th><th>Director</th><th>Delegate director</th><th>Active</th><th></th></tr></thead>
-        <tbody>
-          @for (c of adminCompanies(); track c.id ?? $index) {
-            <tr>
-              <td><input class="code" [(ngModel)]="c.code" maxlength="10"></td>
-              <td><input [(ngModel)]="c.name"><input class="act" [(ngModel)]="c.activity" placeholder="what the company does"></td>
-              <td><select [(ngModel)]="c.accountantUserId"><option [ngValue]="null">— not set —</option>@for (u of usersWith('cred.accountant'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
-              <td><select [(ngModel)]="c.backupApproverUserId"><option [ngValue]="null">—</option>@for (u of usersWith('cred.accountant'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
-              <td><select [(ngModel)]="c.directorUserId"><option [ngValue]="null">— not set —</option>@for (u of usersWith('cred.director'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
-              <td><select [(ngModel)]="c.delegateDirectorUserId"><option [ngValue]="null">—</option>@for (u of usersWith('cred.director'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
-              <td><mat-checkbox [(ngModel)]="c.isActive"></mat-checkbox></td>
-              <td><button mat-flat-button color="primary" (click)="saveCompany(c)" [disabled]="busy() || !c.code || !c.name">Save</button></td>
-            </tr>
-          }
-        </tbody>
-      </table>
-      <p class="hint"><mat-icon>info</mat-icon> <span>Only people ticked as Accountant / Director in step 1 appear in these lists. Until a company has an accountant set, any accountant may approve its packs.</span></p>
-    </section>
-  }
   }
   `,
   styles: [`
@@ -580,7 +586,19 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         &.extra .st { color: var(--color-text-3); } &.none { color: var(--color-text-3); font-size: var(--text-sm); } } }
     .drop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: var(--space-2) var(--space-3); border: 2px dashed var(--color-line-strong); border-radius: var(--radius-md); color: var(--color-text-3); font-size: var(--text-sm); margin-top: var(--space-3); mat-icon { color: var(--color-primary); } }
 
-    .cr-itemform { background: var(--color-surface-2); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3); }
+    .cr-itemform { background: var(--color-surface-2); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3);
+      .inv-src { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; small { flex-basis: 100%; } }
+      .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: var(--text-sm); background: var(--color-surface-3); mat-icon { font-size: 18px; width: 18px; height: 18px; } &.ok { background: var(--color-ok-soft); color: var(--color-ok); } }
+      .picker { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 10px; margin-bottom: 10px;
+        input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); font: inherit; margin-bottom: 6px; }
+        ul { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto; }
+        li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); &:hover { background: var(--color-surface-2); } .amt { margin-left: auto; font-weight: 600; } small { color: var(--color-warn); font-size: var(--text-xs); } &.dis { opacity: .55; cursor: not-allowed; } &.none { color: var(--color-text-3); cursor: default; } }
+      }
+      label.sup { position: relative; }
+      .ac { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; list-style: none; margin: 2px 0 0; padding: 4px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.15)); max-height: 260px; overflow: auto;
+        li { padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; &:hover { background: var(--color-surface-2); } strong { display: block; font-size: var(--text-sm); } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } }
+      }
+    }
     .cr-item { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-bottom: 8px; overflow: hidden;
       .head { display: flex; align-items: center; gap: 8px; padding: 10px 10px; cursor: pointer; flex-wrap: wrap; &:hover { background: var(--color-surface-2); }
         .tw { color: var(--color-text-3); } .who { flex: 1; min-width: 160px; strong { display: block; font-size: var(--text-md); } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } }
@@ -634,9 +652,18 @@ export class FinanceCreditorsComponent implements OnInit {
   signOpen = signal(false);
   itemForm = signal<'new' | number | null>(null);
   openItem = signal(0);
-  users = signal<{ id: number; name: string; email: string; role: string; permissions?: string }[]>([]);
-  adminCompanies = signal<Partial<CreditorCompany>[]>([]);
-  userSearch = '';
+  // invoice auto-fill / supplier directory
+  reading = signal(false);
+  readInfo = signal('');
+  supplierHits = signal<SupplierHit[]>([]);
+  showSuppliers = signal(false);
+  picker = signal(false);
+  pickerHits = signal<BooksInvoiceHit[]>([]);
+  pickerQ = '';
+  pendingInvoiceFile: File | null = null;
+  pendingLink: BooksInvoiceHit | null = null;
+  itemDraftVat: number | null = null;
+  private supTimer: any; private bookTimer: any; private hideTimer: any;
 
   newBatch = { companyCode: '', paymentType: 'DailyCreditor', batchDate: new Date().toISOString().slice(0, 10), notes: '' };
   itemDraft: ItemInput = { ...EMPTY_ITEM };
@@ -834,13 +861,78 @@ export class FinanceCreditorsComponent implements OnInit {
   bankFile(): void { const b = this.batch()!; this.api.bankFile(b.id).subscribe({ next: blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.batchNumber}-bank.csv`; a.click(); URL.revokeObjectURL(a.href); this.open(b.id); }, error: e => this.fail(e, "Couldn't export.") }); }
 
   // ── items ──
-  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned } : { ...EMPTY_ITEM }; this.itemForm.set(it ? it.id : 'new'); }
+  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned } : { ...EMPTY_ITEM }; this.clearInvoice(); this.itemDraftVat = null; this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new'); }
+  cancelItem(): void { this.itemForm.set(null); this.clearInvoice(); }
   saveItem(): void {
     const b = this.batch()!; const f = this.itemForm(); this.busy.set(true);
+    const file = this.pendingInvoiceFile, link = this.pendingLink;
     const req = f === 'new' ? this.api.addItem(b.id, this.itemDraft) : this.api.updateItem(b.id, f as number, this.itemDraft);
-    req.subscribe({ next: r => { this.itemForm.set(null); this.apply(r); if (f === 'new') this.openItem.set(r.items[r.items.length - 1]?.id ?? 0); }, error: e => this.fail(e, "Couldn't save the payment.") });
+    req.subscribe({
+      next: r => {
+        const itemId = f === 'new' ? (r.items[r.items.length - 1]?.id ?? 0) : (f as number);
+        this.itemForm.set(null); this.apply(r); this.openItem.set(itemId); this.clearInvoice();
+        if (!itemId) return;
+        if (file) { this.busy.set(true); this.api.upload(b.id, file, 'TaxInvoice', itemId).subscribe({ next: x => this.apply(x, 'Payment added and invoice attached'), error: e => this.fail(e, 'Payment saved but the invoice could not be attached.') }); }
+        else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => this.apply(x, 'Payment added and linked to the Books invoice'), error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
+      },
+      error: e => this.fail(e, "Couldn't save the payment.")
+    });
   }
   removeItem(it: BatchItem): void { const b = this.batch()!; if (!confirm(`Remove ${it.supplierName} and its documents from this batch?`)) return; this.busy.set(true); this.api.deleteItem(b.id, it.id).subscribe({ next: r => this.apply(r), error: e => this.fail(e, "Couldn't remove.") }); }
+
+  // ── supplier directory + invoice auto-fill ──
+  searchSuppliers(q: string): void {
+    clearTimeout(this.supTimer); this.showSuppliers.set(true);
+    if (!q || q.trim().length < 2) { this.supplierHits.set([]); return; }
+    this.supTimer = setTimeout(() => this.api.suppliers(q.trim()).subscribe({ next: h => this.supplierHits.set(h), error: () => this.supplierHits.set([]) }), 220);
+  }
+  hideSuppliersSoon(): void { clearTimeout(this.hideTimer); this.hideTimer = setTimeout(() => this.showSuppliers.set(false), 150); }
+  pickSupplier(s: SupplierHit): void {
+    const d = this.itemDraft; d.supplierName = s.name;
+    if (s.vatNumber) d.supplierVatNumber = s.vatNumber;
+    if (s.bankName && !d.bankName) d.bankName = s.bankName;
+    if (s.accountNumber && !d.accountNumber) d.accountNumber = s.accountNumber;
+    if (s.branchCode && !d.branchCode) d.branchCode = s.branchCode;
+    if (s.accountHolder && !d.accountHolder) d.accountHolder = s.accountHolder;
+    if (s.paymentReference && !d.paymentReference) d.paymentReference = s.paymentReference;
+    this.showSuppliers.set(false); this.supplierHits.set([]);
+    if (s.bankName) this.toast.info(`Bank details filled from ${s.payments ? 'the last payment' : 'Books'} — still check them against the bank letter`);
+  }
+  invoiceChosen(e: Event): void {
+    const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
+    if (!/\.pdf$/i.test(f.name)) { this.toast.warn('PDF only.'); return; }
+    this.pendingInvoiceFile = f; this.pendingLink = null; this.reading.set(true); this.readInfo.set('');
+    this.api.readInvoice(f).subscribe({
+      next: r => {
+        this.reading.set(false); const d = this.itemDraft; const filled: string[] = [];
+        if (r.supplierName && !d.supplierName) { d.supplierName = r.supplierName; filled.push('supplier'); }
+        if (r.amount && !d.amount) { d.amount = r.amount; filled.push('amount'); }
+        if (r.vatAmount) { this.itemDraftVat = r.vatAmount; filled.push('VAT'); }
+        if (r.vatNumber && !d.supplierVatNumber) { d.supplierVatNumber = r.vatNumber; filled.push('VAT no.'); }
+        if (r.invoiceNumber && !d.invoiceNumbers) { d.invoiceNumbers = r.invoiceNumber; filled.push('invoice no.'); }
+        if (r.supplier) { const s = r.supplier; if (s.bankName && !d.bankName) { d.bankName = s.bankName; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference = s.paymentReference ?? ''; filled.push('bank details from last payment'); } }
+        this.readInfo.set(!r.readable ? 'could not read the text — fill in by hand' : filled.length ? 'filled: ' + filled.join(', ') : 'read, nothing recognised');
+        if (r.suggestedType && r.suggestedType !== 'TaxInvoice' && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a tax invoice — it will still be attached as the invoice.`);
+      },
+      error: e => { this.reading.set(false); this.readInfo.set('could not read'); this.toast.error(e?.error?.message || "Couldn't read the PDF — it will still be attached."); }
+    });
+  }
+  openPicker(): void { this.picker.set(true); this.pickerQ = this.itemDraft.supplierName || ''; this.searchBooks(); }
+  searchBooks(): void {
+    clearTimeout(this.bookTimer); const q = this.pickerQ.trim(); if (q.length < 2) { this.pickerHits.set([]); return; }
+    this.bookTimer = setTimeout(() => this.api.booksInvoices(q, this.batch()?.companyCode).subscribe({ next: h => this.pickerHits.set(h), error: () => this.pickerHits.set([]) }), 220);
+  }
+  pickBooks(h: BooksInvoiceHit): void {
+    const d = this.itemDraft; this.pendingLink = h; this.pendingInvoiceFile = null; this.picker.set(false);
+    if (!d.supplierName) d.supplierName = h.supplierName;
+    if (!d.amount) d.amount = h.total;
+    if (h.vatAmount) this.itemDraftVat = h.vatAmount;
+    if (h.invoiceNumber && !d.invoiceNumbers) d.invoiceNumbers = h.invoiceNumber;
+    if (h.description && !d.description) d.description = h.description;
+    this.api.suppliers(h.supplierName, 1).subscribe({ next: s => { if (s[0]?.bankName && !d.bankName) this.pickSupplier(s[0]); } });
+    if (!h.hasPdf) this.toast.warn('That Books invoice has no PDF — the link will be recorded but you may still need to upload the invoice.');
+  }
+  clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
 
   // ── documents ──
   pickFor(docType: string, itemId: number | null): void { this.pendingType = docType; this.pendingItem = itemId; this.pendingReplace = null; this.fileInput?.nativeElement.click(); }
@@ -867,17 +959,4 @@ export class FinanceCreditorsComponent implements OnInit {
   padMove(e: PointerEvent) { if (!this.drawing) return; const x = this.ctx(); if (!x) return; const p = this.pos(e); x.lineTo(p.x, p.y); x.stroke(); this.drew = true; }
   padUp() { this.drawing = false; }
   padClear() { const c = this.sigpad?.nativeElement; c?.getContext('2d')?.clearRect(0, 0, c.width, c.height); this.drew = false; }
-
-  // ── admin ──
-  openAdmin(): void { this.view.set('admin'); this.adminCompanies.set((this.meta()?.companies ?? []).map(c => ({ ...c }))); this.loadUsers(); }
-  loadUsers(): void { this.api.users(this.userSearch || undefined).subscribe({ next: u => this.users.set(u), error: () => {} }); }
-  hasRole(u: { permissions?: string }, role: string): boolean { return (u.permissions ?? '').split(/[,\[\]" ]+/).includes(role); }
-  usersWith(role: string) { return this.users().filter(u => this.hasRole(u, role) || u.role === 'Admin' || u.role === 'Super Admin'); }
-  setRole(u: { id: number; permissions?: string }, role: string, grant: boolean): void { this.api.toggleRole(u.id, role, grant).subscribe({ next: r => { u.permissions = r.permissions; this.users.set([...this.users()]); }, error: e => this.fail(e, "Couldn't change the role.") }); }
-  addCompanyRow(): void { this.adminCompanies.set([...this.adminCompanies(), { code: '', name: '', isActive: true, sortOrder: this.adminCompanies().length + 1, accountantUserId: null, backupApproverUserId: null, directorUserId: null, delegateDirectorUserId: null }]); }
-  saveCompany(c: Partial<CreditorCompany>): void {
-    this.busy.set(true);
-    const req = c.id ? this.api.updateCompany(c.id, c) : this.api.addCompany(c);
-    req.subscribe({ next: () => { this.busy.set(false); this.toast.done(`${c.code} saved`); this.api.meta().subscribe(m => { this.meta.set(m); this.adminCompanies.set(m.companies.map(x => ({ ...x }))); }); }, error: e => this.fail(e, "Couldn't save the company.") });
-  }
 }

@@ -38,6 +38,7 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { environment } from '../../../environments/environment';
 import { PodUploaderComponent } from './pod-uploader.component';
+import { CreditorAdminComponent } from '../finance/creditor-admin.component';
 import { DocumentTemplatesComponent } from '../admin/document-templates/document-templates.component';
 import { ClientLocationsComponent } from '../admin/client-locations/client-locations.component';
 import { SETTINGS_SECTIONS, SettingsSlug, groupSections, settingsSection } from './settings-sections';
@@ -76,6 +77,7 @@ import * as XLSX from 'xlsx';
     SkeletonRowsComponent,
     EmptyStateComponent,
     PodUploaderComponent,
+    CreditorAdminComponent,
     DocumentTemplatesComponent,
     ClientLocationsComponent
   ],
@@ -136,6 +138,13 @@ import * as XLSX from 'xlsx';
             </header>
           }
           @switch (section()) {
+        <!-- Payment approvers (creditors companies & people) -->
+        @case ('payment-approvers') {
+          <div class="tab-content">
+            <app-creditor-admin></app-creditor-admin>
+          </div>
+        }
+
         <!-- POD Uploader Tab -->
         @case ('pod-uploader') {
           <div class="tab-content">

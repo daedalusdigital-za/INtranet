@@ -56,6 +56,8 @@ public class CreditorChecksService
     private static readonly Regex InvoiceRx = new(@"(?:TAX\s+)?INV(?:OICE)?\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*([A-Z]{0,4}[\-/]?\d{3,10})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex TotalRx = new(@"(?:TOTAL(?:\s+DUE|\s+INCL(?:\.|USIVE)?(?:\s+VAT)?|\s+AMOUNT)?|AMOUNT\s+DUE|GRAND\s+TOTAL)\s*[:\-]?\s*R?\s*([\d\s]{1,12}[.,]\d{2})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex DateRx = new(@"\b(\d{1,2})[\s/\-\.]([A-Za-z]{3,9}|\d{1,2})[\s/\-\.](20\d{2})\b|\b(20\d{2})[\-/](\d{2})[\-/](\d{2})\b", RegexOptions.Compiled);
+    // "VAT @ 15%  R 1 234.56" / "VAT 15% : 1,234.56" / "Total VAT 1234.56" — but never the registration number ("VAT NO 4xxxxxxxxx")
+    private static readonly Regex VatAmountRx = new(@"(?:TOTAL\s+)?VAT(?!\s*(?:REG|NO|NUMBER|#))\s*(?:@|AT)?\s*(?:15\s*%)?\s*[:\-]?\s*R?\s*([\d\s]{1,12}[.,]\d{2})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public sealed class Extracted
     {
@@ -69,6 +71,9 @@ public class CreditorChecksService
         public string? VatNumber { get; set; }
         public string? InvoiceNumber { get; set; }
         public decimal? Amount { get; set; }
+        public decimal? VatAmount { get; set; }
+        /// <summary>Best guess at who issued the document (first meaningful line); callers may override with a known-supplier match.</summary>
+        public string? SupplierName { get; set; }
     }
 
     public async Task<Extracted> ReadAsync(string absolutePath, string? contentType, string fileName)
@@ -108,8 +113,30 @@ public class CreditorChecksService
         ex.VatNumber = VatRx.Match(t) is { Success: true } vm ? vm.Groups[1].Value : null;
         ex.InvoiceNumber = InvoiceRx.Match(t) is { Success: true } im ? im.Groups[1].Value.ToUpperInvariant() : null;
         ex.Amount = ParseAmount(TotalRx.Match(t).Groups[1].Value);
+        ex.VatAmount = ParseAmount(VatAmountRx.Match(t).Groups[1].Value);
+        if (ex.VatAmount != null && ex.Amount != null && ex.VatAmount >= ex.Amount) ex.VatAmount = null; // misread
+        ex.SupplierName = GuessSupplier(t);
         ex.DocumentDate = ParseDate(t);
         return ex;
+    }
+
+    private static readonly string[] NotASupplier = { "TAX INVOICE", "INVOICE", "STATEMENT", "QUOTATION", "QUOTE", "PROFORMA", "PAGE", "DATE", "ORIGINAL", "COPY", "CUSTOMER", "BILL TO", "DELIVER TO", "VAT", "TEL", "FAX", "EMAIL", "WWW", "P.O", "PO BOX", "REG" };
+
+    /// <summary>The first line near the top that looks like a trading name (letters, not a document heading, not an address/contact line).</summary>
+    public static string? GuessSupplier(string text)
+    {
+        foreach (var raw in (text ?? "").Split('\n').Take(25))
+        {
+            var line = Regex.Replace(raw, @"\s+", " ").Trim();
+            if (line.Length < 3 || line.Length > 60) continue;
+            if (!Regex.IsMatch(line, @"[A-Za-z]{3}")) continue;
+            if (Regex.IsMatch(line, @"\d{5,}")) continue; // phone / reg / account numbers
+            if (line.Contains('@') || line.Contains("http", StringComparison.OrdinalIgnoreCase)) continue;
+            var up = line.ToUpperInvariant();
+            if (NotASupplier.Any(w => up.StartsWith(w) || up == w)) continue;
+            return line;
+        }
+        return null;
     }
 
     public static string SuggestType(string fileName, string text)

@@ -333,6 +333,150 @@ public class CreditorPacksController : ControllerBase
         it.BranchCode = d.BranchCode; it.AccountHolder = d.AccountHolder; it.PaymentReference = d.PaymentReference; it.StockReturned = d.StockReturned;
     }
 
+    // ───────────────────────── supplier directory & invoice intake ─────────────────────────
+
+    /// <summary>
+    /// Suppliers we already know — from previous payment packs (with their bank details and VAT number) and from invoices in Books.
+    /// Used to autocomplete "Who is being paid?" so bank details come along and names stay consistent.
+    /// </summary>
+    [HttpGet("suppliers")]
+    public async Task<IActionResult> Suppliers([FromQuery] string? q, [FromQuery] int take = 15)
+    {
+        var s = (q ?? "").Trim().ToLower();
+        take = Math.Clamp(take, 1, 50);
+
+        var fromPacks = await _db.PaymentBatchItems.AsNoTracking()
+            .Where(i => s == "" || i.SupplierName.ToLower().Contains(s) || (i.AccountNumber != null && i.AccountNumber.Contains(s)) || (i.SupplierVatNumber != null && i.SupplierVatNumber.Contains(s)))
+            .OrderByDescending(i => i.Id).Take(400)
+            .Select(i => new { i.SupplierName, i.SupplierVatNumber, i.BankName, i.AccountNumber, i.BranchCode, i.AccountHolder, i.PaymentReference, i.Amount, i.Batch!.CreatedAt })
+            .ToListAsync();
+        var fromBooks = await _db.BookInvoices.AsNoTracking()
+            .Where(b => s == "" || b.SupplierName.ToLower().Contains(s) || (b.SupplierAccount != null && b.SupplierAccount.ToLower().Contains(s)))
+            .OrderByDescending(b => b.Id).Take(400)
+            .Select(b => new { b.SupplierName, b.SupplierAccount, b.Total, b.CreatedAt, b.CompanyName })
+            .ToListAsync();
+
+        static string Key(string n) => System.Text.RegularExpressions.Regex.Replace(n.ToUpperInvariant(), @"[^A-Z0-9]", "");
+        var result = fromPacks.GroupBy(i => Key(i.SupplierName)).Select(g =>
+        {
+            var latest = g.OrderByDescending(i => i.CreatedAt).First();
+            var withBank = g.Where(i => !string.IsNullOrWhiteSpace(i.AccountNumber)).OrderByDescending(i => i.CreatedAt).FirstOrDefault() ?? latest;
+            return new SupplierHit(latest.SupplierName, withBank.SupplierVatNumber ?? g.Select(x => x.SupplierVatNumber).FirstOrDefault(x => x != null),
+                withBank.BankName, withBank.AccountNumber, withBank.BranchCode, withBank.AccountHolder, withBank.PaymentReference, null,
+                g.Count(), 0, latest.CreatedAt, "packs");
+        }).ToDictionary(h => Key(h.Name));
+        foreach (var g in fromBooks.GroupBy(b => Key(b.SupplierName)))
+        {
+            var latest = g.OrderByDescending(b => b.CreatedAt).First();
+            var acc = g.Select(b => b.SupplierAccount).FirstOrDefault(a => !string.IsNullOrWhiteSpace(a));
+            if (result.TryGetValue(g.Key, out var h)) result[g.Key] = h with { Invoices = g.Count(), SupplierAccount = acc, LastUsed = latest.CreatedAt > h.LastUsed ? latest.CreatedAt : h.LastUsed, Source = "packs+books" };
+            else result[g.Key] = new SupplierHit(latest.SupplierName, null, null, null, null, null, null, acc, 0, g.Count(), latest.CreatedAt, "books");
+        }
+        var list = result.Values
+            .OrderByDescending(h => s != "" && h.Name.ToLower().StartsWith(s)).ThenByDescending(h => h.Payments + h.Invoices).ThenByDescending(h => h.LastUsed)
+            .Take(take).ToList();
+        return Ok(list);
+    }
+    public record SupplierHit(string Name, string? VatNumber, string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string? PaymentReference, string? SupplierAccount, int Payments, int Invoices, DateTime LastUsed, string Source);
+
+    /// <summary>
+    /// Read a supplier invoice before it is attached: who is being paid, the total, the VAT, the invoice number and date.
+    /// Nothing is stored — the client fills the payment form, then uploads the same file as the Tax invoice when the payment is saved.
+    /// </summary>
+    [HttpPost("read-invoice")]
+    [RequestSizeLimit(25 * 1024 * 1024)]
+    public async Task<IActionResult> ReadInvoice(IFormFile file)
+    {
+        if (file == null || file.Length == 0) return BadRequest(new { message = "No file." });
+        if (file.Length > MaxFileBytes) return BadRequest(new { message = "File is larger than 20 MB." });
+        var isPdf = file.ContentType?.Contains("pdf", StringComparison.OrdinalIgnoreCase) == true || Path.GetExtension(file.FileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
+        if (!isPdf) return BadRequest(new { message = "PDF only." });
+        var tmp = Path.Combine(Path.GetTempPath(), $"cred-read-{Guid.NewGuid():N}.pdf");
+        try
+        {
+            await using (var fs = System.IO.File.Create(tmp)) await file.CopyToAsync(fs);
+            var ex = await _checks.ReadAsync(tmp, file.ContentType, file.FileName);
+            if (ex.Encrypted) return BadRequest(new { message = "Password-protected PDFs are not accepted." });
+
+            // Prefer a supplier we already know if their name appears in the text
+            var text = ex.Text.ToUpperInvariant();
+            string? known = null; SupplierHit? hit = null;
+            if (text.Length > 20)
+            {
+                var names = await _db.PaymentBatchItems.AsNoTracking().Select(i => i.SupplierName).Distinct().Take(2000).ToListAsync();
+                names.AddRange(await _db.BookInvoices.AsNoTracking().Select(b => b.SupplierName).Distinct().Take(2000).ToListAsync());
+                known = names.Where(n => n.Length >= 4).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(n => n.Length).FirstOrDefault(n => text.Contains(n.ToUpperInvariant()));
+                if (known != null && await Suppliers(known, 1) is OkObjectResult { Value: List<SupplierHit> { Count: > 0 } hits }) hit = hits[0];
+            }
+            return Ok(new
+            {
+                supplierName = known ?? ex.SupplierName, knownSupplier = known != null, supplier = hit,
+                amount = ex.Amount, vatAmount = ex.VatAmount, vatNumber = ex.VatNumber, invoiceNumber = ex.InvoiceNumber, documentDate = ex.DocumentDate,
+                suggestedType = ex.SuggestedType, pages = ex.Pages, method = ex.Method, scanned = ex.Method == "ocr", readable = ex.Method != "none"
+            });
+        }
+        finally { TryDelete(tmp); }
+    }
+
+    /// <summary>Supplier invoices in Books that can be linked to a payment (not already linked to another pack line).</summary>
+    [HttpGet("books-invoices")]
+    public async Task<IActionResult> BooksInvoices([FromQuery] string? q, [FromQuery] string? company, [FromQuery] int take = 25)
+    {
+        var s = (q ?? "").Trim().ToLower();
+        var query = _db.BookInvoices.AsNoTracking().Where(b => b.Status != "Archived" && b.Status != "Draft");
+        if (!string.IsNullOrWhiteSpace(company)) query = query.Where(b => b.CompanyName == company);
+        if (s != "") query = query.Where(b => b.SupplierName.ToLower().Contains(s) || (b.InvoiceNumber != null && b.InvoiceNumber.ToLower().Contains(s)) || (b.Description != null && b.Description.ToLower().Contains(s)));
+        var rows = await query.OrderByDescending(b => b.InvoiceDate).Take(Math.Clamp(take, 1, 100))
+            .Select(b => new { b.Id, b.SupplierName, b.SupplierAccount, b.InvoiceNumber, b.InvoiceDate, b.Total, b.VatAmount, b.CompanyName, b.Description, b.Status, b.PaymentDate, hasPdf = b.FilePath != null, b.FileName,
+                DepartmentName = _db.Departments.Where(d => d.DepartmentId == b.DepartmentId).Select(d => d.Name).FirstOrDefault() })
+            .ToListAsync();
+        var linked = await _db.PaymentBatchDocuments.AsNoTracking().Where(d => d.OriginalFileName != null && d.OriginalFileName.StartsWith("books:")).Select(d => d.OriginalFileName!).ToListAsync();
+        var linkedIds = linked.Select(l => int.TryParse(l.Split(':')[1].Split('|')[0], out var i) ? i : 0).ToHashSet();
+        return Ok(rows.Select(r => new { r.Id, r.SupplierName, r.SupplierAccount, r.InvoiceNumber, r.InvoiceDate, r.Total, r.VatAmount, r.CompanyName, r.Description, r.Status, r.PaymentDate, r.hasPdf, r.FileName, r.DepartmentName, alreadyLinked = linkedIds.Contains(r.Id) }));
+    }
+
+    public record LinkInvoiceDto(int BookInvoiceId);
+
+    /// <summary>Attach an invoice that already lives in Books to a payment line as its Tax invoice (copies the PDF so the pack is self-contained).</summary>
+    [HttpPost("batches/{id:int}/items/{itemId:int}/link-invoice")]
+    public async Task<IActionResult> LinkInvoice(int id, int itemId, [FromBody] LinkInvoiceDto dto)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
+        if (!CreditorWorkflow.PreparerEditable.Contains(b.Status)) return Conflict(new { message = "This batch can no longer be edited." });
+        if (!await CanPrepareAsync(b)) return Forbid();
+        var inv = await _db.BookInvoices.AsNoTracking().FirstOrDefaultAsync(x => x.Id == dto.BookInvoiceId);
+        if (inv == null) return NotFound(new { message = "That Books invoice no longer exists." });
+        if (string.IsNullOrWhiteSpace(inv.FilePath) || !System.IO.File.Exists(inv.FilePath)) return BadRequest(new { message = "The Books invoice has no PDF on disk." });
+
+        var bytes = await System.IO.File.ReadAllBytesAsync(inv.FilePath);
+        var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        if (b.Documents.Any(d => d.Sha256 == sha)) return Conflict(new { message = "That invoice is already on this batch." });
+        var rel = $"Finance/Creditors/{b.CompanyCode}/{b.BatchNumber}/{Guid.NewGuid():N}.pdf";
+        var abs = Abs(rel); Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
+        await System.IO.File.WriteAllBytesAsync(abs, bytes);
+        var ex = await _checks.ReadAsync(abs, "application/pdf", inv.OriginalFileName ?? inv.FileName);
+
+        var na = b.Documents.FirstOrDefault(d => d.IsNotApplicable && d.DocType == CreditorDocTypes.TaxInvoice && d.ItemId == itemId);
+        if (na != null) _db.PaymentBatchDocuments.Remove(na);
+        b.Documents.Add(new PaymentBatchDocument
+        {
+            BatchId = id, ItemId = itemId, DocType = CreditorDocTypes.TaxInvoice, SuggestedDocType = ex.SuggestedType,
+            FileName = Path.GetFileName(rel), OriginalFileName = $"books:{inv.Id}|{inv.OriginalFileName ?? inv.FileName}", ContentType = "application/pdf", Size = bytes.Length,
+            StoragePath = rel, Sha256 = sha, PageCount = ex.Pages, ExtractedText = ex.Text, TextMethod = ex.Method,
+            DocumentDate = inv.InvoiceDate, ExtractedVatNumber = ex.VatNumber, ExtractedInvoiceNumber = inv.InvoiceNumber ?? ex.InvoiceNumber, ExtractedAmount = inv.Total,
+            UploadedByUserId = UserId, UploadedByName = UserName
+        });
+        // Fill gaps on the line from Books
+        if (string.IsNullOrWhiteSpace(it.InvoiceNumbers) && !string.IsNullOrWhiteSpace(inv.InvoiceNumber)) it.InvoiceNumbers = inv.InvoiceNumber;
+        if (string.IsNullOrWhiteSpace(it.Description) && !string.IsNullOrWhiteSpace(inv.Description)) it.Description = inv.Description;
+        b.Events.Add(Ev("DocumentUploaded", null, null, $"Tax invoice linked from Books · {inv.SupplierName} {inv.InvoiceNumber} · {it.SupplierName}"));
+        b.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return Ok(await DetailAsync(id));
+    }
+
     private static void Recalc(PaymentBatch b) { b.TotalAmount = b.Items.Sum(i => i.Amount); b.UpdatedAt = DateTime.UtcNow; }
 
     // ───────────────────────── documents ─────────────────────────

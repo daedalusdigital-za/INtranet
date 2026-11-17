@@ -59,6 +59,9 @@ export interface ItemInput {
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
 }
 export interface CreditorAlert { batchId: number; batchNumber: string; companyCode: string; status: string; code: string; title: string; severity: string; detail?: string; supplier?: string; }
+export interface SupplierHit { name: string; vatNumber?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; supplierAccount?: string; payments: number; invoices: number; lastUsed?: string; source: string; }
+export interface InvoiceRead { supplierName?: string; knownSupplier: boolean; supplier?: SupplierHit; amount?: number; vatAmount?: number; vatNumber?: string; invoiceNumber?: string; documentDate?: string; suggestedType?: string; pages: number; method?: string; scanned: boolean; readable: boolean; }
+export interface BooksInvoiceHit { id: number; supplierName: string; supplierAccount?: string; invoiceNumber?: string; invoiceDate?: string; total: number; vatAmount?: number; companyName?: string; departmentName?: string; description?: string; status: string; paymentDate?: string; hasPdf: boolean; fileName?: string; alreadyLinked: boolean; }
 
 @Injectable({ providedIn: 'root' })
 export class CreditorPacksService {
@@ -90,6 +93,12 @@ export class CreditorPacksService {
   addItem(id: number, dto: ItemInput) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items`, dto); }
   updateItem(id: number, itemId: number, dto: ItemInput) { return this.http.put<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}`, dto); }
   deleteItem(id: number, itemId: number) { return this.http.delete<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}`); }
+
+  // ── Supplier directory / invoice auto-fill ──
+  suppliers(q: string, take = 12) { return this.http.get<SupplierHit[]>(`${this.base}/suppliers`, { params: { q, take } }); }
+  readInvoice(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead>(`${this.base}/read-invoice`, fd); }
+  booksInvoices(q: string, company?: string, take = 20) { let p = new HttpParams().set('q', q).set('take', take); if (company) p = p.set('company', company); return this.http.get<BooksInvoiceHit[]>(`${this.base}/books-invoices`, { params: p }); }
+  linkInvoice(id: number, itemId: number, bookInvoiceId: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/link-invoice`, { bookInvoiceId }); }
 
   upload(id: number, file: File, docType?: string, itemId?: number | null, supersedesDocumentId?: number, versionReason?: string) {
     const fd = new FormData();
