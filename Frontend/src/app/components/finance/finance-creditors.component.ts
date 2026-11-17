@@ -7,6 +7,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialog } from '@angular/material/dialog';
+import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit } from '../../services/creditor-packs.service';
 
@@ -351,6 +353,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 @if (it.prepaymentOpen && it.paidAt) { <span class="pre">awaiting invoice + GRV</span> }
                 @if (it.decisionStatus !== 'Pending') { <span [class]="'dec ' + it.decisionStatus.toLowerCase()">{{ it.decisionStatus }}</span> }
                 <span class="amt">R {{ it.amount | number:'1.2-2' }}</span>
+                @if (previewableDocs(it).length) { <button mat-icon-button (click)="$event.stopPropagation(); previewItem(it)" [matTooltip]="'Review ' + (previewableDocs(it).length === 1 ? 'the document' : previewableDocs(it).length + ' documents')"><mat-icon>visibility</mat-icon></button> }
                 @if (b.can.edit) {
                   <button mat-icon-button (click)="$event.stopPropagation(); startItem(it)" matTooltip="Edit"><mat-icon>edit</mat-icon></button>
                   <button mat-icon-button (click)="$event.stopPropagation(); removeItem(it)" matTooltip="Remove"><mat-icon>delete</mat-icon></button>
@@ -472,7 +475,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               </div>
               <div class="act">
                 @for (d of ds; track d.id) {
-                  @if (!d.isNotApplicable) { <button mat-icon-button matTooltip="Open" (click)="openDoc(d)"><mat-icon>open_in_new</mat-icon></button> }
+                  @if (!d.isNotApplicable) { <button mat-icon-button [matTooltip]="d.textMethod === 'sheet' ? 'Download' : 'Preview'" (click)="openDoc(d)"><mat-icon>{{ d.textMethod === 'sheet' ? 'download' : 'visibility' }}</mat-icon></button> }
                   @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
                   @else if (b.can.uploadAfterLock && !d.isNotApplicable) { <button mat-icon-button matTooltip="Replace (reason required)" (click)="replaceDoc(d)"><mat-icon>published_with_changes</mat-icon></button> }
                 }
@@ -501,7 +504,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 </div>
                 <div class="act">
                   @for (d of ds; track d.id) {
-                    @if (!d.isNotApplicable) { <button mat-icon-button matTooltip="Open" (click)="openDoc(d)"><mat-icon>open_in_new</mat-icon></button> }
+                    @if (!d.isNotApplicable) { <button mat-icon-button [matTooltip]="d.textMethod === 'sheet' ? 'Download' : 'Preview'" (click)="openDoc(d)"><mat-icon>{{ d.textMethod === 'sheet' ? 'download' : 'visibility' }}</mat-icon></button> }
                     @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
                   }
                   @if (b.can.edit || b.can.uploadAfterLock) {
@@ -526,7 +529,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               <small class="file">{{ d.originalFileName }} · {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}</small>
             </div>
             <div class="act">
-              <button mat-icon-button matTooltip="Open" (click)="openDoc(d)"><mat-icon>open_in_new</mat-icon></button>
+              <button mat-icon-button [matTooltip]="d.textMethod === 'sheet' ? 'Download' : 'Preview'" (click)="openDoc(d)"><mat-icon>{{ d.textMethod === 'sheet' ? 'download' : 'visibility' }}</mat-icon></button>
               @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
             </div>
           </li>
@@ -676,6 +679,7 @@ export class FinanceCreditorsComponent implements OnInit {
   private toast = inject(ToastService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private dialog = inject(MatDialog);
 
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('sigpad') sigpad?: ElementRef<HTMLCanvasElement>;
@@ -1032,7 +1036,20 @@ export class FinanceCreditorsComponent implements OnInit {
   retype(d: BatchDoc, t: string): void { const b = this.batch()!; this.api.updateDoc(b.id, d.id, { docType: t }).subscribe({ next: r => this.batch.set(r), error: e => this.fail(e, "Couldn't change the type.") }); }
   removeDoc(d: BatchDoc): void { const b = this.batch()!; this.api.deleteDoc(b.id, d.id).subscribe({ next: r => this.batch.set(r), error: e => this.fail(e, "Couldn't remove the document.") }); }
   markNa(r: RequiredDoc, itemId: number | null): void { const b = this.batch()!; const reason = prompt(`Why does "${r.title}" not apply to this payment? (the approvers will see this)`); if (!reason) return; this.api.markNa(b.id, r.docType, itemId, reason).subscribe({ next: x => this.batch.set(x), error: e => this.fail(e, "Couldn't mark N/A.") }); }
-  openDoc(d: BatchDoc): void { const b = this.batch()!; const isPdf = !d.textMethod || d.textMethod !== 'sheet'; this.api.file(b.id, d.id).subscribe({ next: blob => { const url = URL.createObjectURL(blob); if (isPdf) window.open(url, '_blank'); else { const a = document.createElement('a'); a.href = url; a.download = d.originalFileName || 'recon'; a.click(); URL.revokeObjectURL(url); } }, error: () => this.toast.error("Couldn't open the file.") }); }
+  openDoc(d: BatchDoc): void {
+    const b = this.batch()!;
+    if (d.textMethod === 'sheet') { this.api.file(b.id, d.id).subscribe({ next: blob => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = d.originalFileName || 'recon'; a.click(); URL.revokeObjectURL(url); }, error: () => this.toast.error("Couldn't download the file.") }); return; }
+    const it = b.items.find(i => i.id === d.itemId);
+    PackPreviewDialogComponent.open(this.dialog, { url: this.api.fileUrl(b.id, d.id), title: `${this.docTitle(d.docType)}${it ? ' · ' + it.supplierName : ''}`, subtitle: `${b.batchNumber} · ${d.originalFileName || ''}${d.documentDate ? ' · dated ' + new Date(d.documentDate).toLocaleDateString() : ''}`, fileName: d.originalFileName || 'document.pdf' });
+  }
+  previewableDocs(it: BatchItem): BatchDoc[] { return it.documents.filter(d => !d.isNotApplicable && d.textMethod !== 'sheet'); }
+  /** Review a payment: open its first PDF (tax invoice first) in the preview dialog; the dialog's own buttons handle open/download. */
+  previewItem(it: BatchItem): void {
+    const docs = this.previewableDocs(it); if (!docs.length) return;
+    const order = ['TaxInvoice', 'SupplierRecon', 'BankLetter', 'ProofOfPayment'];
+    const first = [...docs].sort((a, c) => (order.indexOf(a.docType) + 1 || 99) - (order.indexOf(c.docType) + 1 || 99))[0];
+    this.openItem.set(it.id); this.openDoc(first);
+  }
 
   // ── signature pad ──
   private ctx(): CanvasRenderingContext2D | null { const c = this.sigpad?.nativeElement; if (!c) return null; const x = c.getContext('2d'); if (x) { x.lineWidth = 2; x.lineCap = 'round'; x.strokeStyle = '#111'; } return x; }
