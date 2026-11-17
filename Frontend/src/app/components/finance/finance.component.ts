@@ -29,6 +29,7 @@ import { environment } from '../../../environments/environment';
 import { FinancePodsComponent } from './finance-pods.component';
 import { FinanceVaultComponent } from './finance-vault.component';
 import { FinanceCreditorsComponent } from './finance-creditors.component';
+import { FinanceCashflowComponent } from './finance-cashflow.component';
 import { FinanceAgingComponent } from './finance-aging.component';
 import { FinanceRemittancesComponent } from './finance-remittances.component';
 import { FinanceCreditNotesComponent } from './finance-credit-notes.component';
@@ -43,7 +44,7 @@ import { TenderService } from '../../services/tender.service';
  */
 export type FinanceSide = 'debtors' | 'creditors';
 const DEBTOR_TABS = ['overview', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'packs'] as const;
-const CREDITOR_TABS = ['overview', 'approvals', 'creditors', 'schedule', 'invoices', 'vault'] as const;
+const CREDITOR_TABS = ['overview', 'cashflow', 'approvals', 'creditors', 'schedule', 'invoices', 'vault'] as const;
 type FinanceTab = typeof DEBTOR_TABS[number] | typeof CREDITOR_TABS[number];
 const SIDE_OF: Record<FinanceTab, FinanceSide> = Object.fromEntries([
   ...DEBTOR_TABS.map(t => [t, 'debtors']), ...CREDITOR_TABS.map(t => [t, 'creditors'])
@@ -125,6 +126,7 @@ interface Overview {
     FinancePodsComponent,
     FinanceVaultComponent,
     FinanceCreditorsComponent,
+    FinanceCashflowComponent,
     FinanceAgingComponent,
     FinanceRemittancesComponent,
     FinanceCreditNotesComponent,
@@ -320,6 +322,13 @@ export class FinanceComponent implements OnInit {
     if (side !== this.side) { this.side = side; this.tabIndex = 0; }
     this.onTabChange(this.tabs.indexOf(tab));
     if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+  }
+
+  /** From the cashflow: jump to a payment pack on the Payment packs tab. */
+  openPack(batchId: number): void {
+    if (!batchId) return;
+    this.router.navigate([], { relativeTo: this.route, queryParams: { batch: batchId }, queryParamsHandling: 'merge', replaceUrl: true })
+      .then(() => this.goTab('creditors'));
   }
 
   /** Alert strip hints: 'aging' | 'aging:nopod' | 'credit-notes:unsigned' | 'credit-notes:returns' | 'customers' */

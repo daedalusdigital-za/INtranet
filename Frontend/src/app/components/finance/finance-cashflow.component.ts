@@ -31,6 +31,7 @@ interface LineForm extends CashLineInput { id?: number }
       <label class="asat">As at <input type="date" [ngModel]="asAt()" (ngModelChange)="asAt.set($event); load()"></label>
       <span class="hint muted">Balances are the latest captured on or before this date. Payments are every pack not yet paid.</span>
       <span class="sp"></span>
+      <button mat-icon-button (click)="explain()" matTooltip="How the cashflow is worked out"><mat-icon>help_outline</mat-icon></button>
       <button mat-icon-button (click)="load()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
       <button mat-stroked-button (click)="exportXlsx()" [disabled]="busy()"><mat-icon>table_view</mat-icon> Excel</button>
     </div>

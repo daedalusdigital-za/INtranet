@@ -247,6 +247,20 @@
   </mat-tab>
 
   @if (side === 'creditors') {
+  <!-- ═══════════ CASHFLOW ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">account_balance</mat-icon> Cashflow
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Group Cashflow</h2>
+        <p>The group cashflow workbook, kept live. For each paying company: bank balance − payments in open packs − debit orders − monthly payments = closing balance. Click a company to capture its balance, see the payments making up the figure, and keep its debit orders and monthly payments. Excel gives the same workbook as the template.</p>
+      </div>
+      @if (isTab('cashflow')) { <app-finance-cashflow (openBatch)="openPack($event)"></app-finance-cashflow> }
+    </div>
+  </mat-tab>
+
   <!-- ═══════════ APPROVALS ═══════════ -->
   <mat-tab>
     <ng-template mat-tab-label>
