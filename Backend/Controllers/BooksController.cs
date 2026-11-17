@@ -530,7 +530,8 @@ namespace ProjectTracker.API.Controllers
                 invoice.VehicleRegistration = request.VehicleRegistration;
                 invoice.Description = request.Description;
                 invoice.Notes = request.Notes;
-                invoice.Status = "Confirmed";
+                // A captured payment date means the money has left — the invoice is Paid, not merely Confirmed.
+                invoice.Status = request.PaymentDate.HasValue ? "Paid" : "Confirmed";
                 invoice.ConfirmedAt = DateTime.UtcNow;
                 invoice.UpdatedAt = DateTime.UtcNow;
 
@@ -585,11 +586,14 @@ namespace ProjectTracker.API.Controllers
                 invoice.VehicleRegistration = request.VehicleRegistration ?? invoice.VehicleRegistration;
                 invoice.Description = request.Description ?? invoice.Description;
                 invoice.Notes = request.Notes ?? invoice.Notes;
+                // Capturing a payment date on an open invoice settles it.
+                if (invoice.PaymentDate.HasValue && invoice.Status is "Confirmed" or "Payment Requested" or "Submitted" or "Pending")
+                    invoice.Status = "Paid";
                 invoice.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
 
-                return Ok(new { message = "Invoice updated successfully", invoice.Id });
+                return Ok(new { message = "Invoice updated successfully", invoice.Id, invoice.Status });
             }
             catch (Exception ex)
             {
@@ -619,7 +623,7 @@ namespace ProjectTracker.API.Controllers
                 invoice.VatAmount = request.VatAmount;
                 invoice.SubTotal = request.SubTotal;
                 invoice.Currency = request.Currency ?? invoice.Currency;
-                invoice.PaymentDate = request.PaymentDate;
+                invoice.PaymentDate = null; // requesting payment — nothing has been paid yet
                 invoice.PaymentMethod = request.PaymentMethod;
                 invoice.PaymentReference = request.PaymentReference;
                 invoice.Category = request.Category;
