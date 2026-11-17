@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,9 +10,9 @@ using ProjectTracker.API.Models.Finance;
 namespace ProjectTracker.API.Controllers.Finance
 {
     /// <summary>
-    /// Credit notes â€” everything the group has ever credited, built from three sources that are stitched together
+    /// Credit notes — everything the group has ever credited, built from three sources that are stitched together
     /// on the Sage CN number:
-    ///   1. ImportedInvoices (Sage sales history): every CN line ever posted â€” customer, product, qty, value.
+    ///   1. ImportedInvoices (Sage sales history): every CN line ever posted — customer, product, qty, value.
     ///      This is the master list ("what was credited").
     ///   2. ArAgingItems (latest aging per company): a CR row means the credit is still UNAPPLIED on the debtor's
     ///      account; absent from the aging means it has been applied against an invoice / refunded.
@@ -60,9 +60,9 @@ namespace ProjectTracker.API.Controllers.Finance
         /// </summary>
         private static string Key(string? company, string number) => $"{(CompanyCode(company) ?? company ?? "").ToUpperInvariant()}|{number.Trim().ToUpperInvariant()}";
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
         //  Shared: open (unapplied) credit notes from the latest aging snapshot per company
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
         private async Task<Dictionary<string, (decimal balance, string company, DateTime asOf, string? orderNo, int ageDays)>> OpenCreditsAsync()
         {
             var latest = await _db.ArAgingSnapshots.AsNoTracking()
@@ -83,9 +83,9 @@ namespace ProjectTracker.API.Controllers.Finance
             return d;
         }
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
         //  GET api/finance/credit-notes/summary
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
         [HttpGet("summary")]
         public async Task<IActionResult> Summary()
         {
@@ -152,9 +152,9 @@ namespace ProjectTracker.API.Controllers.Finance
             });
         }
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
         //  GET api/finance/credit-notes?company=PMT&search=&from=&to=&status=open|applied|unsigned|signed&page=1&pageSize=50
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
         [HttpGet]
         public async Task<IActionResult> List([FromQuery] string? company, [FromQuery] string? search, [FromQuery] DateTime? from, [FromQuery] DateTime? to,
                                               [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
@@ -233,9 +233,9 @@ namespace ProjectTracker.API.Controllers.Finance
             });
         }
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        //  GET api/finance/credit-notes/CN103513 â€” full context
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
+        //  GET api/finance/credit-notes/CN103513 — full context
+        // ─────────────────────────────────────────────────────────────────────────────
         [HttpGet("{number}")]
         public async Task<IActionResult> Get(string number, [FromQuery] string? company)
         {
@@ -246,7 +246,7 @@ namespace ProjectTracker.API.Controllers.Finance
             var lines = await lq.OrderBy(i => i.ProductCode)
                 .Select(i => new { i.Id, i.ProductCode, i.ProductDescription, i.Brand, qty = -i.Quantity, value = -i.SalesAmount, cost = -i.CostOfSales, i.TransactionDate, i.CustomerNumber, i.CustomerName, i.SourceCompany })
                 .ToListAsync();
-            // Same CN number can exist in two companies â€” without a company hint, take the most recent one
+            // Same CN number can exist in two companies — without a company hint, take the most recent one
             var companiesHit = lines.Select(l => l.SourceCompany).Distinct().ToList();
             if (companiesHit.Count > 1)
             {
@@ -409,11 +409,11 @@ namespace ProjectTracker.API.Controllers.Finance
             return rows.GroupBy(r => r.DocumentNumber, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Sum(x => x.Balance), StringComparer.OrdinalIgnoreCase);
         }
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
         //  Cross-module lookups (Sales / invoices)
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
 
-        /// <summary>GET api/finance/credit-notes/by-invoice/IN148387 â€” credits that reverse (part of) this invoice.</summary>
+        /// <summary>GET api/finance/credit-notes/by-invoice/IN148387 — credits that reverse (part of) this invoice.</summary>
         [HttpGet("by-invoice/{invoiceNumber}")]
         public async Task<IActionResult> ByInvoice(string invoiceNumber)
         {
@@ -442,7 +442,7 @@ namespace ProjectTracker.API.Controllers.Finance
             });
         }
 
-        /// <summary>GET api/finance/credit-notes/by-customer/01-INK-001?company=ACM â€” credit history for a debtor.</summary>
+        /// <summary>GET api/finance/credit-notes/by-customer/01-INK-001?company=ACM — credit history for a debtor.</summary>
         [HttpGet("by-customer/{customerNumber}")]
         public async Task<IActionResult> ByCustomer(string customerNumber, [FromQuery] string? company)
         {
@@ -461,9 +461,9 @@ namespace ProjectTracker.API.Controllers.Finance
             });
         }
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
         //  Signed documents
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─────────────────────────────────────────────────────────────────────────────
 
         /// <summary>GET api/finance/credit-notes/documents?search=&unmatched=true</summary>
         [HttpGet("documents")]
@@ -513,7 +513,7 @@ namespace ProjectTracker.API.Controllers.Finance
             public DateTime? SignedOn { get; set; }
         }
 
-        /// <summary>POST api/finance/credit-notes/documents (multipart) â€” upload a signed credit note PDF/image.</summary>
+        /// <summary>POST api/finance/credit-notes/documents (multipart) — upload a signed credit note PDF/image.</summary>
         [HttpPost("documents")]
         [RequestSizeLimit(30_000_000)]
         public async Task<IActionResult> Upload([FromForm] UploadForm form)
@@ -539,7 +539,7 @@ namespace ProjectTracker.API.Controllers.Finance
                 .ToListAsync();
             if (formCode != null) sageHits = sageHits.Where(h => h.company == formCode).ToList();
             if (sageHits.Count > 1)
-                return BadRequest(new { error = $"{number} exists in more than one company ({string.Join(", ", sageHits.Select(h => $"{CompanyName(h.company)} â€” {h.customer}"))}). Choose the company.", companies = sageHits.Select(h => new { code = h.company, name = CompanyName(h.company), h.customer, h.value }) });
+                return BadRequest(new { error = $"{number} exists in more than one company ({string.Join(", ", sageHits.Select(h => $"{CompanyName(h.company)} — {h.customer}"))}). Choose the company.", companies = sageHits.Select(h => new { code = h.company, name = CompanyName(h.company), h.customer, h.value }) });
             var sage = sageHits.FirstOrDefault();
 
             var dir = Path.Combine(_root, "finance", "credit-notes", DateTime.UtcNow.ToString("yyyy"));
@@ -570,17 +570,17 @@ namespace ProjectTracker.API.Controllers.Finance
             };
             _db.CreditNoteDocuments.Add(doc);
             await _db.SaveChangesAsync();
-            // Finance ↔ Stock: a Return / Damaged / Expired credit means goods came back — raise the branch return
+            // Finance ? Stock: a Return / Damaged / Expired credit means goods came back � raise the branch return
             StockReturn? ret = null;
             if (doc.Company != null && StockReturnsController.IsPhysical(doc.Reason))
             {
                 ret = await StockReturnsController.EnsureForCreditNoteAsync(_db, doc.Company, number, doc.Reason!, UserId, UserName, doc.Id);
                 if (ret != null) await _db.SaveChangesAsync();
             }
-            return Ok(new { doc = DocDto(doc), inSage = sage != null, sageValue = sage?.value, stockReturnId = ret?.Id, warning = sage == null ? $"{number} is not in the Sage sales history yet — it will link automatically once the next sales import includes it." : null });
+            return Ok(new { doc = DocDto(doc), inSage = sage != null, sageValue = sage?.value, stockReturnId = ret?.Id, warning = sage == null ? $"{number} is not in the Sage sales history yet � it will link automatically once the next sales import includes it." : null });
         }
 
-        /// <summary>GET api/finance/credit-notes/reasons — the credit-reason taxonomy and which reasons move stock.</summary>
+        /// <summary>GET api/finance/credit-notes/reasons � the credit-reason taxonomy and which reasons move stock.</summary>
         [HttpGet("reasons")]
         public IActionResult Reasons() => Ok(StockReturnsController.AllReasons.Select(r => new { reason = r, movesStock = StockReturnsController.IsPhysical(r) }));
 
