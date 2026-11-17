@@ -24,7 +24,9 @@ INSERT INTO @p VALUES
 ('4210247',297.00,'Possible'),('4713171000008',135.53,'Possible'),('RT2101044',543.79,'Possible'),('RT2101048',1885.12,'Possible'),
 ('RT2103001',671.64,'Possible'),('RT2103002',868.04,'Possible'),('RT210300700001',1960.99,'Possible'),('RT25316006',803.48,'Possible'),
 ('RT25316008',803.48,'Possible'),('RT420101000000',67.25,'Possible'),('RT4201045',5.51,'Possible'),('RT4201046',8.30,'Possible'),
-('RT4201169',6.70,'Possible'),('RT4202043',21.44,'Possible'),('RT4202044',26.73,'Possible');
+('RT4201169',6.70,'Possible'),('RT4202043',21.44,'Possible'),('RT4202044',26.73,'Possible'),
+-- Sebenzani price list
+('3002812',0.50,'Matched'); -- RT32-09-002 I.D Bands Plastic Pink - Child
 
 UPDATE wi
    SET wi.UnitPrice = ROUND(p.PriceIncl / 1.15, 2), wi.UpdatedAt = SYSUTCDATETIME()
