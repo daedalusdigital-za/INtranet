@@ -10,6 +10,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
+import { CompanyBatchesDialogComponent } from './company-batches-dialog.component';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit } from '../../services/creditor-packs.service';
@@ -149,24 +150,16 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     } @else {
       <div class="cr-cogrid">
       @for (g of groups(); track g.code) {
-        <section class="cr-co">
-          <header>
-            <ng-container *ngTemplateOutlet="coMark; context: { $implicit: g.code, size: 'md' }"></ng-container>
-            <div class="nm"><h3 [matTooltip]="g.name">{{ g.name }}</h3><small>{{ g.code }} · {{ g.rows.length }} batch{{ g.rows.length === 1 ? '' : 'es' }}@if (g.back) { · <em>{{ g.back }} sent back</em> }</small></div>
-          </header>
-          <div class="tot"><span class="l">Open · {{ g.open }} batch{{ g.open === 1 ? '' : 'es' }}</span><span class="v">R {{ g.openAmount | number:'1.2-2' }}</span></div>
-          <ul class="cbs">
-            @for (r of g.rows; track r.id) {
-              <li (click)="open(r.id)" [class.back]="isSentBack(r.status)">
-                <div class="l1"><span class="ref">{{ r.batchNumber }}</span><span class="amt">R {{ r.totalAmount | number:'1.0-0' }}</span></div>
-                <div class="l2"><span [class]="'badge ' + badge(r.status)">{{ r.statusTitle }}</span><small>{{ typeTitle(r.paymentType) }} · {{ r.batchDate | date:'dd MMM' }} · {{ r.items }} pmt{{ r.items === 1 ? '' : 's' }}</small></div>
-                @if (waitingOn(r); as w) { <div class="l3"><mat-icon>person</mat-icon>{{ w }}</div> }
-                @if (r.returnReason && isSentBack(r.status)) { <div class="reason">{{ r.returnReason }}</div> }
-                @if (r.openPrepayments) { <div class="reason warn">{{ r.openPrepayments }} prepayment{{ r.openPrepayments === 1 ? '' : 's' }} awaiting invoice + GRV</div> }
-              </li>
-            }
-          </ul>
-        </section>
+        <button class="cr-co" type="button" (click)="openCompany(g)" [class.back]="g.back > 0">
+          <span class="mark">
+            @if (logo(g.code); as src) { <img [src]="src" [alt]="g.name"> }
+            @else { <span class="mono" [style.--hue]="hue(g.code)">{{ monogram(g.code, g.name) }}</span> }
+          </span>
+          <span class="nm">{{ g.name }}</span>
+          <span class="stat"><b>{{ g.open }}</b> open batch{{ g.open === 1 ? '' : 'es' }}@if (g.back) { <em>· {{ g.back }} sent back</em> }</span>
+          <span class="amt">R {{ g.openAmount | number:'1.2-2' }}</span>
+          <span class="foot">{{ g.code }} · {{ g.rows.length }} total <mat-icon>chevron_right</mat-icon></span>
+        </button>
       }
       </div>
       @if (meta()!.me.isAdmin && missingLogos().length) {
@@ -609,17 +602,15 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       &.xs { width: 34px; height: 22px; .mono { font-size: 9px; } } &.sm { width: 56px; height: 34px; .mono { font-size: 11px; } } &.md { width: 76px; height: 44px; .mono { font-size: 14px; } } &.lg { width: 112px; height: 64px; border-radius: var(--radius-md); img { padding: 6px; } .mono { font-size: 20px; } } }
     .cr-cogrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); align-items: start;
       @media (max-width: 1400px) { grid-template-columns: repeat(3, minmax(0, 1fr)); } @media (max-width: 1000px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (max-width: 640px) { grid-template-columns: 1fr; } }
-    .cr-co { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); overflow: hidden; display: flex; flex-direction: column; min-width: 0;
-      > header { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px;
-        .nm { flex: 1; min-width: 0; h3 { margin: 0; font-size: var(--text-sm); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } small { color: var(--color-text-3); font-size: var(--text-xs); em { color: var(--color-danger); font-style: normal; font-weight: 600; } } } }
-      .tot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 14px 10px; border-bottom: 1px solid var(--color-line); .l { font-size: var(--text-xs); color: var(--color-text-3); } .v { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-md); white-space: nowrap; } }
-      .cbs { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow: auto;
-        li { padding: 8px 14px; border-bottom: 1px solid var(--color-line); cursor: pointer; display: flex; flex-direction: column; gap: 3px; border-left: 3px solid transparent;
-          &:last-child { border-bottom: 0; } &:hover { background: var(--color-surface-2); } &.back { border-left-color: var(--color-danger); }
-          .l1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; .ref { font-size: var(--text-xs); } .amt { font-family: var(--font-mono); font-weight: 600; font-size: var(--text-sm); white-space: nowrap; } }
-          .l2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; small { color: var(--color-text-3); font-size: var(--text-xs); } }
-          .l3 { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-text-2); mat-icon { font-size: 14px; width: 14px; height: 14px; color: var(--color-text-3); } }
-          .reason { font-size: var(--text-xs); color: var(--color-danger); &.warn { color: var(--color-warn); } } } } }
+    .cr-co { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 16px 16px 12px; font: inherit; text-align: left; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); cursor: pointer; min-width: 0; transition: border-color .12s, box-shadow .12s, transform .12s;
+      .mark { height: 64px; display: grid; place-items: center; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 8px; img { width: 100%; height: 100%; object-fit: contain; padding: 8px; box-sizing: border-box; } }
+      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 22px; letter-spacing: .08em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
+      .nm { font-weight: 700; font-size: var(--text-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .stat { font-size: var(--text-sm); color: var(--color-text-2); b { color: var(--color-primary); font-size: var(--text-lg); font-weight: 700; } em { color: var(--color-danger); font-style: normal; font-weight: 600; font-size: var(--text-xs); } }
+      .amt { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-lg); white-space: nowrap; }
+      .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--color-line); font-size: var(--text-xs); color: var(--color-text-3); mat-icon { font-size: 18px; width: 18px; height: 18px; } }
+      &:hover { border-color: var(--color-primary); box-shadow: var(--shadow-md); transform: translateY(-2px); .foot { color: var(--color-primary); } }
+      &.back { border-top: 3px solid var(--color-danger); } }
     .cr-logo-note { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--color-text-3); mat-icon { font-size: 16px; width: 16px; height: 16px; } code { font-family: var(--font-mono); background: var(--color-surface-3); padding: 0 4px; border-radius: 3px; } }
     .pick-lbl { font-size: var(--text-xs); color: var(--color-text-2); font-weight: 600; margin-bottom: 6px; }
     .cr-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
@@ -813,6 +804,12 @@ export class FinanceCreditorsComponent implements OnInit {
         openAmount: rows.filter(r => r.status !== 'Closed').reduce((s, r) => s + (r.totalAmount || 0), 0)
       }));
   });
+  openCompany(g: { code: string; name: string; rows: BatchRow[] }): void {
+    CompanyBatchesDialogComponent.open(this.dialog, {
+      code: g.code, name: g.name, logo: companyWideLogo(g.code), monogram: companyMonogram(g.code, g.name), hue: companyHue(g.code), rows: g.rows,
+      typeTitle: k => this.typeTitle(k), badge: s => this.badge(s), waitingOn: r => this.waitingOn(r), isSentBack: s => this.isSentBack(s)
+    }).afterClosed().subscribe(id => { if (id) this.open(id); });
+  }
   filteredRows = computed(() => {
     const co = this.companyFilter(), st = this.statusFilter(), ty = this.typeFilter();
     return this.rows().filter(r => (!co || r.companyCode === co) && (!ty || r.paymentType === ty) && this.matchStatus(r, st));
