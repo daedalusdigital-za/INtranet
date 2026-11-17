@@ -1065,6 +1065,8 @@
   overflow: hidden;
 }
 .sp-header { display:flex; align-items:center; gap:12px; padding:16px 20px; background:var(--color-warn); color:var(--color-on-primary); }
+.sp-collapse { color: inherit !important; margin-left: auto; flex-shrink: 0; }
+.stationery-panel.collapsed .sp-header { border-radius: inherit; }
 .sp-title { display:flex; align-items:center; gap:8px; flex:1; }
 .sp-title h3 { margin:0; font-size:var(--text-xl); font-weight:700; }
 .sp-title mat-icon { font-size:var(--text-3xl); width:var(--text-3xl); height:var(--text-3xl); }

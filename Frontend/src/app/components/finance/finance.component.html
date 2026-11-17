@@ -29,10 +29,11 @@
     <div class="ov-error"><mat-icon>cloud_off</mat-icon><p>Couldn't load the finance overview.</p><button mat-stroked-button (click)="loadOverview()"><mat-icon>refresh</mat-icon> Retry</button></div>
   } @else {
 
+  @if (side === 'debtors') {
+  <!-- ───────── DEBTORS OVERVIEW ───────── -->
   <!-- Control-gap alerts: stale aging, unsigned credits, 60+ days no POD, pending stock returns -->
   <app-finance-alerts class="animate-in" (go)="onAlertGo($event)"></app-finance-alerts>
 
-  <!-- KPI row -->
   <div class="kpi-grid animate-in delay-1">
     <button class="kpi kpi-debtors" (click)="goTab('aging')">
       <div class="kpi-head"><mat-icon>call_received</mat-icon><span>Debtors · owed to us</span></div>
@@ -48,59 +49,42 @@
       }
     </button>
 
-    <button class="kpi kpi-creditors" (click)="goToCreditors()">
-      <div class="kpi-head"><mat-icon>call_made</mat-icon><span>Creditors · payable</span></div>
-      <div class="kpi-value">{{ ov.creditors.totalPayable | currency:'ZAR':'R':'1.0-0' }}</div>
-      <div class="kpi-foot kpi-breakdown">
-        <span>Supplier invoices <b>{{ ov.creditors.unpaidInvoices | currency:'ZAR':'R':'1.0-0' }}</b></span>
-        <span>Requisitions <b>{{ ov.creditors.requisitions | currency:'ZAR':'R':'1.0-0' }}</b></span>
-        <span>Commitments /mo <b>{{ ov.creditors.commitmentsMonthly | currency:'ZAR':'R':'1.0-0' }}</b></span>
-        @if (ov.creditors.pendingExpenses > 0) { <span>Expenses <b>{{ ov.creditors.pendingExpenses | currency:'ZAR':'R':'1.0-0' }}</b></span> }
-      </div>
-    </button>
-
-    <button class="kpi kpi-requests" [class.hot]="ov.invoices.paymentRequested > 0" (click)="openRequestedPayments()">
-      <div class="kpi-head"><mat-icon>request_quote</mat-icon><span>Payment requests waiting</span></div>
-      <div class="kpi-value">{{ ov.invoices.paymentRequested }}</div>
-      <div class="kpi-foot">
-        <span>{{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }} asked by departments</span>
-        <span class="kpi-sub">{{ ov.invoices.paymentRequested > 0 ? 'Click to review, pay or send back' : 'Nothing waiting on Finance' }}</span>
-      </div>
-    </button>
-
     <button class="kpi kpi-cash" (click)="goTab('remittances')">
-      <div class="kpi-head"><mat-icon>savings</mat-icon><span>This month</span></div>
+      <div class="kpi-head"><mat-icon>savings</mat-icon><span>Received this month</span></div>
       <div class="kpi-value">{{ ov.remittances.thisMonthAmount | currency:'ZAR':'R':'1.0-0' }}</div>
       <div class="kpi-foot">
-        <span>received on <b>{{ ov.remittances.thisMonth }}</b> remittance{{ ov.remittances.thisMonth === 1 ? '' : 's' }}</span>
-        <span class="kpi-sub">{{ ov.invoices.paidThisMonth | currency:'ZAR':'R':'1.0-0' }} paid out to suppliers</span>
+        <span>on <b>{{ ov.remittances.thisMonth }}</b> remittance{{ ov.remittances.thisMonth === 1 ? '' : 's' }}</span>
+        <span class="kpi-sub">{{ ov.remittances.new > 0 ? ov.remittances.new + ' new to allocate' : 'All remittances allocated' }}</span>
+      </div>
+    </button>
+
+    <button class="kpi kpi-requests" [class.hot]="ov.pods.unlinked > 0" (click)="goTab('pods')">
+      <div class="kpi-head"><mat-icon>fact_check</mat-icon><span>PODs not linked</span></div>
+      <div class="kpi-value">{{ ov.pods.unlinked }}</div>
+      <div class="kpi-foot">
+        <span>deliveries without an invoice match</span>
+        <span class="kpi-sub">{{ ov.pods.unlinked > 0 ? 'Link them so collections can be proven' : 'Every POD is matched' }}</span>
+      </div>
+    </button>
+
+    <button class="kpi kpi-creditors" (click)="goTab('aging')">
+      <div class="kpi-head"><mat-icon>warning_amber</mat-icon><span>120+ days</span></div>
+      <div class="kpi-value">{{ ov.debtors.d120 | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-foot">
+        <span><b>{{ barPct(ov.debtors.d120, ov.debtors.total) | number:'1.0-0' }}%</b> of the book is at risk</span>
+        <span class="kpi-sub">Oldest buckets across all companies</span>
       </div>
     </button>
   </div>
 
   <div class="ov-columns animate-in delay-2">
-    <!-- Needs attention -->
+    <!-- Needs attention (debtors) -->
     <section class="ov-card">
       <header class="ov-card-head">
         <h2><mat-icon>notifications_active</mat-icon> Needs attention</h2>
-        @if (attentionCount > 0) { <span class="ov-count">{{ attentionCount }}</span> } @else { <span class="ov-count ok">All clear</span> }
+        @if (debtorsAttentionCount > 0) { <span class="ov-count">{{ debtorsAttentionCount }}</span> } @else { <span class="ov-count ok">All clear</span> }
       </header>
       <ul class="attn-list">
-        <li class="attn" [class.zero]="ov.invoices.paymentRequested === 0" (click)="openRequestedPayments()">
-          <mat-icon>request_quote</mat-icon>
-          <div class="attn-text"><b>{{ ov.invoices.paymentRequested }}</b> supplier invoice{{ ov.invoices.paymentRequested === 1 ? '' : 's' }} awaiting payment decision<small>{{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</small></div>
-          <mat-icon class="chev">chevron_right</mat-icon>
-        </li>
-        <li class="attn" [class.zero]="ov.requisitions.requested === 0" (click)="goTab('approvals', 'requisitions')">
-          <mat-icon>receipt_long</mat-icon>
-          <div class="attn-text"><b>{{ ov.requisitions.requested }}</b> requisition{{ ov.requisitions.requested === 1 ? '' : 's' }} to pay<small>{{ ov.requisitions.requestedAmount | currency:'ZAR':'R':'1.0-0' }} petty cash / e-wallet / diesel</small></div>
-          <mat-icon class="chev">chevron_right</mat-icon>
-        </li>
-        <li class="attn" [class.zero]="stationeryCounts.pending === 0" (click)="goTab('approvals', 'stationery')">
-          <mat-icon>edit_note</mat-icon>
-          <div class="attn-text"><b>{{ stationeryCounts.pending }}</b> stationery request{{ stationeryCounts.pending === 1 ? '' : 's' }} to approve</div>
-          <mat-icon class="chev">chevron_right</mat-icon>
-        </li>
         <li class="attn" [class.zero]="ov.remittances.new === 0" (click)="goTab('remittances')">
           <mat-icon>payments</mat-icon>
           <div class="attn-text"><b>{{ ov.remittances.new }}</b> new remittance{{ ov.remittances.new === 1 ? '' : 's' }} to allocate
@@ -112,13 +96,14 @@
           <div class="attn-text"><b>{{ ov.pods.unlinked }}</b> POD{{ ov.pods.unlinked === 1 ? '' : 's' }} not linked to an invoice<small>deliveries we can't prove for collection yet</small></div>
           <mat-icon class="chev">chevron_right</mat-icon>
         </li>
-        <li class="attn" [class.zero]="ov.vault.expired + ov.vault.dueSoon === 0" [class.danger]="ov.vault.expired > 0" (click)="goTab('vault')">
-          <mat-icon>shield</mat-icon>
-          <div class="attn-text">
-            @if (ov.vault.expired > 0) { <b>{{ ov.vault.expired }}</b> compliance document{{ ov.vault.expired === 1 ? '' : 's' }} <span class="bad">expired</span> }
-            @else { <b>{{ ov.vault.dueSoon }}</b> compliance renewal{{ ov.vault.dueSoon === 1 ? '' : 's' }} due }
-            <small>{{ ov.vault.dueSoon }} due within 60 days · tax clearance, B-BBEE, CSD, bank letters</small>
-          </div>
+        <li class="attn" [class.zero]="ov.debtors.d120 === 0" [class.danger]="ov.debtors.d120 > 0" (click)="goTab('aging')">
+          <mat-icon>hourglass_bottom</mat-icon>
+          <div class="attn-text"><b>{{ ov.debtors.d120 | currency:'ZAR':'R':'1.0-0' }}</b> sitting at 120+ days<small>chase or hand over — these balances are the hardest to collect</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="staleCompanies === 0" (click)="goTab('aging')">
+          <mat-icon>update</mat-icon>
+          <div class="attn-text"><b>{{ staleCompanies }}</b> compan{{ staleCompanies === 1 ? 'y' : 'ies' }} with aging older than 2 weeks<small>upload a fresh Sage export so the numbers stay honest</small></div>
           <mat-icon class="chev">chevron_right</mat-icon>
         </li>
       </ul>
@@ -153,8 +138,105 @@
     </section>
   </div>
 
-  <!-- Supplier invoices snapshot + quick actions -->
+  <!-- Debtors quick actions -->
   <div class="ov-columns animate-in delay-3">
+    <section class="ov-card">
+      <header class="ov-card-head"><h2><mat-icon>bolt</mat-icon> Go to</h2></header>
+      <div class="qa-grid">
+        <button class="qa" (click)="goTab('aging')"><mat-icon>hourglass_bottom</mat-icon><span>Aging</span></button>
+        <button class="qa" (click)="goTab('remittances')"><mat-icon>payments</mat-icon><span>Remittances</span></button>
+        <button class="qa" (click)="goTab('pods')"><mat-icon>fact_check</mat-icon><span>PODs</span></button>
+        <button class="qa" (click)="goTab('credit-notes')"><mat-icon>undo</mat-icon><span>Credit notes</span></button>
+        <button class="qa" (click)="goTab('packs')"><mat-icon>folder_zip</mat-icon><span>Invoice packs</span></button>
+        <button class="qa" (click)="goToBooks()"><mat-icon>description</mat-icon><span>Books</span></button>
+        <button class="qa" (click)="goToDebtors()"><mat-icon>call_received</mat-icon><span>Debtors ledger</span></button>
+      </div>
+    </section>
+  </div>
+
+  } @else {
+  <!-- ───────── CREDITORS OVERVIEW ───────── -->
+  <div class="kpi-grid animate-in delay-1">
+    <button class="kpi kpi-creditors" (click)="goToCreditors()">
+      <div class="kpi-head"><mat-icon>call_made</mat-icon><span>Creditors · payable</span></div>
+      <div class="kpi-value">{{ ov.creditors.totalPayable | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-foot kpi-breakdown">
+        <span>Supplier invoices <b>{{ ov.creditors.unpaidInvoices | currency:'ZAR':'R':'1.0-0' }}</b></span>
+        <span>Requisitions <b>{{ ov.creditors.requisitions | currency:'ZAR':'R':'1.0-0' }}</b></span>
+        <span>Commitments /mo <b>{{ ov.creditors.commitmentsMonthly | currency:'ZAR':'R':'1.0-0' }}</b></span>
+        @if (ov.creditors.pendingExpenses > 0) { <span>Expenses <b>{{ ov.creditors.pendingExpenses | currency:'ZAR':'R':'1.0-0' }}</b></span> }
+      </div>
+    </button>
+
+    <button class="kpi kpi-requests" [class.hot]="ov.invoices.paymentRequested > 0" (click)="openRequestedPayments()">
+      <div class="kpi-head"><mat-icon>request_quote</mat-icon><span>Payment requests waiting</span></div>
+      <div class="kpi-value">{{ ov.invoices.paymentRequested }}</div>
+      <div class="kpi-foot">
+        <span>{{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }} asked by departments</span>
+        <span class="kpi-sub">{{ ov.invoices.paymentRequested > 0 ? 'Click to review, pay or send back' : 'Nothing waiting on Finance' }}</span>
+      </div>
+    </button>
+
+    <button class="kpi kpi-debtors" [class.hot]="ov.requisitions.requested > 0" (click)="goTab('approvals', 'requisitions')">
+      <div class="kpi-head"><mat-icon>receipt_long</mat-icon><span>Requisitions to pay</span></div>
+      <div class="kpi-value">{{ ov.requisitions.requested }}</div>
+      <div class="kpi-foot">
+        <span>{{ ov.requisitions.requestedAmount | currency:'ZAR':'R':'1.0-0' }} petty cash / e-wallet / diesel</span>
+        <span class="kpi-sub">{{ stationeryCounts.pending }} stationery request{{ stationeryCounts.pending === 1 ? '' : 's' }} also pending</span>
+      </div>
+    </button>
+
+    <button class="kpi kpi-cash" (click)="selectedStatus='Paid'; goTab('invoices'); applyFilters()">
+      <div class="kpi-head"><mat-icon>savings</mat-icon><span>Paid out this month</span></div>
+      <div class="kpi-value">{{ ov.invoices.paidThisMonth | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-foot">
+        <span>to suppliers on <b>{{ ov.invoices.paid }}</b> paid invoice{{ ov.invoices.paid === 1 ? '' : 's' }} total</span>
+        <span class="kpi-sub">{{ ov.invoices.overdue }} overdue · {{ ov.invoices.unpaidAmount | currency:'ZAR':'R':'1.0-0' }} still unpaid</span>
+      </div>
+    </button>
+  </div>
+
+  <div class="ov-columns animate-in delay-2">
+    <!-- Needs attention (creditors) -->
+    <section class="ov-card">
+      <header class="ov-card-head">
+        <h2><mat-icon>notifications_active</mat-icon> Needs attention</h2>
+        @if (creditorsAttentionCount > 0) { <span class="ov-count">{{ creditorsAttentionCount }}</span> } @else { <span class="ov-count ok">All clear</span> }
+      </header>
+      <ul class="attn-list">
+        <li class="attn" [class.zero]="ov.invoices.paymentRequested === 0" (click)="openRequestedPayments()">
+          <mat-icon>request_quote</mat-icon>
+          <div class="attn-text"><b>{{ ov.invoices.paymentRequested }}</b> supplier invoice{{ ov.invoices.paymentRequested === 1 ? '' : 's' }} awaiting payment decision<small>{{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="ov.requisitions.requested === 0" (click)="goTab('approvals', 'requisitions')">
+          <mat-icon>receipt_long</mat-icon>
+          <div class="attn-text"><b>{{ ov.requisitions.requested }}</b> requisition{{ ov.requisitions.requested === 1 ? '' : 's' }} to pay<small>{{ ov.requisitions.requestedAmount | currency:'ZAR':'R':'1.0-0' }} petty cash / e-wallet / diesel</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="stationeryCounts.pending === 0" (click)="goTab('approvals', 'stationery')">
+          <mat-icon>edit_note</mat-icon>
+          <div class="attn-text"><b>{{ stationeryCounts.pending }}</b> stationery request{{ stationeryCounts.pending === 1 ? '' : 's' }} to approve</div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="ov.invoices.overdue === 0" [class.danger]="ov.invoices.overdue > 0" (click)="selectedStatus='Overdue'; goTab('invoices'); applyFilters()">
+          <mat-icon>event_busy</mat-icon>
+          <div class="attn-text"><b>{{ ov.invoices.overdue }}</b> supplier invoice{{ ov.invoices.overdue === 1 ? '' : 's' }} overdue<small>late payments cost us supplier goodwill and discounts</small></div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+        <li class="attn" [class.zero]="ov.vault.expired + ov.vault.dueSoon === 0" [class.danger]="ov.vault.expired > 0" (click)="goTab('vault')">
+          <mat-icon>shield</mat-icon>
+          <div class="attn-text">
+            @if (ov.vault.expired > 0) { <b>{{ ov.vault.expired }}</b> compliance document{{ ov.vault.expired === 1 ? '' : 's' }} <span class="bad">expired</span> }
+            @else { <b>{{ ov.vault.dueSoon }}</b> compliance renewal{{ ov.vault.dueSoon === 1 ? '' : 's' }} due }
+            <small>{{ ov.vault.dueSoon }} due within 60 days · tax clearance, B-BBEE, CSD, bank letters</small>
+          </div>
+          <mat-icon class="chev">chevron_right</mat-icon>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Supplier invoices snapshot -->
     <section class="ov-card">
       <header class="ov-card-head">
         <h2><mat-icon>description</mat-icon> Supplier invoices</h2>
@@ -168,22 +250,26 @@
         <button class="mini ok" (click)="selectedStatus='Paid'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.paid }}</span><span class="l">Paid</span></button>
       </div>
     </section>
+  </div>
 
+  <div class="ov-columns animate-in delay-3">
     <section class="ov-card">
       <header class="ov-card-head"><h2><mat-icon>bolt</mat-icon> Go to</h2></header>
       <div class="qa-grid">
-        <button class="qa" (click)="goToBooks()"><mat-icon>description</mat-icon><span>Books</span></button>
+        <button class="qa" (click)="goTab('approvals')"><mat-icon>approval</mat-icon><span>Approvals</span></button>
+        <button class="qa" (click)="goTab('creditors')"><mat-icon>payments</mat-icon><span>Payment packs</span></button>
+        <button class="qa" (click)="goTab('invoices')"><mat-icon>description</mat-icon><span>Supplier invoices</span></button>
+        <button class="qa" (click)="goTab('vault')"><mat-icon>shield</mat-icon><span>Compliance vault</span></button>
         <button class="qa" routerLink="/finance/expenses"><mat-icon>receipt</mat-icon><span>Expenses</span></button>
         <button class="qa" routerLink="/finance/purchase-orders"><mat-icon>shopping_cart</mat-icon><span>Purchase orders</span></button>
         <button class="qa" routerLink="/finance/payments"><mat-icon>payment</mat-icon><span>Payments</span></button>
         <button class="qa" (click)="goToCommitments()"><mat-icon>event_repeat</mat-icon><span>Commitments</span></button>
-        <button class="qa" (click)="goToCreditors()"><mat-icon>call_made</mat-icon><span>Creditors</span></button>
-        <button class="qa" (click)="goToDebtors()"><mat-icon>call_received</mat-icon><span>Debtors</span></button>
-        <button class="qa" (click)="goTab('credit-notes')"><mat-icon>undo</mat-icon><span>Credit notes</span></button>
+        <button class="qa" (click)="goToCreditors()"><mat-icon>call_made</mat-icon><span>Creditors ledger</span></button>
         <button class="qa" routerLink="/finance/categories"><mat-icon>category</mat-icon><span>Categories</span></button>
       </div>
     </section>
   </div>
+  }
 
   }
     </div>
@@ -200,7 +286,7 @@
 
   <div class="approvals-grid">
     <!-- Requested payments (invoices awaiting finance) -->
-    <div class="stationery-panel animate-in">
+    <div class="stationery-panel animate-in" [class.collapsed]="collapsed.payments">
       <div class="sp-header">
         <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Requested Payments</h3></div>
         <div class="sp-filters">
@@ -208,12 +294,15 @@
           @if (ov?.invoices?.paymentRequestedAmount) { <span class="sp-filter">{{ ov!.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</span> }
         </div>
         <button mat-flat-button color="primary" (click)="openRequestedPayments()"><mat-icon>rule</mat-icon> Review payments</button>
+        <button mat-icon-button class="sp-collapse" [attr.aria-label]="collapsed.payments ? 'Expand' : 'Minimise'" [matTooltip]="collapsed.payments ? 'Expand' : 'Minimise'" [attr.aria-expanded]="!collapsed.payments" (click)="togglePanel('payments')"><mat-icon>{{ collapsed.payments ? 'expand_more' : 'expand_less' }}</mat-icon></button>
       </div>
+      @if (!collapsed.payments) {
       <p class="sp-hint">Supplier invoices departments have marked <b>Payment Requested</b>. Review the PDF, then mark <b>Paid</b> or send it back with a reason.</p>
+      }
     </div>
 
     <!-- Requisitions -->
-    <div class="stationery-panel animate-in" id="requisitions">
+    <div class="stationery-panel animate-in" id="requisitions" [class.collapsed]="collapsed.requisitions">
     <div class="sp-header">
       <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Requisitions</h3></div>
       <div class="sp-filters">
@@ -222,8 +311,10 @@
         <button class="sp-filter sp-declined" [class.active]="requisitionFilter==='Rejected'" (click)="setRequisitionFilter('Rejected')">Rejected ({{requisitionCounts.rejected}})</button>
         <button class="sp-filter" [class.active]="requisitionFilter==='all'" (click)="setRequisitionFilter('all')">All ({{requisitionCounts.total}})</button>
       </div>
+      <button mat-icon-button class="sp-collapse" [attr.aria-label]="collapsed.requisitions ? 'Expand' : 'Minimise'" [matTooltip]="collapsed.requisitions ? 'Expand' : 'Minimise'" [attr.aria-expanded]="!collapsed.requisitions" (click)="togglePanel('requisitions')"><mat-icon>{{ collapsed.requisitions ? 'expand_more' : 'expand_less' }}</mat-icon></button>
     </div>
-    @if (requisitionsLoading) {
+    @if (collapsed.requisitions) {
+    } @else if (requisitionsLoading) {
       <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
     } @else if (requisitions.length === 0) {
       <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No requisitions</p></div>
@@ -245,7 +336,7 @@
             <div class="sp-right">
               <span class="sp-status" [class]="'spill-' + r.financeStatus.toLowerCase()">{{r.financeStatus}}</span>
               <div class="sp-actions">
-                <button aria-label="View requisition form" mat-icon-button matTooltip="View requisition form" (click)="viewRequisitionForm(r)"><mat-icon>description</mat-icon></button>
+                <button aria-label="Preview requisition PDF" mat-icon-button matTooltip="Preview requisition PDF" (click)="viewRequisitionForm(r)"><mat-icon>visibility</mat-icon></button>
                 <button aria-label="Download / print PDF" mat-icon-button matTooltip="Download / print PDF" (click)="printRequisitionForm(r)"><mat-icon>picture_as_pdf</mat-icon></button>
               </div>
               @if (r.financeStatus !== 'Paid') {
@@ -267,7 +358,7 @@
     </div>
 
     <!-- Stationery -->
-    <div class="stationery-panel animate-in" id="stationery">
+    <div class="stationery-panel animate-in" id="stationery" [class.collapsed]="collapsed.stationery">
     <div class="sp-header">
       <div class="sp-title"><mat-icon>edit_note</mat-icon><h3>Stationery Requests</h3></div>
       <div class="sp-filters">
@@ -276,8 +367,10 @@
         <button class="sp-filter sp-approved" [class.active]="stationeryFilter==='Approved'" (click)="setStationeryFilter('Approved')">Approved ({{stationeryCounts.approved}})</button>
         <button class="sp-filter sp-declined" [class.active]="stationeryFilter==='Declined'" (click)="setStationeryFilter('Declined')">Declined ({{stationeryCounts.declined}})</button>
       </div>
+      <button mat-icon-button class="sp-collapse" [attr.aria-label]="collapsed.stationery ? 'Expand' : 'Minimise'" [matTooltip]="collapsed.stationery ? 'Expand' : 'Minimise'" [attr.aria-expanded]="!collapsed.stationery" (click)="togglePanel('stationery')"><mat-icon>{{ collapsed.stationery ? 'expand_more' : 'expand_less' }}</mat-icon></button>
     </div>
-    @if (stationeryLoading) {
+    @if (collapsed.stationery) {
+    } @else if (stationeryLoading) {
       <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
     } @else if (stationeryRequests.length === 0) {
       <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No stationery requests</p></div>

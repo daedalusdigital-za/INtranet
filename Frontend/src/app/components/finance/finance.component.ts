@@ -169,6 +169,25 @@ export class FinanceComponent implements OnInit {
     return (this.ov?.invoices.paymentRequested ?? 0) + (this.ov?.requisitions.requested ?? 0) + (this.stationeryCounts.pending || 0)
       + (this.ov?.remittances.new ?? 0) + (this.ov?.vault.expired ?? 0);
   }
+  get staleCompanies(): number { return (this.ov?.debtors.byCompany ?? []).filter(c => c.stale).length; }
+  get debtorsAttentionCount(): number {
+    return (this.ov?.remittances.new ?? 0) + (this.ov?.pods.unlinked ?? 0) + ((this.ov?.debtors.d120 ?? 0) > 0 ? 1 : 0) + this.staleCompanies;
+  }
+  get creditorsAttentionCount(): number {
+    return (this.ov?.invoices.paymentRequested ?? 0) + (this.ov?.requisitions.requested ?? 0) + (this.stationeryCounts.pending || 0)
+      + (this.ov?.invoices.overdue ?? 0) + (this.ov?.vault.expired ?? 0);
+  }
+
+  // ── Approvals panels: minimise/expand (remembered per browser) ──
+  collapsed: Record<'payments' | 'requisitions' | 'stationery', boolean> = this.loadCollapsed();
+  togglePanel(p: 'payments' | 'requisitions' | 'stationery'): void {
+    this.collapsed[p] = !this.collapsed[p];
+    try { localStorage.setItem('finance.approvals.collapsed', JSON.stringify(this.collapsed)); } catch { /* ignore */ }
+  }
+  private loadCollapsed(): Record<'payments' | 'requisitions' | 'stationery', boolean> {
+    const d = { payments: false, requisitions: false, stationery: false };
+    try { return { ...d, ...JSON.parse(localStorage.getItem('finance.approvals.collapsed') || '{}') }; } catch { return d; }
+  }
   barPct(part: number, whole: number): number { return whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0; }
 
   get approvalsBadge(): number {
