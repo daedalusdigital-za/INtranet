@@ -261,6 +261,20 @@
     </div>
   </mat-tab>
 
+  <!-- ═══════════ CREDITORS AGING ═══════════ -->
+  <mat-tab>
+    <ng-template mat-tab-label>
+      <mat-icon class="tab-icon">hourglass_bottom</mat-icon> Aging
+    </ng-template>
+    <div class="tab-body">
+      <div class="tab-intro">
+        <h2>Creditors Age Analysis</h2>
+        <p>Who each company owes and how old it is — the Sage aged payables per paying company, uploaded as dated snapshots. Pick a company, see every vendor's Current / 1–30 / 31–60 / 61–90 / Over 90, what is already in a payment pack, and start a payment straight from the row. These vendors are also offered first when adding payments to a pack.</p>
+      </div>
+      @if (isTab('creditors-aging')) { <app-finance-creditors-aging (pay)="payFromAging($event)" (openBatch)="openPack($event)"></app-finance-creditors-aging> }
+    </div>
+  </mat-tab>
+
   <!-- ═══════════ APPROVALS ═══════════ -->
   <mat-tab>
     <ng-template mat-tab-label>
@@ -412,7 +426,7 @@
         <h2>Creditors Payment Packs</h2>
         <p>Pay suppliers the controlled way. Build a batch per paying company, attach the documents each payment type requires, let the system check them (bank letters, duplicates, VAT numbers, totals), then the company accountant approves, the director decides each payment and signs, the bank user loads and marks paid, and the batch closes with proof of payment. Everything is locked and audited once signed.</p>
       </div>
-      @if (isTab('creditors')) { <app-finance-creditors></app-finance-creditors> }
+      @if (isTab('creditors')) { <app-finance-creditors #creditorsRef></app-finance-creditors> }
     </div>
   </mat-tab>
 

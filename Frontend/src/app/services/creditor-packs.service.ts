@@ -59,7 +59,7 @@ export interface ItemInput {
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
 }
 export interface CreditorAlert { batchId: number; batchNumber: string; companyCode: string; status: string; code: string; title: string; severity: string; detail?: string; supplier?: string; }
-export interface SupplierHit { name: string; vatNumber?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; supplierAccount?: string; payments: number; invoices: number; lastUsed?: string; source: string; }
+export interface SupplierHit { name: string; vatNumber?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; supplierAccount?: string; payments: number; invoices: number; lastUsed?: string; source: string; vendorCode?: string | null; agingBalance?: number | null; agingOverdue?: number | null; }
 export interface InvoiceRead { supplierName?: string; knownSupplier: boolean; supplier?: SupplierHit; amount?: number; vatAmount?: number; vatNumber?: string; invoiceNumber?: string; documentDate?: string; description?: string; orderNumber?: string; customerAccount?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; suggestedType?: string; pages: number; method?: string; scanned: boolean; readable: boolean; }
 export interface BooksInvoiceHit { id: number; supplierName: string; supplierAccount?: string; invoiceNumber?: string; invoiceDate?: string; total: number; vatAmount?: number; companyName?: string; departmentName?: string; description?: string; status: string; paymentDate?: string; hasPdf: boolean; fileName?: string; alreadyLinked: boolean; }
 
@@ -95,7 +95,15 @@ export class CreditorPacksService {
   deleteItem(id: number, itemId: number) { return this.http.delete<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}`); }
 
   // ── Supplier directory / invoice auto-fill ──
-  suppliers(q: string, take = 12) { return this.http.get<SupplierHit[]>(`${this.base}/suppliers`, { params: { q, take } }); }
+  suppliers(q: string, take = 12, company?: string) { let p = new HttpParams().set('q', q).set('take', take); if (company) p = p.set('company', company); return this.http.get<SupplierHit[]>(`${this.base}/suppliers`, { params: p }); }
+
+  // ── Creditors aging (Sage A/P aged payables per company) ──
+  apAgingSnapshots() { return this.http.get<ApAgingIndex>(`${this.base}/aging/snapshots`); }
+  apAging(id: number, search?: string, activeOnly = true) { let p = new HttpParams().set('activeOnly', activeOnly); if (search) p = p.set('search', search); return this.http.get<ApAging>(`${this.base}/aging/snapshots/${id}`, { params: p }); }
+  apAgingDelete(id: number) { return this.http.delete(`${this.base}/aging/snapshots/${id}`); }
+  apAgingExport(id: number, activeOnly = true) { return this.http.get(`${this.base}/aging/snapshots/${id}/export`, { params: { activeOnly }, responseType: 'blob' }); }
+  apAgingHistory(company: string, code: string) { return this.http.get<ApAgingHistoryRow[]>(`${this.base}/aging/vendors/${company}/${encodeURIComponent(code)}/history`); }
+  apAgingImport(file: File, company?: string, notes?: string) { const fd = new FormData(); fd.append('file', file); if (company) fd.append('company', company); if (notes) fd.append('notes', notes); return this.http.post<ApAgingSnapshot>(`${this.base}/aging/import`, fd); }
   readInvoice(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead>(`${this.base}/read-invoice`, fd); }
   readRecon(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead & { invoiceNumbers?: string[] }>(`${this.base}/read-recon`, fd); }
   booksInvoices(q: string, company?: string, take = 20) { let p = new HttpParams().set('q', q).set('take', take); if (company) p = p.set('company', company); return this.http.get<BooksInvoiceHit[]>(`${this.base}/books-invoices`, { params: p }); }
@@ -181,6 +189,11 @@ export interface PaymentSchedule {
   totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number };
   batches: ScheduleBatch[];
 }
+export interface ApAgingSnapshot { id: number; companyCode: string; reportCompany?: string | null; asOfDate: string; sourceFileName?: string | null; uploadedAt: string; uploadedByName?: string | null; vendorCount: number; activeVendorCount: number; totalCurrent: number; totalOverdue: number; totalPayables: number; notes?: string | null; }
+export interface ApAgingIndex { companies: { code: string; name: string }[]; snapshots: ApAgingSnapshot[]; }
+export interface ApAgingVendor { id: number; code: string; name: string; currency?: string | null; current: number; d30: number; d60: number; d90: number; over90: number; overdue: number; total: number; oldestBucket: number; inPacks: number; packs?: { batchId: number; batchNumber: string; status: string }[] | null; }
+export interface ApAging { snapshot: ApAgingSnapshot; buckets: { index: number; label: string; amount: number; pct: number }[]; total: number; overdue: number; vendors: ApAgingVendor[]; }
+export interface ApAgingHistoryRow { asOfDate: string; id: number; current: number; d30: number; d60: number; d90: number; over90: number; overdue: number; total: number; }
 export type CashSection = 'DebitOrder' | 'Monthly';
 export interface CashLineInput { companyCode: string; section: CashSection; payee: string; reference?: string | null; description?: string | null; frequency?: string | null; dueDay?: number | null; amount: number; isActive: boolean; }
 export interface CashLine extends CashLineInput { id: number; sortOrder: number; updatedAt?: string | null; updatedByName?: string | null; }

@@ -341,7 +341,7 @@ public class CreditorPacksController : ControllerBase
     /// Used to autocomplete "Who is being paid?" so bank details come along and names stay consistent.
     /// </summary>
     [HttpGet("suppliers")]
-    public async Task<IActionResult> Suppliers([FromQuery] string? q, [FromQuery] int take = 15)
+    public async Task<IActionResult> Suppliers([FromQuery] string? q, [FromQuery] int take = 15, [FromQuery] string? company = null)
     {
         var s = (q ?? "").Trim().ToLower();
         take = Math.Clamp(take, 1, 50);
@@ -373,12 +373,31 @@ public class CreditorPacksController : ControllerBase
             if (result.TryGetValue(g.Key, out var h)) result[g.Key] = h with { Invoices = g.Count(), SupplierAccount = acc, LastUsed = latest.CreatedAt > h.LastUsed ? latest.CreatedAt : h.LastUsed, Source = "packs+books" };
             else result[g.Key] = new SupplierHit(latest.SupplierName, null, null, null, null, null, null, acc, 0, g.Count(), latest.CreatedAt, "books");
         }
+        // Vendors on the company's latest creditors aging (Sage A/P) — the suppliers most likely to be paid.
+        if (!string.IsNullOrWhiteSpace(company))
+        {
+            var snapId = await _db.ApAgingSnapshots.AsNoTracking().Where(x => x.CompanyCode == company).OrderByDescending(x => x.AsOfDate).ThenByDescending(x => x.Id).Select(x => (int?)x.Id).FirstOrDefaultAsync();
+            if (snapId != null)
+            {
+                var vendors = await _db.ApAgingVendors.AsNoTracking()
+                    .Where(v => v.SnapshotId == snapId && (s == "" || v.VendorName.ToLower().Contains(s) || v.VendorCode.ToLower().Contains(s)))
+                    .OrderByDescending(v => v.Total != 0).ThenByDescending(v => v.Total).Take(300)
+                    .Select(v => new { v.VendorCode, v.VendorName, v.Total, v.Overdue, v.Snapshot!.AsOfDate }).ToListAsync();
+                foreach (var v in vendors)
+                {
+                    var k = Key(v.VendorName);
+                    if (result.TryGetValue(k, out var h)) result[k] = h with { VendorCode = v.VendorCode, AgingBalance = v.Total, AgingOverdue = v.Overdue, Source = h.Source + "+aging" };
+                    else result[k] = new SupplierHit(v.VendorName, null, null, null, null, null, null, null, 0, 0, v.AsOfDate, "aging", v.VendorCode, v.Total, v.Overdue);
+                }
+            }
+        }
         var list = result.Values
-            .OrderByDescending(h => s != "" && h.Name.ToLower().StartsWith(s)).ThenByDescending(h => h.Payments + h.Invoices).ThenByDescending(h => h.LastUsed)
+            .OrderByDescending(h => s != "" && h.Name.ToLower().StartsWith(s)).ThenByDescending(h => h.Payments + h.Invoices > 0 || h.AgingBalance != 0).ThenByDescending(h => h.AgingBalance ?? 0).ThenByDescending(h => h.Payments + h.Invoices).ThenByDescending(h => h.LastUsed)
             .Take(take).ToList();
         return Ok(list);
     }
-    public record SupplierHit(string Name, string? VatNumber, string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string? PaymentReference, string? SupplierAccount, int Payments, int Invoices, DateTime LastUsed, string Source);
+    public record SupplierHit(string Name, string? VatNumber, string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string? PaymentReference, string? SupplierAccount, int Payments, int Invoices, DateTime LastUsed, string Source,
+        string? VendorCode = null, decimal? AgingBalance = null, decimal? AgingOverdue = null);
 
     /// <summary>
     /// Read a supplier invoice before it is attached: who is being paid, the total, the VAT, the invoice number and date.

@@ -286,13 +286,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               <h5>2 · Who and how much</h5>
               <div class="row">
                 <label class="grow sup">Who is being paid?
-                  <input [(ngModel)]="itemDraft.supplierName" (ngModelChange)="searchSuppliers($event)" (focus)="searchSuppliers(itemDraft.supplierName)" (blur)="hideSuppliersSoon()" placeholder="Start typing — we search past invoices, Books and payments" required autocomplete="off">
+                  <input [(ngModel)]="itemDraft.supplierName" (ngModelChange)="searchSuppliers($event)" (focus)="searchSuppliers(itemDraft.supplierName)" (blur)="hideSuppliersSoon()" placeholder="Start typing — or click to pick from the company's creditors aging" required autocomplete="off">
                   @if (supplierHits().length && showSuppliers()) {
                     <ul class="ac">
                       @for (s of supplierHits(); track s.name) {
                         <li (mousedown)="$event.preventDefault(); pickSupplier(s)">
                           <strong>{{ s.name }}</strong>
-                          <small>@if (s.vatNumber) { VAT {{ s.vatNumber }} · } @if (s.bankName) { {{ s.bankName }} ···{{ (s.accountNumber || '').slice(-4) }} · } {{ s.payments }} payment{{ s.payments === 1 ? '' : 's' }}, {{ s.invoices }} invoice{{ s.invoices === 1 ? '' : 's' }}</small>
+                          <small>@if (s.vendorCode) { <span class="vc">{{ s.vendorCode }}</span> · } @if (s.agingBalance != null) { <span class="agb" [class.neg]="s.agingBalance < 0">owes R {{ s.agingBalance | number:'1.0-0' }}</span>@if (s.agingOverdue) { <em> ({{ s.agingOverdue | number:'1.0-0' }} overdue)</em> } · } @if (s.vatNumber) { VAT {{ s.vatNumber }} · } @if (s.bankName) { {{ s.bankName }} ···{{ (s.accountNumber || '').slice(-4) }} · } {{ s.payments }} payment{{ s.payments === 1 ? '' : 's' }}, {{ s.invoices }} invoice{{ s.invoices === 1 ? '' : 's' }}</small>
                         </li>
                       }
                     </ul>
@@ -706,7 +706,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       }
       label.sup { position: relative; }
       .ac { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; list-style: none; margin: 2px 0 0; padding: 4px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.15)); max-height: 260px; overflow: auto;
-        li { padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; &:hover { background: var(--color-surface-2); } strong { display: block; font-size: var(--text-sm); } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } }
+        li { padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; &:hover { background: var(--color-surface-2); } strong { display: block; font-size: var(--text-sm); } small { display: block; color: var(--color-text-3); font-size: var(--text-xs); .vc { font-family: var(--font-mono); } .agb { color: var(--color-danger); font-weight: 600; &.neg { color: var(--color-ok); } } em { font-style: normal; color: #b45309; } } }
       }
     }
     .cr-item { border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-bottom: 8px; overflow: hidden;
@@ -1011,6 +1011,20 @@ export class FinanceCreditorsComponent implements OnInit {
     this.busy.set(true);
     this.api.create({ ...this.newBatch, notes: this.newBatch.notes || undefined }).subscribe({ next: b => { this.newOpen.set(false); this.apply(b, `${b.batchNumber} created — now add the payments`); this.view.set('batch'); }, error: e => this.fail(e, "Couldn't create the batch.") });
   }
+  /**
+   * From the creditors aging: pay a vendor. Opens the company's newest editable draft (or creates one) and
+   * starts the payment form with the supplier filled in.
+   */
+  payFromAging(companyCode: string, vendorName: string): void {
+    const open = (b: BatchDetail) => { this.batch.set(b); this.view.set('batch'); setTimeout(() => { this.startItem(); this.itemDraft.supplierName = vendorName; this.searchSuppliers(vendorName); }, 50); };
+    const draft = this.rows().find(r => r.companyCode === companyCode && r.status === 'Draft');
+    if (draft) { this.api.get(draft.id).subscribe({ next: open, error: e => this.fail(e, "Couldn't open the draft.") }); return; }
+    this.busy.set(true);
+    this.api.create({ companyCode, paymentType: 'DailyCreditor', batchDate: new Date().toISOString().slice(0, 10) }).subscribe({
+      next: b => { this.busy.set(false); this.toast.done(`${b.batchNumber} created for ${vendorName}`); this.loadBoard(); open(b); },
+      error: e => this.fail(e, "Couldn't create the batch.")
+    });
+  }
   deleteBatch(): void { const b = this.batch()!; if (!confirm(`Delete draft ${b.batchNumber}? This can't be undone.`)) return; this.api.delete(b.id).subscribe({ next: () => { this.toast.done('Draft deleted'); this.back(); }, error: e => this.fail(e, "Couldn't delete.") }); }
   submit(): void { const b = this.batch()!; this.busy.set(true); this.api.submit(b.id).subscribe({ next: r => this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems — see the red items' : 'Sent to the accountant'), error: e => this.fail(e, "Couldn't submit.") }); }
   rerun(): void { const b = this.batch()!; this.busy.set(true); this.api.rerunChecks(b.id).subscribe({ next: r => this.apply(r, `Checks: ${r.checksStatus}`), error: e => this.fail(e, "Couldn't run the checks.") }); }
@@ -1064,8 +1078,10 @@ export class FinanceCreditorsComponent implements OnInit {
   // ── supplier directory + invoice auto-fill ──
   searchSuppliers(q: string): void {
     clearTimeout(this.supTimer); this.showSuppliers.set(true);
-    if (!q || q.trim().length < 2) { this.supplierHits.set([]); return; }
-    this.supTimer = setTimeout(() => this.api.suppliers(q.trim()).subscribe({ next: h => this.supplierHits.set(h), error: () => this.supplierHits.set([]) }), 220);
+    const co = this.batch()?.companyCode;
+    // With no text yet, offer the company's aging vendors (biggest balances first) so the usual suppliers are one click away.
+    if (!q || q.trim().length < 2) { if (co && !q?.trim()) this.api.suppliers('', 12, co).subscribe({ next: h => this.supplierHits.set(h.filter(x => x.agingBalance)), error: () => this.supplierHits.set([]) }); else this.supplierHits.set([]); return; }
+    this.supTimer = setTimeout(() => this.api.suppliers(q.trim(), 12, co).subscribe({ next: h => this.supplierHits.set(h), error: () => this.supplierHits.set([]) }), 220);
   }
   hideSuppliersSoon(): void { clearTimeout(this.hideTimer); this.hideTimer = setTimeout(() => this.showSuppliers.set(false), 150); }
   pickSupplier(s: SupplierHit): void {

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -30,6 +30,7 @@ import { FinancePodsComponent } from './finance-pods.component';
 import { FinanceVaultComponent } from './finance-vault.component';
 import { FinanceCreditorsComponent } from './finance-creditors.component';
 import { FinanceCashflowComponent } from './finance-cashflow.component';
+import { FinanceCreditorsAgingComponent } from './finance-creditors-aging.component';
 import { FinanceAgingComponent } from './finance-aging.component';
 import { FinanceRemittancesComponent } from './finance-remittances.component';
 import { FinanceCreditNotesComponent } from './finance-credit-notes.component';
@@ -44,7 +45,7 @@ import { TenderService } from '../../services/tender.service';
  */
 export type FinanceSide = 'debtors' | 'creditors';
 const DEBTOR_TABS = ['overview', 'bookkeeping', 'pods', 'aging', 'remittances', 'credit-notes', 'packs'] as const;
-const CREDITOR_TABS = ['overview', 'cashflow', 'approvals', 'creditors', 'schedule', 'invoices', 'vault'] as const;
+const CREDITOR_TABS = ['overview', 'cashflow', 'creditors-aging', 'approvals', 'creditors', 'schedule', 'invoices', 'vault'] as const;
 type FinanceTab = typeof DEBTOR_TABS[number] | typeof CREDITOR_TABS[number];
 const SIDE_OF: Record<FinanceTab, FinanceSide> = Object.fromEntries([
   ...DEBTOR_TABS.map(t => [t, 'debtors']), ...CREDITOR_TABS.map(t => [t, 'creditors'])
@@ -127,6 +128,7 @@ interface Overview {
     FinanceVaultComponent,
     FinanceCreditorsComponent,
     FinanceCashflowComponent,
+    FinanceCreditorsAgingComponent,
     FinanceAgingComponent,
     FinanceRemittancesComponent,
     FinanceCreditNotesComponent,
@@ -329,6 +331,18 @@ export class FinanceComponent implements OnInit {
     if (!batchId) return;
     this.router.navigate([], { relativeTo: this.route, queryParams: { batch: batchId }, queryParamsHandling: 'merge', replaceUrl: true })
       .then(() => this.goTab('creditors'));
+  }
+
+  @ViewChild('creditorsRef') creditorsRef?: FinanceCreditorsComponent;
+  /** From the creditors aging: open Payment packs and start a payment to that vendor. */
+  payFromAging(e: { company: string; vendor: { name: string } }): void {
+    this.goTab('creditors');
+    const tryStart = (n: number) => {
+      const c = this.creditorsRef;
+      if (c && c.meta()) { c.payFromAging(e.company, e.vendor.name); return; }
+      if (n < 40) setTimeout(() => tryStart(n + 1), 150);
+    };
+    setTimeout(() => tryStart(0), 100);
   }
 
   /** Alert strip hints: 'aging' | 'aging:nopod' | 'credit-notes:unsigned' | 'credit-notes:returns' | 'customers' */
