@@ -10,6 +10,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
+import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit } from '../../services/creditor-packs.service';
 
@@ -55,7 +56,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <div class="cards">
           @for (r of mine(); track r.id) {
             <button [class]="'mcard tone-' + rowStep(r).tone" (click)="open(r.id)">
-              <div class="top"><span class="ref">{{ r.batchNumber }}</span><span class="co">{{ r.companyCode }}</span><span class="amt">R {{ r.totalAmount | number:'1.0-0' }}</span></div>
+              <div class="top"><ng-container *ngTemplateOutlet="coMark; context: { $implicit: r.companyCode, size: 'xs' }"></ng-container><span class="ref">{{ r.batchNumber }}</span><span class="co">{{ r.companyCode }}</span><span class="amt">R {{ r.totalAmount | number:'1.0-0' }}</span></div>
               <div class="what"><mat-icon>{{ rowStep(r).icon }}</mat-icon> {{ rowStep(r).title }}</div>
               <div class="sub">{{ typeTitle(r.paymentType) }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.returnReason && isSentBack(r.status)) { · <em>{{ r.returnReason }}</em> }</div>
             </button>
@@ -81,6 +82,26 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       }
     }
 
+    <section class="cr-cos" aria-label="Paying companies">
+      <button class="cotile all" [class.on]="companyFilter() === ''" (click)="companyFilter.set('')">
+        <span class="mark"><mat-icon>apartment</mat-icon></span>
+        <span class="lbl"><b>All companies</b><small>{{ rows().length }} batch{{ rows().length === 1 ? '' : 'es' }}</small></span>
+      </button>
+      @for (c of activeCompanies(); track c.code) {
+        <button class="cotile" [class.on]="companyFilter() === c.code" [class.nologo]="!logo(c.code)" (click)="companyFilter.set(companyFilter() === c.code ? '' : c.code)"
+                [matTooltip]="c.name + (logo(c.code) ? '' : ' · logo not uploaded yet')">
+          <span class="mark">
+            @if (logo(c.code); as src) { <img [src]="src" [alt]="c.name"> }
+            @else { <span class="mono" [style.--hue]="hue(c.code)">{{ monogram(c.code, c.name) }}</span> }
+          </span>
+          <span class="lbl"><b>{{ c.code }}</b><small>{{ countFor(c.code) }} batch{{ countFor(c.code) === 1 ? '' : 'es' }}@if (openFor(c.code)) { · {{ openFor(c.code) }} open }</small></span>
+        </button>
+      }
+    </section>
+    @if (meta()!.me.isAdmin && missingLogos().length) {
+      <p class="cr-logo-note"><mat-icon>image_not_supported</mat-icon> Logos still to be added for <strong>{{ missingLogos().join(', ') }}</strong> — the initials are a placeholder until the artwork is uploaded to <code>/logos</code>.</p>
+    }
+
     <div class="cr-toolbar">
       <div class="cr-seg">
         <button [class.on]="statusFilter() === ''" (click)="statusFilter.set('')">All <b>{{ rows().length }}</b></button>
@@ -92,10 +113,6 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <button [class.on]="statusFilter() === 'Closed'" (click)="statusFilter.set('Closed')">Closed <b>{{ count('Closed') }}</b></button>
       </div>
       <span class="cr-spacer"></span>
-      <select [ngModel]="companyFilter()" (ngModelChange)="companyFilter.set($event)">
-        <option value="">All companies</option>
-        @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} — {{ c.name }}</option> }
-      </select>
       <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
         <option value="">All payment types</option>
         @for (p of meta()!.paymentTypes; track p.key) { <option [value]="p.key">{{ p.title }}</option> }
@@ -109,12 +126,20 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       <div class="cr-card cr-new">
         <h3>Start a new payment batch</h3>
         <p class="lead">One batch = one paying company + one kind of payment. You'll add the individual payments on the next screen.</p>
+        <div class="pick-lbl">Which company is paying?</div>
+        <div class="cr-pick">
+          @for (c of activeCompanies(); track c.code) {
+            <button type="button" class="ptile" [class.on]="newBatch.companyCode === c.code" (click)="newBatch.companyCode = c.code" [matTooltip]="c.name">
+              <span class="mark">
+                @if (logo(c.code); as src) { <img [src]="src" [alt]="c.name"> }
+                @else { <span class="mono" [style.--hue]="hue(c.code)">{{ monogram(c.code, c.name) }}</span> }
+              </span>
+              <b>{{ c.code }}</b><small>{{ c.name }}</small>
+              @if (newBatch.companyCode === c.code) { <mat-icon class="tick">check_circle</mat-icon> }
+            </button>
+          }
+        </div>
         <div class="row">
-          <label>Which company is paying?
-            <select [(ngModel)]="newBatch.companyCode">
-              @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} — {{ c.name }}</option> }
-            </select>
-          </label>
           <label>What kind of payment?
             <select [(ngModel)]="newBatch.paymentType">
               @for (p of meta()!.paymentTypes; track p.key) { <option [value]="p.key">{{ p.title }}</option> }
@@ -145,7 +170,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             @for (r of filteredRows(); track r.id) {
               <tr (click)="open(r.id)">
                 <td><span class="ref">{{ r.batchNumber }}</span><br><small class="muted">{{ r.batchDate | date:'dd MMM' }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
-                <td><strong>{{ r.companyCode }}</strong><br><small class="muted">{{ companyFor(r.companyCode)?.name }}</small></td>
+                <td><div class="cocell"><ng-container *ngTemplateOutlet="coMark; context: { $implicit: r.companyCode, size: 'sm' }"></ng-container><div><strong>{{ r.companyCode }}</strong><br><small class="muted">{{ companyFor(r.companyCode)?.name }}</small></div></div></td>
                 <td>{{ typeTitle(r.paymentType) }}</td>
                 <td class="num">R {{ r.totalAmount | number:'1.2-2' }}</td>
                 <td>
@@ -168,6 +193,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
   @if (view() === 'batch' && batch(); as b) {
     <div class="cr-bhead">
       <button mat-icon-button (click)="back()" aria-label="Back to all batches" matTooltip="All batches"><mat-icon>arrow_back</mat-icon></button>
+      <ng-container *ngTemplateOutlet="coMark; context: { $implicit: b.companyCode, size: 'lg' }"></ng-container>
       <div class="ttl">
         <h2>{{ b.batchNumber }} <span [class]="'badge lg ' + badge(b.status)">{{ b.statusTitle }}</span>
           @if (b.lockedAt) { <mat-icon class="lock" matTooltip="Signed and locked — nothing can be changed">lock</mat-icon> }
@@ -553,6 +579,14 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     </ng-template>
     <input #fileInput type="file" [accept]="pickAccept" multiple hidden (change)="filesChosen($event)">
   }
+
+  <!-- Company mark: the full brand logo, or an initials placeholder when none has been uploaded yet. -->
+  <ng-template #coMark let-code let-size="size">
+    <span [class]="'comark ' + (size || 'sm')" [class.nologo]="!logo(code)" [matTooltip]="logo(code) ? '' : 'Logo not uploaded yet'">
+      @if (logo(code); as src) { <img [src]="src" [alt]="companyFor(code)?.name || code"> }
+      @else { <span class="mono" [style.--hue]="hue(code)">{{ monogram(code, companyFor(code)?.name) }}</span> }
+    </span>
+  </ng-template>
   }
   `,
   styles: [`
@@ -581,6 +615,31 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 
     .cr-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3);
       select { height: 40px; padding: 0 var(--space-3); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font: inherit; } }
+
+    /* ---- company marks (logo or initials) ---- */
+    .comark { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-sm); overflow: hidden; vertical-align: middle;
+      img { width: 100%; height: 100%; object-fit: contain; padding: 3px; box-sizing: border-box; }
+      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; letter-spacing: .04em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
+      &.xs { width: 34px; height: 22px; .mono { font-size: 9px; } } &.sm { width: 56px; height: 34px; .mono { font-size: 11px; } } &.lg { width: 112px; height: 64px; border-radius: var(--radius-md); img { padding: 6px; } .mono { font-size: 20px; } } }
+    .cr-cos { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-2); }
+    .cotile { display: flex; align-items: center; gap: 10px; padding: 8px 10px; font: inherit; text-align: left; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s;
+      .mark { width: 64px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-sm); overflow: hidden; img { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; } mat-icon { color: var(--color-text-3); } }
+      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 13px; letter-spacing: .05em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
+      .lbl { display: flex; flex-direction: column; min-width: 0; b { font-size: var(--text-sm); } small { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+      &:hover { border-color: var(--color-primary); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+      &.on { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: inset 0 0 0 1px var(--color-primary); }
+      &.nologo .mark { border-style: dashed; } }
+    .cr-logo-note { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--color-text-3); mat-icon { font-size: 16px; width: 16px; height: 16px; } code { font-family: var(--font-mono); background: var(--color-surface-3); padding: 0 4px; border-radius: 3px; } }
+    .pick-lbl { font-size: var(--text-xs); color: var(--color-text-2); font-weight: 600; margin-bottom: 6px; }
+    .cr-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
+    .ptile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 8px; font: inherit; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line-strong); border-radius: var(--radius-md); cursor: pointer; transition: border-color .12s, box-shadow .12s;
+      .mark { width: 100%; height: 52px; display: grid; place-items: center; background: #fff; border-radius: var(--radius-sm); overflow: hidden; img { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; } }
+      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 16px; letter-spacing: .06em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
+      b { font-size: var(--text-sm); } small { font-size: var(--text-xs); color: var(--color-text-3); text-align: center; line-height: 1.2; }
+      .tick { position: absolute; top: 6px; right: 6px; color: var(--color-primary); font-size: 18px; width: 18px; height: 18px; background: #fff; border-radius: 50%; }
+      &:hover { border-color: var(--color-primary); } &.on { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-soft); background: var(--color-primary-soft); } }
+    .cocell { display: flex; align-items: center; gap: 8px; }
+    .cr-mine .mcard .top .comark { margin-right: 2px; }
     .cr-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); overflow: hidden;
       button { font: inherit; font-size: var(--text-sm); height: 38px; padding: 0 12px; border: 0; border-right: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-text-2); cursor: pointer; b { margin-left: 4px; font-size: var(--text-xs); background: var(--color-surface-3); padding: 1px 6px; border-radius: 999px; }
         &:last-child { border-right: 0; } &.on { background: var(--color-primary-soft); color: var(--color-primary); font-weight: 600; b { background: var(--color-primary); color: #fff; } } } }
@@ -610,7 +669,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-3); color: var(--color-text-2); vertical-align: middle;
       &.ok { background: var(--color-ok-soft); color: var(--color-ok); } &.warn { background: var(--color-warn-soft); color: var(--color-warn); } &.bad { background: var(--color-danger-soft); color: var(--color-danger); } &.info { background: var(--color-primary-soft); color: var(--color-primary); } &.lg { font-size: var(--text-sm); padding: 4px 12px; } }
 
-    .cr-bhead { display: flex; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-3);
+    .cr-bhead { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3);
       .ttl { flex: 1; h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: var(--text-xl); flex-wrap: wrap; .lock { color: var(--color-ok); } } p { margin: 4px 0 0; color: var(--color-text-2); font-size: var(--text-sm); } }
       .sum { text-align: right; .l { display: block; font-size: var(--text-xs); color: var(--color-text-3); } .v { display: block; font-size: var(--text-2xl); font-weight: 700; font-family: var(--font-mono); } } }
     .cr-steps { display: flex; list-style: none; margin: 0 0 var(--space-3); padding: 0; overflow: auto;
@@ -747,6 +806,11 @@ export class FinanceCreditorsComponent implements OnInit {
   private readonly sentBack = ['ChecksFailed', 'QueriedByAccountant', 'QueriedByDirector'];
 
   activeCompanies = computed(() => (this.meta()?.companies ?? []).filter(c => c.isActive));
+  /** Company branding: full logo where we have artwork, otherwise initials. Admins see which ones still need a file. */
+  logo = companyWideLogo; monogram = companyMonogram; hue = companyHue;
+  missingLogos = computed(() => this.activeCompanies().filter(c => !companyWideLogo(c.code)).map(c => c.code));
+  countFor(code: string): number { return this.rows().filter(r => r.companyCode === code).length; }
+  openFor(code: string): number { return this.rows().filter(r => r.companyCode === code && r.status !== 'Closed').length; }
   filteredRows = computed(() => {
     const co = this.companyFilter(), st = this.statusFilter(), ty = this.typeFilter();
     return this.rows().filter(r => (!co || r.companyCode === co) && (!ty || r.paymentType === ty) && this.matchStatus(r, st));
