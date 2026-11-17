@@ -15,6 +15,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ToastService } from '../../ui/toast.service';
 import { RequisitionFormService } from '../../services/requisition-form.service';
+import { MatDialog } from '@angular/material/dialog';
+import { RequisitionPreviewDialogComponent } from './requisition-preview-dialog.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { FinanceService } from '../../services/finance.service';
@@ -262,6 +264,7 @@ export class FinanceComponent implements OnInit {
     private route: ActivatedRoute,
     private toast: ToastService,
     private requisitionForm: RequisitionFormService,
+    private dialog: MatDialog,
     private tenderService: TenderService,
     private sanitizer: DomSanitizer
   ) {}
@@ -649,8 +652,8 @@ export class FinanceComponent implements OnInit {
     });
   }
 
-  /** Show the Rocket Freight requisition form (same document Logistics prints). */
-  viewRequisitionForm(req: any): void { this.requisitionForm.open(req, false); }
+  /** Preview the Rocket Freight requisition form in a dialog (same document Logistics prints). */
+  viewRequisitionForm(req: any): void { RequisitionPreviewDialogComponent.open(this.dialog, req); }
 
   /** Open the form and trigger the print dialog so it can be saved as PDF. */
   printRequisitionForm(req: any): void { this.requisitionForm.open(req, true); }
