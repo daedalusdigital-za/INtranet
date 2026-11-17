@@ -97,6 +97,7 @@ export class CreditorPacksService {
   // ── Supplier directory / invoice auto-fill ──
   suppliers(q: string, take = 12) { return this.http.get<SupplierHit[]>(`${this.base}/suppliers`, { params: { q, take } }); }
   readInvoice(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead>(`${this.base}/read-invoice`, fd); }
+  readRecon(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead & { invoiceNumbers?: string[] }>(`${this.base}/read-recon`, fd); }
   booksInvoices(q: string, company?: string, take = 20) { let p = new HttpParams().set('q', q).set('take', take); if (company) p = p.set('company', company); return this.http.get<BooksInvoiceHit[]>(`${this.base}/books-invoices`, { params: p }); }
   linkInvoice(id: number, itemId: number, bookInvoiceId: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/link-invoice`, { bookInvoiceId }); }
 

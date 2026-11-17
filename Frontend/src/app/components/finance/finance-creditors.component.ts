@@ -261,14 +261,14 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 }
                 <input #invFileInput type="file" accept="application/pdf" hidden (change)="invoiceChosen($event)">
               </div>
-              @if (itemForm() === 'new' && needsRecon()) {
-                <div class="inv-src recon" [class.missing]="!pendingReconFile">
+              @if (itemForm() === 'new' && reconSlot()) {
+                <div class="inv-src recon" [class.missing]="needsRecon() && !pendingReconFile">
                   @if (!pendingReconFile) {
                     <button mat-stroked-button (click)="reconFileInput.click()"><mat-icon>table_view</mat-icon> Upload supplier recon</button>
-                    <small><mat-icon>priority_high</mat-icon> Required — every invoice must come with its recon (.xlsx, .xls, .csv or .pdf).</small>
+                    <small>@if (needsRecon()) { <mat-icon>priority_high</mat-icon> Required — every invoice must come with its recon } @else { Expected with the invoice } (.xlsx, .xls, .csv or .pdf). We read it too and fill in what the invoice didn't.</small>
                   } @else {
-                    <span class="chip ok"><mat-icon>table_view</mat-icon> {{ pendingReconFile.name }}</span>
-                    <button mat-icon-button (click)="pendingReconFile = null" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                    <span class="chip ok"><mat-icon>table_view</mat-icon> {{ pendingReconFile.name }} @if (reconInfo()) { · {{ reconInfo() }} }</span>
+                    <button mat-icon-button (click)="pendingReconFile = null; reconInfo.set('')" matTooltip="Remove"><mat-icon>close</mat-icon></button>
                   }
                   <input #reconFileInput type="file" accept=".xlsx,.xls,.csv,application/pdf" hidden (change)="reconChosen($event)">
                 </div>
@@ -464,7 +464,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 @for (d of ds; track d.id) {
                   <small class="file">
                     @if (d.isNotApplicable) { Not applicable — {{ d.naReason }} }
-                    @else { {{ d.originalFileName }} · {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}@if (d.documentDate) { · dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.extractedAmount) { · R {{ d.extractedAmount | number:'1.2-2' }} }@if (d.version > 1) { · v{{ d.version }} } }
+                    @else { {{ d.originalFileName }} · {{ d.textMethod === 'sheet' ? (d.pageCount + ' sheet' + (d.pageCount === 1 ? '' : 's')) : (d.pageCount + ' page' + (d.pageCount === 1 ? '' : 's')) }}@if (d.documentDate) { · dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.extractedAmount) { · R {{ d.extractedAmount | number:'1.2-2' }} }@if (d.version > 1) { · v{{ d.version }} } }
                     @if (d.suggestedDocType && d.suggestedDocType !== d.docType && !d.isNotApplicable) { <span class="sugg">looked like {{ docTitle(d.suggestedDocType) }}</span> }
                     @if (d.versionReason) { <span class="sugg">replaced: {{ d.versionReason }}</span> }
                   </small>
@@ -708,6 +708,7 @@ export class FinanceCreditorsComponent implements OnInit {
   pickerQ = '';
   pendingInvoiceFile: File | null = null;
   pendingReconFile: File | null = null;
+  reconInfo = signal('');
   pendingLink: BooksInvoiceHit | null = null;
   pickAccept = 'application/pdf';
   private supTimer: any; private bookTimer: any; private hideTimer: any;
@@ -784,7 +785,8 @@ export class FinanceCreditorsComponent implements OnInit {
   docTypesFor(itemId: number | null) { return (this.meta()?.docTypes ?? []).filter(d => itemId ? d.scope === 'item' || d.key === 'Other' : d.scope === 'batch' || d.key === 'Other'); }
   badge(s: string) { return ['Approved', 'Paid', 'Closed', 'LoadedOnBank'].includes(s) ? 'ok' : s.startsWith('Awaiting') ? 'warn' : this.sentBack.includes(s) || s === 'Rejected' ? 'bad' : s === 'Draft' ? '' : 'info'; }
   rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (opt.length ? ` · optional: ${opt.join(', ')}` : ''); }
-  needsRecon(): boolean { const pt = this.batch()?.paymentType ?? ''; const hasSlot = (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); return hasSlot && !!(this.pendingInvoiceFile || this.pendingLink); }
+  reconSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); }
+  needsRecon(): boolean { return this.reconSlot() && !!(this.pendingInvoiceFile || this.pendingLink); }
   isSheetSlot(t: string) { return ['SupplierRecon', 'CreditorsRecon', 'SageAgedPayables', 'PaymentSchedule'].includes(t); }
   responsibleName(id?: number) { if (!id) return ''; for (const x of this.meta()?.companies ?? []) { if (x.accountantUserId === id) return x.accountantName ?? ''; if (x.backupApproverUserId === id) return x.backupApproverName ?? ''; if (x.directorUserId === id) return x.directorName ?? ''; if (x.delegateDirectorUserId === id) return x.delegateDirectorName ?? ''; } return ''; }
 
@@ -989,11 +991,25 @@ export class FinanceCreditorsComponent implements OnInit {
     this.api.suppliers(h.supplierName, 1).subscribe({ next: s => { if (s[0]?.bankName && !d.bankName) this.pickSupplier(s[0]); } });
     if (!h.hasPdf) this.toast.warn('That Books invoice has no PDF — the link will be recorded but you may still need to upload the invoice.');
   }
-  clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingReconFile = null; this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
+  clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingReconFile = null; this.reconInfo.set(''); this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
   reconChosen(e: Event): void {
     const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
     if (!/\.(xlsx|xls|csv|pdf)$/i.test(f.name)) { this.toast.warn('The recon must be an Excel file (.xlsx/.xls), CSV or PDF.'); return; }
-    this.pendingReconFile = f;
+    this.pendingReconFile = f; this.reconInfo.set('reading…');
+    this.api.readRecon(f).subscribe({
+      next: r => {
+        const d = this.itemDraft; const filled: string[] = [];
+        if (r.supplierName && !d.supplierName) { d.supplierName = r.supplierName; filled.push('supplier'); }
+        if (r.amount && !d.amount) { d.amount = Math.abs(r.amount); filled.push('amount'); }
+        if (r.vatNumber && !d.supplierVatNumber) d.supplierVatNumber = r.vatNumber;
+        if (!d.invoiceNumbers) { const list = (r.invoiceNumbers?.length ? r.invoiceNumbers : r.invoiceNumber ? [r.invoiceNumber] : []); if (list.length) { d.invoiceNumbers = list.join(', '); filled.push(list.length > 1 ? `${list.length} invoice nos.` : 'invoice no.'); } }
+        if (r.customerAccount && !d.paymentReference) { d.paymentReference = r.customerAccount; filled.push('reference'); }
+        if (r.supplier?.bankName && !d.bankName) { const s = r.supplier; d.bankName = s.bankName!; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference ||= s.paymentReference ?? ''; filled.push('bank details from last payment'); }
+        else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details on the recon — verify'); }
+        this.reconInfo.set(!r.readable ? 'could not read' : filled.length ? 'filled: ' + filled.join(', ') : 'read');
+      },
+      error: () => this.reconInfo.set('could not read — will still be attached')
+    });
   }
 
   // ── documents ──
@@ -1016,7 +1032,7 @@ export class FinanceCreditorsComponent implements OnInit {
   retype(d: BatchDoc, t: string): void { const b = this.batch()!; this.api.updateDoc(b.id, d.id, { docType: t }).subscribe({ next: r => this.batch.set(r), error: e => this.fail(e, "Couldn't change the type.") }); }
   removeDoc(d: BatchDoc): void { const b = this.batch()!; this.api.deleteDoc(b.id, d.id).subscribe({ next: r => this.batch.set(r), error: e => this.fail(e, "Couldn't remove the document.") }); }
   markNa(r: RequiredDoc, itemId: number | null): void { const b = this.batch()!; const reason = prompt(`Why does "${r.title}" not apply to this payment? (the approvers will see this)`); if (!reason) return; this.api.markNa(b.id, r.docType, itemId, reason).subscribe({ next: x => this.batch.set(x), error: e => this.fail(e, "Couldn't mark N/A.") }); }
-  openDoc(d: BatchDoc): void { const b = this.batch()!; this.api.file(b.id, d.id).subscribe({ next: blob => window.open(URL.createObjectURL(blob), '_blank'), error: () => this.toast.error("Couldn't open the file.") }); }
+  openDoc(d: BatchDoc): void { const b = this.batch()!; const isPdf = !d.textMethod || d.textMethod !== 'sheet'; this.api.file(b.id, d.id).subscribe({ next: blob => { const url = URL.createObjectURL(blob); if (isPdf) window.open(url, '_blank'); else { const a = document.createElement('a'); a.href = url; a.download = d.originalFileName || 'recon'; a.click(); URL.revokeObjectURL(url); } }, error: () => this.toast.error("Couldn't open the file.") }); }
 
   // ── signature pad ──
   private ctx(): CanvasRenderingContext2D | null { const c = this.sigpad?.nativeElement; if (!c) return null; const x = c.getContext('2d'); if (x) { x.lineWidth = 2; x.lineCap = 'round'; x.strokeStyle = '#111'; } return x; }

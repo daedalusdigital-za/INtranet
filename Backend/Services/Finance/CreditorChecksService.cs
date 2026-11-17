@@ -140,6 +140,57 @@ public class CreditorChecksService
         return ex;
     }
 
+    /// <summary>
+    /// Reads an .xlsx / .xls / .csv (recon, schedule) into text so the same regex extraction applies.
+    /// Cell values are joined per row; the first 5 sheets and 400 rows each are read. Method is "sheet".
+    /// </summary>
+    public Extracted ReadSheet(string absolutePath, string fileName)
+    {
+        var ex = new Extracted { Method = "sheet" };
+        var sb = new StringBuilder();
+        try
+        {
+            if (Path.GetExtension(fileName).Equals(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var line in System.IO.File.ReadLines(absolutePath).Take(400)) sb.AppendLine(line.Replace(',', ' ').Replace(';', ' '));
+                ex.Pages = 1;
+            }
+            else
+            {
+                using var wb = new ClosedXML.Excel.XLWorkbook(absolutePath);
+                var n = 0;
+                foreach (var ws in wb.Worksheets.Take(5))
+                {
+                    n++;
+                    var used = ws.RangeUsed(); if (used == null) continue;
+                    sb.AppendLine(ws.Name);
+                    foreach (var row in used.RowsUsed().Take(400))
+                    {
+                        var cells = row.CellsUsed().Select(c => c.DataType == ClosedXML.Excel.XLDataType.Number ? c.GetDouble().ToString("0.00", CultureInfo.InvariantCulture) : c.GetFormattedString().Trim());
+                        sb.AppendLine(string.Join("  ", cells.Where(s => s.Length > 0)));
+                    }
+                }
+                ex.Pages = n;
+            }
+        }
+        catch (Exception e) { _log.LogDebug(e, "Sheet read failed for {File}", fileName); ex.Method = "none"; }
+
+        ex.Text = sb.Length > 60_000 ? sb.ToString(0, 60_000) : sb.ToString();
+        var t = ex.Text;
+        ex.SuggestedType = CreditorDocTypes.SupplierRecon;
+        ex.VatNumber = VatRx.Match(t) is { Success: true } vm ? vm.Groups[1].Value : null;
+        ex.InvoiceNumber = InvoiceRx.Match(t) is { Success: true } im ? im.Groups[1].Value.ToUpperInvariant() : null;
+        // Recons usually say "Balance due / Amount payable / Total"
+        ex.Amount = ParseAmount(Regex.Match(t, @"(?:BALANCE\s+(?:DUE|PAYABLE|OWING)|AMOUNT\s+(?:DUE|PAYABLE)|TOTAL\s+(?:DUE|PAYABLE)|TO\s+PAY|PAYMENT\s+DUE)\s*[:\-]?\s*R?\s*(-?[\d\s]{1,12}[.,]\d{2})\b", RegexOptions.IgnoreCase).Groups[1].Value) ?? ParseAmount(TotalRx.Match(t).Groups[1].Value);
+        ex.AccountNumber = Digits(AccountRx.Match(t).Groups[1].Value);
+        ex.BranchCode = BranchRx.Match(t) is { Success: true } bm ? bm.Groups[1].Value : null;
+        ex.BankName = BankNameRx.Match(t) is { Success: true } bn ? TitleCaseBank(bn.Groups[1].Value) : null;
+        ex.CustomerAccount = CustomerAccRx.Match(t) is { Success: true } cm ? cm.Groups[1].Value.ToUpperInvariant() : null;
+        ex.SupplierName = Regex.Match(t, @"(?:SUPPLIER|CREDITOR|VENDOR|PAYEE)\s*(?:NAME)?\s*[:\-]\s*([A-Za-z][A-Za-z0-9&().,'\- ]{2,60})", RegexOptions.IgnoreCase) is { Success: true } sm ? sm.Groups[1].Value.Trim() : GuessSupplier(t);
+        ex.DocumentDate = ParseDate(t);
+        return ex;
+    }
+
     private static string TitleCaseBank(string s)
     {
         var up = Regex.Replace(s, @"\s+", " ").Trim().ToUpperInvariant();
@@ -292,7 +343,7 @@ public class CreditorChecksService
                     Add("C10", "No warehouse GRV, no credit note", "FAIL", $"Stock came back for {it.SupplierName} but the warehouse return GRV has not been uploaded.", it, CreditorDocTypes.WarehouseReturnGrv);
 
         // C8 — unreadable / encrypted / non-PDF
-        foreach (var d in docs.Where(d => d.StoragePath != null && d.TextMethod != "spreadsheet"))
+        foreach (var d in docs.Where(d => d.StoragePath != null && d.TextMethod != "sheet"))
         {
             if (d.TextMethod == "none")
                 Add("C8", "Document could not be read", "REVIEW", $"{Label(d.DocType)} '{d.OriginalFileName}' has no readable text (poor scan?). The checks below could not look at it.", items.FirstOrDefault(i => i.Id == d.ItemId), d.DocType);

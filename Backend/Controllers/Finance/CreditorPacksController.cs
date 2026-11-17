@@ -483,6 +483,45 @@ public class CreditorPacksController : ControllerBase
 
     // ───────────────────────── documents ─────────────────────────
 
+    /// <summary>Read a supplier recon (.xlsx/.xls/.csv/.pdf) without storing it: returns the same auto-fill fields as read-invoice.</summary>
+    [HttpPost("read-recon")]
+    [RequestSizeLimit(25 * 1024 * 1024)]
+    public async Task<IActionResult> ReadRecon(IFormFile file)
+    {
+        if (file == null || file.Length == 0) return BadRequest(new { message = "No file." });
+        if (file.Length > MaxFileBytes) return BadRequest(new { message = "File is larger than 20 MB." });
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var isSheet = ext is ".xlsx" or ".xls" or ".csv";
+        if (!isSheet && ext != ".pdf") return BadRequest(new { message = "The recon must be .xlsx, .xls, .csv or .pdf." });
+        var tmp = Path.Combine(Path.GetTempPath(), $"cred-recon-{Guid.NewGuid():N}{ext}");
+        try
+        {
+            await using (var fs = System.IO.File.Create(tmp)) await file.CopyToAsync(fs);
+            var ex = isSheet ? _checks.ReadSheet(tmp, file.FileName) : await _checks.ReadAsync(tmp, file.ContentType, file.FileName);
+            if (ex.Encrypted) return BadRequest(new { message = "Password-protected PDFs are not accepted." });
+            var text = ex.Text.ToUpperInvariant();
+            string? known = null; SupplierHit? hit = null;
+            if (text.Length > 20)
+            {
+                var names = await _db.PaymentBatchItems.AsNoTracking().Select(i => i.SupplierName).Distinct().Take(2000).ToListAsync();
+                names.AddRange(await _db.BookInvoices.AsNoTracking().Select(b => b.SupplierName).Distinct().Take(2000).ToListAsync());
+                known = names.Where(n => n.Length >= 4).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(n => n.Length).FirstOrDefault(n => text.Contains(n.ToUpperInvariant()));
+                if (known != null && await Suppliers(known, 1) is OkObjectResult { Value: List<SupplierHit> { Count: > 0 } hits }) hit = hits[0];
+            }
+            // Invoice numbers listed on the recon (up to 12) — handy for "Invoice / reference numbers being paid"
+            var invoices = System.Text.RegularExpressions.Regex.Matches(ex.Text, @"\b(?:INV|TAX\s*INV(?:OICE)?)[\s#:\-]*([A-Z]{0,4}[\-/]?\d{3,10})\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                .Select(m => m.Groups[1].Value.ToUpperInvariant()).Distinct().Take(12).ToList();
+            return Ok(new
+            {
+                supplierName = known ?? ex.SupplierName, knownSupplier = known != null, supplier = hit,
+                amount = ex.Amount, vatNumber = ex.VatNumber, invoiceNumber = ex.InvoiceNumber, invoiceNumbers = invoices, documentDate = ex.DocumentDate,
+                customerAccount = ex.CustomerAccount, bankName = ex.BankName, accountNumber = ex.AccountNumber, branchCode = ex.BranchCode, accountHolder = ex.AccountHolder,
+                pages = ex.Pages, method = ex.Method, readable = ex.Method != "none"
+            });
+        }
+        finally { TryDelete(tmp); }
+    }
+
     /// <summary>Upload one PDF (one document). After lock only ProofOfPayment and prepayment closing docs (TaxInvoice, GRV) may be added, and replacements need a reason.</summary>
     [HttpPost("batches/{id:int}/documents")]
     [RequestSizeLimit(25 * 1024 * 1024)]
@@ -515,7 +554,8 @@ public class CreditorPacksController : ControllerBase
         Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
         await System.IO.File.WriteAllBytesAsync(abs, bytes);
 
-        var ex = isSheet ? new CreditorChecksService.Extracted { Method = "spreadsheet", SuggestedType = docType } : await _checks.ReadAsync(abs, file.ContentType, file.FileName);
+        var ex = isSheet ? _checks.ReadSheet(abs, file.FileName) : await _checks.ReadAsync(abs, file.ContentType, file.FileName);
+        if (isSheet) ex.SuggestedType = docType;
         if (ex.Encrypted) { TryDelete(abs); return BadRequest(new { message = "Password-protected PDFs are not accepted." }); }
         var storedContentType = isSheet ? ext switch { ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls" => "application/vnd.ms-excel", _ => "text/csv" } : "application/pdf";
 
