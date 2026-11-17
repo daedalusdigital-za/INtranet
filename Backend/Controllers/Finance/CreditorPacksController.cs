@@ -651,6 +651,70 @@ public class CreditorPacksController : ControllerBase
         return PhysicalFile(abs, isPdfDoc ? "application/pdf" : d.ContentType!, download || !isPdfDoc ? (d.OriginalFileName ?? d.FileName) : null);
     }
 
+    /// <summary>
+    /// Spreadsheet document (recon / schedule) as a grid for in-page preview, plus everything we extracted from it.
+    /// Up to 5 sheets × 300 rows × 30 columns.
+    /// </summary>
+    [HttpGet("batches/{id:int}/documents/{docId:int}/sheet")]
+    public async Task<IActionResult> Sheet(int id, int docId)
+    {
+        var d = await _db.PaymentBatchDocuments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == docId && x.BatchId == id);
+        if (d?.StoragePath == null) return NotFound();
+        var abs = Abs(d.StoragePath);
+        if (!System.IO.File.Exists(abs)) return NotFound();
+        var ext = Path.GetExtension(d.OriginalFileName ?? d.FileName).ToLowerInvariant();
+        if (ext is not (".xlsx" or ".xls" or ".csv")) return BadRequest(new { message = "Not a spreadsheet." });
+
+        var sheets = new List<object>();
+        try
+        {
+            if (ext == ".csv")
+            {
+                var rows = System.IO.File.ReadLines(abs).Take(300).Select(l => l.Split(new[] { ',', ';' }).Take(30).Select(c => c.Trim().Trim('"')).ToArray()).ToList();
+                sheets.Add(new { name = "Sheet1", rows });
+            }
+            else
+            {
+                using var wb = new ClosedXML.Excel.XLWorkbook(abs);
+                foreach (var ws in wb.Worksheets.Take(5))
+                {
+                    var used = ws.RangeUsed(); if (used == null) continue;
+                    var firstCol = used.FirstColumn().ColumnNumber(); var lastCol = Math.Min(used.LastColumn().ColumnNumber(), firstCol + 29);
+                    var rows = new List<string[]>();
+                    foreach (var row in used.Rows().Take(300))
+                    {
+                        var cells = new string[lastCol - firstCol + 1];
+                        for (var c = firstCol; c <= lastCol; c++) { var cell = row.Cell(c); cells[c - firstCol] = cell.IsEmpty() ? "" : cell.GetFormattedString(); }
+                        if (cells.All(string.IsNullOrWhiteSpace)) continue;
+                        rows.Add(cells);
+                    }
+                    sheets.Add(new { name = ws.Name, rows });
+                }
+            }
+        }
+        catch (Exception e) { return BadRequest(new { message = "Couldn't read the spreadsheet: " + e.Message }); }
+
+        var text = d.ExtractedText ?? "";
+        var invoiceNumbers = System.Text.RegularExpressions.Regex.Matches(text, @"\b(?:INV|TAX\s*INV(?:OICE)?)[\s#:\-]*([A-Z]{0,4}[\-/]?\d{3,10})\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Select(m => m.Groups[1].Value.ToUpperInvariant()).Distinct().Take(20).ToList();
+        var amounts = System.Text.RegularExpressions.Regex.Matches(text, @"(?:BALANCE\s+(?:DUE|PAYABLE|OWING)|AMOUNT\s+(?:DUE|PAYABLE)|TOTAL(?:\s+DUE|\s+PAYABLE)?|TO\s+PAY)\s*[:\-]?\s*R?\s*(-?[\d\s]{1,12}[.,]\d{2})\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Select(m => new { label = m.Value.Split(new[] { ':', '-', 'R' }, 2)[0].Trim(), value = m.Groups[1].Value.Trim() }).Take(8).ToList();
+        var item = d.ItemId == null ? null : await _db.PaymentBatchItems.AsNoTracking().Where(i => i.Id == d.ItemId).Select(i => new { i.SupplierName, i.Amount, i.InvoiceNumbers, i.AccountNumber }).FirstOrDefaultAsync();
+
+        return Ok(new
+        {
+            d.Id, d.DocType, title = CreditorChecksService.Label(d.DocType), d.OriginalFileName, d.Size, d.UploadedByName, d.UploadedAt,
+            extracted = new
+            {
+                amount = d.ExtractedAmount, invoiceNumber = d.ExtractedInvoiceNumber, invoiceNumbers, accountNumber = d.ExtractedAccountNumber, vatNumber = d.ExtractedVatNumber,
+                documentDate = d.DocumentDate, amounts,
+                matchesSchedule = item == null || d.ExtractedAmount == null ? (bool?)null : Math.Abs(d.ExtractedAmount.Value - item.Amount) <= 1m,
+                scheduleAmount = item?.Amount, scheduleInvoices = item?.InvoiceNumbers, supplier = item?.SupplierName
+            },
+            sheets
+        });
+    }
+
     // ───────────────────────── workflow ─────────────────────────
 
     /// <summary>Preparer submits: checks run; FAIL → back to preparer, otherwise → company accountant.</summary>

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed, ElementRef, ViewChild } from '@angular/core';
+﻿import { Component, OnInit, inject, signal, computed, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -9,6 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
+import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit } from '../../services/creditor-packs.service';
 
@@ -18,7 +19,7 @@ interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted
 const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoiceNumbers: '', description: '', amount: 0, bankName: '', accountNumber: '', branchCode: '', accountHolder: '', paymentReference: '', stockReturned: false };
 
 /**
- * Finance → Creditors. Payment packs per paying company. The screen is organised around
+ * Finance â†’ Creditors. Payment packs per paying company. The screen is organised around
  * "what do I need to do next": the board lists batches waiting on you first, and every batch
  * opens with a plain-language next-step card and the buttons that go with it.
  */
@@ -28,22 +29,22 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
   imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule],
   template: `
   @if (!meta()) {
-    <div class="cr-state"><mat-spinner diameter="36"></mat-spinner><p>Opening creditors…</p></div>
+    <div class="cr-state"><mat-spinner diameter="36"></mat-spinner><p>Opening creditorsâ€¦</p></div>
   } @else {
 
-  <!-- ═══════════════════════ BOARD ═══════════════════════ -->
+  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• BOARD â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
   @if (view() === 'board') {
 
     <div class="cr-how" [class.open]="howOpen()">
       <button class="hd" (click)="howOpen.set(!howOpen())"><mat-icon>help_outline</mat-icon> How a payment pack moves <mat-icon class="tw">{{ howOpen() ? 'expand_less' : 'expand_more' }}</mat-icon></button>
       @if (howOpen()) {
         <ol>
-          <li><strong>Prepare</strong> — a clerk creates a batch, adds each payment (upload the invoice or link one from Books and the details fill in; suppliers are found from past invoices and payments) and attaches the documents the list asks for.</li>
-          <li><strong>Checks</strong> — the system reads the PDFs and flags problems (missing docs, old bank letters, duplicates…).</li>
-          <li><strong>Accountant</strong> — the company's accountant approves or sends it back.</li>
-          <li><strong>Director</strong> — approves / queries / rejects each payment, then signs. The pack locks.</li>
-          <li><strong>Bank</strong> — the bank user downloads the bank file, loads it, marks it paid.</li>
-          <li><strong>Close</strong> — proof of payment is attached for every payment and the pack is closed.</li>
+          <li><strong>Prepare</strong> â€” a clerk creates a batch, adds each payment (upload the invoice or link one from Books and the details fill in; suppliers are found from past invoices and payments) and attaches the documents the list asks for.</li>
+          <li><strong>Checks</strong> â€” the system reads the PDFs and flags problems (missing docs, old bank letters, duplicatesâ€¦).</li>
+          <li><strong>Accountant</strong> â€” the company's accountant approves or sends it back.</li>
+          <li><strong>Director</strong> â€” approves / queries / rejects each payment, then signs. The pack locks.</li>
+          <li><strong>Bank</strong> â€” the bank user downloads the bank file, loads it, marks it paid.</li>
+          <li><strong>Close</strong> â€” proof of payment is attached for every payment and the pack is closed.</li>
         </ol>
       }
     </div>
@@ -56,7 +57,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <button [class]="'mcard tone-' + rowStep(r).tone" (click)="open(r.id)">
               <div class="top"><span class="ref">{{ r.batchNumber }}</span><span class="co">{{ r.companyCode }}</span><span class="amt">R {{ r.totalAmount | number:'1.0-0' }}</span></div>
               <div class="what"><mat-icon>{{ rowStep(r).icon }}</mat-icon> {{ rowStep(r).title }}</div>
-              <div class="sub">{{ typeTitle(r.paymentType) }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.returnReason && isSentBack(r.status)) { · <em>{{ r.returnReason }}</em> }</div>
+              <div class="sub">{{ typeTitle(r.paymentType) }} Â· {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.returnReason && isSentBack(r.status)) { Â· <em>{{ r.returnReason }}</em> }</div>
             </button>
           }
         </div>
@@ -66,14 +67,14 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     @if (alerts().length) {
       <div class="cr-alerts">
         <mat-icon>gpp_maybe</mat-icon>
-        <div class="txt"><strong>{{ alerts().length }} thing{{ alerts().length === 1 ? '' : 's' }} worth a second look</strong> — new bank details, old bank letters, possible duplicates, prepayments still open.</div>
+        <div class="txt"><strong>{{ alerts().length }} thing{{ alerts().length === 1 ? '' : 's' }} worth a second look</strong> â€” new bank details, old bank letters, possible duplicates, prepayments still open.</div>
         <button mat-button (click)="showAlerts.set(!showAlerts())">{{ showAlerts() ? 'Hide' : 'Show' }}</button>
       </div>
       @if (showAlerts()) {
         <div class="cr-alert-list">
           @for (a of alerts(); track $index) {
             <button class="cr-alert" [class.fail]="a.severity === 'FAIL'" (click)="open(a.batchId)">
-              <span class="b">{{ a.batchNumber }} · {{ a.companyCode }}</span><span class="t">{{ a.title }}</span><span class="d">{{ a.detail }}</span>
+              <span class="b">{{ a.batchNumber }} Â· {{ a.companyCode }}</span><span class="t">{{ a.title }}</span><span class="d">{{ a.detail }}</span>
             </button>
           }
         </div>
@@ -86,14 +87,14 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <button [class.on]="statusFilter() === 'open'" (click)="statusFilter.set('open')">In progress <b>{{ countOpen() }}</b></button>
         <button [class.on]="statusFilter() === 'back'" (click)="statusFilter.set('back')">Sent back <b>{{ count('ChecksFailed') + count('QueriedByAccountant') + count('QueriedByDirector') }}</b></button>
         <button [class.on]="statusFilter() === 'pay'" (click)="statusFilter.set('pay')">To pay <b>{{ count('Approved') + count('LoadedOnBank') }}</b></button>
-        <button [class.on]="statusFilter() === 'Paid'" (click)="statusFilter.set('Paid')">Paid · needs POP <b>{{ count('Paid') }}</b></button>
+        <button [class.on]="statusFilter() === 'Paid'" (click)="statusFilter.set('Paid')">Paid Â· needs POP <b>{{ count('Paid') }}</b></button>
         <button [class.on]="statusFilter() === 'prepay'" (click)="statusFilter.set('prepay')">Open prepayments <b>{{ openPrepay() }}</b></button>
         <button [class.on]="statusFilter() === 'Closed'" (click)="statusFilter.set('Closed')">Closed <b>{{ count('Closed') }}</b></button>
       </div>
       <span class="cr-spacer"></span>
       <select [ngModel]="companyFilter()" (ngModelChange)="companyFilter.set($event)">
         <option value="">All companies</option>
-        @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} — {{ c.name }}</option> }
+        @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} â€” {{ c.name }}</option> }
       </select>
       <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
         <option value="">All payment types</option>
@@ -111,7 +112,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <div class="row">
           <label>Which company is paying?
             <select [(ngModel)]="newBatch.companyCode">
-              @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} — {{ c.name }}</option> }
+              @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} â€” {{ c.name }}</option> }
             </select>
           </label>
           <label>What kind of payment?
@@ -143,7 +144,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           <tbody>
             @for (r of filteredRows(); track r.id) {
               <tr (click)="open(r.id)">
-                <td><span class="ref">{{ r.batchNumber }}</span><br><small class="muted">{{ r.batchDate | date:'dd MMM' }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
+                <td><span class="ref">{{ r.batchNumber }}</span><br><small class="muted">{{ r.batchDate | date:'dd MMM' }} Â· {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
                 <td><strong>{{ r.companyCode }}</strong><br><small class="muted">{{ companyFor(r.companyCode)?.name }}</small></td>
                 <td>{{ typeTitle(r.paymentType) }}</td>
                 <td class="num">R {{ r.totalAmount | number:'1.2-2' }}</td>
@@ -163,15 +164,15 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     }
   }
 
-  <!-- ═══════════════════════ BATCH ═══════════════════════ -->
+  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• BATCH â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
   @if (view() === 'batch' && batch(); as b) {
     <div class="cr-bhead">
       <button mat-icon-button (click)="back()" aria-label="Back to all batches" matTooltip="All batches"><mat-icon>arrow_back</mat-icon></button>
       <div class="ttl">
         <h2>{{ b.batchNumber }} <span [class]="'badge lg ' + badge(b.status)">{{ b.statusTitle }}</span>
-          @if (b.lockedAt) { <mat-icon class="lock" matTooltip="Signed and locked — nothing can be changed">lock</mat-icon> }
+          @if (b.lockedAt) { <mat-icon class="lock" matTooltip="Signed and locked â€” nothing can be changed">lock</mat-icon> }
         </h2>
-        <p><strong>{{ b.companyName }}</strong> is paying · {{ b.paymentTypeTitle }} · dated {{ b.batchDate | date:'dd MMM yyyy' }} · prepared by {{ b.preparedByName }}@if (b.notes) { · “{{ b.notes }}” }</p>
+        <p><strong>{{ b.companyName }}</strong> is paying Â· {{ b.paymentTypeTitle }} Â· dated {{ b.batchDate | date:'dd MMM yyyy' }} Â· prepared by {{ b.preparedByName }}@if (b.notes) { Â· â€œ{{ b.notes }}â€ }</p>
       </div>
       <div class="sum">
         @if (b.approvedAmount && b.approvedAmount !== b.totalAmount) {
@@ -219,7 +220,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       <div class="cr-card cr-sign">
         <h3><mat-icon>draw</mat-icon> Sign this batch</h3>
         <ul class="facts">
-          <li><mat-icon>business</mat-icon><span>{{ b.companyName }} pays <strong>R {{ b.approvedAmount | number:'1.2-2' }}</strong> across <strong>{{ approvedCount(b) }}</strong> approved payment{{ approvedCount(b) === 1 ? '' : 's' }}@if (queriedCount(b)) { · <span class="warn">{{ queriedCount(b) }} queried → pack goes back to the preparer</span> }@if (rejectedCount(b)) { · <span class="bad">{{ rejectedCount(b) }} rejected</span> }</span></li>
+          <li><mat-icon>business</mat-icon><span>{{ b.companyName }} pays <strong>R {{ b.approvedAmount | number:'1.2-2' }}</strong> across <strong>{{ approvedCount(b) }}</strong> approved payment{{ approvedCount(b) === 1 ? '' : 's' }}@if (queriedCount(b)) { Â· <span class="warn">{{ queriedCount(b) }} queried â†’ pack goes back to the preparer</span> }@if (rejectedCount(b)) { Â· <span class="bad">{{ rejectedCount(b) }} rejected</span> }</span></li>
           <li><mat-icon>fact_check</mat-icon><span>Accountant <strong>{{ b.accountantName }}</strong> approved on {{ b.accountantApprovedAt | date:'dd MMM HH:mm' }}</span></li>
           <li><mat-icon>lock</mat-icon><span>After signing, the pack and its documents are locked and the bank file becomes available.</span></li>
         </ul>
@@ -247,7 +248,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <div class="cr-itemform">
               <h4>{{ itemForm() === 'new' ? 'New payment' : 'Edit payment' }}</h4>
 
-              <h5>1 · Invoice and recon</h5>
+              <h5>1 Â· Invoice and recon</h5>
               <div class="inv-src">
                 @if (!pendingInvoiceFile && !pendingLink) {
                   <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> Upload invoice</button>
@@ -255,10 +256,10 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   <small class="muted">We read the PDF and fill in who is being paid, the amount, invoice number, description and any bank details printed on it. Or link an invoice already captured in Books.</small>
                   @if (reading()) { <mat-spinner diameter="18"></mat-spinner> }
                 } @else if (pendingInvoiceFile) {
-                  <span class="chip ok"><mat-icon>picture_as_pdf</mat-icon> {{ pendingInvoiceFile.name }} @if (readInfo()) { · {{ readInfo() }} }</span>
+                  <span class="chip ok"><mat-icon>picture_as_pdf</mat-icon> {{ pendingInvoiceFile.name }} @if (readInfo()) { Â· {{ readInfo() }} }</span>
                   <button mat-icon-button (click)="clearInvoice()" matTooltip="Remove"><mat-icon>close</mat-icon></button>
                 } @else if (pendingLink) {
-                  <span class="chip ok"><mat-icon>link</mat-icon> Books #{{ pendingLink.id }} · {{ pendingLink.supplierName }} · {{ pendingLink.invoiceNumber || 'no number' }} · R {{ pendingLink.total | number:'1.2-2' }}</span>
+                  <span class="chip ok"><mat-icon>link</mat-icon> Books #{{ pendingLink.id }} Â· {{ pendingLink.supplierName }} Â· {{ pendingLink.invoiceNumber || 'no number' }} Â· R {{ pendingLink.total | number:'1.2-2' }}</span>
                   <button mat-icon-button (click)="clearInvoice()" matTooltip="Unlink"><mat-icon>close</mat-icon></button>
                 }
                 <input #invFileInput type="file" accept="application/pdf" hidden (change)="invoiceChosen($event)">
@@ -267,9 +268,9 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 <div class="inv-src recon" [class.missing]="needsRecon() && !pendingReconFile">
                   @if (!pendingReconFile) {
                     <button mat-stroked-button (click)="reconFileInput.click()"><mat-icon>table_view</mat-icon> Upload supplier recon</button>
-                    <small>@if (needsRecon()) { <mat-icon>priority_high</mat-icon> Required — every invoice must come with its recon } @else { Expected with the invoice } (.xlsx, .xls, .csv or .pdf). We read it too and fill in what the invoice didn't.</small>
+                    <small>@if (needsRecon()) { <mat-icon>priority_high</mat-icon> Required â€” every invoice must come with its recon } @else { Expected with the invoice } (.xlsx, .xls, .csv or .pdf). We read it too and fill in what the invoice didn't.</small>
                   } @else {
-                    <span class="chip ok"><mat-icon>table_view</mat-icon> {{ pendingReconFile.name }} @if (reconInfo()) { · {{ reconInfo() }} }</span>
+                    <span class="chip ok"><mat-icon>table_view</mat-icon> {{ pendingReconFile.name }} @if (reconInfo()) { Â· {{ reconInfo() }} }</span>
                     <button mat-icon-button (click)="pendingReconFile = null; reconInfo.set('')" matTooltip="Remove"><mat-icon>close</mat-icon></button>
                   }
                   <input #reconFileInput type="file" accept=".xlsx,.xls,.csv,application/pdf" hidden (change)="reconChosen($event)">
@@ -278,7 +279,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   <div class="inv-src recon" [class.missing]="!pendingSageFile">
                     @if (!pendingSageFile) {
                       <button mat-stroked-button (click)="sageFileInput.click()"><mat-icon>picture_as_pdf</mat-icon> Upload Sage aged payables</button>
-                      <small><mat-icon>priority_high</mat-icon> Required with the recon — PDF only.</small>
+                      <small><mat-icon>priority_high</mat-icon> Required with the recon â€” PDF only.</small>
                     } @else {
                       <span class="chip ok"><mat-icon>picture_as_pdf</mat-icon> {{ pendingSageFile.name }}</span>
                       <button mat-icon-button (click)="pendingSageFile = null" matTooltip="Remove"><mat-icon>close</mat-icon></button>
@@ -289,30 +290,30 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               }
               @if (picker()) {
                 <div class="picker">
-                  <input [(ngModel)]="pickerQ" (ngModelChange)="searchBooks()" placeholder="Search Books invoices by supplier, number or amount…" autofocus>
+                  <input [(ngModel)]="pickerQ" (ngModelChange)="searchBooks()" placeholder="Search Books invoices by supplier, number or amountâ€¦" autofocus>
                   <ul>
                     @for (h of pickerHits(); track h.id) {
                       <li [class.dis]="h.alreadyLinked" (click)="!h.alreadyLinked && pickBooks(h)">
-                        <strong>{{ h.supplierName }}</strong> <span class="ref">{{ h.invoiceNumber || '—' }}</span> <span class="muted">{{ h.invoiceDate | date:'d MMM yy' }} · {{ h.companyName }} · {{ h.status }}</span>
+                        <strong>{{ h.supplierName }}</strong> <span class="ref">{{ h.invoiceNumber || 'â€”' }}</span> <span class="muted">{{ h.invoiceDate | date:'d MMM yy' }} Â· {{ h.companyName }} Â· {{ h.status }}</span>
                         <span class="amt">R {{ h.total | number:'1.2-2' }}</span>
                         @if (h.alreadyLinked) { <small>already in a pack</small> } @if (!h.hasPdf) { <small>no PDF</small> }
                       </li>
-                    } @empty { <li class="none">{{ pickerQ.length < 2 ? 'Type to search…' : 'Nothing found.' }}</li> }
+                    } @empty { <li class="none">{{ pickerQ.length < 2 ? 'Type to searchâ€¦' : 'Nothing found.' }}</li> }
                   </ul>
                   <button mat-button (click)="picker.set(false)">Close</button>
                 </div>
               }
 
-              <h5>2 · Who and how much</h5>
+              <h5>2 Â· Who and how much</h5>
               <div class="row">
                 <label class="grow sup">Who is being paid?
-                  <input [(ngModel)]="itemDraft.supplierName" (ngModelChange)="searchSuppliers($event)" (focus)="searchSuppliers(itemDraft.supplierName)" (blur)="hideSuppliersSoon()" placeholder="Start typing — we search past invoices, Books and payments" required autocomplete="off">
+                  <input [(ngModel)]="itemDraft.supplierName" (ngModelChange)="searchSuppliers($event)" (focus)="searchSuppliers(itemDraft.supplierName)" (blur)="hideSuppliersSoon()" placeholder="Start typing â€” we search past invoices, Books and payments" required autocomplete="off">
                   @if (supplierHits().length && showSuppliers()) {
                     <ul class="ac">
                       @for (s of supplierHits(); track s.name) {
                         <li (mousedown)="$event.preventDefault(); pickSupplier(s)">
                           <strong>{{ s.name }}</strong>
-                          <small>@if (s.vatNumber) { VAT {{ s.vatNumber }} · } @if (s.bankName) { {{ s.bankName }} ···{{ (s.accountNumber || '').slice(-4) }} · } {{ s.payments }} payment{{ s.payments === 1 ? '' : 's' }}, {{ s.invoices }} invoice{{ s.invoices === 1 ? '' : 's' }}</small>
+                          <small>@if (s.vatNumber) { VAT {{ s.vatNumber }} Â· } @if (s.bankName) { {{ s.bankName }} Â·Â·Â·{{ (s.accountNumber || '').slice(-4) }} Â· } {{ s.payments }} payment{{ s.payments === 1 ? '' : 's' }}, {{ s.invoices }} invoice{{ s.invoices === 1 ? '' : 's' }}</small>
                         </li>
                       }
                     </ul>
@@ -321,13 +322,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 <label>Amount incl. VAT (R) <input type="number" step="0.01" [(ngModel)]="itemDraft.amount"></label>
               </div>
 
-              <h5>3 · What is it for</h5>
+              <h5>3 Â· What is it for</h5>
               <div class="row">
                 <label class="grow">Invoice / reference numbers being paid <input [(ngModel)]="itemDraft.invoiceNumbers" placeholder="INV123, INV124"></label>
-                <label class="grow">Description <input [(ngModel)]="itemDraft.description" placeholder="e.g. March stock, repairs to bakkie…"></label>
+                <label class="grow">Description <input [(ngModel)]="itemDraft.description" placeholder="e.g. March stock, repairs to bakkieâ€¦"></label>
               </div>
 
-              <h5>4 · Bank details (as on the bank letter)</h5>
+              <h5>4 Â· Bank details (as on the bank letter)</h5>
               <div class="row">
                 <label>Bank <input [(ngModel)]="itemDraft.bankName"></label>
                 <label>Account number <input [(ngModel)]="itemDraft.accountNumber"></label>
@@ -356,7 +357,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 <mat-icon class="tw">{{ openItem() === it.id ? 'expand_more' : 'chevron_right' }}</mat-icon>
                 <div class="who">
                   <strong>{{ it.supplierName }}</strong>
-                  <small>{{ it.invoiceNumbers || it.description || 'no reference' }}@if (it.bankName) { · {{ it.bankName }} ···{{ (it.accountNumber || '').slice(-4) }} }</small>
+                  <small>{{ it.invoiceNumbers || it.description || 'no reference' }}@if (it.bankName) { Â· {{ it.bankName }} Â·Â·Â·{{ (it.accountNumber || '').slice(-4) }} }</small>
                 </div>
                 <span class="docpill" [class.ok]="filledCount(it.required) === it.required.length" [class.none]="!it.required.length" [matTooltip]="missingNames(it.required)">
                   <mat-icon>{{ filledCount(it.required) === it.required.length ? 'check_circle' : 'description' }}</mat-icon>
@@ -379,9 +380,9 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   <button mat-stroked-button [class.sel-ok]="it.decisionStatus === 'Approved'" (click)="decide(it, 'Approved')"><mat-icon>thumb_up</mat-icon> Approve</button>
                   <button mat-stroked-button [class.sel-warn]="it.decisionStatus === 'Queried'" (click)="decide(it, 'Queried')"><mat-icon>help</mat-icon> Query</button>
                   <button mat-stroked-button [class.sel-bad]="it.decisionStatus === 'Rejected'" (click)="decide(it, 'Rejected')"><mat-icon>thumb_down</mat-icon> Reject</button>
-                  @if (it.decisionComment) { <em>“{{ it.decisionComment }}”</em> }
+                  @if (it.decisionComment) { <em>â€œ{{ it.decisionComment }}â€</em> }
                 </div>
-              } @else if (it.decisionComment) { <div class="deccomment"><mat-icon>chat</mat-icon> Director: “{{ it.decisionComment }}”</div> }
+              } @else if (it.decisionComment) { <div class="deccomment"><mat-icon>chat</mat-icon> Director: â€œ{{ it.decisionComment }}â€</div> }
 
               @if (openItem() === it.id) {
                 <div class="body">
@@ -423,8 +424,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <div [class]="'chk-verdict ' + b.checks.status.toLowerCase()">
               <mat-icon>{{ b.checks.status === 'FAIL' ? 'cancel' : b.checks.status === 'REVIEW' ? 'error_outline' : 'check_circle' }}</mat-icon>
               <div>
-                <strong>{{ b.checks.status === 'FAIL' ? 'Must be fixed before it can go further' : b.checks.status === 'REVIEW' ? 'Nothing blocking — a few things for the approvers to eyeball' : 'All clear' }}</strong>
-                <small>{{ b.checks.fail }} blocking · {{ b.checks.review }} to review · {{ b.checks.pass }} passed</small>
+                <strong>{{ b.checks.status === 'FAIL' ? 'Must be fixed before it can go further' : b.checks.status === 'REVIEW' ? 'Nothing blocking â€” a few things for the approvers to eyeball' : 'All clear' }}</strong>
+                <small>{{ b.checks.fail }} blocking Â· {{ b.checks.review }} to review Â· {{ b.checks.pass }} passed</small>
               </div>
             </div>
             <ul class="cr-findings">
@@ -443,19 +444,19 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           <header><h3><mat-icon>verified</mat-icon> Approvals</h3></header>
           <div class="appr-row" [class.done]="b.accountantApprovedAt">
             <mat-icon>{{ b.accountantApprovedAt ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
-            <div><strong>1 · Company accountant</strong>
-              <small>@if (b.accountantApprovedAt) { {{ b.accountantName }} · {{ b.accountantApprovedAt | date:'dd MMM HH:mm' }} } @else { {{ responsibleName(b.responsible.accountant) || 'Any accountant' }}@if (responsibleName(b.responsible.backup)) { (back-up {{ responsibleName(b.responsible.backup) }}) } }</small>
-              @if (b.accountantComment) { <small class="q">“{{ b.accountantComment }}”</small> }
+            <div><strong>1 Â· Company accountant</strong>
+              <small>@if (b.accountantApprovedAt) { {{ b.accountantName }} Â· {{ b.accountantApprovedAt | date:'dd MMM HH:mm' }} } @else { {{ responsibleName(b.responsible.accountant) || 'Any accountant' }}@if (responsibleName(b.responsible.backup)) { (back-up {{ responsibleName(b.responsible.backup) }}) } }</small>
+              @if (b.accountantComment) { <small class="q">â€œ{{ b.accountantComment }}â€</small> }
             </div>
           </div>
           <div class="appr-row" [class.done]="b.lockedAt">
             <mat-icon>{{ b.lockedAt ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
-            <div><strong>2 · Director signature</strong>
-              <small>@if (b.directorSignedAt) { {{ b.directorName }} · {{ b.directorSignedAt | date:'dd MMM HH:mm' }} } @else { {{ responsibleName(b.responsible.director) || 'Any director' }}@if (responsibleName(b.responsible.delegateDirector)) { (or {{ responsibleName(b.responsible.delegateDirector) }}) } }</small>
-              @if (b.directorComment) { <small class="q">“{{ b.directorComment }}”</small> }
+            <div><strong>2 Â· Director signature</strong>
+              <small>@if (b.directorSignedAt) { {{ b.directorName }} Â· {{ b.directorSignedAt | date:'dd MMM HH:mm' }} } @else { {{ responsibleName(b.responsible.director) || 'Any director' }}@if (responsibleName(b.responsible.delegateDirector)) { (or {{ responsibleName(b.responsible.delegateDirector) }}) } }</small>
+              @if (b.directorComment) { <small class="q">â€œ{{ b.directorComment }}â€</small> }
             </div>
           </div>
-          @if (b.lockHash) { <small class="hash" matTooltip="Fingerprint of the batch at signing — proves nothing changed afterwards">Locked · fingerprint {{ b.lockHash | slice:0:12 }}…</small> }
+          @if (b.lockHash) { <small class="hash" matTooltip="Fingerprint of the batch at signing â€” proves nothing changed afterwards">Locked Â· fingerprint {{ b.lockHash | slice:0:12 }}â€¦</small> }
         </section>
 
         <section class="cr-card">
@@ -479,8 +480,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 @if (!r.filled) { <small class="miss">Missing</small> }
                 @for (d of ds; track d.id) {
                   <small class="file">
-                    @if (d.isNotApplicable) { Not applicable — {{ d.naReason }} }
-                    @else { {{ d.originalFileName }} · {{ d.textMethod === 'sheet' ? (d.pageCount + ' sheet' + (d.pageCount === 1 ? '' : 's')) : (d.pageCount + ' page' + (d.pageCount === 1 ? '' : 's')) }}@if (d.documentDate) { · dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.extractedAmount) { · R {{ d.extractedAmount | number:'1.2-2' }} }@if (d.version > 1) { · v{{ d.version }} } }
+                    @if (d.isNotApplicable) { Not applicable â€” {{ d.naReason }} }
+                    @else { {{ d.originalFileName }} Â· {{ d.textMethod === 'sheet' ? (d.pageCount + ' sheet' + (d.pageCount === 1 ? '' : 's')) : (d.pageCount + ' page' + (d.pageCount === 1 ? '' : 's')) }}@if (d.documentDate) { Â· dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.extractedAmount) { Â· R {{ d.extractedAmount | number:'1.2-2' }} }@if (d.version > 1) { Â· v{{ d.version }} } }
                     @if (d.suggestedDocType && d.suggestedDocType !== d.docType && !d.isNotApplicable) { <span class="sugg">looked like {{ docTitle(d.suggestedDocType) }}</span> }
                     @if (d.versionReason) { <span class="sugg">replaced: {{ d.versionReason }}</span> }
                   </small>
@@ -488,7 +489,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               </div>
               <div class="act">
                 @for (d of ds; track d.id) {
-                  @if (!d.isNotApplicable) { <button mat-icon-button [matTooltip]="d.textMethod === 'sheet' ? 'Download' : 'Preview'" (click)="openDoc(d)"><mat-icon>{{ d.textMethod === 'sheet' ? 'download' : 'visibility' }}</mat-icon></button> }
+                  @if (!d.isNotApplicable) { <button mat-icon-button matTooltip="Preview" (click)="openDoc(d)"><mat-icon>visibility</mat-icon></button> }
                   @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
                   @else if (b.can.uploadAfterLock && !d.isNotApplicable) { <button mat-icon-button matTooltip="Replace (reason required)" (click)="replaceDoc(d)"><mat-icon>published_with_changes</mat-icon></button> }
                 }
@@ -501,7 +502,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           }
         }
         @if (recommended?.length) {
-          <li class="sect"><mat-icon>info_outline</mat-icon> Optional — attach where you have them. Missing ones are flagged for the approvers but don't block.</li>
+          <li class="sect"><mat-icon>info_outline</mat-icon> Optional â€” attach where you have them. Missing ones are flagged for the approvers but don't block.</li>
           @for (r of recommended; track r.docType) {
             @if (docsOfType(docs, r.docType); as ds) {
               <li class="rec" [class.ok]="r.filled" [class.warn]="!r.filled">
@@ -510,14 +511,14 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   @if (!r.filled) { <small class="optional">Not attached</small> }
                   @for (d of ds; track d.id) {
                     <small class="file">
-                      @if (d.isNotApplicable) { Not applicable — {{ d.naReason }} }
-                      @else { {{ d.originalFileName }} · {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}@if (d.documentDate) { · dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.version > 1) { · v{{ d.version }} } }
+                      @if (d.isNotApplicable) { Not applicable â€” {{ d.naReason }} }
+                      @else { {{ d.originalFileName }} Â· {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}@if (d.documentDate) { Â· dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.version > 1) { Â· v{{ d.version }} } }
                     </small>
                   }
                 </div>
                 <div class="act">
                   @for (d of ds; track d.id) {
-                    @if (!d.isNotApplicable) { <button mat-icon-button [matTooltip]="d.textMethod === 'sheet' ? 'Download' : 'Preview'" (click)="openDoc(d)"><mat-icon>{{ d.textMethod === 'sheet' ? 'download' : 'visibility' }}</mat-icon></button> }
+                    @if (!d.isNotApplicable) { <button mat-icon-button matTooltip="Preview" (click)="openDoc(d)"><mat-icon>visibility</mat-icon></button> }
                     @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
                   }
                   @if (b.can.edit || b.can.uploadAfterLock) {
@@ -537,12 +538,12 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 <select class="type" [ngModel]="d.docType" (ngModelChange)="retype(d, $event)">
                   @for (t of docTypesFor(itemId); track t.key) { <option [value]="t.key">{{ t.title }}</option> }
                 </select>
-                @if (d.suggestedDocType && d.suggestedDocType !== d.docType) { <small class="sugg">System thinks this is a {{ docTitle(d.suggestedDocType) }} — change the type if so</small> }
+                @if (d.suggestedDocType && d.suggestedDocType !== d.docType) { <small class="sugg">System thinks this is a {{ docTitle(d.suggestedDocType) }} â€” change the type if so</small> }
               } @else { <strong>{{ d.title }}</strong> }
-              <small class="file">{{ d.originalFileName }} · {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}</small>
+              <small class="file">{{ d.originalFileName }} Â· {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}</small>
             </div>
             <div class="act">
-              <button mat-icon-button [matTooltip]="d.textMethod === 'sheet' ? 'Download' : 'Preview'" (click)="openDoc(d)"><mat-icon>{{ d.textMethod === 'sheet' ? 'download' : 'visibility' }}</mat-icon></button>
+              <button mat-icon-button matTooltip="Preview" (click)="openDoc(d)"><mat-icon>visibility</mat-icon></button>
               @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
             </div>
           </li>
@@ -776,7 +777,7 @@ export class FinanceCreditorsComponent implements OnInit {
     this.api.alerts().subscribe({ next: a => this.alerts.set(a), error: () => {} });
   }
 
-  // ── lookups & text ──
+  // â”€â”€ lookups & text â”€â”€
   private matchStatus(r: BatchRow, st: string): boolean {
     switch (st) {
       case '': return true;
@@ -802,7 +803,7 @@ export class FinanceCreditorsComponent implements OnInit {
   docTitle(k: string) { return this.meta()?.docTypes.find(d => d.key === k)?.title ?? k; }
   docTypesFor(itemId: number | null) { return (this.meta()?.docTypes ?? []).filter(d => itemId ? d.scope === 'item' || d.key === 'Other' : d.scope === 'batch' || d.key === 'Other'); }
   badge(s: string) { return ['Approved', 'Paid', 'Closed', 'LoadedOnBank'].includes(s) ? 'ok' : s.startsWith('Awaiting') ? 'warn' : this.sentBack.includes(s) || s === 'Rejected' ? 'bad' : s === 'Draft' ? '' : 'info'; }
-  rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned && !r.withRecon).map(r => this.docTitle(r.docType)); const withRecon = rules.filter(r => r.withRecon).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (withRecon.length ? ` · with every recon: ${withRecon.join(', ')}` : '') + (opt.length ? ` · optional: ${opt.join(', ')}` : ''); }
+  rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned && !r.withRecon).map(r => this.docTitle(r.docType)); const withRecon = rules.filter(r => r.withRecon).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (withRecon.length ? ` Â· with every recon: ${withRecon.join(', ')}` : '') + (opt.length ? ` Â· optional: ${opt.join(', ')}` : ''); }
   reconSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); }
   needsRecon(): boolean { return this.reconSlot() && !!(this.pendingInvoiceFile || this.pendingLink); }
   sageSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SageAgedPayables' && r.withRecon); }
@@ -820,13 +821,13 @@ export class FinanceCreditorsComponent implements OnInit {
       case 'Approved': return 'bank user (load on bank)';
       case 'LoadedOnBank': return 'bank user (mark paid)';
       case 'Paid': return `${r.preparedByName || 'preparer'} (proof of payment)`;
-      default: return '—';
+      default: return 'â€”';
     }
   }
   rowStep(r: BatchRow): NextStep {
     switch (r.status) {
       case 'Draft': return { icon: 'edit_note', tone: 'info', title: 'Finish preparing and submit', body: '' };
-      case 'ChecksFailed': return { icon: 'report', tone: 'bad', title: 'Checks failed — fix and resubmit', body: '' };
+      case 'ChecksFailed': return { icon: 'report', tone: 'bad', title: 'Checks failed â€” fix and resubmit', body: '' };
       case 'QueriedByAccountant': return { icon: 'reply', tone: 'bad', title: 'Sent back by the accountant', body: '' };
       case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: 'Sent back by the director', body: '' };
       case 'AwaitingAccountant': return { icon: 'fact_check', tone: 'warn', title: 'Review and approve as accountant', body: '' };
@@ -848,28 +849,28 @@ export class FinanceCreditorsComponent implements OnInit {
         return { icon: 'send', tone: 'ok', title: 'Ready to submit', body: `All required documents are attached. Submitting runs the system checks and sends the pack to ${acc}.` };
       case 'ChecksFailed': return { icon: 'report', tone: 'bad', title: 'The system checks found blocking problems', body: 'See the red items under System checks and on each payment. Click Reopen & fix, correct them, then submit again.' };
       case 'QueriedByAccountant': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.accountantName || 'the accountant'}`, body: b.returnReason || 'Reopen, fix what was asked, and submit again.' };
-      case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.directorName || 'the director'}`, body: b.returnReason || 'The queried payments are marked below. Reopen, fix, and submit again — it will go back through the accountant.' };
+      case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.directorName || 'the director'}`, body: b.returnReason || 'The queried payments are marked below. Reopen, fix, and submit again â€” it will go back through the accountant.' };
       case 'AwaitingAccountant': return b.can.accountant
         ? { icon: 'fact_check', tone: 'warn', title: 'Your approval is needed', body: `Check the schedule against the recon and the supporting documents. Approve to send it to ${dir}, or send it back with a note.` }
         : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${acc} to approve`, body: 'Nothing for you to do here right now.' };
       case 'AwaitingDirector': return b.can.direct
-        ? { icon: 'draw', tone: 'warn', title: this.pendingCount(b) > 0 ? `Decide on ${this.pendingCount(b)} payment${this.pendingCount(b) === 1 ? '' : 's'}, then sign` : 'All decided — sign the batch', body: `${b.accountantName} has approved. Approve, query or reject each payment below. Queried payments send the pack back; the rest are paid once you sign.` }
+        ? { icon: 'draw', tone: 'warn', title: this.pendingCount(b) > 0 ? `Decide on ${this.pendingCount(b)} payment${this.pendingCount(b) === 1 ? '' : 's'}, then sign` : 'All decided â€” sign the batch', body: `${b.accountantName} has approved. Approve, query or reject each payment below. Queried payments send the pack back; the rest are paid once you sign.` }
         : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${dir} to sign`, body: `Approved by ${b.accountantName}. Nothing for you to do until the director signs.` };
-      case 'Approved': return { icon: 'account_balance', tone: 'ok', title: 'Signed and locked — ready for the bank', body: `${b.directorName} signed. The bank user downloads the bank file (approved payments only), loads it, and marks it loaded.` };
+      case 'Approved': return { icon: 'account_balance', tone: 'ok', title: 'Signed and locked â€” ready for the bank', body: `${b.directorName} signed. The bank user downloads the bank file (approved payments only), loads it, and marks it loaded.` };
       case 'LoadedOnBank': return { icon: 'price_check', tone: 'ok', title: 'Loaded on the bank', body: 'Once the payments have been released, mark the batch as paid.' };
       case 'Paid': { const pop = this.missingPop(b), pre = this.openPrepayCount(b);
-        return { icon: 'receipt_long', tone: 'info', title: pop || pre ? 'Paid — a few things before it can close' : 'Paid — ready to close', body: [pop ? `Proof of payment still needed for ${pop} payment${pop === 1 ? '' : 's'}` : '', pre ? `${pre} prepayment${pre === 1 ? '' : 's'} still waiting for the tax invoice + GRV after delivery` : ''].filter(Boolean).join(' · ') || 'Everything is attached.' }; }
-      case 'Closed': return { icon: 'inventory', tone: 'muted', title: 'Closed', body: `Completed on ${b.closedAt ? new Date(b.closedAt).toLocaleDateString() : '—'}. Everything here is read-only.` };
+        return { icon: 'receipt_long', tone: 'info', title: pop || pre ? 'Paid â€” a few things before it can close' : 'Paid â€” ready to close', body: [pop ? `Proof of payment still needed for ${pop} payment${pop === 1 ? '' : 's'}` : '', pre ? `${pre} prepayment${pre === 1 ? '' : 's'} still waiting for the tax invoice + GRV after delivery` : ''].filter(Boolean).join(' Â· ') || 'Everything is attached.' }; }
+      case 'Closed': return { icon: 'inventory', tone: 'muted', title: 'Closed', body: `Completed on ${b.closedAt ? new Date(b.closedAt).toLocaleDateString() : 'â€”'}. Everything here is read-only.` };
       case 'Rejected': return { icon: 'block', tone: 'bad', title: 'Rejected by the director', body: b.returnReason || 'You can reopen it as a draft if it should be reworked.' };
       default: return { icon: 'info', tone: 'muted', title: b.statusTitle, body: '' };
     }
   }
   eventText(e: { action: string; toStatus?: string; fromStatus?: string }): string {
-    const m: Record<string, string> = { Created: 'created the batch', ItemAdded: 'added a payment', ItemUpdated: 'edited a payment', ItemRemoved: 'removed a payment', DocumentUploaded: 'attached a document', DocumentReplaced: 'replaced a document', DocumentRemoved: 'removed a document', DocumentNA: 'marked a document N/A', Submitted: e.toStatus === 'ChecksFailed' ? 'submitted — checks failed' : 'submitted to the accountant', ChecksRun: 'ran the checks', AccountantApproved: 'approved as accountant', AccountantQueried: 'sent it back', ItemDecision: 'decided on a payment', DirectorSigned: 'signed the batch', DirectorQueried: 'sent it back with queries', DirectorRejected: 'rejected the batch', BankFileExported: 'downloaded the bank file', StatusChanged: `moved it to ${this.statusTitle(e.toStatus || '')}`, Reopened: 'reopened it as a draft', PrepaymentClosed: 'closed a prepayment' };
-    return m[e.action] ?? (e.toStatus ? `${e.action} → ${this.statusTitle(e.toStatus)}` : e.action);
+    const m: Record<string, string> = { Created: 'created the batch', ItemAdded: 'added a payment', ItemUpdated: 'edited a payment', ItemRemoved: 'removed a payment', DocumentUploaded: 'attached a document', DocumentReplaced: 'replaced a document', DocumentRemoved: 'removed a document', DocumentNA: 'marked a document N/A', Submitted: e.toStatus === 'ChecksFailed' ? 'submitted â€” checks failed' : 'submitted to the accountant', ChecksRun: 'ran the checks', AccountantApproved: 'approved as accountant', AccountantQueried: 'sent it back', ItemDecision: 'decided on a payment', DirectorSigned: 'signed the batch', DirectorQueried: 'sent it back with queries', DirectorRejected: 'rejected the batch', BankFileExported: 'downloaded the bank file', StatusChanged: `moved it to ${this.statusTitle(e.toStatus || '')}`, Reopened: 'reopened it as a draft', PrepaymentClosed: 'closed a prepayment' };
+    return m[e.action] ?? (e.toStatus ? `${e.action} â†’ ${this.statusTitle(e.toStatus)}` : e.action);
   }
 
-  // ── derived counts ──
+  // â”€â”€ derived counts â”€â”€
   stepState(b: BatchDetail, key: string): 'done' | 'now' | 'bad' | '' {
     const cur = b.status === 'ChecksFailed' ? 'Checks' : b.status === 'QueriedByAccountant' ? 'AwaitingAccountant' : b.status === 'QueriedByDirector' || b.status === 'Rejected' ? 'AwaitingDirector' : b.status;
     const ci = this.order.indexOf(cur), ki = this.order.indexOf(key);
@@ -893,7 +894,7 @@ export class FinanceCreditorsComponent implements OnInit {
   findingsFor(itemId: number) { return (this.batch()?.checks?.findings ?? []).filter(f => f.itemId === itemId && f.severity !== 'PASS'); }
   hasFail(itemId: number) { return this.findingsFor(itemId).some(f => f.severity === 'FAIL'); }
 
-  // ── navigation ──
+  // â”€â”€ navigation â”€â”€
   open(id: number): void {
     this.busy.set(true);
     this.api.get(id).subscribe({
@@ -907,24 +908,24 @@ export class FinanceCreditorsComponent implements OnInit {
   private apply = (b: BatchDetail, msg?: string) => { this.batch.set(b); this.busy.set(false); if (msg) this.toast.done(msg); };
   private fail = (e: any, fallback: string) => { this.busy.set(false); this.toast.error(e?.error?.message || fallback); };
 
-  // ── batch actions ──
+  // â”€â”€ batch actions â”€â”€
   create(): void {
     this.busy.set(true);
-    this.api.create({ ...this.newBatch, notes: this.newBatch.notes || undefined }).subscribe({ next: b => { this.newOpen.set(false); this.apply(b, `${b.batchNumber} created — now add the payments`); this.view.set('batch'); }, error: e => this.fail(e, "Couldn't create the batch.") });
+    this.api.create({ ...this.newBatch, notes: this.newBatch.notes || undefined }).subscribe({ next: b => { this.newOpen.set(false); this.apply(b, `${b.batchNumber} created â€” now add the payments`); this.view.set('batch'); }, error: e => this.fail(e, "Couldn't create the batch.") });
   }
   deleteBatch(): void { const b = this.batch()!; if (!confirm(`Delete draft ${b.batchNumber}? This can't be undone.`)) return; this.api.delete(b.id).subscribe({ next: () => { this.toast.done('Draft deleted'); this.back(); }, error: e => this.fail(e, "Couldn't delete.") }); }
-  submit(): void { const b = this.batch()!; this.busy.set(true); this.api.submit(b.id).subscribe({ next: r => this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems — see the red items' : 'Sent to the accountant'), error: e => this.fail(e, "Couldn't submit.") }); }
+  submit(): void { const b = this.batch()!; this.busy.set(true); this.api.submit(b.id).subscribe({ next: r => this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems â€” see the red items' : 'Sent to the accountant'), error: e => this.fail(e, "Couldn't submit.") }); }
   rerun(): void { const b = this.batch()!; this.busy.set(true); this.api.rerunChecks(b.id).subscribe({ next: r => this.apply(r, `Checks: ${r.checksStatus}`), error: e => this.fail(e, "Couldn't run the checks.") }); }
   accountant(d: 'approve' | 'query'): void {
     const b = this.batch()!; const c = prompt(d === 'approve' ? 'Add a note for the director (optional):' : 'What needs to be fixed before you can approve?'); if (c === null) return; if (d === 'query' && !c.trim()) return;
-    this.busy.set(true); this.api.accountant(b.id, d, c || undefined).subscribe({ next: r => this.apply(r, d === 'approve' ? 'Approved — now with the director' : 'Sent back to the preparer'), error: e => this.fail(e, "Couldn't record your decision.") });
+    this.busy.set(true); this.api.accountant(b.id, d, c || undefined).subscribe({ next: r => this.apply(r, d === 'approve' ? 'Approved â€” now with the director' : 'Sent back to the preparer'), error: e => this.fail(e, "Couldn't record your decision.") });
   }
   decide(it: BatchItem, d: string): void {
     const b = this.batch()!; let c: string | null = null;
     if (d !== 'Approved') { c = prompt(d === 'Queried' ? `What do you want checked on ${it.supplierName}?` : `Why is ${it.supplierName} rejected?`); if (!c) return; }
     this.busy.set(true); this.api.decide(b.id, it.id, d, c || undefined).subscribe({ next: r => this.apply(r), error: e => this.fail(e, "Couldn't save the decision.") });
   }
-  decideAll(d: string): void { const b = this.batch()!; const pend = b.items.filter(i => i.decisionStatus === 'Pending'); if (!pend.length) return; this.busy.set(true); let n = 0; for (const it of pend) this.api.decide(b.id, it.id, d).subscribe({ next: r => { if (++n === pend.length) this.apply(r, `${n} payment(s) approved — now sign`); }, error: e => this.fail(e, "Couldn't approve all.") }); }
+  decideAll(d: string): void { const b = this.batch()!; const pend = b.items.filter(i => i.decisionStatus === 'Pending'); if (!pend.length) return; this.busy.set(true); let n = 0; for (const it of pend) this.api.decide(b.id, it.id, d).subscribe({ next: r => { if (++n === pend.length) this.apply(r, `${n} payment(s) approved â€” now sign`); }, error: e => this.fail(e, "Couldn't approve all.") }); }
   sign(): void {
     const b = this.batch()!; const img = this.drew && this.sigpad ? this.sigpad.nativeElement.toDataURL('image/png') : undefined;
     this.busy.set(true); this.api.sign(b.id, this.signName, this.signComment || undefined, img).subscribe({ next: r => { this.signOpen.set(false); this.apply(r, r.status === 'Approved' ? 'Signed and locked' : r.status === 'Rejected' ? 'Batch rejected' : 'Queries sent back to the preparer'); }, error: e => this.fail(e, "Couldn't sign.") });
@@ -932,7 +933,7 @@ export class FinanceCreditorsComponent implements OnInit {
   setStatus(s: 'LoadedOnBank' | 'Paid' | 'Closed' | 'Draft'): void { const b = this.batch()!; this.busy.set(true); this.api.setStatus(b.id, s).subscribe({ next: r => this.apply(r, this.statusTitle(r.status)), error: e => this.fail(e, "Couldn't change the status.") }); }
   bankFile(): void { const b = this.batch()!; this.api.bankFile(b.id).subscribe({ next: blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.batchNumber}-bank.csv`; a.click(); URL.revokeObjectURL(a.href); this.open(b.id); }, error: e => this.fail(e, "Couldn't export.") }); }
 
-  // ── items ──
+  // â”€â”€ items â”€â”€
   startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned } : { ...EMPTY_ITEM }; this.clearInvoice(); this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new'); }
   cancelItem(): void { this.itemForm.set(null); this.clearInvoice(); }
   saveItem(): void {
@@ -947,12 +948,12 @@ export class FinanceCreditorsComponent implements OnInit {
         const attachSage = (afterMsg: string) => {
           if (!sage) { this.toast.done(afterMsg); return; }
           this.busy.set(true);
-          this.api.upload(b.id, sage, 'SageAgedPayables', itemId).subscribe({ next: x => this.apply(x, afterMsg + ' + Sage aged payables'), error: e => this.fail(e, 'Saved, but the Sage aged payables PDF could not be attached — upload it under the payment.') });
+          this.api.upload(b.id, sage, 'SageAgedPayables', itemId).subscribe({ next: x => this.apply(x, afterMsg + ' + Sage aged payables'), error: e => this.fail(e, 'Saved, but the Sage aged payables PDF could not be attached â€” upload it under the payment.') });
         };
         const attachRecon = (afterMsg: string) => {
           if (!recon) { attachSage(afterMsg); return; }
           this.busy.set(true);
-          this.api.upload(b.id, recon, 'SupplierRecon', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachSage(afterMsg + ' + recon'); }, error: e => this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.') });
+          this.api.upload(b.id, recon, 'SupplierRecon', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachSage(afterMsg + ' + recon'); }, error: e => this.fail(e, 'Payment saved but the recon could not be attached â€” upload it under the payment.') });
         };
         if (file) { this.busy.set(true); this.api.upload(b.id, file, 'TaxInvoice', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and invoice attached'); }, error: e => this.fail(e, 'Payment saved but the invoice could not be attached.') }); }
         else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and linked to the Books invoice'); }, error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
@@ -962,7 +963,7 @@ export class FinanceCreditorsComponent implements OnInit {
   }
   removeItem(it: BatchItem): void { const b = this.batch()!; if (!confirm(`Remove ${it.supplierName} and its documents from this batch?`)) return; this.busy.set(true); this.api.deleteItem(b.id, it.id).subscribe({ next: r => this.apply(r), error: e => this.fail(e, "Couldn't remove.") }); }
 
-  // ── supplier directory + invoice auto-fill ──
+  // â”€â”€ supplier directory + invoice auto-fill â”€â”€
   searchSuppliers(q: string): void {
     clearTimeout(this.supTimer); this.showSuppliers.set(true);
     if (!q || q.trim().length < 2) { this.supplierHits.set([]); return; }
@@ -978,7 +979,7 @@ export class FinanceCreditorsComponent implements OnInit {
     if (s.accountHolder && !d.accountHolder) d.accountHolder = s.accountHolder;
     if (s.paymentReference && !d.paymentReference) d.paymentReference = s.paymentReference;
     this.showSuppliers.set(false); this.supplierHits.set([]);
-    if (s.bankName) this.toast.info(`Bank details filled from ${s.payments ? 'the last payment' : 'Books'} — still check them against the bank letter`);
+    if (s.bankName) this.toast.info(`Bank details filled from ${s.payments ? 'the last payment' : 'Books'} â€” still check them against the bank letter`);
   }
   invoiceChosen(e: Event): void {
     const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
@@ -996,11 +997,11 @@ export class FinanceCreditorsComponent implements OnInit {
         if (r.customerAccount && !d.paymentReference) { d.paymentReference = r.customerAccount; filled.push('reference'); }
         // Bank details: prefer what we paid last time (verified), else what is printed on the invoice
         if (r.supplier?.bankName && !d.bankName) { const s = r.supplier; d.bankName = s.bankName!; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference ||= s.paymentReference ?? ''; filled.push('bank details from last payment'); }
-        else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details printed on the invoice — verify against the bank letter'); }
-        this.readInfo.set(!r.readable ? 'could not read the text — fill in by hand' : filled.length ? 'filled: ' + filled.join(', ') : 'read, nothing recognised');
-        if (r.suggestedType && r.suggestedType !== 'TaxInvoice' && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a tax invoice — it will still be attached as the invoice.`);
+        else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details printed on the invoice â€” verify against the bank letter'); }
+        this.readInfo.set(!r.readable ? 'could not read the text â€” fill in by hand' : filled.length ? 'filled: ' + filled.join(', ') : 'read, nothing recognised');
+        if (r.suggestedType && r.suggestedType !== 'TaxInvoice' && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a tax invoice â€” it will still be attached as the invoice.`);
       },
-      error: e => { this.reading.set(false); this.readInfo.set('could not read'); this.toast.error(e?.error?.message || "Couldn't read the PDF — it will still be attached."); }
+      error: e => { this.reading.set(false); this.readInfo.set('could not read'); this.toast.error(e?.error?.message || "Couldn't read the PDF â€” it will still be attached."); }
     });
   }
   openPicker(): void { this.picker.set(true); this.pickerQ = this.itemDraft.supplierName || ''; this.searchBooks(); }
@@ -1015,13 +1016,13 @@ export class FinanceCreditorsComponent implements OnInit {
     if (h.invoiceNumber && !d.invoiceNumbers) d.invoiceNumbers = h.invoiceNumber;
     if (h.description && !d.description) d.description = h.description;
     this.api.suppliers(h.supplierName, 1).subscribe({ next: s => { if (s[0]?.bankName && !d.bankName) this.pickSupplier(s[0]); } });
-    if (!h.hasPdf) this.toast.warn('That Books invoice has no PDF — the link will be recorded but you may still need to upload the invoice.');
+    if (!h.hasPdf) this.toast.warn('That Books invoice has no PDF â€” the link will be recorded but you may still need to upload the invoice.');
   }
   clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingReconFile = null; this.pendingSageFile = null; this.reconInfo.set(''); this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
   reconChosen(e: Event): void {
     const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
     if (!/\.(xlsx|xls|csv|pdf)$/i.test(f.name)) { this.toast.warn('The recon must be an Excel file (.xlsx/.xls), CSV or PDF.'); return; }
-    this.pendingReconFile = f; this.reconInfo.set('reading…');
+    this.pendingReconFile = f; this.reconInfo.set('readingâ€¦');
     this.api.readRecon(f).subscribe({
       next: r => {
         const d = this.itemDraft; const filled: string[] = [];
@@ -1031,14 +1032,14 @@ export class FinanceCreditorsComponent implements OnInit {
         if (!d.invoiceNumbers) { const list = (r.invoiceNumbers?.length ? r.invoiceNumbers : r.invoiceNumber ? [r.invoiceNumber] : []); if (list.length) { d.invoiceNumbers = list.join(', '); filled.push(list.length > 1 ? `${list.length} invoice nos.` : 'invoice no.'); } }
         if (r.customerAccount && !d.paymentReference) { d.paymentReference = r.customerAccount; filled.push('reference'); }
         if (r.supplier?.bankName && !d.bankName) { const s = r.supplier; d.bankName = s.bankName!; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference ||= s.paymentReference ?? ''; filled.push('bank details from last payment'); }
-        else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details on the recon — verify'); }
+        else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details on the recon â€” verify'); }
         this.reconInfo.set(!r.readable ? 'could not read' : filled.length ? 'filled: ' + filled.join(', ') : 'read');
       },
-      error: () => this.reconInfo.set('could not read — will still be attached')
+      error: () => this.reconInfo.set('could not read â€” will still be attached')
     });
   }
 
-  // ── documents ──
+  // â”€â”€ documents â”€â”€
   pickFor(docType: string, itemId: number | null): void { this.pendingType = docType; this.pendingItem = itemId; this.pendingReplace = null; this.pickAccept = this.isSheetSlot(docType) ? '.xlsx,.xls,.csv,application/pdf' : 'application/pdf'; setTimeout(() => this.fileInput?.nativeElement.click()); }
   replaceDoc(d: BatchDoc): void { const reason = prompt('Why is this document being replaced? (kept in the history)'); if (!reason) return; this.pendingType = d.docType; this.pendingItem = d.itemId ?? null; this.pendingReplace = { ...d, versionReason: reason }; this.pickAccept = this.isSheetSlot(d.docType) ? '.xlsx,.xls,.csv,application/pdf' : 'application/pdf'; setTimeout(() => this.fileInput?.nativeElement.click()); }
   filesChosen(e: Event): void { const inp = e.target as HTMLInputElement; const files = Array.from(inp.files ?? []); inp.value = ''; this.uploadAll(files, this.pendingItem, this.pendingType); }
@@ -1047,10 +1048,10 @@ export class FinanceCreditorsComponent implements OnInit {
     const b = this.batch()!;
     const sheetOk = this.isSheetSlot(docType);
     const pdfs = files.filter(f => /\.pdf$/i.test(f.name) || (sheetOk && /\.(xlsx|xls|csv)$/i.test(f.name)));
-    if (!pdfs.length) { this.toast.warn(sheetOk ? 'PDF or Excel/CSV files only.' : 'PDF files only — one document per file. Excel recons go in the Supplier recon slot (use its Upload button).'); return; }
-    if (!sheetOk && files.some(f => /\.(xlsx|xls|csv)$/i.test(f.name))) { const items = this.batch()?.items ?? []; const it = items.find(i => i.id === itemId); const slot = (it?.required ?? []).find(r => r.docType === 'SupplierRecon'); if (slot && files.filter(f => /\.(xlsx|xls|csv)$/i.test(f.name)).length === 1 && pdfs.length === files.length - 1) { /* a spreadsheet dropped with PDFs — send it to the recon slot */ const sheet = files.find(f => /\.(xlsx|xls|csv)$/i.test(f.name))!; this.api.upload(b.id, sheet, 'SupplierRecon', itemId).subscribe({ next: r => { this.batch.set(r); this.toast.done('Spreadsheet attached as the supplier recon'); }, error: e => this.toast.error(`${sheet.name}: ${e?.error?.message || 'upload failed'}`) }); } else this.toast.warn('Spreadsheets are only accepted as the supplier recon — use that slot\'s Upload button.'); }
-    this.busy.set(true); let i = 0; this.toast.info(pdfs.length === 1 ? 'Reading the document…' : `Reading ${pdfs.length} documents… scanned PDFs take a little longer`);
-    const next = () => { if (i >= pdfs.length) { this.busy.set(false); this.toast.done(docType ? 'Attached' : `${pdfs.length} file(s) attached — check the document type we guessed`); return; }
+    if (!pdfs.length) { this.toast.warn(sheetOk ? 'PDF or Excel/CSV files only.' : 'PDF files only â€” one document per file. Excel recons go in the Supplier recon slot (use its Upload button).'); return; }
+    if (!sheetOk && files.some(f => /\.(xlsx|xls|csv)$/i.test(f.name))) { const items = this.batch()?.items ?? []; const it = items.find(i => i.id === itemId); const slot = (it?.required ?? []).find(r => r.docType === 'SupplierRecon'); if (slot && files.filter(f => /\.(xlsx|xls|csv)$/i.test(f.name)).length === 1 && pdfs.length === files.length - 1) { /* a spreadsheet dropped with PDFs â€” send it to the recon slot */ const sheet = files.find(f => /\.(xlsx|xls|csv)$/i.test(f.name))!; this.api.upload(b.id, sheet, 'SupplierRecon', itemId).subscribe({ next: r => { this.batch.set(r); this.toast.done('Spreadsheet attached as the supplier recon'); }, error: e => this.toast.error(`${sheet.name}: ${e?.error?.message || 'upload failed'}`) }); } else this.toast.warn('Spreadsheets are only accepted as the supplier recon â€” use that slot\'s Upload button.'); }
+    this.busy.set(true); let i = 0; this.toast.info(pdfs.length === 1 ? 'Reading the documentâ€¦' : `Reading ${pdfs.length} documentsâ€¦ scanned PDFs take a little longer`);
+    const next = () => { if (i >= pdfs.length) { this.busy.set(false); this.toast.done(docType ? 'Attached' : `${pdfs.length} file(s) attached â€” check the document type we guessed`); return; }
       const f = pdfs[i++]; const rep = this.pendingReplace;
       this.api.upload(b.id, f, docType || undefined, itemId, rep?.id, rep?.versionReason).subscribe({ next: r => { this.batch.set(r); this.pendingReplace = null; next(); }, error: e => { this.toast.error(`${f.name}: ${e?.error?.message || 'upload failed'}`); next(); } }); };
     next();
@@ -1060,11 +1061,14 @@ export class FinanceCreditorsComponent implements OnInit {
   markNa(r: RequiredDoc, itemId: number | null): void { const b = this.batch()!; const reason = prompt(`Why does "${r.title}" not apply to this payment? (the approvers will see this)`); if (!reason) return; this.api.markNa(b.id, r.docType, itemId, reason).subscribe({ next: x => this.batch.set(x), error: e => this.fail(e, "Couldn't mark N/A.") }); }
   openDoc(d: BatchDoc): void {
     const b = this.batch()!;
-    if (d.textMethod === 'sheet') { this.api.file(b.id, d.id).subscribe({ next: blob => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = d.originalFileName || 'recon'; a.click(); URL.revokeObjectURL(url); }, error: () => this.toast.error("Couldn't download the file.") }); return; }
     const it = b.items.find(i => i.id === d.itemId);
-    PackPreviewDialogComponent.open(this.dialog, { url: this.api.fileUrl(b.id, d.id), title: `${this.docTitle(d.docType)}${it ? ' · ' + it.supplierName : ''}`, subtitle: `${b.batchNumber} · ${d.originalFileName || ''}${d.documentDate ? ' · dated ' + new Date(d.documentDate).toLocaleDateString() : ''}`, fileName: d.originalFileName || 'document.pdf' });
+    if (d.textMethod === 'sheet') {
+      ReconPreviewDialogComponent.open(this.dialog, { sheetUrl: this.api.sheetUrl(b.id, d.id), fileUrl: this.api.fileUrl(b.id, d.id), title: `${this.docTitle(d.docType)}${it ? ' Â· ' + it.supplierName : ''}`, subtitle: `${b.batchNumber} Â· ${d.originalFileName || ''}`, fileName: d.originalFileName || 'recon.xlsx' });
+      return;
+    }
+    PackPreviewDialogComponent.open(this.dialog, { url: this.api.fileUrl(b.id, d.id), title: `${this.docTitle(d.docType)}${it ? ' Â· ' + it.supplierName : ''}`, subtitle: `${b.batchNumber} Â· ${d.originalFileName || ''}${d.documentDate ? ' Â· dated ' + new Date(d.documentDate).toLocaleDateString() : ''}`, fileName: d.originalFileName || 'document.pdf' });
   }
-  previewableDocs(it: BatchItem): BatchDoc[] { return it.documents.filter(d => !d.isNotApplicable && d.textMethod !== 'sheet'); }
+  previewableDocs(it: BatchItem): BatchDoc[] { return it.documents.filter(d => !d.isNotApplicable); }
   /** Review a payment: open its first PDF (tax invoice first) in the preview dialog; the dialog's own buttons handle open/download. */
   previewItem(it: BatchItem): void {
     const docs = this.previewableDocs(it); if (!docs.length) return;
@@ -1073,7 +1077,7 @@ export class FinanceCreditorsComponent implements OnInit {
     this.openItem.set(it.id); this.openDoc(first);
   }
 
-  // ── signature pad ──
+  // â”€â”€ signature pad â”€â”€
   private ctx(): CanvasRenderingContext2D | null { const c = this.sigpad?.nativeElement; if (!c) return null; const x = c.getContext('2d'); if (x) { x.lineWidth = 2; x.lineCap = 'round'; x.strokeStyle = '#111'; } return x; }
   private pos(e: PointerEvent) { const c = this.sigpad!.nativeElement; const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height }; }
   padDown(e: PointerEvent) { const x = this.ctx(); if (!x) return; this.drawing = true; const p = this.pos(e); x.beginPath(); x.moveTo(p.x, p.y); }

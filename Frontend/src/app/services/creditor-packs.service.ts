@@ -115,6 +115,8 @@ export class CreditorPacksService {
   deleteDoc(id: number, docId: number) { return this.http.delete<BatchDetail>(`${this.base}/batches/${id}/documents/${docId}`); }
   fileUrl(id: number, docId: number, download = false) { return `${this.base}/batches/${id}/documents/${docId}/file${download ? '?download=true' : ''}`; }
   file(id: number, docId: number) { return this.http.get(this.fileUrl(id, docId), { responseType: 'blob' }); }
+  /** Parsed grid + extracted facts for a spreadsheet document (recon / schedule). */
+  sheetUrl(id: number, docId: number) { return `${this.base}/batches/${id}/documents/${docId}/sheet`; }
 
   submit(id: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, {}); }
   rerunChecks(id: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/checks`, {}); }
