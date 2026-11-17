@@ -245,7 +245,7 @@ public class CreditorChecksService
         if (Has("PAYMENT SCHEDULE", "PAYMENT_SCHEDULE", "SCHEDULE OF PAYMENTS")) return CreditorDocTypes.PaymentSchedule;
         if (Has("CREDITORS RECON")) return CreditorDocTypes.CreditorsRecon;
         if (Has("SUPPLIER RECON", "RECONCILIATION", "RECON")) return CreditorDocTypes.SupplierRecon;
-        if (Has("AGED PAYABLES", "A/P AGED", "AP AGED", "SAGE 300", "PAYABLES BATCH")) return CreditorDocTypes.SageAgedPayables;
+        if (Has("AGED PAYABLES", "A/P AGED", "AP AGED", "SAGE 300", "PAYABLES BATCH", "AGED ANALYSIS")) return CreditorDocTypes.SageAgedPayables;
         if (Has("CREDIT NOTE SUMMARY", "CREDIT NOTE REQUEST", "CREDIT NOTE")) return CreditorDocTypes.CreditNoteForm;
         if (Has("RETURN GRV", "GOODS RETURNED", "RETURNS NOTE")) return CreditorDocTypes.WarehouseReturnGrv;
         if (Has("COLLECTION SLIP", "COLLECTED BY")) return CreditorDocTypes.CustomerCollectionSlip;
@@ -313,14 +313,15 @@ public class CreditorChecksService
             if (!docs.Any(d => d.DocType == dt && d.ItemId == null && (d.IsNotApplicable || d.StoragePath != null)))
                 Add("C1", "Required document missing", "FAIL", $"{Label(dt)} is required for a {Label(batch.PaymentType)} batch.", null, dt);
 
+        bool HasRecon(PaymentBatchItem it) => docs.Any(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.SupplierRecon && d.StoragePath != null);
         foreach (var it in items)
-            foreach (var dt in CreditorDocRules.RequiredForItem(batch.PaymentType, it.StockReturned, closingPrepayment))
+            foreach (var dt in CreditorDocRules.RequiredForItem(batch.PaymentType, it.StockReturned, closingPrepayment, HasRecon(it)))
                 if (!docs.Any(d => d.DocType == dt && d.ItemId == it.Id && (d.IsNotApplicable || d.StoragePath != null)))
-                    Add("C1", "Required document missing", "FAIL", $"{Label(dt)} is missing for {it.SupplierName}.", it, dt);
+                    Add("C1", "Required document missing", "FAIL", dt == CreditorDocTypes.SageAgedPayables ? $"Sage aged payables (PDF) must accompany the recon for {it.SupplierName}." : $"{Label(dt)} is missing for {it.SupplierName}.", it, dt);
 
         // C1a — recommended documents (quote, PO, GRV, proof of work, bank letter…): not blocking, but the approvers should know
         foreach (var it in items)
-            foreach (var dt in CreditorDocRules.RecommendedForItem(batch.PaymentType, it.StockReturned, closingPrepayment))
+            foreach (var dt in CreditorDocRules.RecommendedForItem(batch.PaymentType, it.StockReturned, closingPrepayment, HasRecon(it)))
                 if (!docs.Any(d => d.DocType == dt && d.ItemId == it.Id && (d.IsNotApplicable || d.StoragePath != null)))
                     Add("C1a", "Supporting document not attached", "REVIEW",
                         dt == CreditorDocTypes.BankLetter

@@ -274,6 +274,18 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   }
                   <input #reconFileInput type="file" accept=".xlsx,.xls,.csv,application/pdf" hidden (change)="reconChosen($event)">
                 </div>
+                @if (sageSlot() && pendingReconFile) {
+                  <div class="inv-src recon" [class.missing]="!pendingSageFile">
+                    @if (!pendingSageFile) {
+                      <button mat-stroked-button (click)="sageFileInput.click()"><mat-icon>picture_as_pdf</mat-icon> Upload Sage aged payables</button>
+                      <small><mat-icon>priority_high</mat-icon> Required with the recon — PDF only.</small>
+                    } @else {
+                      <span class="chip ok"><mat-icon>picture_as_pdf</mat-icon> {{ pendingSageFile.name }}</span>
+                      <button mat-icon-button (click)="pendingSageFile = null" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                    }
+                    <input #sageFileInput type="file" accept="application/pdf" hidden (change)="sageChosen($event)">
+                  </div>
+                }
               }
               @if (picker()) {
                 <div class="picker">
@@ -328,7 +340,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               }
               <div class="actions">
                 @if (itemForm() === 'new' && needsRecon() && !pendingReconFile) { <small class="warn-txt"><mat-icon>warning</mat-icon> Attach the supplier recon before adding this payment.</small> }
-                <button mat-button (click)="cancelItem()">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy() || (itemForm() === 'new' && needsRecon() && !pendingReconFile)" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button>
+                @else if (itemForm() === 'new' && needsSage()) { <small class="warn-txt"><mat-icon>warning</mat-icon> The recon must come with the Sage aged payables PDF.</small> }
+                <button mat-button (click)="cancelItem()">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy() || (itemForm() === 'new' && ((needsRecon() && !pendingReconFile) || needsSage()))" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button>
               </div>
             </div>
           }
@@ -396,7 +409,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           <ng-container *ngTemplateOutlet="checklist; context: { required: b.requiredBatchDocs, recommended: [], docs: b.batchDocuments, itemId: null }"></ng-container>
           @if (b.can.edit || b.can.uploadAfterLock) {
             <div class="drop" (dragover)="$event.preventDefault()" (drop)="drop($event, null)">
-              <mat-icon>upload_file</mat-icon> Drop batch PDFs here (schedule, recon, Sage report) or <button mat-button (click)="pickFor('', null)">choose files</button>
+              <mat-icon>upload_file</mat-icon> Drop batch PDFs here (payment schedule, creditors recon) or <button mat-button (click)="pickFor('', null)">choose files</button>
             </div>
           }
         </section>
@@ -712,6 +725,7 @@ export class FinanceCreditorsComponent implements OnInit {
   pickerQ = '';
   pendingInvoiceFile: File | null = null;
   pendingReconFile: File | null = null;
+  pendingSageFile: File | null = null;
   reconInfo = signal('');
   pendingLink: BooksInvoiceHit | null = null;
   pickAccept = 'application/pdf';
@@ -788,10 +802,13 @@ export class FinanceCreditorsComponent implements OnInit {
   docTitle(k: string) { return this.meta()?.docTypes.find(d => d.key === k)?.title ?? k; }
   docTypesFor(itemId: number | null) { return (this.meta()?.docTypes ?? []).filter(d => itemId ? d.scope === 'item' || d.key === 'Other' : d.scope === 'batch' || d.key === 'Other'); }
   badge(s: string) { return ['Approved', 'Paid', 'Closed', 'LoadedOnBank'].includes(s) ? 'ok' : s.startsWith('Awaiting') ? 'warn' : this.sentBack.includes(s) || s === 'Rejected' ? 'bad' : s === 'Draft' ? '' : 'info'; }
-  rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (opt.length ? ` · optional: ${opt.join(', ')}` : ''); }
+  rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned && !r.withRecon).map(r => this.docTitle(r.docType)); const withRecon = rules.filter(r => r.withRecon).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (withRecon.length ? ` · with every recon: ${withRecon.join(', ')}` : '') + (opt.length ? ` · optional: ${opt.join(', ')}` : ''); }
   reconSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); }
   needsRecon(): boolean { return this.reconSlot() && !!(this.pendingInvoiceFile || this.pendingLink); }
-  isSheetSlot(t: string) { return ['SupplierRecon', 'CreditorsRecon', 'SageAgedPayables', 'PaymentSchedule'].includes(t); }
+  sageSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SageAgedPayables' && r.withRecon); }
+  needsSage(): boolean { return this.sageSlot() && !!this.pendingReconFile && !this.pendingSageFile; }
+  sageChosen(e: Event): void { const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return; if (!/\.pdf$/i.test(f.name)) { this.toast.warn('Sage aged payables must be a PDF.'); return; } this.pendingSageFile = f; }
+  isSheetSlot(t: string) { return ['SupplierRecon', 'CreditorsRecon', 'PaymentSchedule'].includes(t); }
   responsibleName(id?: number) { if (!id) return ''; for (const x of this.meta()?.companies ?? []) { if (x.accountantUserId === id) return x.accountantName ?? ''; if (x.backupApproverUserId === id) return x.backupApproverName ?? ''; if (x.directorUserId === id) return x.directorName ?? ''; if (x.delegateDirectorUserId === id) return x.delegateDirectorName ?? ''; } return ''; }
 
   waitingOn(r: BatchRow): string {
@@ -920,17 +937,22 @@ export class FinanceCreditorsComponent implements OnInit {
   cancelItem(): void { this.itemForm.set(null); this.clearInvoice(); }
   saveItem(): void {
     const b = this.batch()!; const f = this.itemForm(); this.busy.set(true);
-    const file = this.pendingInvoiceFile, link = this.pendingLink, recon = this.pendingReconFile;
+    const file = this.pendingInvoiceFile, link = this.pendingLink, recon = this.pendingReconFile, sage = this.pendingSageFile;
     const req = f === 'new' ? this.api.addItem(b.id, this.itemDraft) : this.api.updateItem(b.id, f as number, this.itemDraft);
     req.subscribe({
       next: r => {
         const itemId = f === 'new' ? (r.items[r.items.length - 1]?.id ?? 0) : (f as number);
         this.itemForm.set(null); this.apply(r); this.openItem.set(itemId); this.clearInvoice();
         if (!itemId) return;
-        const attachRecon = (afterMsg: string) => {
-          if (!recon) { this.toast.done(afterMsg); return; }
+        const attachSage = (afterMsg: string) => {
+          if (!sage) { this.toast.done(afterMsg); return; }
           this.busy.set(true);
-          this.api.upload(b.id, recon, 'SupplierRecon', itemId).subscribe({ next: x => this.apply(x, afterMsg + ' + recon'), error: e => this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.') });
+          this.api.upload(b.id, sage, 'SageAgedPayables', itemId).subscribe({ next: x => this.apply(x, afterMsg + ' + Sage aged payables'), error: e => this.fail(e, 'Saved, but the Sage aged payables PDF could not be attached — upload it under the payment.') });
+        };
+        const attachRecon = (afterMsg: string) => {
+          if (!recon) { attachSage(afterMsg); return; }
+          this.busy.set(true);
+          this.api.upload(b.id, recon, 'SupplierRecon', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachSage(afterMsg + ' + recon'); }, error: e => this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.') });
         };
         if (file) { this.busy.set(true); this.api.upload(b.id, file, 'TaxInvoice', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and invoice attached'); }, error: e => this.fail(e, 'Payment saved but the invoice could not be attached.') }); }
         else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and linked to the Books invoice'); }, error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
@@ -995,7 +1017,7 @@ export class FinanceCreditorsComponent implements OnInit {
     this.api.suppliers(h.supplierName, 1).subscribe({ next: s => { if (s[0]?.bankName && !d.bankName) this.pickSupplier(s[0]); } });
     if (!h.hasPdf) this.toast.warn('That Books invoice has no PDF — the link will be recorded but you may still need to upload the invoice.');
   }
-  clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingReconFile = null; this.reconInfo.set(''); this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
+  clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingReconFile = null; this.pendingSageFile = null; this.reconInfo.set(''); this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
   reconChosen(e: Event): void {
     const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
     if (!/\.(xlsx|xls|csv|pdf)$/i.test(f.name)) { this.toast.warn('The recon must be an Excel file (.xlsx/.xls), CSV or PDF.'); return; }

@@ -10,7 +10,7 @@ export interface CreditorCompany {
   directorUserId?: number | null; directorName?: string | null;
   delegateDirectorUserId?: number | null; delegateDirectorName?: string | null;
 }
-export interface DocRule { docType: string; required: boolean; afterDelivery: boolean; ifReturned: boolean; }
+export interface DocRule { docType: string; required: boolean; afterDelivery: boolean; ifReturned: boolean; withRecon?: boolean; }
 export interface CreditorMeta {
   companies: CreditorCompany[];
   paymentTypes: { key: string; title: string }[];

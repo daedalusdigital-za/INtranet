@@ -20,7 +20,7 @@ namespace ProjectTracker.API.Migrations
             migrationBuilder.Sql(@"
 UPDATE FlowDefinitions SET GraphJson = REPLACE(GraphJson,
   'Attach the required documents per payment, then Submit.',
-  'Every invoice must come with its supplier recon (.xlsx or PDF) - the form will not add the payment without it. Quotes, purchase orders, GRVs, proof of work and bank letters are optional: attach them where you have them (missing ones are flagged to the approvers, not blocked). Requisitions / payment requests are handled in their own module, not in the pack. Then Submit.')
+  'Every invoice must come with its supplier recon (.xlsx or PDF) and, with the recon, the Sage aged payables PDF - the form will not add the payment without them. Quotes, purchase orders, GRVs, proof of work and bank letters are optional: attach them where you have them (missing ones are flagged to the approvers, not blocked). Requisitions / payment requests are handled in their own module, not in the pack. Then Submit.')
 WHERE Name LIKE N'Supplier payment%' AND IsTemplate = 1;
 
 UPDATE FlowDefinitions SET GraphJson = REPLACE(GraphJson,

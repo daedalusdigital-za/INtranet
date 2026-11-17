@@ -148,7 +148,6 @@ public static class CreditorDocTypes
         (PaymentSchedule, "Payment schedule", "batch"),
         (CreditorsRecon, "Creditors recon", "batch"),
         (SupplierStatement, "Supplier statement", "item"),
-        (SageAgedPayables, "Sage aged payables / batch", "batch"),
         (TaxInvoice, "Tax invoice", "item"),
         (SupplierRecon, "Supplier recon (Excel or PDF)", "item"),
         (Quote, "Quote (3 where possible)", "item"),
@@ -156,6 +155,7 @@ public static class CreditorDocTypes
         (Grv, "GRV / delivery note / POD", "item"),
         (ProofOfWork, "Proof of work (photos, reg, sign-off)", "item"),
         (BankLetter, "Bank letter < 3 months + AVS", "item"),
+        (SageAgedPayables, "Sage aged payables (PDF)", "item"),
         (WrittenInstruction, "Written instruction + invoices settled", "item"),
         (CreditNoteForm, "Credit note + summary form (all signatures)", "item"),
         (CustomerReason, "Customer e-mail / reason + original invoice", "item"),
@@ -166,9 +166,9 @@ public static class CreditorDocTypes
         (Other, "Other", "any"),
     };
 
-    public static bool IsBatchLevel(string docType) => docType is PaymentSchedule or CreditorsRecon or SageAgedPayables;
+    public static bool IsBatchLevel(string docType) => docType is PaymentSchedule or CreditorsRecon;
     /// <summary>Document slots that accept spreadsheets as well as PDFs.</summary>
-    public static bool AllowsSpreadsheet(string docType) => docType is SupplierRecon or CreditorsRecon or SageAgedPayables or PaymentSchedule;
+    public static bool AllowsSpreadsheet(string docType) => docType is SupplierRecon or CreditorsRecon or PaymentSchedule;
 }
 
 /// <summary>
@@ -179,43 +179,46 @@ public static class CreditorDocTypes
 /// </summary>
 public static class CreditorDocRules
 {
-    public sealed record Rule(string DocType, bool Required, bool AfterDelivery = false, bool IfReturned = false);
+    public sealed record Rule(string DocType, bool Required, bool AfterDelivery = false, bool IfReturned = false, bool WithRecon = false);
+
+    /// <summary>Sage aged payables sits under the payment (after the bank letter) and becomes mandatory the moment a supplier recon is attached.</summary>
+    private static readonly Rule Sage = new(CreditorDocTypes.SageAgedPayables, false, WithRecon: true);
 
     private static readonly Dictionary<string, Rule[]> Matrix = new()
     {
         [CreditorPaymentTypes.DailyCreditor] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
+            new Rule(CreditorDocTypes.PaymentSchedule, true),
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
             new Rule(CreditorDocTypes.Quote, false), new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false),
-            new Rule(CreditorDocTypes.ProofOfWork, false), new Rule(CreditorDocTypes.BankLetter, false),
+            new Rule(CreditorDocTypes.ProofOfWork, false), new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
         [CreditorPaymentTypes.MonthlyCreditor] = new[]
         {
             new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
-            new Rule(CreditorDocTypes.SupplierStatement, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
+            new Rule(CreditorDocTypes.SupplierStatement, true),
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
-            new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false),
+            new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
         [CreditorPaymentTypes.Prepayment] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
+            new Rule(CreditorDocTypes.PaymentSchedule, true),
             new Rule(CreditorDocTypes.TaxInvoice, false, AfterDelivery: true), new Rule(CreditorDocTypes.SupplierRecon, false, AfterDelivery: true),
             new Rule(CreditorDocTypes.Quote, false), new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false, AfterDelivery: true),
-            new Rule(CreditorDocTypes.BankLetter, false),
+            new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
         [CreditorPaymentTypes.Intercompany] = new[]
         {
             new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
-            new Rule(CreditorDocTypes.SupplierStatement, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
+            new Rule(CreditorDocTypes.SupplierStatement, true),
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
-            new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), new Rule(CreditorDocTypes.WrittenInstruction, true),
+            new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage, new Rule(CreditorDocTypes.WrittenInstruction, true),
         },
         [CreditorPaymentTypes.Utility] = new[]
         {
             new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
-            new Rule(CreditorDocTypes.SupplierStatement, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
-            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
+            new Rule(CreditorDocTypes.SupplierStatement, true),
+            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true), Sage,
         },
         [CreditorPaymentTypes.StaffPayment] = new[]
         {
@@ -223,7 +226,7 @@ public static class CreditorDocRules
         },
         [CreditorPaymentTypes.CreditNote] = new[]
         {
-            new Rule(CreditorDocTypes.SageAgedPayables, true), new Rule(CreditorDocTypes.CreditNoteForm, true),
+            new Rule(CreditorDocTypes.CreditNoteForm, true),
             new Rule(CreditorDocTypes.CustomerReason, true), new Rule(CreditorDocTypes.ReinvoiceNumber, true),
             new Rule(CreditorDocTypes.CustomerCollectionSlip, false, IfReturned: true),
             new Rule(CreditorDocTypes.WarehouseReturnGrv, false, IfReturned: true),
@@ -236,7 +239,7 @@ public static class CreditorDocRules
     /// Document types that must be present (or marked N/A) for a given payment, taking the
     /// per-item flags into account. Batch-level types are evaluated once per batch.
     /// </summary>
-    public static IEnumerable<string> RequiredForItem(string paymentType, bool stockReturned, bool closingPrepayment)
+    public static IEnumerable<string> RequiredForItem(string paymentType, bool stockReturned, bool closingPrepayment, bool hasRecon = false)
     {
         foreach (var r in For(paymentType))
         {
@@ -244,6 +247,7 @@ public static class CreditorDocRules
             if (r.Required) yield return r.DocType;
             else if (r.IfReturned && stockReturned) yield return r.DocType;
             else if (r.AfterDelivery && closingPrepayment) yield return r.DocType;
+            else if (r.WithRecon && hasRecon) yield return r.DocType;
         }
     }
 
@@ -254,9 +258,9 @@ public static class CreditorDocRules
     /// Optional-but-wanted documents for a payment: shown as slots and raise a warning when missing, never block.
     /// Excludes anything that is currently required for the item.
     /// </summary>
-    public static IEnumerable<string> RecommendedForItem(string paymentType, bool stockReturned, bool closingPrepayment)
+    public static IEnumerable<string> RecommendedForItem(string paymentType, bool stockReturned, bool closingPrepayment, bool hasRecon = false)
     {
-        var req = RequiredForItem(paymentType, stockReturned, closingPrepayment).ToHashSet();
+        var req = RequiredForItem(paymentType, stockReturned, closingPrepayment, hasRecon).ToHashSet();
         foreach (var r in For(paymentType))
         {
             if (CreditorDocTypes.IsBatchLevel(r.DocType) || r.Required || req.Contains(r.DocType)) continue;
