@@ -11,6 +11,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
 import { CompanyBatchesDialogComponent } from './company-batches-dialog.component';
+import { ExplainerDialogComponent } from './explainer-dialog.component';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit } from '../../services/creditor-packs.service';
@@ -37,34 +38,10 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
   <!-- ═══════════════════════ BOARD ═══════════════════════ -->
   @if (view() === 'board') {
 
-    <div class="cr-how" [class.open]="howOpen()">
-      <button class="hd" (click)="howOpen.set(!howOpen())"><mat-icon>help_outline</mat-icon> How a payment pack moves <mat-icon class="tw">{{ howOpen() ? 'expand_less' : 'expand_more' }}</mat-icon></button>
-      @if (howOpen()) {
-        <ol>
-          <li><strong>Prepare</strong> — a clerk creates a batch, adds each payment (upload the invoice or link one from Books and the details fill in; suppliers are found from past invoices and payments) and attaches the documents the list asks for.</li>
-          <li><strong>Checks</strong> — the system reads the PDFs and flags problems (missing docs, old bank letters, duplicates…).</li>
-          <li><strong>Accountant</strong> — the company's accountant approves or sends it back.</li>
-          <li><strong>Director</strong> — approves / queries / rejects each payment, then signs. The pack locks.</li>
-          <li><strong>Bank</strong> — the bank user downloads the bank file, loads it, marks it paid.</li>
-          <li><strong>Close</strong> — proof of payment is attached for every payment and the pack is closed.</li>
-        </ol>
-      }
+    <div class="cr-title">
+      <h2>Payment packs</h2>
+      <button mat-icon-button class="help" (click)="explain()" matTooltip="How a payment pack moves" aria-label="How a payment pack moves"><mat-icon>help_outline</mat-icon></button>
     </div>
-
-    @if (mine().length) {
-      <section class="cr-mine">
-        <h3><mat-icon>notifications_active</mat-icon> Needs your action <span class="n">{{ mine().length }}</span></h3>
-        <div class="cards">
-          @for (r of mine(); track r.id) {
-            <button [class]="'mcard tone-' + rowStep(r).tone" (click)="open(r.id)">
-              <div class="top"><ng-container *ngTemplateOutlet="coMark; context: { $implicit: r.companyCode, size: 'xs' }"></ng-container><span class="ref">{{ r.batchNumber }}</span><span class="co">{{ r.companyCode }}</span><span class="amt">R {{ r.totalAmount | number:'1.0-0' }}</span></div>
-              <div class="what"><mat-icon>{{ rowStep(r).icon }}</mat-icon> {{ rowStep(r).title }}</div>
-              <div class="sub">{{ typeTitle(r.paymentType) }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.returnReason && isSentBack(r.status)) { · <em>{{ r.returnReason }}</em> }</div>
-            </button>
-          }
-        </div>
-      </section>
-    }
 
     @if (alerts().length) {
       <div class="cr-alerts">
@@ -94,10 +71,6 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <button [class.on]="statusFilter() === 'Closed'" (click)="statusFilter.set('Closed')">Closed <b>{{ count('Closed') }}</b></button>
       </div>
       <span class="cr-spacer"></span>
-      <select [ngModel]="companyFilter()" (ngModelChange)="companyFilter.set($event)">
-        <option value="">All companies</option>
-        @for (c of activeCompanies(); track c.code) { <option [value]="c.code">{{ c.code }} — {{ c.name }}</option> }
-      </select>
       <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
         <option value="">All payment types</option>
         @for (p of meta()!.paymentTypes; track p.key) { <option [value]="p.key">{{ p.title }}</option> }
@@ -574,19 +547,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .cr-spacer { flex: 1; }
     .muted { color: var(--color-text-3); } .nowrap { white-space: nowrap; } .ref { font-family: var(--font-mono); font-weight: 600; }
 
-    .cr-how { border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface); margin-bottom: var(--space-3);
-      .hd { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 12px; font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-2); background: none; border: 0; cursor: pointer; text-align: left; mat-icon { color: var(--color-primary); } .tw { margin-left: auto; color: var(--color-text-3); } }
-      ol { margin: 0; padding: 0 16px 12px 36px; font-size: var(--text-sm); color: var(--color-text-2); li { margin: 4px 0; } } }
-
-    .cr-mine { margin-bottom: var(--space-4);
-      h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-2); font-size: var(--text-md); mat-icon { color: var(--color-warn); } .n { font-size: var(--text-xs); background: var(--color-warn); color: #fff; border-radius: 999px; padding: 1px 8px; } }
-      .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-3); }
-      .mcard { text-align: left; font: inherit; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line); border-left: 4px solid var(--color-primary); border-radius: var(--radius-md); padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
-        &:hover { box-shadow: var(--shadow-sm); border-color: var(--color-primary); }
-        .top { display: flex; gap: 8px; align-items: baseline; .co { font-weight: 700; } .amt { margin-left: auto; font-family: var(--font-mono); font-weight: 600; } }
-        .what { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: var(--text-sm); mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); } }
-        .sub { font-size: var(--text-xs); color: var(--color-text-3); em { color: var(--color-danger); font-style: normal; } }
-        &.tone-warn { border-left-color: var(--color-warn); .what mat-icon { color: var(--color-warn); } } &.tone-bad { border-left-color: var(--color-danger); .what mat-icon { color: var(--color-danger); } } &.tone-ok { border-left-color: var(--color-ok); .what mat-icon { color: var(--color-ok); } } } }
+    .cr-title { display: flex; align-items: center; gap: 4px; margin-bottom: var(--space-3); h2 { margin: 0; font-size: var(--text-xl); } .help { color: var(--color-text-3); &:hover { color: var(--color-primary); } } }
 
     .cr-alerts { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-md); mat-icon { color: var(--color-warn); } .txt { flex: 1; font-size: var(--text-sm); } }
     .cr-alert-list { display: grid; gap: 4px; margin-bottom: var(--space-3); }
@@ -597,14 +558,14 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 
     /* ---- company marks (logo or initials) ---- */
     .comark { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-sm); overflow: hidden; vertical-align: middle;
-      img { width: 100%; height: 100%; object-fit: contain; padding: 3px; box-sizing: border-box; }
+      img { max-width: 86%; max-height: 80%; width: auto; height: auto; object-fit: contain; display: block; }
       .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; letter-spacing: .04em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
       &.xs { width: 34px; height: 22px; .mono { font-size: 9px; } } &.sm { width: 56px; height: 34px; .mono { font-size: 11px; } } &.md { width: 76px; height: 44px; .mono { font-size: 14px; } } &.lg { width: 112px; height: 64px; border-radius: var(--radius-md); img { padding: 6px; } .mono { font-size: 20px; } } }
     .cr-cogrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); align-items: start;
       @media (max-width: 1400px) { grid-template-columns: repeat(3, minmax(0, 1fr)); } @media (max-width: 1000px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (max-width: 640px) { grid-template-columns: 1fr; } }
     .cr-co { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 16px 16px 12px; font: inherit; text-align: left; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); cursor: pointer; min-width: 0; transition: border-color .12s, box-shadow .12s, transform .12s;
-      .mark { height: 64px; display: grid; place-items: center; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 8px; img { width: 100%; height: 100%; object-fit: contain; padding: 8px; box-sizing: border-box; } }
-      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 22px; letter-spacing: .08em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
+      .mark { aspect-ratio: 5 / 2; width: 100%; display: grid; place-items: center; background: #fff; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 10px; img { max-width: 82%; max-height: 78%; width: auto; height: auto; object-fit: contain; display: block; } }
+      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 26px; letter-spacing: .1em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
       .nm { font-weight: 700; font-size: var(--text-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .stat { font-size: var(--text-sm); color: var(--color-text-2); b { color: var(--color-primary); font-size: var(--text-lg); font-weight: 700; } em { color: var(--color-danger); font-style: normal; font-weight: 600; font-size: var(--text-xs); } }
       .amt { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-lg); white-space: nowrap; }
@@ -615,13 +576,12 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .pick-lbl { font-size: var(--text-xs); color: var(--color-text-2); font-weight: 600; margin-bottom: 6px; }
     .cr-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
     .ptile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 8px; font: inherit; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-line-strong); border-radius: var(--radius-md); cursor: pointer; transition: border-color .12s, box-shadow .12s;
-      .mark { width: 100%; height: 52px; display: grid; place-items: center; background: #fff; border-radius: var(--radius-sm); overflow: hidden; img { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; } }
+      .mark { width: 100%; height: 52px; display: grid; place-items: center; background: #fff; border-radius: var(--radius-sm); overflow: hidden; img { max-width: 84%; max-height: 80%; width: auto; height: auto; object-fit: contain; display: block; } }
       .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 16px; letter-spacing: .06em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
       b { font-size: var(--text-sm); } small { font-size: var(--text-xs); color: var(--color-text-3); text-align: center; line-height: 1.2; }
       .tick { position: absolute; top: 6px; right: 6px; color: var(--color-primary); font-size: 18px; width: 18px; height: 18px; background: #fff; border-radius: 50%; }
       &:hover { border-color: var(--color-primary); } &.on { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-soft); background: var(--color-primary-soft); } }
     .cocell { display: flex; align-items: center; gap: 8px; }
-    .cr-mine .mcard .top .comark { margin-right: 2px; }
     .cr-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); overflow: hidden;
       button { font: inherit; font-size: var(--text-sm); height: 38px; padding: 0 12px; border: 0; border-right: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-text-2); cursor: pointer; b { margin-left: 4px; font-size: var(--text-xs); background: var(--color-surface-3); padding: 1px 6px; border-radius: 999px; }
         &:last-child { border-right: 0; } &.on { background: var(--color-primary-soft); color: var(--color-primary); font-weight: 600; b { background: var(--color-primary); color: #fff; } } } }
@@ -744,7 +704,19 @@ export class FinanceCreditorsComponent implements OnInit {
   alerts = signal<CreditorAlert[]>([]);
   showAlerts = signal(false);
   showPassed = signal(false);
-  howOpen = signal(false);
+  explain(): void {
+    ExplainerDialogComponent.open(this.dialog, {
+      title: 'How a payment pack moves', intro: 'One pack = one paying company + one kind of payment. Every pack goes through the same six steps.',
+      steps: [
+        { icon: 'edit_note', title: 'Prepare', body: 'A clerk creates the batch and adds each payment — upload the invoice (or link one from Books) and the details fill in. Every invoice needs its supplier recon; the checklist shows what else is expected.' },
+        { icon: 'rule', title: 'Checks', body: 'On submit the system reads the documents and flags problems: missing papers, old bank letters, amounts that don\'t match the recon, possible duplicates.' },
+        { icon: 'fact_check', title: 'Accountant', body: 'The company\'s accountant reviews and approves, or sends the pack back with a reason.' },
+        { icon: 'draw', title: 'Director', body: 'The director approves, queries or rejects each payment, then signs. The pack locks — nothing can change after this.' },
+        { icon: 'account_balance', title: 'Bank', body: 'The bank user downloads the bank file, loads it, and marks the pack as paid.' },
+        { icon: 'inventory', title: 'Close', body: 'Proof of payment is attached for every payment and the pack is closed.' },
+      ]
+    });
+  }
   openPrepay = signal(0);
   loading = signal(false);
   busy = signal(false);

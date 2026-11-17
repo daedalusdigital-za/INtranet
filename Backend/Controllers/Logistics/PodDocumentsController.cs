@@ -528,8 +528,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     if (loadId.HasValue)
                     {
                         pod.LoadId = loadId.Value;
-                        var load = await _context.Loads.FindAsync(loadId.Value);
+                        var load = await _context.Loads.Include(l => l.Driver).FirstOrDefaultAsync(l => l.Id == loadId.Value);
                         loadNumber = load?.LoadNumber;
+                        ApplyDriverFromLoad(pod, load);
                         foreach (var inv in matchedInvoices.Where(i => i.LoadId == null)) inv.LoadId = loadId.Value;
                     }
 
@@ -888,11 +889,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (pod == null)
                 return NotFound("POD document not found");
 
-            var load = await _context.Loads.FindAsync(request.LoadId);
+            var load = await _context.Loads.Include(l => l.Driver).FirstOrDefaultAsync(l => l.Id == request.LoadId);
             if (load == null)
                 return NotFound("Tripsheet/Load not found");
 
             pod.LoadId = request.LoadId;
+            ApplyDriverFromLoad(pod, load);
 
             // Auto-link to all non-cancelled invoices on the tripsheet — by FK, and by the
             // invoice numbers typed on its stops/lines (spreadsheet-imported tripsheets).
@@ -1177,8 +1179,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                 if (loadId.HasValue)
                 {
                     pod.LoadId = loadId.Value;
-                    var load = await _context.Loads.FindAsync(loadId.Value);
+                    var load = await _context.Loads.Include(l => l.Driver).FirstOrDefaultAsync(l => l.Id == loadId.Value);
                     loadNumber = load?.LoadNumber;
+                    ApplyDriverFromLoad(pod, load);
                     foreach (var inv in invoices.Where(i => i.LoadId == null)) inv.LoadId = loadId.Value;
                 }
             }
@@ -1726,6 +1729,38 @@ namespace ProjectTracker.API.Controllers.Logistics
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// A POD linked to a trip sheet belongs to that trip sheet's driver. Fill the POD's driver from the load
+        /// whenever it's blank/unknown or only a guessed first name (parsed from the file name) — the load is authoritative.
+        /// </summary>
+        private static void ApplyDriverFromLoad(PodDocument pod, Load? load)
+        {
+            if (load?.Driver == null) return;
+            var full = $"{load.Driver.FirstName} {load.Driver.LastName}".Trim();
+            if (string.IsNullOrWhiteSpace(full)) return;
+            var cur = (pod.DriverName ?? "").Trim();
+            var weak = cur.Length == 0 || cur.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
+                       || cur.Equals(load.Driver.FirstName?.Trim(), StringComparison.OrdinalIgnoreCase)
+                       || cur.Equals(load.Driver.LastName?.Trim(), StringComparison.OrdinalIgnoreCase);
+            if (pod.DriverId != null && pod.DriverId != load.DriverId) return; // someone deliberately chose a different driver
+            pod.DriverId = load.DriverId;
+            if (weak) pod.DriverName = full;
+        }
+
+        /// <summary>One-off repair: PODs already linked to a trip sheet but with no driver recorded take the trip sheet's driver.</summary>
+        [HttpPost("backfill-drivers")]
+        public async Task<IActionResult> BackfillDrivers()
+        {
+            var pods = await _context.PodDocuments
+                .Include(p => p.Load).ThenInclude(l => l!.Driver)
+                .Where(p => p.LoadId != null && p.Load!.DriverId != null)
+                .ToListAsync();
+            var before = pods.Count(p => string.IsNullOrWhiteSpace(p.DriverName) || p.DriverName == "Unknown");
+            foreach (var p in pods) ApplyDriverFromLoad(p, p.Load);
+            var changed = await _context.SaveChangesAsync();
+            return Ok(new { linkedPods = pods.Count, blankBefore = before, updated = changed });
         }
 
         private string ParseDriverName(string fileName)
