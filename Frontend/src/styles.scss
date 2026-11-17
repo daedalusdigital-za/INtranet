@@ -271,6 +271,16 @@ body.artwork-viewer-open app-chatbot {
   display: none !important;
 }
 
+/* Requisition preview / sign dialog — component paints its own surface edge to edge */
+.req-preview-panel .mat-mdc-dialog-container,
+.req-preview-panel .mat-mdc-dialog-surface {
+  padding: 0 !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+  background: var(--color-surface) !important;
+}
+.req-preview-panel .mat-mdc-dialog-surface > * { display: block; height: 100%; }
+
 /* I Hate PDF toolbox dialog */
 .ihp-dialog-panel .mat-mdc-dialog-container {
   padding: 0 !important;
