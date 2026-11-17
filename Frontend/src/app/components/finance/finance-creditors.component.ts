@@ -245,12 +245,12 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <div class="cr-itemform">
               <h4>{{ itemForm() === 'new' ? 'New payment' : 'Edit payment' }}</h4>
 
-              <h5>1 · Invoice</h5>
+              <h5>1 · Invoice and recon</h5>
               <div class="inv-src">
                 @if (!pendingInvoiceFile && !pendingLink) {
                   <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> Upload invoice</button>
                   <button mat-stroked-button (click)="openPicker()"><mat-icon>link</mat-icon> Link from Books</button>
-                  <small class="muted">We read the PDF and fill in who is being paid, the amount and VAT for you. Or link an invoice already captured in Books.</small>
+                  <small class="muted">We read the PDF and fill in who is being paid, the amount, invoice number, description and any bank details printed on it. Or link an invoice already captured in Books.</small>
                   @if (reading()) { <mat-spinner diameter="18"></mat-spinner> }
                 } @else if (pendingInvoiceFile) {
                   <span class="chip ok"><mat-icon>picture_as_pdf</mat-icon> {{ pendingInvoiceFile.name }} @if (readInfo()) { · {{ readInfo() }} }</span>
@@ -261,6 +261,18 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 }
                 <input #invFileInput type="file" accept="application/pdf" hidden (change)="invoiceChosen($event)">
               </div>
+              @if (itemForm() === 'new' && needsRecon()) {
+                <div class="inv-src recon" [class.missing]="!pendingReconFile">
+                  @if (!pendingReconFile) {
+                    <button mat-stroked-button (click)="reconFileInput.click()"><mat-icon>table_view</mat-icon> Upload supplier recon</button>
+                    <small><mat-icon>priority_high</mat-icon> Required — every invoice must come with its recon (.xlsx, .xls, .csv or .pdf).</small>
+                  } @else {
+                    <span class="chip ok"><mat-icon>table_view</mat-icon> {{ pendingReconFile.name }}</span>
+                    <button mat-icon-button (click)="pendingReconFile = null" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                  }
+                  <input #reconFileInput type="file" accept=".xlsx,.xls,.csv,application/pdf" hidden (change)="reconChosen($event)">
+                </div>
+              }
               @if (picker()) {
                 <div class="picker">
                   <input [(ngModel)]="pickerQ" (ngModelChange)="searchBooks()" placeholder="Search Books invoices by supplier, number or amount…" autofocus>
@@ -293,8 +305,6 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   }
                 </label>
                 <label>Amount incl. VAT (R) <input type="number" step="0.01" [(ngModel)]="itemDraft.amount"></label>
-                <label>VAT on invoice (R) <input type="number" step="0.01" [(ngModel)]="itemDraftVat" placeholder="from the invoice"></label>
-                <label>Their VAT number <input [(ngModel)]="itemDraft.supplierVatNumber" placeholder="4xxxxxxxxx"></label>
               </div>
 
               <h5>3 · What is it for</h5>
@@ -314,7 +324,10 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               @if (b.paymentType === 'CreditNote') {
                 <mat-checkbox [(ngModel)]="itemDraft.stockReturned">Stock physically came back (warehouse GRV + collection slip will be required)</mat-checkbox>
               }
-              <div class="actions"><button mat-button (click)="cancelItem()">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy()" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button></div>
+              <div class="actions">
+                @if (itemForm() === 'new' && needsRecon() && !pendingReconFile) { <small class="warn-txt"><mat-icon>warning</mat-icon> Attach the supplier recon before adding this payment.</small> }
+                <button mat-button (click)="cancelItem()">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy() || (itemForm() === 'new' && needsRecon() && !pendingReconFile)" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button>
+              </div>
             </div>
           }
 
@@ -357,7 +370,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               @if (openItem() === it.id) {
                 <div class="body">
                   <h5>Documents for this payment</h5>
-                  <ng-container *ngTemplateOutlet="checklist; context: { required: it.required, docs: it.documents, itemId: it.id }"></ng-container>
+                  <ng-container *ngTemplateOutlet="checklist; context: { required: it.required, recommended: it.recommended || [], docs: it.documents, itemId: it.id }"></ng-container>
                   @if (findingsFor(it.id).length) {
                     <h5>Checks on this payment</h5>
                     <ul class="cr-findings">
@@ -366,7 +379,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   }
                   @if (b.can.edit || b.can.uploadAfterLock) {
                     <div class="drop" (dragover)="$event.preventDefault()" (drop)="drop($event, it.id)">
-                      <mat-icon>upload_file</mat-icon> Drop PDFs for <strong>{{ it.supplierName }}</strong> here, or <button mat-button (click)="pickFor('', it.id)">choose files</button>
+                      <mat-icon>upload_file</mat-icon> Drop PDFs (or an Excel recon) for <strong>{{ it.supplierName }}</strong> here, or <button mat-button (click)="pickFor('', it.id)">choose files</button>
                     </div>
                   }
                 </div>
@@ -377,7 +390,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 
         <section class="cr-card">
           <header><h3><mat-icon>folder</mat-icon> Documents for the whole batch</h3><small>{{ filledCount(b.requiredBatchDocs) }} of {{ b.requiredBatchDocs.length }} attached</small></header>
-          <ng-container *ngTemplateOutlet="checklist; context: { required: b.requiredBatchDocs, docs: b.batchDocuments, itemId: null }"></ng-container>
+          <ng-container *ngTemplateOutlet="checklist; context: { required: b.requiredBatchDocs, recommended: [], docs: b.batchDocuments, itemId: null }"></ng-container>
           @if (b.can.edit || b.can.uploadAfterLock) {
             <div class="drop" (dragover)="$event.preventDefault()" (drop)="drop($event, null)">
               <mat-icon>upload_file</mat-icon> Drop batch PDFs here (schedule, recon, Sage report) or <button mat-button (click)="pickFor('', null)">choose files</button>
@@ -440,7 +453,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       </aside>
     </div>
 
-    <ng-template #checklist let-required="required" let-docs="docs" let-itemId="itemId">
+    <ng-template #checklist let-required="required" let-recommended="recommended" let-docs="docs" let-itemId="itemId">
       <ul class="cr-check">
         @for (r of required; track r.docType) {
           @if (docsOfType(docs, r.docType); as ds) {
@@ -471,7 +484,36 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             </li>
           }
         }
-        @for (d of extraDocs(docs, required); track d.id) {
+        @if (recommended?.length) {
+          <li class="sect"><mat-icon>info_outline</mat-icon> Optional — attach where you have them. Missing ones are flagged for the approvers but don't block.</li>
+          @for (r of recommended; track r.docType) {
+            @if (docsOfType(docs, r.docType); as ds) {
+              <li class="rec" [class.ok]="r.filled" [class.warn]="!r.filled">
+                <mat-icon class="st">{{ r.filled ? (ds[0]?.isNotApplicable ? 'remove_circle_outline' : 'check_circle') : 'warning_amber' }}</mat-icon>
+                <div class="name"><strong>{{ r.title }}</strong>
+                  @if (!r.filled) { <small class="optional">Not attached</small> }
+                  @for (d of ds; track d.id) {
+                    <small class="file">
+                      @if (d.isNotApplicable) { Not applicable — {{ d.naReason }} }
+                      @else { {{ d.originalFileName }} · {{ d.pageCount }} page{{ d.pageCount === 1 ? '' : 's' }}@if (d.documentDate) { · dated {{ d.documentDate | date:'dd MMM yyyy' }} }@if (d.version > 1) { · v{{ d.version }} } }
+                    </small>
+                  }
+                </div>
+                <div class="act">
+                  @for (d of ds; track d.id) {
+                    @if (!d.isNotApplicable) { <button mat-icon-button matTooltip="Open" (click)="openDoc(d)"><mat-icon>open_in_new</mat-icon></button> }
+                    @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
+                  }
+                  @if (b.can.edit || b.can.uploadAfterLock) {
+                    <button mat-stroked-button class="sm" (click)="pickFor(r.docType, itemId)"><mat-icon>upload</mat-icon> {{ r.filled ? 'Add another' : 'Upload' }}</button>
+                    @if (b.can.edit && !r.filled) { <button mat-button class="sm" (click)="markNa(r, itemId)">N/A</button> }
+                  }
+                </div>
+              </li>
+            }
+          }
+        }
+        @for (d of extraDocs(docs, required, recommended); track d.id) {
           <li class="extra">
             <mat-icon class="st">attach_file</mat-icon>
             <div class="name">
@@ -492,7 +534,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         @if (!required.length && !docs.length) { <li class="none">No documents are required here.</li> }
       </ul>
     </ng-template>
-    <input #fileInput type="file" accept="application/pdf" multiple hidden (change)="filesChosen($event)">
+    <input #fileInput type="file" [accept]="pickAccept" multiple hidden (change)="filesChosen($event)">
   }
   }
   `,
@@ -583,11 +625,15 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         .name { flex: 1; min-width: 0; strong { display: block; font-size: var(--text-sm); } small { display: block; font-size: var(--text-xs); color: var(--color-text-3); } .miss { color: var(--color-danger); font-weight: 600; } .sugg { display: inline-block; margin-left: 6px; color: var(--color-warn); } .type { height: 30px; font-size: var(--text-sm); max-width: 260px; } }
         .act { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; .sm { height: 30px; line-height: 30px; font-size: var(--text-xs); mat-icon { font-size: 16px; width: 16px; height: 16px; } } }
         &.ok .st { color: var(--color-ok); } &.missing { background: linear-gradient(90deg, var(--color-danger-soft), transparent 40%); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: var(--radius-sm); }
-        &.extra .st { color: var(--color-text-3); } &.none { color: var(--color-text-3); font-size: var(--text-sm); } } }
+        &.extra .st { color: var(--color-text-3); } &.none { color: var(--color-text-3); font-size: var(--text-sm); }
+        &.sect { display: flex; align-items: center; gap: 6px; padding: 10px 0 4px; margin-top: 4px; border-bottom: 0; color: var(--color-text-3); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; mat-icon { font-size: 16px; width: 16px; height: 16px; } }
+        &.rec.warn .st { color: var(--color-warn); } &.rec .optional { color: var(--color-warn); font-weight: 600; } } }
     .drop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: var(--space-2) var(--space-3); border: 2px dashed var(--color-line-strong); border-radius: var(--radius-md); color: var(--color-text-3); font-size: var(--text-sm); margin-top: var(--space-3); mat-icon { color: var(--color-primary); } }
 
     .cr-itemform { background: var(--color-surface-2); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3);
       .inv-src { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; small { flex-basis: 100%; } }
+      .inv-src.recon { padding: 8px 10px; border-radius: var(--radius-md); border: 1px dashed var(--color-line); small { display: inline-flex; align-items: center; gap: 4px; flex-basis: auto; color: var(--color-text-3); mat-icon { font-size: 16px; width: 16px; height: 16px; } } &.missing { border-color: var(--color-warn); background: var(--color-warn-soft, rgba(245,158,11,.08)); small { color: var(--color-warn); } } }
+      .actions .warn-txt { display: inline-flex; align-items: center; gap: 4px; color: var(--color-warn); font-size: var(--text-xs); margin-right: auto; mat-icon { font-size: 16px; width: 16px; height: 16px; } }
       .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: var(--text-sm); background: var(--color-surface-3); mat-icon { font-size: 18px; width: 18px; height: 18px; } &.ok { background: var(--color-ok-soft); color: var(--color-ok); } }
       .picker { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 10px; margin-bottom: 10px;
         input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); font: inherit; margin-bottom: 6px; }
@@ -661,8 +707,9 @@ export class FinanceCreditorsComponent implements OnInit {
   pickerHits = signal<BooksInvoiceHit[]>([]);
   pickerQ = '';
   pendingInvoiceFile: File | null = null;
+  pendingReconFile: File | null = null;
   pendingLink: BooksInvoiceHit | null = null;
-  itemDraftVat: number | null = null;
+  pickAccept = 'application/pdf';
   private supTimer: any; private bookTimer: any; private hideTimer: any;
 
   newBatch = { companyCode: '', paymentType: 'DailyCreditor', batchDate: new Date().toISOString().slice(0, 10), notes: '' };
@@ -736,7 +783,9 @@ export class FinanceCreditorsComponent implements OnInit {
   docTitle(k: string) { return this.meta()?.docTypes.find(d => d.key === k)?.title ?? k; }
   docTypesFor(itemId: number | null) { return (this.meta()?.docTypes ?? []).filter(d => itemId ? d.scope === 'item' || d.key === 'Other' : d.scope === 'batch' || d.key === 'Other'); }
   badge(s: string) { return ['Approved', 'Paid', 'Closed', 'LoadedOnBank'].includes(s) ? 'ok' : s.startsWith('Awaiting') ? 'warn' : this.sentBack.includes(s) || s === 'Rejected' ? 'bad' : s === 'Draft' ? '' : 'info'; }
-  rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); return names.length ? names.join(', ') : 'none beyond the batch schedule'; }
+  rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (opt.length ? ` · optional: ${opt.join(', ')}` : ''); }
+  needsRecon(): boolean { const pt = this.batch()?.paymentType ?? ''; const hasSlot = (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); return hasSlot && !!(this.pendingInvoiceFile || this.pendingLink); }
+  isSheetSlot(t: string) { return ['SupplierRecon', 'CreditorsRecon', 'SageAgedPayables', 'PaymentSchedule'].includes(t); }
   responsibleName(id?: number) { if (!id) return ''; for (const x of this.meta()?.companies ?? []) { if (x.accountantUserId === id) return x.accountantName ?? ''; if (x.backupApproverUserId === id) return x.backupApproverName ?? ''; if (x.directorUserId === id) return x.directorName ?? ''; if (x.delegateDirectorUserId === id) return x.delegateDirectorName ?? ''; } return ''; }
 
   waitingOn(r: BatchRow): string {
@@ -816,7 +865,7 @@ export class FinanceCreditorsComponent implements OnInit {
   missingPop(b: BatchDetail) { return b.items.filter(i => i.decisionStatus === 'Approved' && !i.documents.some(d => d.docType === 'ProofOfPayment' && !d.isNotApplicable)).length; }
   openPrepayCount(b: BatchDetail) { return b.items.filter(i => i.prepaymentOpen && i.decisionStatus === 'Approved').length; }
   docsOfType(docs: BatchDoc[], t: string) { return docs.filter(d => d.docType === t); }
-  extraDocs(docs: BatchDoc[], required: RequiredDoc[]) { const keys = new Set(required.map(r => r.docType)); return docs.filter(d => !keys.has(d.docType)); }
+  extraDocs(docs: BatchDoc[], required: RequiredDoc[], recommended: RequiredDoc[] = []) { const keys = new Set([...required, ...recommended].map(r => r.docType)); return docs.filter(d => !keys.has(d.docType)); }
   visibleFindings(b: BatchDetail): CheckFinding[] { const w: Record<string, number> = { FAIL: 0, REVIEW: 1, PASS: 2 }; return [...(b.checks?.findings ?? [])].filter(f => this.showPassed() || f.severity !== 'PASS').sort((a, c) => w[a.severity] - w[c.severity]); }
   findingsFor(itemId: number) { return (this.batch()?.checks?.findings ?? []).filter(f => f.itemId === itemId && f.severity !== 'PASS'); }
   hasFail(itemId: number) { return this.findingsFor(itemId).some(f => f.severity === 'FAIL'); }
@@ -861,19 +910,24 @@ export class FinanceCreditorsComponent implements OnInit {
   bankFile(): void { const b = this.batch()!; this.api.bankFile(b.id).subscribe({ next: blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.batchNumber}-bank.csv`; a.click(); URL.revokeObjectURL(a.href); this.open(b.id); }, error: e => this.fail(e, "Couldn't export.") }); }
 
   // ── items ──
-  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned } : { ...EMPTY_ITEM }; this.clearInvoice(); this.itemDraftVat = null; this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new'); }
+  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned } : { ...EMPTY_ITEM }; this.clearInvoice(); this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new'); }
   cancelItem(): void { this.itemForm.set(null); this.clearInvoice(); }
   saveItem(): void {
     const b = this.batch()!; const f = this.itemForm(); this.busy.set(true);
-    const file = this.pendingInvoiceFile, link = this.pendingLink;
+    const file = this.pendingInvoiceFile, link = this.pendingLink, recon = this.pendingReconFile;
     const req = f === 'new' ? this.api.addItem(b.id, this.itemDraft) : this.api.updateItem(b.id, f as number, this.itemDraft);
     req.subscribe({
       next: r => {
         const itemId = f === 'new' ? (r.items[r.items.length - 1]?.id ?? 0) : (f as number);
         this.itemForm.set(null); this.apply(r); this.openItem.set(itemId); this.clearInvoice();
         if (!itemId) return;
-        if (file) { this.busy.set(true); this.api.upload(b.id, file, 'TaxInvoice', itemId).subscribe({ next: x => this.apply(x, 'Payment added and invoice attached'), error: e => this.fail(e, 'Payment saved but the invoice could not be attached.') }); }
-        else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => this.apply(x, 'Payment added and linked to the Books invoice'), error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
+        const attachRecon = (afterMsg: string) => {
+          if (!recon) { this.toast.done(afterMsg); return; }
+          this.busy.set(true);
+          this.api.upload(b.id, recon, 'SupplierRecon', itemId).subscribe({ next: x => this.apply(x, afterMsg + ' + recon'), error: e => this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.') });
+        };
+        if (file) { this.busy.set(true); this.api.upload(b.id, file, 'TaxInvoice', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and invoice attached'); }, error: e => this.fail(e, 'Payment saved but the invoice could not be attached.') }); }
+        else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and linked to the Books invoice'); }, error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
       },
       error: e => this.fail(e, "Couldn't save the payment.")
     });
@@ -907,10 +961,14 @@ export class FinanceCreditorsComponent implements OnInit {
         this.reading.set(false); const d = this.itemDraft; const filled: string[] = [];
         if (r.supplierName && !d.supplierName) { d.supplierName = r.supplierName; filled.push('supplier'); }
         if (r.amount && !d.amount) { d.amount = r.amount; filled.push('amount'); }
-        if (r.vatAmount) { this.itemDraftVat = r.vatAmount; filled.push('VAT'); }
-        if (r.vatNumber && !d.supplierVatNumber) { d.supplierVatNumber = r.vatNumber; filled.push('VAT no.'); }
+        if (r.vatNumber && !d.supplierVatNumber) d.supplierVatNumber = r.vatNumber;
         if (r.invoiceNumber && !d.invoiceNumbers) { d.invoiceNumbers = r.invoiceNumber; filled.push('invoice no.'); }
-        if (r.supplier) { const s = r.supplier; if (s.bankName && !d.bankName) { d.bankName = s.bankName; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference = s.paymentReference ?? ''; filled.push('bank details from last payment'); } }
+        if (r.description && !d.description) { d.description = r.description; filled.push('description'); }
+        else if (!d.description && r.orderNumber) { d.description = `Order ${r.orderNumber}`; filled.push('order no.'); }
+        if (r.customerAccount && !d.paymentReference) { d.paymentReference = r.customerAccount; filled.push('reference'); }
+        // Bank details: prefer what we paid last time (verified), else what is printed on the invoice
+        if (r.supplier?.bankName && !d.bankName) { const s = r.supplier; d.bankName = s.bankName!; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference ||= s.paymentReference ?? ''; filled.push('bank details from last payment'); }
+        else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details printed on the invoice — verify against the bank letter'); }
         this.readInfo.set(!r.readable ? 'could not read the text — fill in by hand' : filled.length ? 'filled: ' + filled.join(', ') : 'read, nothing recognised');
         if (r.suggestedType && r.suggestedType !== 'TaxInvoice' && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a tax invoice — it will still be attached as the invoice.`);
       },
@@ -926,21 +984,29 @@ export class FinanceCreditorsComponent implements OnInit {
     const d = this.itemDraft; this.pendingLink = h; this.pendingInvoiceFile = null; this.picker.set(false);
     if (!d.supplierName) d.supplierName = h.supplierName;
     if (!d.amount) d.amount = h.total;
-    if (h.vatAmount) this.itemDraftVat = h.vatAmount;
     if (h.invoiceNumber && !d.invoiceNumbers) d.invoiceNumbers = h.invoiceNumber;
     if (h.description && !d.description) d.description = h.description;
     this.api.suppliers(h.supplierName, 1).subscribe({ next: s => { if (s[0]?.bankName && !d.bankName) this.pickSupplier(s[0]); } });
     if (!h.hasPdf) this.toast.warn('That Books invoice has no PDF — the link will be recorded but you may still need to upload the invoice.');
   }
-  clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
+  clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingReconFile = null; this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
+  reconChosen(e: Event): void {
+    const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
+    if (!/\.(xlsx|xls|csv|pdf)$/i.test(f.name)) { this.toast.warn('The recon must be an Excel file (.xlsx/.xls), CSV or PDF.'); return; }
+    this.pendingReconFile = f;
+  }
 
   // ── documents ──
-  pickFor(docType: string, itemId: number | null): void { this.pendingType = docType; this.pendingItem = itemId; this.pendingReplace = null; this.fileInput?.nativeElement.click(); }
-  replaceDoc(d: BatchDoc): void { const reason = prompt('Why is this document being replaced? (kept in the history)'); if (!reason) return; this.pendingType = d.docType; this.pendingItem = d.itemId ?? null; this.pendingReplace = { ...d, versionReason: reason }; this.fileInput?.nativeElement.click(); }
+  pickFor(docType: string, itemId: number | null): void { this.pendingType = docType; this.pendingItem = itemId; this.pendingReplace = null; this.pickAccept = this.isSheetSlot(docType) ? '.xlsx,.xls,.csv,application/pdf' : 'application/pdf'; setTimeout(() => this.fileInput?.nativeElement.click()); }
+  replaceDoc(d: BatchDoc): void { const reason = prompt('Why is this document being replaced? (kept in the history)'); if (!reason) return; this.pendingType = d.docType; this.pendingItem = d.itemId ?? null; this.pendingReplace = { ...d, versionReason: reason }; this.pickAccept = this.isSheetSlot(d.docType) ? '.xlsx,.xls,.csv,application/pdf' : 'application/pdf'; setTimeout(() => this.fileInput?.nativeElement.click()); }
   filesChosen(e: Event): void { const inp = e.target as HTMLInputElement; const files = Array.from(inp.files ?? []); inp.value = ''; this.uploadAll(files, this.pendingItem, this.pendingType); }
   drop(e: DragEvent, itemId: number | null): void { e.preventDefault(); this.uploadAll(Array.from(e.dataTransfer?.files ?? []), itemId, ''); }
   private uploadAll(files: File[], itemId: number | null, docType: string): void {
-    const b = this.batch()!; const pdfs = files.filter(f => /\.pdf$/i.test(f.name)); if (!pdfs.length) { this.toast.warn('PDF files only — one document per file.'); return; }
+    const b = this.batch()!;
+    const sheetOk = this.isSheetSlot(docType);
+    const pdfs = files.filter(f => /\.pdf$/i.test(f.name) || (sheetOk && /\.(xlsx|xls|csv)$/i.test(f.name)));
+    if (!pdfs.length) { this.toast.warn(sheetOk ? 'PDF or Excel/CSV files only.' : 'PDF files only — one document per file. Excel recons go in the Supplier recon slot (use its Upload button).'); return; }
+    if (!sheetOk && files.some(f => /\.(xlsx|xls|csv)$/i.test(f.name))) { const items = this.batch()?.items ?? []; const it = items.find(i => i.id === itemId); const slot = (it?.required ?? []).find(r => r.docType === 'SupplierRecon'); if (slot && files.filter(f => /\.(xlsx|xls|csv)$/i.test(f.name)).length === 1 && pdfs.length === files.length - 1) { /* a spreadsheet dropped with PDFs — send it to the recon slot */ const sheet = files.find(f => /\.(xlsx|xls|csv)$/i.test(f.name))!; this.api.upload(b.id, sheet, 'SupplierRecon', itemId).subscribe({ next: r => { this.batch.set(r); this.toast.done('Spreadsheet attached as the supplier recon'); }, error: e => this.toast.error(`${sheet.name}: ${e?.error?.message || 'upload failed'}`) }); } else this.toast.warn('Spreadsheets are only accepted as the supplier recon — use that slot\'s Upload button.'); }
     this.busy.set(true); let i = 0; this.toast.info(pdfs.length === 1 ? 'Reading the document…' : `Reading ${pdfs.length} documents… scanned PDFs take a little longer`);
     const next = () => { if (i >= pdfs.length) { this.busy.set(false); this.toast.done(docType ? 'Attached' : `${pdfs.length} file(s) attached — check the document type we guessed`); return; }
       const f = pdfs[i++]; const rep = this.pendingReplace;

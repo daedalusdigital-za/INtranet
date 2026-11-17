@@ -37,7 +37,7 @@ export interface BatchItem {
   id: number; supplierName: string; supplierVatNumber?: string; invoiceNumbers?: string; description?: string; amount: number;
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
   decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string; decidedAt?: string; prepaymentOpen: boolean; paidAt?: string; sortOrder: number;
-  required: RequiredDoc[]; documents: BatchDoc[];
+  required: RequiredDoc[]; recommended: RequiredDoc[]; documents: BatchDoc[];
 }
 export interface CheckFinding { code: string; title: string; severity: 'PASS' | 'REVIEW' | 'FAIL'; detail?: string; supplier?: string; itemId?: number; }
 export interface BatchDetail {
@@ -60,7 +60,7 @@ export interface ItemInput {
 }
 export interface CreditorAlert { batchId: number; batchNumber: string; companyCode: string; status: string; code: string; title: string; severity: string; detail?: string; supplier?: string; }
 export interface SupplierHit { name: string; vatNumber?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; supplierAccount?: string; payments: number; invoices: number; lastUsed?: string; source: string; }
-export interface InvoiceRead { supplierName?: string; knownSupplier: boolean; supplier?: SupplierHit; amount?: number; vatAmount?: number; vatNumber?: string; invoiceNumber?: string; documentDate?: string; suggestedType?: string; pages: number; method?: string; scanned: boolean; readable: boolean; }
+export interface InvoiceRead { supplierName?: string; knownSupplier: boolean; supplier?: SupplierHit; amount?: number; vatAmount?: number; vatNumber?: string; invoiceNumber?: string; documentDate?: string; description?: string; orderNumber?: string; customerAccount?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; suggestedType?: string; pages: number; method?: string; scanned: boolean; readable: boolean; }
 export interface BooksInvoiceHit { id: number; supplierName: string; supplierAccount?: string; invoiceNumber?: string; invoiceDate?: string; total: number; vatAmount?: number; companyName?: string; departmentName?: string; description?: string; status: string; paymentDate?: string; hasPdf: boolean; fileName?: string; alreadyLinked: boolean; }
 
 @Injectable({ providedIn: 'root' })

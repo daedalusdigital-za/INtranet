@@ -58,6 +58,11 @@ public class CreditorChecksService
     private static readonly Regex DateRx = new(@"\b(\d{1,2})[\s/\-\.]([A-Za-z]{3,9}|\d{1,2})[\s/\-\.](20\d{2})\b|\b(20\d{2})[\-/](\d{2})[\-/](\d{2})\b", RegexOptions.Compiled);
     // "VAT @ 15%  R 1 234.56" / "VAT 15% : 1,234.56" / "Total VAT 1234.56" — but never the registration number ("VAT NO 4xxxxxxxxx")
     private static readonly Regex VatAmountRx = new(@"(?:TOTAL\s+)?VAT(?!\s*(?:REG|NO|NUMBER|#))\s*(?:@|AT)?\s*(?:15\s*%)?\s*[:\-]?\s*R?\s*([\d\s]{1,12}[.,]\d{2})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex BranchRx = new(@"BRANCH\s*(?:CODE|NO|NUMBER|#)?\s*[:.\-]?\s*(\d{6})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex BankNameRx = new(@"\b(ABSA|FNB|FIRST\s+NATIONAL\s+BANK|STANDARD\s+BANK|NEDBANK|CAPITEC|INVESTEC|AFRICAN\s+BANK|TYME\s*BANK|DISCOVERY\s+BANK|BIDVEST\s+BANK|SASFIN|MERCANTILE|GRINDROD|ACCESS\s+BANK|HSBC|CITIBANK|RMB|BANK\s+ZERO)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex HolderRx = new(@"(?:ACC(?:OUNT)?\s*(?:HOLDER|NAME)|BENEFICIARY(?:\s+NAME)?|IN\s+(?:THE\s+)?NAME\s+OF)\s*[:.\-]?\s*([A-Za-z][A-Za-z0-9&().,'\- ]{2,60})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CustomerAccRx = new(@"(?:CUSTOMER|CLIENT|DEBTOR|YOUR)\s*(?:ACC(?:OUNT)?|A/C|REF(?:ERENCE)?|CODE|NO)\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*([A-Z0-9][A-Z0-9\-/]{2,20})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex PoRefRx = new(@"(?:ORDER|P/?O)\s*(?:NO|NUMBER|#|REF)?\s*[:.\-]?\s*([A-Z0-9][A-Z0-9\-/]{3,20})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public sealed class Extracted
     {
@@ -74,6 +79,14 @@ public class CreditorChecksService
         public decimal? VatAmount { get; set; }
         /// <summary>Best guess at who issued the document (first meaningful line); callers may override with a known-supplier match.</summary>
         public string? SupplierName { get; set; }
+        public string? BankName { get; set; }
+        public string? BranchCode { get; set; }
+        public string? AccountHolder { get; set; }
+        /// <summary>Our account / reference number with the supplier — the natural payment reference.</summary>
+        public string? CustomerAccount { get; set; }
+        public string? OrderNumber { get; set; }
+        /// <summary>First line-item description found under a DESCRIPTION / ITEM header.</summary>
+        public string? Description { get; set; }
     }
 
     public async Task<Extracted> ReadAsync(string absolutePath, string? contentType, string fileName)
@@ -117,7 +130,38 @@ public class CreditorChecksService
         if (ex.VatAmount != null && ex.Amount != null && ex.VatAmount >= ex.Amount) ex.VatAmount = null; // misread
         ex.SupplierName = GuessSupplier(t);
         ex.DocumentDate = ParseDate(t);
+        ex.BranchCode = BranchRx.Match(t) is { Success: true } bm ? bm.Groups[1].Value : null;
+        ex.BankName = BankNameRx.Match(t) is { Success: true } bn ? TitleCaseBank(bn.Groups[1].Value) : null;
+        ex.AccountHolder = HolderRx.Match(t) is { Success: true } hm ? Regex.Replace(hm.Groups[1].Value, @"\s+", " ").Trim().TrimEnd('.', ',', '-') : null;
+        if (ex.AccountHolder != null && (ex.AccountHolder.Length < 3 || Regex.IsMatch(ex.AccountHolder, @"^\d"))) ex.AccountHolder = null;
+        ex.CustomerAccount = CustomerAccRx.Match(t) is { Success: true } cm ? cm.Groups[1].Value.ToUpperInvariant() : null;
+        ex.OrderNumber = PoRefRx.Match(t) is { Success: true } om ? om.Groups[1].Value.ToUpperInvariant() : null;
+        ex.Description = GuessDescription(t);
         return ex;
+    }
+
+    private static string TitleCaseBank(string s)
+    {
+        var up = Regex.Replace(s, @"\s+", " ").Trim().ToUpperInvariant();
+        return up switch { "ABSA" => "ABSA", "FNB" or "FIRST NATIONAL BANK" => "FNB", "RMB" => "RMB", "HSBC" => "HSBC", _ => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(up.ToLowerInvariant()) };
+    }
+
+    /// <summary>First plausible line-item after a DESCRIPTION / ITEM / PARTICULARS header: letters, not a total/VAT/bank line.</summary>
+    public static string? GuessDescription(string text)
+    {
+        var lines = (text ?? "").Split('\n').Select(l => Regex.Replace(l, @"\s+", " ").Trim()).ToList();
+        var hdr = lines.FindIndex(l => Regex.IsMatch(l, @"^(?:ITEM|CODE|QTY|QUANTITY)?\s*(?:DESCRIPTION|PARTICULARS|DETAILS)\b", RegexOptions.IgnoreCase));
+        if (hdr < 0) return null;
+        foreach (var l in lines.Skip(hdr + 1).Take(12))
+        {
+            if (l.Length < 6) continue;
+            if (!Regex.IsMatch(l, @"[A-Za-z]{3}.*[A-Za-z]{2}")) continue;
+            if (Regex.IsMatch(l, @"\b(SUB\s*TOTAL|TOTAL|VAT|BANK|BRANCH|ACCOUNT|PAGE|TERMS|DUE|BALANCE)\b", RegexOptions.IgnoreCase)) continue;
+            var d = Regex.Replace(l, @"\s+R?\s*[\d\s]{1,12}[.,]\d{2}\b.*$", "").Trim(); // drop trailing qty/price columns
+            d = Regex.Replace(d, @"^\d+\s+", ""); // leading line number / qty
+            if (d.Length >= 5) return d.Length > 120 ? d[..120] : d;
+        }
+        return null;
     }
 
     private static readonly string[] NotASupplier = { "TAX INVOICE", "INVOICE", "STATEMENT", "QUOTATION", "QUOTE", "PROFORMA", "PAGE", "DATE", "ORIGINAL", "COPY", "CUSTOMER", "BILL TO", "DELIVER TO", "VAT", "TEL", "FAX", "EMAIL", "WWW", "P.O", "PO BOX", "REG" };
@@ -148,7 +192,8 @@ public class CreditorChecksService
         if (Has("PROOF OF PAYMENT", "PAYMENT NOTIFICATION", "PAYMENT CONFIRMATION", " POP")) return CreditorDocTypes.ProofOfPayment;
         if (Has("BANK CONFIRMATION", "CONFIRMATION OF BANK", "ACCOUNT VERIFICATION", "BANK LETTER", "AVS")) return CreditorDocTypes.BankLetter;
         if (Has("PAYMENT SCHEDULE", "PAYMENT_SCHEDULE", "SCHEDULE OF PAYMENTS")) return CreditorDocTypes.PaymentSchedule;
-        if (Has("CREDITORS RECON", "RECONCILIATION", "RECON")) return CreditorDocTypes.CreditorsRecon;
+        if (Has("CREDITORS RECON")) return CreditorDocTypes.CreditorsRecon;
+        if (Has("SUPPLIER RECON", "RECONCILIATION", "RECON")) return CreditorDocTypes.SupplierRecon;
         if (Has("AGED PAYABLES", "A/P AGED", "AP AGED", "SAGE 300", "PAYABLES BATCH")) return CreditorDocTypes.SageAgedPayables;
         if (Has("CREDIT NOTE SUMMARY", "CREDIT NOTE REQUEST", "CREDIT NOTE")) return CreditorDocTypes.CreditNoteForm;
         if (Has("RETURN GRV", "GOODS RETURNED", "RETURNS NOTE")) return CreditorDocTypes.WarehouseReturnGrv;
@@ -157,7 +202,6 @@ public class CreditorChecksService
         if (Has("PURCHASE ORDER", "P/O NUMBER", "PO NUMBER", "ORDER NO")) return CreditorDocTypes.PurchaseOrder;
         if (Has("GOODS RECEIVED", "GRV", "DELIVERY NOTE", "PROOF OF DELIVERY", "RECEIVED IN GOOD ORDER")) return CreditorDocTypes.Grv;
         if (Has("QUOTATION", "QUOTE")) return CreditorDocTypes.Quote;
-        if (Has("REQUISITION", "PAYMENT REQUEST")) return CreditorDocTypes.Requisition;
         if (Has("TAX INVOICE", "INVOICE")) return CreditorDocTypes.TaxInvoice;
         if (Has("INSTRUCTION", "PLEASE SETTLE", "KINDLY SETTLE")) return CreditorDocTypes.WrittenInstruction;
         if (Has("JOB CARD", "FITMENT", "CHECKLIST", "PHOTO")) return CreditorDocTypes.ProofOfWork;
@@ -223,6 +267,24 @@ public class CreditorChecksService
                 if (!docs.Any(d => d.DocType == dt && d.ItemId == it.Id && (d.IsNotApplicable || d.StoragePath != null)))
                     Add("C1", "Required document missing", "FAIL", $"{Label(dt)} is missing for {it.SupplierName}.", it, dt);
 
+        // C1a — recommended documents (quote, PO, GRV, proof of work, bank letter…): not blocking, but the approvers should know
+        foreach (var it in items)
+            foreach (var dt in CreditorDocRules.RecommendedForItem(batch.PaymentType, it.StockReturned, closingPrepayment))
+                if (!docs.Any(d => d.DocType == dt && d.ItemId == it.Id && (d.IsNotApplicable || d.StoragePath != null)))
+                    Add("C1a", "Supporting document not attached", "REVIEW",
+                        dt == CreditorDocTypes.BankLetter
+                            ? $"No bank letter for {it.SupplierName} — the bank details on the schedule have not been confirmed against a letter."
+                            : $"{Label(dt)} not attached for {it.SupplierName} — attach it if you have it, or mark N/A with a reason.", it, dt);
+
+        // C1c — an invoice without its recon (prepayments before delivery excluded)
+        foreach (var it in items)
+        {
+            var hasInv = docs.Any(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.TaxInvoice && d.StoragePath != null);
+            var hasRecon = docs.Any(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.SupplierRecon && (d.StoragePath != null || d.IsNotApplicable));
+            if (hasInv && !hasRecon && CreditorDocRules.For(batch.PaymentType).Any(r => r.DocType == CreditorDocTypes.SupplierRecon))
+                Add("C1c", "Invoice without recon", "FAIL", $"A tax invoice is attached for {it.SupplierName} but no supplier recon (Excel or PDF) — every invoice must come with its recon.", it, CreditorDocTypes.SupplierRecon);
+        }
+
         // C1b — credit note rule: stock back but no warehouse GRV ⇒ no credit note (already FAIL via matrix; spell it out)
         if (batch.PaymentType == CreditorPaymentTypes.CreditNote)
             foreach (var it in items.Where(i => i.StockReturned))
@@ -230,7 +292,7 @@ public class CreditorChecksService
                     Add("C10", "No warehouse GRV, no credit note", "FAIL", $"Stock came back for {it.SupplierName} but the warehouse return GRV has not been uploaded.", it, CreditorDocTypes.WarehouseReturnGrv);
 
         // C8 — unreadable / encrypted / non-PDF
-        foreach (var d in docs.Where(d => d.StoragePath != null))
+        foreach (var d in docs.Where(d => d.StoragePath != null && d.TextMethod != "spreadsheet"))
         {
             if (d.TextMethod == "none")
                 Add("C8", "Document could not be read", "REVIEW", $"{Label(d.DocType)} '{d.OriginalFileName}' has no readable text (poor scan?). The checks below could not look at it.", items.FirstOrDefault(i => i.Id == d.ItemId), d.DocType);
@@ -379,6 +441,7 @@ public class CreditorChecksService
 
     public static string Label(string key)
     {
+        if (key == CreditorDocTypes.Requisition) return "Requisition / payment request (legacy)";
         var d = CreditorDocTypes.All.FirstOrDefault(x => x.Key == key);
         if (d.Key != null) return d.Title;
         var p = CreditorPaymentTypes.All.FirstOrDefault(x => x.Key == key);

@@ -125,12 +125,15 @@ public static class CreditorDocTypes
     public const string SupplierStatement = "SupplierStatement";
     public const string SageAgedPayables = "SageAgedPayables";
     public const string TaxInvoice = "TaxInvoice";
+    /// <summary>Per-payment supplier reconciliation (Excel or PDF) — expected with every invoice.</summary>
+    public const string SupplierRecon = "SupplierRecon";
     public const string Quote = "Quote";
     public const string PurchaseOrder = "PurchaseOrder";
     public const string Grv = "GRV";
     public const string ProofOfWork = "ProofOfWork";
     public const string BankLetter = "BankLetter";
     public const string WrittenInstruction = "WrittenInstruction";
+    /// <summary>Legacy — requisitions / payment requests live in their own module now and are no longer attached to packs.</summary>
     public const string Requisition = "Requisition";
     public const string CreditNoteForm = "CreditNoteForm";
     public const string CustomerReason = "CustomerReason";
@@ -147,13 +150,13 @@ public static class CreditorDocTypes
         (SupplierStatement, "Supplier statement", "item"),
         (SageAgedPayables, "Sage aged payables / batch", "batch"),
         (TaxInvoice, "Tax invoice", "item"),
+        (SupplierRecon, "Supplier recon (Excel or PDF)", "item"),
         (Quote, "Quote (3 where possible)", "item"),
         (PurchaseOrder, "Purchase order", "item"),
         (Grv, "GRV / delivery note / POD", "item"),
         (ProofOfWork, "Proof of work (photos, reg, sign-off)", "item"),
         (BankLetter, "Bank letter < 3 months + AVS", "item"),
         (WrittenInstruction, "Written instruction + invoices settled", "item"),
-        (Requisition, "Requisition / payment request", "item"),
         (CreditNoteForm, "Credit note + summary form (all signatures)", "item"),
         (CustomerReason, "Customer e-mail / reason + original invoice", "item"),
         (CustomerCollectionSlip, "Customer collection slip", "item"),
@@ -164,11 +167,15 @@ public static class CreditorDocTypes
     };
 
     public static bool IsBatchLevel(string docType) => docType is PaymentSchedule or CreditorsRecon or SageAgedPayables;
+    /// <summary>Document slots that accept spreadsheets as well as PDFs.</summary>
+    public static bool AllowsSpreadsheet(string docType) => docType is SupplierRecon or CreditorsRecon or SageAgedPayables or PaymentSchedule;
 }
 
 /// <summary>
 /// The "documents required per payment type" matrix. Required = needed to submit.
+/// Required=false (and no other flag) = recommended: shown as a slot, missing ones raise a REVIEW warning but never block.
 /// AfterDelivery = needed to close a prepayment. IfReturned = mandatory when stock came back (credit notes).
+/// Requisitions / payment requests are handled in their own module and are not part of the pack.
 /// </summary>
 public static class CreditorDocRules
 {
@@ -179,42 +186,40 @@ public static class CreditorDocRules
         [CreditorPaymentTypes.DailyCreditor] = new[]
         {
             new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
-            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.Quote, true),
-            new Rule(CreditorDocTypes.PurchaseOrder, true), new Rule(CreditorDocTypes.Grv, true),
-            new Rule(CreditorDocTypes.ProofOfWork, true), new Rule(CreditorDocTypes.BankLetter, true),
-            new Rule(CreditorDocTypes.Requisition, true),
+            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
+            new Rule(CreditorDocTypes.Quote, false), new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false),
+            new Rule(CreditorDocTypes.ProofOfWork, false), new Rule(CreditorDocTypes.BankLetter, false),
         },
         [CreditorPaymentTypes.MonthlyCreditor] = new[]
         {
             new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
             new Rule(CreditorDocTypes.SupplierStatement, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
-            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.PurchaseOrder, true),
-            new Rule(CreditorDocTypes.Grv, true), new Rule(CreditorDocTypes.BankLetter, true),
+            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
+            new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false),
         },
         [CreditorPaymentTypes.Prepayment] = new[]
         {
             new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
-            new Rule(CreditorDocTypes.TaxInvoice, false, AfterDelivery: true), new Rule(CreditorDocTypes.Quote, true),
-            new Rule(CreditorDocTypes.PurchaseOrder, true), new Rule(CreditorDocTypes.Grv, false, AfterDelivery: true),
-            new Rule(CreditorDocTypes.BankLetter, true), new Rule(CreditorDocTypes.Requisition, true),
+            new Rule(CreditorDocTypes.TaxInvoice, false, AfterDelivery: true), new Rule(CreditorDocTypes.SupplierRecon, false, AfterDelivery: true),
+            new Rule(CreditorDocTypes.Quote, false), new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false, AfterDelivery: true),
+            new Rule(CreditorDocTypes.BankLetter, false),
         },
         [CreditorPaymentTypes.Intercompany] = new[]
         {
             new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
             new Rule(CreditorDocTypes.SupplierStatement, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
-            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.Grv, true),
-            new Rule(CreditorDocTypes.BankLetter, true), new Rule(CreditorDocTypes.WrittenInstruction, true),
+            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
+            new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), new Rule(CreditorDocTypes.WrittenInstruction, true),
         },
         [CreditorPaymentTypes.Utility] = new[]
         {
             new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.CreditorsRecon, true),
             new Rule(CreditorDocTypes.SupplierStatement, true), new Rule(CreditorDocTypes.SageAgedPayables, true),
-            new Rule(CreditorDocTypes.TaxInvoice, true),
+            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
         },
         [CreditorPaymentTypes.StaffPayment] = new[]
         {
-            new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.BankLetter, true),
-            new Rule(CreditorDocTypes.Requisition, true),
+            new Rule(CreditorDocTypes.PaymentSchedule, true), new Rule(CreditorDocTypes.BankLetter, false),
         },
         [CreditorPaymentTypes.CreditNote] = new[]
         {
@@ -244,4 +249,19 @@ public static class CreditorDocRules
 
     public static IEnumerable<string> RequiredForBatch(string paymentType) =>
         For(paymentType).Where(r => r.Required && CreditorDocTypes.IsBatchLevel(r.DocType)).Select(r => r.DocType);
+
+    /// <summary>
+    /// Optional-but-wanted documents for a payment: shown as slots and raise a warning when missing, never block.
+    /// Excludes anything that is currently required for the item.
+    /// </summary>
+    public static IEnumerable<string> RecommendedForItem(string paymentType, bool stockReturned, bool closingPrepayment)
+    {
+        var req = RequiredForItem(paymentType, stockReturned, closingPrepayment).ToHashSet();
+        foreach (var r in For(paymentType))
+        {
+            if (CreditorDocTypes.IsBatchLevel(r.DocType) || r.Required || req.Contains(r.DocType)) continue;
+            if (r.AfterDelivery || r.IfReturned) continue; // become required later / conditionally — not "recommended now"
+            yield return r.DocType;
+        }
+    }
 }

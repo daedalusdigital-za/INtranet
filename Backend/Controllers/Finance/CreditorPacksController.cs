@@ -413,6 +413,8 @@ public class CreditorPacksController : ControllerBase
             {
                 supplierName = known ?? ex.SupplierName, knownSupplier = known != null, supplier = hit,
                 amount = ex.Amount, vatAmount = ex.VatAmount, vatNumber = ex.VatNumber, invoiceNumber = ex.InvoiceNumber, documentDate = ex.DocumentDate,
+                description = ex.Description, orderNumber = ex.OrderNumber, customerAccount = ex.CustomerAccount,
+                bankName = ex.BankName, accountNumber = ex.AccountNumber, branchCode = ex.BranchCode, accountHolder = ex.AccountHolder,
                 suggestedType = ex.SuggestedType, pages = ex.Pages, method = ex.Method, scanned = ex.Method == "ocr", readable = ex.Method != "none"
             });
         }
@@ -489,8 +491,12 @@ public class CreditorPacksController : ControllerBase
         var b = await Load(id); if (b == null) return NotFound();
         if (file == null || file.Length == 0) return BadRequest(new { message = "No file." });
         if (file.Length > MaxFileBytes) return BadRequest(new { message = "File is larger than 20 MB." });
-        var isPdf = file.ContentType?.Contains("pdf", StringComparison.OrdinalIgnoreCase) == true || Path.GetExtension(file.FileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
-        if (!isPdf) return BadRequest(new { message = "PDF only — one document per file." });
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var isPdf = file.ContentType?.Contains("pdf", StringComparison.OrdinalIgnoreCase) == true || ext == ".pdf";
+        var isSheet = ext is ".xlsx" or ".xls" or ".csv";
+        if (!isPdf && !isSheet) return BadRequest(new { message = "PDF only — one document per file (Excel/CSV is accepted for recons and schedules)." });
+        if (isSheet && (string.IsNullOrWhiteSpace(docType) || !CreditorDocTypes.AllowsSpreadsheet(docType)))
+            return BadRequest(new { message = "Spreadsheets are only accepted for the supplier recon, creditors recon, payment schedule and Sage batch slots. Pick that slot first." });
         if (itemId != null && b.Items.All(i => i.Id != itemId)) return BadRequest(new { message = "That payment is not on this batch." });
 
         var locked = CreditorWorkflow.Locked.Contains(b.Status);
@@ -504,13 +510,14 @@ public class CreditorPacksController : ControllerBase
         var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         if (b.Documents.Any(d => d.Sha256 == sha)) return Conflict(new { message = "This exact file is already on the batch." });
 
-        var rel = $"Finance/Creditors/{b.CompanyCode}/{b.BatchNumber}/{Guid.NewGuid():N}.pdf";
+        var rel = $"Finance/Creditors/{b.CompanyCode}/{b.BatchNumber}/{Guid.NewGuid():N}{(isSheet ? ext : ".pdf")}";
         var abs = Abs(rel);
         Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
         await System.IO.File.WriteAllBytesAsync(abs, bytes);
 
-        var ex = await _checks.ReadAsync(abs, file.ContentType, file.FileName);
+        var ex = isSheet ? new CreditorChecksService.Extracted { Method = "spreadsheet", SuggestedType = docType } : await _checks.ReadAsync(abs, file.ContentType, file.FileName);
         if (ex.Encrypted) { TryDelete(abs); return BadRequest(new { message = "Password-protected PDFs are not accepted." }); }
+        var storedContentType = isSheet ? ext switch { ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls" => "application/vnd.ms-excel", _ => "text/csv" } : "application/pdf";
 
         var type = !string.IsNullOrWhiteSpace(docType) && CreditorDocTypes.All.Any(d => d.Key == docType) ? docType! : (ex.SuggestedType ?? CreditorDocTypes.Other);
         if (locked)
@@ -523,7 +530,7 @@ public class CreditorPacksController : ControllerBase
         var doc = new PaymentBatchDocument
         {
             BatchId = id, ItemId = itemId, DocType = type, SuggestedDocType = ex.SuggestedType,
-            FileName = Path.GetFileName(rel), OriginalFileName = file.FileName, ContentType = "application/pdf", Size = bytes.Length,
+            FileName = Path.GetFileName(rel), OriginalFileName = file.FileName, ContentType = storedContentType, Size = bytes.Length,
             StoragePath = rel, Sha256 = sha, PageCount = ex.Pages, ExtractedText = ex.Text, TextMethod = ex.Method,
             DocumentDate = ex.DocumentDate, ExtractedAccountNumber = ex.AccountNumber, ExtractedVatNumber = ex.VatNumber, ExtractedInvoiceNumber = ex.InvoiceNumber, ExtractedAmount = ex.Amount,
             UploadedByUserId = UserId, UploadedByName = UserName, SupersedesDocumentId = supersedesDocumentId, VersionReason = versionReason
@@ -599,8 +606,9 @@ public class CreditorPacksController : ControllerBase
         if (d?.StoragePath == null) return NotFound();
         var abs = Abs(d.StoragePath);
         if (!System.IO.File.Exists(abs)) return NotFound();
-        if (!download) Response.Headers["Content-Disposition"] = $"inline; filename=\"{d.OriginalFileName ?? d.FileName}\"";
-        return PhysicalFile(abs, "application/pdf", download ? (d.OriginalFileName ?? d.FileName) : null);
+        var isPdfDoc = string.IsNullOrEmpty(d.ContentType) || d.ContentType.Contains("pdf", StringComparison.OrdinalIgnoreCase);
+        if (!download && isPdfDoc) Response.Headers["Content-Disposition"] = $"inline; filename=\"{d.OriginalFileName ?? d.FileName}\"";
+        return PhysicalFile(abs, isPdfDoc ? "application/pdf" : d.ContentType!, download || !isPdfDoc ? (d.OriginalFileName ?? d.FileName) : null);
     }
 
     // ───────────────────────── workflow ─────────────────────────
@@ -1072,6 +1080,7 @@ public class CreditorPacksController : ControllerBase
         bool Filled(string dt, int? itemId) => b.Documents.Any(d => d.DocType == dt && d.ItemId == itemId && (d.IsNotApplicable || d.StoragePath != null));
         var batchReq = CreditorDocRules.RequiredForBatch(b.PaymentType).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, null) }).ToList();
         var itemReq = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RequiredForItem(b.PaymentType, i.StockReturned, closing).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
+        var itemRec = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RecommendedForItem(b.PaymentType, i.StockReturned, closing).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
         var allFilled = batchReq.All(r => r.filled) && itemReq.Values.All(l => l.All(r => r.filled)) && b.Items.Count > 0;
 
         var canPrepare = await CanPrepareAsync(b);
@@ -1099,6 +1108,7 @@ public class CreditorPacksController : ControllerBase
                 i.Id, i.SupplierName, i.SupplierVatNumber, i.InvoiceNumbers, i.Description, i.Amount, i.BankName, i.AccountNumber, i.BranchCode, i.AccountHolder, i.PaymentReference,
                 i.StockReturned, i.DecisionStatus, i.DecisionComment, i.DecidedAt, i.PrepaymentOpen, i.PaidAt, i.SortOrder,
                 required = itemReq[i.Id],
+                recommended = itemRec[i.Id],
                 documents = b.Documents.Where(d => d.ItemId == i.Id).OrderBy(d => d.DocType).ThenBy(d => d.Version).Select(DocDto)
             }),
             batchDocuments = b.Documents.Where(d => d.ItemId == null).OrderBy(d => d.DocType).Select(DocDto),
