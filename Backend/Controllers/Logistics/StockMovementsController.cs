@@ -259,12 +259,14 @@ namespace ProjectTracker.API.Controllers.Logistics
             // more can be added to it, so every line must be linked first.
             var unlinked = await _context.StopCommodities
                 .CountAsync(sc => sc.LoadStop.LoadId == dto.LoadId && sc.CommodityId == null && sc.Quantity > 0);
-            if (unlinked > 0)
+            if (unlinked > 0 && !dto.SkipUnlinked)
                 return Conflict(new
                 {
                     message = $"{unlinked} line(s) on {load.LoadNumber} aren't linked to a stock item yet. Link every line before approving.",
                     unlinkedLines = unlinked
                 });
+            if (unlinked > 0)
+                _logger.LogWarning("Approving {Load} with {Unlinked} unlinked line(s) skipped by {User}", load.LoadNumber, unlinked, CurrentUserName);
 
             // What the load actually carries — the dispatch may ship less than this, never more or anything else.
             var planned = await _context.StopCommodities
@@ -318,7 +320,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 var message = skipped == 0
                     ? $"Stock deducted for {load.LoadNumber}"
                     : $"Stock deducted for {load.LoadNumber}; {skipped} line(s) skipped because they were counted after the load went out";
-                return Ok(new { loadId = dto.LoadId, loadNumber = load.LoadNumber, lines = toDeduct.Count, skippedLines = skipped, message });
+                if (unlinked > 0) message += $"; {unlinked} unlinked line(s) not deducted";
+                return Ok(new { loadId = dto.LoadId, loadNumber = load.LoadNumber, lines = toDeduct.Count, skippedLines = skipped, unlinkedLines = unlinked, message });
             }
             catch (InvalidOperationException ex)
             {
@@ -859,6 +862,8 @@ namespace ProjectTracker.API.Controllers.Logistics
         public int LoadId { get; set; }
         public int? WarehouseId { get; set; }
         public List<DispatchLineDto> Lines { get; set; } = new();
+        /// <summary>Bulk/pre-count use only: deduct the linked lines and leave unlinked ones (which cannot deduct) behind, instead of refusing.</summary>
+        public bool SkipUnlinked { get; set; }
     }
 
     public class DispatchLineDto
