@@ -147,38 +147,28 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     @else if (!groups().length) {
       <div class="cr-state"><mat-icon>inbox</mat-icon><h3>Nothing here</h3><p>No batches match these filters.</p></div>
     } @else {
+      <div class="cr-cogrid">
       @for (g of groups(); track g.code) {
-        <section class="cr-co" [class.collapsed]="collapsed().has(g.code)">
-          <header (click)="toggleCo(g.code)">
-            <ng-container *ngTemplateOutlet="coMark; context: { $implicit: g.code, size: 'lg' }"></ng-container>
-            <div class="nm"><h3>{{ g.name }}</h3><small>{{ g.code }} · {{ g.rows.length }} batch{{ g.rows.length === 1 ? '' : 'es' }}@if (g.open) { · <b>{{ g.open }} in progress</b> }@if (g.back) { · <em>{{ g.back }} sent back</em> }</small></div>
-            <div class="tot"><span class="l">Open amount</span><span class="v">R {{ g.openAmount | number:'1.2-2' }}</span></div>
-            <mat-icon class="tw">{{ collapsed().has(g.code) ? 'expand_more' : 'expand_less' }}</mat-icon>
+        <section class="cr-co">
+          <header>
+            <ng-container *ngTemplateOutlet="coMark; context: { $implicit: g.code, size: 'md' }"></ng-container>
+            <div class="nm"><h3 [matTooltip]="g.name">{{ g.name }}</h3><small>{{ g.code }} · {{ g.rows.length }} batch{{ g.rows.length === 1 ? '' : 'es' }}@if (g.back) { · <em>{{ g.back }} sent back</em> }</small></div>
           </header>
-          @if (!collapsed().has(g.code)) {
-            <table class="cr-table">
-              <thead><tr><th>Batch</th><th>Payment type</th><th class="num">Amount</th><th>Where it is</th><th>Waiting on</th><th>Last change</th><th></th></tr></thead>
-              <tbody>
-                @for (r of g.rows; track r.id) {
-                  <tr (click)="open(r.id)">
-                    <td><span class="ref">{{ r.batchNumber }}</span><br><small class="muted">{{ r.batchDate | date:'dd MMM yyyy' }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
-                    <td>{{ typeTitle(r.paymentType) }}</td>
-                    <td class="num">R {{ r.totalAmount | number:'1.2-2' }}</td>
-                    <td>
-                      <span [class]="'badge ' + badge(r.status)">{{ r.statusTitle }}</span>
-                      @if (r.returnReason && isSentBack(r.status)) { <div class="reason">{{ r.returnReason }}</div> }
-                      @if (r.openPrepayments) { <div class="reason warn">{{ r.openPrepayments }} prepayment{{ r.openPrepayments === 1 ? '' : 's' }} awaiting invoice + GRV</div> }
-                    </td>
-                    <td class="who">{{ waitingOn(r) }}</td>
-                    <td class="nowrap muted">{{ (r.updatedAt || r.createdAt) | date:'dd MMM HH:mm' }}</td>
-                    <td class="actions"><mat-icon>chevron_right</mat-icon></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          }
+          <div class="tot"><span class="l">Open · {{ g.open }} batch{{ g.open === 1 ? '' : 'es' }}</span><span class="v">R {{ g.openAmount | number:'1.2-2' }}</span></div>
+          <ul class="cbs">
+            @for (r of g.rows; track r.id) {
+              <li (click)="open(r.id)" [class.back]="isSentBack(r.status)">
+                <div class="l1"><span class="ref">{{ r.batchNumber }}</span><span class="amt">R {{ r.totalAmount | number:'1.0-0' }}</span></div>
+                <div class="l2"><span [class]="'badge ' + badge(r.status)">{{ r.statusTitle }}</span><small>{{ typeTitle(r.paymentType) }} · {{ r.batchDate | date:'dd MMM' }} · {{ r.items }} pmt{{ r.items === 1 ? '' : 's' }}</small></div>
+                @if (waitingOn(r); as w) { <div class="l3"><mat-icon>person</mat-icon>{{ w }}</div> }
+                @if (r.returnReason && isSentBack(r.status)) { <div class="reason">{{ r.returnReason }}</div> }
+                @if (r.openPrepayments) { <div class="reason warn">{{ r.openPrepayments }} prepayment{{ r.openPrepayments === 1 ? '' : 's' }} awaiting invoice + GRV</div> }
+              </li>
+            }
+          </ul>
         </section>
       }
+      </div>
       @if (meta()!.me.isAdmin && missingLogos().length) {
         <p class="cr-logo-note"><mat-icon>image_not_supported</mat-icon> Logos still to be added for <strong>{{ missingLogos().join(', ') }}</strong> — initials are shown until the artwork is uploaded to <code>/logos</code>.</p>
       }
@@ -616,16 +606,20 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .comark { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-sm); overflow: hidden; vertical-align: middle;
       img { width: 100%; height: 100%; object-fit: contain; padding: 3px; box-sizing: border-box; }
       .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; letter-spacing: .04em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
-      &.xs { width: 34px; height: 22px; .mono { font-size: 9px; } } &.sm { width: 56px; height: 34px; .mono { font-size: 11px; } } &.lg { width: 112px; height: 64px; border-radius: var(--radius-md); img { padding: 6px; } .mono { font-size: 20px; } } }
-    .cr-co { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); margin-bottom: var(--space-3); overflow: hidden;
-      > header { display: flex; align-items: center; gap: var(--space-3); padding: 12px var(--space-4); cursor: pointer; user-select: none; background: var(--color-surface-2); border-bottom: 1px solid var(--color-line);
-        .nm { flex: 1; min-width: 0; h3 { margin: 0; font-size: var(--text-md); } small { color: var(--color-text-3); font-size: var(--text-xs); b { color: var(--color-primary); font-weight: 600; } em { color: var(--color-danger); font-style: normal; font-weight: 600; } } }
-        .tot { text-align: right; .l { display: block; font-size: var(--text-xs); color: var(--color-text-3); } .v { display: block; font-family: var(--font-mono); font-weight: 700; font-size: var(--text-md); } }
-        .tw { color: var(--color-text-3); }
-        &:hover { background: var(--color-surface-3); } }
-      &.collapsed > header { border-bottom: 0; }
-      .cr-table thead th { background: var(--color-surface); }
-      .cr-table tbody tr:last-child td { border-bottom: 0; } }
+      &.xs { width: 34px; height: 22px; .mono { font-size: 9px; } } &.sm { width: 56px; height: 34px; .mono { font-size: 11px; } } &.md { width: 76px; height: 44px; .mono { font-size: 14px; } } &.lg { width: 112px; height: 64px; border-radius: var(--radius-md); img { padding: 6px; } .mono { font-size: 20px; } } }
+    .cr-cogrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); align-items: start;
+      @media (max-width: 1400px) { grid-template-columns: repeat(3, minmax(0, 1fr)); } @media (max-width: 1000px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (max-width: 640px) { grid-template-columns: 1fr; } }
+    .cr-co { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); overflow: hidden; display: flex; flex-direction: column; min-width: 0;
+      > header { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px;
+        .nm { flex: 1; min-width: 0; h3 { margin: 0; font-size: var(--text-sm); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } small { color: var(--color-text-3); font-size: var(--text-xs); em { color: var(--color-danger); font-style: normal; font-weight: 600; } } } }
+      .tot { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 14px 10px; border-bottom: 1px solid var(--color-line); .l { font-size: var(--text-xs); color: var(--color-text-3); } .v { font-family: var(--font-mono); font-weight: 700; font-size: var(--text-md); white-space: nowrap; } }
+      .cbs { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow: auto;
+        li { padding: 8px 14px; border-bottom: 1px solid var(--color-line); cursor: pointer; display: flex; flex-direction: column; gap: 3px; border-left: 3px solid transparent;
+          &:last-child { border-bottom: 0; } &:hover { background: var(--color-surface-2); } &.back { border-left-color: var(--color-danger); }
+          .l1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; .ref { font-size: var(--text-xs); } .amt { font-family: var(--font-mono); font-weight: 600; font-size: var(--text-sm); white-space: nowrap; } }
+          .l2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; small { color: var(--color-text-3); font-size: var(--text-xs); } }
+          .l3 { display: flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--color-text-2); mat-icon { font-size: 14px; width: 14px; height: 14px; color: var(--color-text-3); } }
+          .reason { font-size: var(--text-xs); color: var(--color-danger); &.warn { color: var(--color-warn); } } } } }
     .cr-logo-note { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--color-text-3); mat-icon { font-size: 16px; width: 16px; height: 16px; } code { font-family: var(--font-mono); background: var(--color-surface-3); padding: 0 4px; border-radius: 3px; } }
     .pick-lbl { font-size: var(--text-xs); color: var(--color-text-2); font-weight: 600; margin-bottom: 6px; }
     .cr-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); margin-bottom: var(--space-3); }
@@ -819,8 +813,6 @@ export class FinanceCreditorsComponent implements OnInit {
         openAmount: rows.filter(r => r.status !== 'Closed').reduce((s, r) => s + (r.totalAmount || 0), 0)
       }));
   });
-  collapsed = signal(new Set<string>());
-  toggleCo(code: string): void { const s = new Set(this.collapsed()); s.has(code) ? s.delete(code) : s.add(code); this.collapsed.set(s); }
   filteredRows = computed(() => {
     const co = this.companyFilter(), st = this.statusFilter(), ty = this.typeFilter();
     return this.rows().filter(r => (!co || r.companyCode === co) && (!ty || r.paymentType === ty) && this.matchStatus(r, st));
