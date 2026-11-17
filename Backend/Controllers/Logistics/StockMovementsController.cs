@@ -414,6 +414,141 @@ namespace ProjectTracker.API.Controllers.Logistics
             return Ok(new { commoditiesCreated = created, r.LinesConsidered, r.LinesLinked, r.StillUnlinked });
         }
 
+        // ═══ POST: pre-count sweep — deduct EVERY line on every live load, no questions asked ═══
+        // Still-unlinked lines get a stock item created from their description (code "DESC-<n>" when the line
+        // has no product code) so they can deduct. Loads already partly deducted are topped up with the
+        // lines that have no Dispatch movement yet. Negative stock is allowed (reason recorded).
+        // Excluded load numbers (e.g. tomorrow's loads) are left alone. dryRun only reports.
+        [HttpPost("loads/force-deduct")]
+        public async Task<ActionResult<object>> ForceDeductAll([FromBody] ForceDeductDto dto, [FromQuery] bool dryRun = true)
+        {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = StockAccess.Denied });
+
+            var exclude = (dto.ExcludeLoadNumbers ?? new()).Select(n => n.Trim().ToUpperInvariant()).ToHashSet();
+            var reason = string.IsNullOrWhiteSpace(dto.Reason) ? "Pre-count sweep: deducted regardless of stock on hand" : dto.Reason.Trim();
+
+            var loads = await _context.Loads
+                .Where(l => l.Status != "Cancelled" && l.LoadType != InternalMovementsController.LoadTypeInternal && l.WarehouseId != null)
+                .ToListAsync();
+            loads = loads.Where(l => !exclude.Contains((l.LoadNumber ?? "").ToUpperInvariant())
+                                     && (dto.UpTo == null || LoadStockGuard.DispatchDate(l) < dto.UpTo.Value.Date.AddDays(1)))
+                        .ToList();
+            var loadIds = loads.Select(l => l.Id).ToHashSet();
+
+            var lines = await _context.StopCommodities
+                .Include(sc => sc.LoadStop)
+                .Where(sc => sc.Quantity > 0 && loadIds.Contains(sc.LoadStop.LoadId))
+                .ToListAsync();
+
+            // 1) stock items for unlinked lines: exact name match first; otherwise a pending (negative) key that is
+            //    only turned into a real Commodity if the line actually deducts below.
+            var unlinked = lines.Where(sc => sc.CommodityId == null).ToList();
+            var created = 0;
+            var keyOf = new Dictionary<int, int>(); // StopCommodity.Id -> commodity id (negative = pending creation)
+            var pending = new Dictionary<int, Models.Logistics.Commodity>(); // negative key -> commodity to create
+            if (unlinked.Count > 0)
+            {
+                var byName = (await _context.Commodities.Where(c => c.Name != "").Select(c => new { c.Id, c.Name }).ToListAsync())
+                    .GroupBy(c => c.Name.Trim().ToLowerInvariant()).ToDictionary(g => g.Key, g => g.First().Id);
+                var keyByName = new Dictionary<string, int>();
+                foreach (var sc in unlinked)
+                {
+                    var name = (sc.Comment ?? "").Trim();
+                    if (name.Length == 0) name = string.IsNullOrWhiteSpace(sc.ProductCode) ? $"Unnamed line {sc.Id}" : sc.ProductCode!.Trim();
+                    var key = name.ToLowerInvariant();
+                    if (byName.TryGetValue(key, out var id)) { keyOf[sc.Id] = id; continue; }
+                    if (!keyByName.TryGetValue(key, out var pk))
+                    {
+                        pk = -(pending.Count + 1);
+                        keyByName[key] = pk;
+                        pending[pk] = new Models.Logistics.Commodity
+                        {
+                            Code = string.IsNullOrWhiteSpace(sc.ProductCode) ? $"DESC-{sc.Id}" : sc.ProductCode!.Trim(),
+                            Name = name.Length > 200 ? name[..200] : name,
+                            Description = "Created from tripsheet line during pre-count sweep — review code/name",
+                            UnitOfMeasure = "Each",
+                            CreatedAt = DateTime.UtcNow
+                        };
+                    }
+                    keyOf[sc.Id] = pk;
+                }
+            }
+
+            // 2) what each load already deducted
+            var existing = (await _context.WarehouseStockMovements
+                    .Where(m => m.LoadId != null && loadIds.Contains(m.LoadId.Value) && m.MovementType == "Dispatch" && m.Status == "Approved" && m.ReversedByMovementId == null)
+                    .Select(m => new { LoadId = m.LoadId!.Value, m.CommodityId }).ToListAsync())
+                .Select(x => (x.LoadId, x.CommodityId)).ToHashSet();
+
+            // Lines counted after the load went out are already in that count — skip them (same rule as ApproveDispatch)
+            var countOf = dto.IgnoreCounts ? new Dictionary<(int, int), DateTime>() : await _context.WarehouseInventory.AsNoTracking()
+                .Where(i => i.LastCountDate != null)
+                .Select(i => new { i.WarehouseId, i.CommodityId, Counted = i.LastCountDate!.Value })
+                .ToDictionaryAsync(i => (i.WarehouseId, i.CommodityId), i => i.Counted);
+            // Items never counted (incl. the stock items created just now) fall back to the warehouse's latest count date
+            var warehouseCount = countOf.GroupBy(k => k.Key.Item1).ToDictionary(g => g.Key, g => g.Max(k => k.Value));
+            var baselineSkipped = 0;
+
+            var results = new List<object>();
+            var movements = 0; var loadsTouched = 0; var negatives = 0;
+            foreach (var load in loads.OrderBy(l => LoadStockGuard.DispatchDate(l)))
+            {
+                var dispatched = LoadStockGuard.DispatchDate(load);
+                var candidates = lines.Where(sc => sc.LoadStop.LoadId == load.Id && (sc.CommodityId != null || keyOf.ContainsKey(sc.Id)))
+                    .GroupBy(sc => sc.CommodityId ?? keyOf[sc.Id])
+                    .Select(g => new { CommodityId = g.Key, Qty = g.Sum(x => x.Quantity) })
+                    .Where(p => p.Qty > 0 && !existing.Contains((load.Id, p.CommodityId)))
+                    .ToList();
+                var plan = candidates.Where(p =>
+                {
+                    var wh = load.WarehouseId!.Value;
+                    if (countOf.TryGetValue((wh, p.CommodityId), out var counted)) return !(dispatched < counted);
+                    return !(warehouseCount.TryGetValue(wh, out var whCounted) && dispatched < whCounted);
+                }).ToList();
+                baselineSkipped += candidates.Count - plan.Count;
+                if (plan.Count == 0) continue;
+                loadsTouched++;
+                var wouldCreate = plan.Count(p => p.CommodityId < 0 && pending.ContainsKey(p.CommodityId));
+                if (dryRun) { created += wouldCreate; results.Add(new { load.LoadNumber, lines = plan.Count, qty = plan.Sum(p => p.Qty), newItems = wouldCreate }); movements += plan.Count; continue; }
+
+                using var tx = await _context.Database.BeginTransactionAsync();
+                var createdInTx = new List<Models.Logistics.Commodity>();
+                try
+                {
+                    // Materialise pending stock items for this load's lines and link the lines to them
+                    var loadLines = lines.Where(sc => sc.LoadStop.LoadId == load.Id && sc.CommodityId == null && keyOf.ContainsKey(sc.Id)).ToList();
+                    foreach (var p in plan.Where(p => p.CommodityId < 0).ToList())
+                    {
+                        var c = pending[p.CommodityId];
+                        if (c.Id == 0) { _context.Commodities.Add(c); await _context.SaveChangesAsync(); created++; createdInTx.Add(c); }
+                        foreach (var sc in loadLines.Where(sc => keyOf[sc.Id] == p.CommodityId)) { sc.CommodityId = c.Id; sc.ProductCode ??= c.Code; }
+                    }
+                    foreach (var sc in loadLines.Where(sc => sc.CommodityId == null && keyOf[sc.Id] > 0)) sc.CommodityId = keyOf[sc.Id];
+                    foreach (var p in plan)
+                    {
+                        var commodityId = p.CommodityId < 0 ? pending[p.CommodityId].Id : p.CommodityId;
+                        var r = await StockLedger.ApplyAsync(_context, load.WarehouseId!.Value, commodityId, "Dispatch", -p.Qty, load.Id, null, load.LoadNumber, reason, CurrentUserName);
+                        if (r.BalanceAfter < 0) negatives++;
+                        movements++;
+                    }
+                    await _context.SaveChangesAsync();
+                    await tx.CommitAsync();
+                    results.Add(new { load.LoadNumber, lines = plan.Count, ok = true });
+                }
+                catch (Exception ex)
+                {
+                    await tx.RollbackAsync();
+                    foreach (var c in createdInTx) { _context.Entry(c).State = EntityState.Detached; c.Id = 0; created--; }
+                    _logger.LogError(ex, "Force-deduct failed for {Load}", load.LoadNumber);
+                    results.Add(new { load.LoadNumber, lines = plan.Count, ok = false, error = ex.Message });
+                }
+            }
+            _logger.LogWarning("Force-deduct by {User}: dryRun={Dry} loads={Loads} movements={Moves} stockItemsCreated={Created} negatives={Neg} excluded={Excl}",
+                CurrentUserName, dryRun, loadsTouched, movements, created, negatives, string.Join(",", exclude));
+            return Ok(new { dryRun, loadsConsidered = loads.Count, loadsTouched, movements, stockItemsCreated = created, wentNegative = negatives, baselineSkipped, excluded = exclude.Count, results });
+        }
+
         // ═══ POST: one-off repair of loads created before stock lines were linked automatically ═══
         // 1) Loads made from sales invoices that got no stock lines at all get one line per invoice.
         // 2) Unlinked lines are linked by product code, taken from the line's invoice (when that settles
@@ -835,6 +970,15 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
             return new { commodityId, movementType, quantity = signedQty, balanceAfter = movement.BalanceAfter };
         }
+    }
+
+    public class ForceDeductDto
+    {
+        public List<string>? ExcludeLoadNumbers { get; set; }
+        public DateTime? UpTo { get; set; }
+        public string? Reason { get; set; }
+        /// <summary>Also deduct lines that were counted after the load left (double-counts against the stock take). Off by default.</summary>
+        public bool IgnoreCounts { get; set; }
     }
 
     public class ManualMovementDto
