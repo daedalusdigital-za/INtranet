@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using ProjectTracker.API.Data;
 
@@ -20,18 +20,16 @@ namespace ProjectTracker.API.Migrations
             migrationBuilder.Sql(@"
 UPDATE FlowDefinitions SET GraphJson = REPLACE(GraphJson,
   'Attach the required documents per payment, then Submit.',
-  'Every invoice must come with its supplier recon (.xlsx or PDF) â€” the form will not add the payment without it. Quotes, purchase orders, GRVs, proof of work and bank letters are optional: attach them where you have them (missing ones are flagged to the approvers, not blocked). Requisitions / payment requests are handled in their own module, not in the pack. Then Submit.')
-WHERE Name = N'Supplier payment Â· pack â†’ sign â†’ pay-run â†’ POP';
+  'Every invoice must come with its supplier recon (.xlsx or PDF) - the form will not add the payment without it. Quotes, purchase orders, GRVs, proof of work and bank letters are optional: attach them where you have them (missing ones are flagged to the approvers, not blocked). Requisitions / payment requests are handled in their own module, not in the pack. Then Submit.')
+WHERE Name LIKE N'Supplier payment%' AND IsTemplate = 1;
 
 UPDATE FlowDefinitions SET GraphJson = REPLACE(GraphJson,
   'the red items on the pack (missing documents, bank letter older than 3 months, account differs from letter, duplicate invoice, VAT / amount mismatch)',
   'the red items on the pack (invoice without its recon, missing required documents, bank letter older than 3 months, account differs from letter, duplicate invoice, VAT / amount mismatch). Yellow items (no quote / PO / GRV / bank letter) are warnings for the approvers, not blockers')
-WHERE Name = N'Supplier payment Â· pack â†’ sign â†’ pay-run â†’ POP';
+WHERE Name LIKE N'Supplier payment%' AND IsTemplate = 1;
 ");
         }
 
         protected override void Down(MigrationBuilder migrationBuilder) { }
     }
 }
-
-
