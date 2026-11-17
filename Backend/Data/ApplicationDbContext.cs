@@ -287,6 +287,8 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Finance.Creditors.PaymentBatchItem> PaymentBatchItems { get; set; }
         public DbSet<Models.Finance.Creditors.PaymentBatchDocument> PaymentBatchDocuments { get; set; }
         public DbSet<Models.Finance.Creditors.PaymentBatchEvent> PaymentBatchEvents { get; set; }
+        public DbSet<Models.Finance.Creditors.CreditorCashflowBalance> CreditorCashflowBalances { get; set; }
+        public DbSet<Models.Finance.Creditors.CreditorCashflowLine> CreditorCashflowLines { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -318,6 +320,16 @@ namespace ProjectTracker.API.Data
                 e.Property(d => d.ExtractedAmount).HasPrecision(18, 2);
             });
             modelBuilder.Entity<Models.Finance.Creditors.PaymentBatchEvent>(e => e.HasIndex(x => x.BatchId));
+            modelBuilder.Entity<Models.Finance.Creditors.CreditorCashflowBalance>(e =>
+            {
+                e.HasIndex(x => new { x.CompanyCode, x.AsAt });
+                e.Property(x => x.Balance).HasPrecision(18, 2);
+            });
+            modelBuilder.Entity<Models.Finance.Creditors.CreditorCashflowLine>(e =>
+            {
+                e.HasIndex(x => new { x.CompanyCode, x.Section });
+                e.Property(x => x.Amount).HasPrecision(18, 2);
+            });
 
             // Cortex
             modelBuilder.Entity<Models.Cortex.CortexNode>(e =>

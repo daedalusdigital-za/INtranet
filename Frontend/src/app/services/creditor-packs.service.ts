@@ -136,6 +136,15 @@ export class CreditorPacksService {
   // ── Executive (directors) ──
   executive() { return this.http.get<ExecutiveOverview>(`${this.base}/executive`); }
 
+  // ── Group cashflow (template: Balance − Payments − Debit orders − Monthly = Closing) ──
+  cashflow(asAt?: string) { return this.http.get<Cashflow>(`${this.base}/cashflow`, { params: asAt ? new HttpParams().set('asAt', asAt) : undefined }); }
+  cashflowXlsx(asAt?: string) { return this.http.get(`${this.base}/cashflow/export`, { params: asAt ? new HttpParams().set('asAt', asAt) : undefined, responseType: 'blob' }); }
+  setCashBalance(b: { companyCode: string; asAt: string; balance: number; note?: string }) { return this.http.put<Cashflow>(`${this.base}/cashflow/balance`, b); }
+  cashBalanceHistory(code: string) { return this.http.get<CashBalance[]>(`${this.base}/cashflow/balance/${code}/history`); }
+  addCashLine(l: CashLineInput) { return this.http.post<Cashflow>(`${this.base}/cashflow/lines`, l); }
+  updateCashLine(id: number, l: CashLineInput) { return this.http.put<Cashflow>(`${this.base}/cashflow/lines/${id}`, l); }
+  deleteCashLine(id: number) { return this.http.delete<Cashflow>(`${this.base}/cashflow/lines/${id}`); }
+
   // ── History (paid / closed) ──
   history(f: { from?: string; to?: string; company?: string; q?: string } = {}) {
     let p = new HttpParams();
@@ -171,6 +180,21 @@ export interface PaymentSchedule {
   payDays: string[]; nextPayDay: string; me: { bank: boolean; clerk: boolean };
   totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number };
   batches: ScheduleBatch[];
+}
+export type CashSection = 'DebitOrder' | 'Monthly';
+export interface CashLineInput { companyCode: string; section: CashSection; payee: string; reference?: string | null; description?: string | null; frequency?: string | null; dueDay?: number | null; amount: number; isActive: boolean; }
+export interface CashLine extends CashLineInput { id: number; sortOrder: number; updatedAt?: string | null; updatedByName?: string | null; }
+export interface CashBalance { id: number; companyCode: string; asAt: string; balance: number; note?: string | null; updatedByName?: string | null; updatedAt: string; }
+export interface CashBatchRef { id: number; batchNumber: string; status: string; paymentType: string; batchDate: string; amount: number; approved: boolean; }
+export interface CashPaymentLine { no: number; supplier: string; invoiceDate?: string | null; documentNumber: string; description?: string | null; payableBy: string; amount: number; batchNumber: string; status: string; }
+export interface CashCompany {
+  code: string; name: string; balance?: number | null; balanceAsAt?: string | null; balanceNote?: string | null;
+  payments: number; paymentsApproved: number; batchCount: number; debitOrders: number; monthly: number; closing: number;
+  batches: CashBatchRef[]; paymentLines: CashPaymentLine[]; lines: CashLine[];
+}
+export interface Cashflow {
+  asAt: string; generatedAt: string; companies: CashCompany[]; canEdit: boolean;
+  totals: { balance: number; payments: number; paymentsApproved: number; debitOrders: number; monthly: number; closing: number };
 }
 export interface ExecutiveAwaiting {
   id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; totalAmount: number; items: number; decided: number;

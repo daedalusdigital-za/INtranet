@@ -13,11 +13,12 @@ import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
 import { CompanyBatchesDialogComponent } from './company-batches-dialog.component';
 import { ExplainerDialogComponent } from './explainer-dialog.component';
 import { SchedulePreviewDialogComponent } from './schedule-preview-dialog.component';
+import { FinanceCashflowComponent } from './finance-cashflow.component';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule } from '../../services/creditor-packs.service';
 
-type View = 'board' | 'batch';
+type View = 'board' | 'batch' | 'cashflow';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
 
 const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoiceNumbers: '', description: '', amount: 0, bankName: '', accountNumber: '', branchCode: '', accountHolder: '', paymentReference: '', stockReturned: false };
@@ -30,11 +31,28 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 @Component({
   selector: 'app-finance-creditors',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule, FinanceCashflowComponent],
   template: `
   @if (!meta()) {
     <div class="cr-state"><mat-spinner diameter="36"></mat-spinner><p>Opening creditors…</p></div>
   } @else {
+
+  <!-- ═══════════════════════ TABS ═══════════════════════ -->
+  @if (view() !== 'batch') {
+    <div class="cr-tabs">
+      <button type="button" [class.on]="view() === 'board'" (click)="setView('board')"><mat-icon>inventory_2</mat-icon> Payment packs</button>
+      <button type="button" [class.on]="view() === 'cashflow'" (click)="setView('cashflow')"><mat-icon>account_balance</mat-icon> Cashflow</button>
+    </div>
+  }
+
+  <!-- ═══════════════════════ CASHFLOW ═══════════════════════ -->
+  @if (view() === 'cashflow') {
+    <div class="cr-title">
+      <h2>Group cashflow</h2>
+      <button mat-icon-button class="help" (click)="cashflowRef?.explain()" matTooltip="How the cashflow is worked out" aria-label="How the cashflow is worked out"><mat-icon>help_outline</mat-icon></button>
+    </div>
+    <app-finance-cashflow #cashflowRef (openBatch)="open($event)"></app-finance-cashflow>
+  }
 
   <!-- ═══════════════════════ BOARD ═══════════════════════ -->
   @if (view() === 'board') {
@@ -585,6 +603,9 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .muted { color: var(--color-text-3); } .nowrap { white-space: nowrap; } .ref { font-family: var(--font-mono); font-weight: 600; }
 
     .cr-title { display: flex; align-items: center; gap: 4px; margin-bottom: var(--space-3); h2 { margin: 0; font-size: var(--text-xl); } .help { color: var(--color-text-3); &:hover { color: var(--color-primary); } } }
+    .cr-tabs { display: flex; gap: 2px; margin-bottom: var(--space-3); border-bottom: 1px solid var(--color-line-strong);
+      button { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: var(--text-sm); font-weight: 600; padding: 10px 16px; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--color-text-2); cursor: pointer; mat-icon { font-size: 18px; width: 18px; height: 18px; }
+        &:hover { color: var(--color-text); } &.on { color: var(--color-primary); border-bottom-color: var(--color-primary); } } }
 
     .cr-alerts { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-md); mat-icon { color: var(--color-warn); } .txt { flex: 1; font-size: var(--text-sm); } }
     .cr-alert-list { display: grid; gap: 4px; margin-bottom: var(--space-3); }
@@ -767,6 +788,14 @@ export class FinanceCreditorsComponent implements OnInit {
   loading = signal(false);
   busy = signal(false);
   view = signal<View>('board');
+  /** Tab to return to when leaving a batch. */
+  private homeView: View = 'board';
+  @ViewChild('cashflowRef') cashflowRef?: FinanceCashflowComponent;
+  setView(v: View): void {
+    this.view.set(v); this.homeView = v;
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab: v === 'cashflow' ? 'cashflow' : null }, queryParamsHandling: 'merge', replaceUrl: true });
+    if (v === 'board') this.loadBoard();
+  }
   batch = signal<BatchDetail | null>(null);
   /** Generated payment schedule for the open batch; refreshed whenever the batch changes. */
   schedule = signal<GeneratedSchedule | null>(null);
@@ -864,6 +893,7 @@ export class FinanceCreditorsComponent implements OnInit {
   ngOnInit(): void {
     this.api.meta().subscribe({
       next: m => { this.meta.set(m); if (!this.newBatch.companyCode) this.newBatch.companyCode = m.companies.find(c => c.isActive)?.code ?? ''; this.loadBoard();
+        if (this.route.snapshot.queryParamMap.get('tab') === 'cashflow') { this.view.set('cashflow'); this.homeView = 'cashflow'; }
         const id = Number(this.route.snapshot.queryParamMap.get('batch')); if (id) this.open(id); },
       error: () => this.toast.error("Couldn't open creditors. Check your Finance access.")
     });
@@ -1002,7 +1032,7 @@ export class FinanceCreditorsComponent implements OnInit {
       error: () => { this.busy.set(false); this.toast.error("Couldn't open that batch."); }
     });
   }
-  back(): void { this.view.set('board'); this.batch.set(null); this.router.navigate([], { relativeTo: this.route, queryParams: { batch: null }, queryParamsHandling: 'merge', replaceUrl: true }); this.loadBoard(); }
+  back(): void { this.view.set(this.homeView); this.batch.set(null); this.router.navigate([], { relativeTo: this.route, queryParams: { batch: null }, queryParamsHandling: 'merge', replaceUrl: true }); if (this.homeView === 'board') this.loadBoard(); }
   private apply = (b: BatchDetail, msg?: string) => { this.batch.set(b); this.busy.set(false); if (msg) this.toast.done(msg); };
   private fail = (e: any, fallback: string) => { this.busy.set(false); this.toast.error(e?.error?.message || fallback); };
 
