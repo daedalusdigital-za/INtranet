@@ -1,24 +1,93 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, map, of, catchError } from 'rxjs';
 import { ToastService } from '../ui/toast.service';
+import { environment } from '../../environments/environment';
+
+export type RequisitionSignSlot = 'RequestedBy' | 'AuthorisedBy' | 'ReceivedBy';
+export const REQUISITION_SIGN_SLOTS: { key: RequisitionSignSlot; label: string }[] = [
+  { key: 'RequestedBy', label: 'Requested By' },
+  { key: 'AuthorisedBy', label: 'Authorised By' },
+  { key: 'ReceivedBy', label: 'Received By' },
+];
+
+/** A drawn signature placed in one of the three boxes on the requisition form. */
+export interface RequisitionSignature {
+  id?: number;
+  slot: RequisitionSignSlot;
+  /** width as % of the signature box (30–140) */
+  size: number;
+  /** horizontal / vertical nudge, % of box (-50..50) */
+  dx: number;
+  dy: number;
+  imageDataUrl: string;
+  signerName: string;
+  signedAtUtc?: string;
+}
+
+/** Context string stored on the ElectronicSignature row: Sig|<slot>|<size>|<dx>|<dy> */
+export function encodeSignContext(s: Pick<RequisitionSignature, 'slot' | 'size' | 'dx' | 'dy'>): string {
+  return `Sig|${s.slot}|${Math.round(s.size)}|${Math.round(s.dx)}|${Math.round(s.dy)}`;
+}
+function decodeSignContext(ctx: string | null | undefined): Pick<RequisitionSignature, 'slot' | 'size' | 'dx' | 'dy'> | null {
+  if (!ctx || !ctx.startsWith('Sig|')) return null;
+  const [, slot, size, dx, dy] = ctx.split('|');
+  if (!REQUISITION_SIGN_SLOTS.some(s => s.key === slot)) return null;
+  return { slot: slot as RequisitionSignSlot, size: +size || 80, dx: +dx || 0, dy: +dy || 0 };
+}
 
 /**
  * Renders the Rocket Freight "Requisition Form" (petty cash / e-wallet) on the company letterhead.
  * Used by Logistics (where the form is raised) and Finance › Approvals (where it is paid), so both
  * sides see the identical document. The browser's print dialog is how it becomes a PDF ("Save as PDF").
+ * Digital signatures captured against the requisition (EntityType "Requisition") are drawn into the boxes.
  */
 @Injectable({ providedIn: 'root' })
 export class RequisitionFormService {
   private toast = inject(ToastService);
+  private http = inject(HttpClient);
 
-  /** Opens the form in a new tab and triggers print. `autoPrint=false` just shows it. */
+  /** Signatures stored for this requisition (latest per slot wins). */
+  loadSignatures(requisitionId: number): Observable<RequisitionSignature[]> {
+    return this.http.get<any[]>(`${environment.apiUrl}/signatures/Requisition/${requisitionId}?images=true`).pipe(
+      map(rows => {
+        const out: RequisitionSignature[] = [];
+        for (const r of rows || []) {             // rows are newest-first
+          const pos = decodeSignContext(r.context);
+          if (!pos || !r.imageDataUrl) continue;
+          if (out.some(o => o.slot === pos.slot)) continue;
+          out.push({ id: r.id, ...pos, imageDataUrl: r.imageDataUrl, signerName: r.signerName, signedAtUtc: r.signedAtUtc });
+        }
+        return out;
+      }),
+      catchError(() => of([] as RequisitionSignature[]))
+    );
+  }
+
+  /** Save a drawn signature against the requisition. */
+  saveSignature(req: any, sig: RequisitionSignature, comment?: string): Observable<any> {
+    const slotLabel = REQUISITION_SIGN_SLOTS.find(s => s.key === sig.slot)?.label ?? sig.slot;
+    return this.http.post(`${environment.apiUrl}/signatures`, {
+      entityType: 'Requisition', entityId: req.id, context: encodeSignContext(sig), signerRole: slotLabel,
+      action: 'Sign', method: 'Drawn', comment: comment || null,
+      signatureImageBase64: sig.imageDataUrl, signatureImageMimeType: 'image/png',
+      payload: { id: req.id, rfNumber: req.rfNumber, paidTo: req.paidTo, amountEwallet: req.amountEwallet, dieselAmount: req.dieselAmount, date: req.date }
+    });
+  }
+
+  /** Opens the form in a new tab (with stored signatures) and triggers print. `autoPrint=false` just shows it. */
   open(req: any, autoPrint = true): void {
     const w = window.open('', '_blank');
     if (!w) { this.toast.warn('Pop-up blocked — allow pop-ups to open the form'); return; }
-    w.document.write(this.html(req, autoPrint));
-    w.document.close();
+    w.document.write('<title>Loading requisition…</title>');
+    this.loadSignatures(req.id).subscribe(sigs => {
+      w.document.open();
+      w.document.write(this.html(req, autoPrint, sigs));
+      w.document.close();
+    });
   }
 
-  html(req: any, autoPrint: boolean): string {
+  html(req: any, autoPrint: boolean, signatures: RequisitionSignature[] = []): string {
     const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const money = (v: any) => (v && +v > 0) ? 'R ' + (+v).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
     const dateStr = req.date ? new Date(req.date).toLocaleDateString('en-ZA', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
@@ -61,8 +130,10 @@ export class RequisitionFormService {
   .total-row td { background: rgba(224,236,240,0.95); font-size: 18px; font-weight: 800; color: #033142; }
   .sign-row { display: table; width: 100%; margin-top: 34px; border-spacing: 18px 0; }
   .sign-box { display: table-cell; width: 33%; text-align: center; }
-  .sign-line { border-bottom: 1.5px solid #333; height: 40px; margin-bottom: 6px; }
+  .sign-line { position: relative; border-bottom: 1.5px solid #333; height: 56px; margin-bottom: 6px; overflow: visible; }
+  .sign-line img { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); max-height: 400%; pointer-events: none; }
   .sign-label { font-size: 11px; color: #52606d; text-transform: uppercase; letter-spacing: 0.6px; }
+  .sign-by { font-size: 10px; color: #2e7d32; margin-top: 3px; }
   .print-meta { margin-top: 20px; font-size: 10.5px; color: #52606d; text-align: center; }
   .watermark { position: fixed; top: 40%; left: 0; right: 0; text-align: center; font-size: 90px; font-weight: 900; color: rgba(198,40,40,0.14); transform: rotate(-20deg); pointer-events: none; }
   .toolbar { position: fixed; top: 10px; right: 10px; display: flex; gap: 8px; }
@@ -95,9 +166,12 @@ export class RequisitionFormService {
   </table>
 
   <div class="sign-row">
-    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Requested By</div></div>
-    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Authorised By</div></div>
-    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">Received By</div></div>
+    ${REQUISITION_SIGN_SLOTS.map(s => {
+      const sig = signatures.find(x => x.slot === s.key);
+      const img = sig ? `<img src="${sig.imageDataUrl}" alt="Signature" style="width:${sig.size}%;left:calc(50% + ${sig.dx}%);bottom:calc(2px + ${sig.dy}%)">` : '';
+      const by = sig ? `<div class="sign-by">✓ ${esc(sig.signerName)}${sig.signedAtUtc ? ' · ' + esc(new Date(sig.signedAtUtc).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })) : ''}</div>` : '';
+      return `<div class="sign-box"><div class="sign-line">${img}</div><div class="sign-label">${s.label}</div>${by}</div>`;
+    }).join('')}
   </div>
 
   <div class="print-meta">

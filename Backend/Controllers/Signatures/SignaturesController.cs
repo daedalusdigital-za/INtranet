@@ -72,9 +72,9 @@ namespace ProjectTracker.API.Controllers.Signatures
             });
         }
 
-        /// <summary>List all signatures for an entity (newest first).</summary>
+        /// <summary>List all signatures for an entity (newest first). Pass <c>?images=true</c> to inline the drawn image as a data URL.</summary>
         [HttpGet("{entityType}/{entityId:int}")]
-        public async Task<IActionResult> List(string entityType, int entityId)
+        public async Task<IActionResult> List(string entityType, int entityId, [FromQuery] bool images = false)
         {
             var sigs = await _signatures.GetForEntityAsync(entityType, entityId);
             return Ok(sigs.Select(s => new
@@ -82,7 +82,10 @@ namespace ProjectTracker.API.Controllers.Signatures
                 s.Id, s.EntityType, s.EntityId, s.Context, s.SignerName, s.SignerEmail,
                 s.SignerRole, s.Action, s.Comment, s.Method, s.ReAuthenticated,
                 s.PayloadHash, s.PreviousSignatureId, s.IpAddress, s.SignedAtUtc,
-                hasImage = s.SignatureImage != null && s.SignatureImage.Length > 0
+                hasImage = s.SignatureImage != null && s.SignatureImage.Length > 0,
+                imageDataUrl = images && s.SignatureImage != null && s.SignatureImage.Length > 0
+                    ? $"data:{s.SignatureImageMimeType ?? "image/png"};base64,{Convert.ToBase64String(s.SignatureImage)}"
+                    : null
             }));
         }
 
