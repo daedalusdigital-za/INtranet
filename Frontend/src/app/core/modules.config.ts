@@ -635,13 +635,20 @@ export function getModuleRoutes(): Routes {
       canActivate: [authGuard]
     },
 
-    // Executive — directors approve & sign supplier payments, company stats. Role-gated server-side.
+    // Executive section — Directors (sign payments, company insights) and Treasury (load/pay/POP). Role-gated server-side.
     {
-      path: 'executive',
-      title: 'Executive',
-      loadComponent: () => import('../components/executive/executive.component').then(m => m.ExecutiveComponent),
+      path: 'directors',
+      title: 'Directors',
+      loadComponent: () => import('../components/directors/directors.component').then(m => m.DirectorsComponent),
       canActivate: [authGuard]
     },
+    {
+      path: 'treasury',
+      title: 'Treasury',
+      loadComponent: () => import('../components/treasury/treasury.component').then(m => m.TreasuryComponent),
+      canActivate: [authGuard]
+    },
+    { path: 'executive', redirectTo: 'directors' },
 
     // Collaborative Documents Module
     { 

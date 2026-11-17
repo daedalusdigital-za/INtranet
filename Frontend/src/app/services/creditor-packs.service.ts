@@ -120,7 +120,22 @@ export class CreditorPacksService {
 
   // ── Executive (directors) ──
   executive() { return this.http.get<ExecutiveOverview>(`${this.base}/executive`); }
+
+  // ── History (paid / closed) ──
+  history(f: { from?: string; to?: string; company?: string; q?: string } = {}) {
+    let p = new HttpParams();
+    Object.entries(f).forEach(([k, v]) => { if (v) p = p.set(k, v); });
+    return this.http.get<PaymentHistory>(`${this.base}/history`, { params: p });
+  }
 }
+
+export interface HistoryLine { id: number; supplierName: string; amount: number; invoiceNumbers?: string; description?: string; bankName?: string; accountNumber?: string; paymentReference?: string; paidAt?: string; popDocId?: number | null; }
+export interface HistoryBatch {
+  id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; status: string; statusTitle: string;
+  scheduledPayDate?: string; directorName?: string; directorSignedAt?: string; accountantName?: string; accountantApprovedAt?: string; preparedByName?: string; bankExportedAt?: string; paidAt?: string; closedAt?: string;
+  amount: number; items: number; popDone: number; popMissing: number; lines: HistoryLine[];
+}
+export interface PaymentHistory { count: number; total: number; popMissing: number; companies: { code: string; name: string }[]; batches: HistoryBatch[]; }
 
 export interface ScheduleItem {
   id: number; supplierName: string; amount: number; invoiceNumbers?: string; description?: string; bankName?: string; accountNumber?: string; branchCode?: string;

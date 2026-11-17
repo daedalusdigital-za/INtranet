@@ -64,6 +64,8 @@ interface BookInvoice {
   departmentId: number;
   departmentName?: string;
   fileName?: string;
+  hasPop?: boolean;
+  popFileName?: string;
 }
 
 interface Department {
@@ -462,6 +464,7 @@ export class FinanceComponent implements OnInit {
   }
   downloadInvoice(invoice: BookInvoice): void { this.fetchFile(`${environment.apiUrl}/Books/${invoice.id}/download`, false, invoice.fileName); }
   openInvoiceFile(invoice: BookInvoice): void { this.fetchFile(`${environment.apiUrl}/Books/${invoice.id}/view`, true); }
+  viewPop(invoice: BookInvoice): void { this.fetchFile(`${environment.apiUrl}/Books/${invoice.id}/pop`, true); }
 
   markPaid(invoice: BookInvoice): void {
     const body = { paymentDate: new Date().toISOString() };

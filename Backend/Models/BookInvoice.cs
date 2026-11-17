@@ -113,5 +113,12 @@ namespace ProjectTracker.API.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ConfirmedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+
+        // Proof of payment (Treasury attaches after paying)
+        [MaxLength(500)] public string? PopFilePath { get; set; }
+        [MaxLength(255)] public string? PopFileName { get; set; }
+        [MaxLength(100)] public string? PopContentType { get; set; }
+        public DateTime? PopUploadedAt { get; set; }
+        [MaxLength(200)] public string? PopUploadedByName { get; set; }
     }
 }

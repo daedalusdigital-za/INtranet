@@ -52,6 +52,7 @@ namespace ProjectTracker.API.Controllers
             [FromQuery] string? year,
             [FromQuery] string? sortBy,
             [FromQuery] string? sortDir,
+            [FromQuery] string? pop,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -60,6 +61,9 @@ namespace ProjectTracker.API.Controllers
                 // departmentId is optional so Finance can see invoices across every department.
                 var query = _context.BookInvoices.AsNoTracking().AsQueryable();
                 if (departmentId.HasValue && departmentId.Value > 0) query = query.Where(b => b.DepartmentId == departmentId.Value);
+                // pop=missing → paid invoices without a proof of payment; pop=has → with one
+                if (pop == "missing") query = query.Where(b => b.PopFilePath == null);
+                else if (pop == "has") query = query.Where(b => b.PopFilePath != null);
 
                 // Search across supplier, invoice number, description, notes
                 if (!string.IsNullOrWhiteSpace(search))
@@ -146,7 +150,11 @@ namespace ProjectTracker.API.Controllers
                         b.UploadedByName,
                         b.CreatedAt,
                         b.ConfirmedAt,
-                        b.UpdatedAt
+                        b.UpdatedAt,
+                        hasPop = b.PopFilePath != null,
+                        b.PopFileName,
+                        b.PopUploadedAt,
+                        b.PopUploadedByName
                     })
                     .ToListAsync();
 
@@ -836,6 +844,49 @@ namespace ProjectTracker.API.Controllers
                 _logger.LogError(ex, "Error viewing book invoice PDF {Id}", id);
                 return StatusCode(500, new { error = "Failed to view PDF" });
             }
+        }
+
+        // ============================================================================
+        // POST: api/Books/{id}/pop - Attach a proof of payment (Treasury). Marks the invoice Paid.
+        // GET:  api/Books/{id}/pop - View the proof of payment inline
+        // ============================================================================
+        [HttpPost("{id}/pop")]
+        [RequestSizeLimit(30_000_000)]
+        public async Task<IActionResult> UploadPop(int id, IFormFile file, [FromForm] string? paymentReference, [FromForm] DateTime? paymentDate)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { error = "Choose the proof of payment file." });
+            var invoice = await _context.BookInvoices.FindAsync(id);
+            if (invoice == null) return NotFound(new { error = "Invoice not found" });
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (ext is not (".pdf" or ".png" or ".jpg" or ".jpeg")) return BadRequest(new { error = "POP must be a PDF or image." });
+
+            var dir = Path.Combine(_storagePath, "POP");
+            Directory.CreateDirectory(dir);
+            var name = $"POP_{id}_{DateTime.UtcNow:yyyyMMddHHmmss}{ext}";
+            var path = Path.Combine(dir, name);
+            await using (var fs = System.IO.File.Create(path)) await file.CopyToAsync(fs);
+
+            invoice.PopFilePath = path;
+            invoice.PopFileName = file.FileName;
+            invoice.PopContentType = ext == ".pdf" ? "application/pdf" : ext == ".png" ? "image/png" : "image/jpeg";
+            invoice.PopUploadedAt = DateTime.UtcNow;
+            invoice.PopUploadedByName = User.FindFirst(ClaimTypes.Name)?.Value ?? User.Identity?.Name;
+            if (!string.IsNullOrWhiteSpace(paymentReference)) invoice.PaymentReference = paymentReference.Trim();
+            if (invoice.Status != "Paid") { invoice.Status = "Paid"; invoice.PaymentDate = paymentDate ?? invoice.PaymentDate ?? DateTime.UtcNow; }
+            else if (paymentDate.HasValue) invoice.PaymentDate = paymentDate;
+            invoice.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Book invoice {Id} POP attached by {User}", id, invoice.PopUploadedByName);
+            return Ok(new { invoice.Id, invoice.Status, invoice.PaymentDate, invoice.PaymentReference, hasPop = true, invoice.PopFileName, invoice.PopUploadedAt, invoice.PopUploadedByName });
+        }
+
+        [HttpGet("{id}/pop")]
+        public async Task<IActionResult> ViewPop(int id)
+        {
+            var invoice = await _context.BookInvoices.AsNoTracking().FirstOrDefaultAsync(b => b.Id == id);
+            if (invoice?.PopFilePath == null || !System.IO.File.Exists(invoice.PopFilePath)) return NotFound(new { error = "No proof of payment on this invoice" });
+            var bytes = await System.IO.File.ReadAllBytesAsync(invoice.PopFilePath);
+            return File(bytes, invoice.PopContentType ?? "application/pdf", enableRangeProcessing: true);
         }
 
         // ============================================================================

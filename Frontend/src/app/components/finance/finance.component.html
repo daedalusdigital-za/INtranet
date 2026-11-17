@@ -603,6 +603,11 @@
                   <button aria-label="Open in Books" class="action-btn view" (click)="viewInvoice(invoice)" matTooltip="Open in Books">
                     <mat-icon>open_in_new</mat-icon>
                   </button>
+                  @if (invoice.hasPop) {
+                    <button aria-label="Proof of payment" class="action-btn paid" (click)="viewPop(invoice)" matTooltip="Proof of payment: {{ invoice.popFileName }}">
+                      <mat-icon>receipt_long</mat-icon>
+                    </button>
+                  }
                   @if (invoice.status === 'Paid') {
                     <button aria-label="Mark as Unpaid" class="action-btn unpaid" (click)="markUnpaid(invoice)" matTooltip="Mark as Unpaid">
                       <mat-icon>undo</mat-icon>

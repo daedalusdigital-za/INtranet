@@ -760,6 +760,51 @@ public class CreditorPacksController : ControllerBase
         return Ok(await DetailAsync(id));
     }
 
+    // ───────────────────────── history (treasury / directors) ─────────────────────────
+
+    /// <summary>
+    /// Payment history: batches that have been paid or closed, with their items and proofs of payment.
+    /// Filters: from/to (paid date), company, q (batch number / supplier / reference).
+    /// </summary>
+    [HttpGet("history")]
+    public async Task<IActionResult> History([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? company, [FromQuery] string? q, [FromQuery] int take = 300)
+    {
+        var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.Name);
+        var query = _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
+            .Where(b => b.Status == CreditorWorkflow.Paid || b.Status == CreditorWorkflow.Closed);
+        if (from.HasValue) query = query.Where(b => (b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt) >= from.Value.Date);
+        if (to.HasValue) { var t = to.Value.Date.AddDays(1); query = query.Where(b => (b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt) < t); }
+        if (!string.IsNullOrWhiteSpace(company)) query = query.Where(b => b.CompanyCode == company);
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var s = q.Trim().ToLower();
+            query = query.Where(b => b.BatchNumber.ToLower().Contains(s) || b.Items.Any(i => i.SupplierName.ToLower().Contains(s) || (i.PaymentReference != null && i.PaymentReference.ToLower().Contains(s)) || (i.InvoiceNumbers != null && i.InvoiceNumbers.ToLower().Contains(s))));
+        }
+        var batches = await query.OrderByDescending(b => b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt).Take(Math.Clamp(take, 1, 2000)).ToListAsync();
+
+        var rows = batches.Select(b =>
+        {
+            var approved = b.Items.Where(i => i.DecisionStatus == "Approved").OrderBy(i => i.SortOrder).ToList();
+            int? Pop(int itemId) => b.Documents.Where(d => d.ItemId == itemId && d.DocType == CreditorDocTypes.ProofOfPayment && d.StoragePath != null).OrderByDescending(d => d.Version).Select(d => (int?)d.Id).FirstOrDefault();
+            var popDone = approved.Count(i => Pop(i.Id) != null);
+            return new
+            {
+                b.Id, b.BatchNumber, b.CompanyCode, companyName = companies.TryGetValue(b.CompanyCode, out var n) ? n : b.CompanyCode,
+                b.PaymentType, paymentTypeTitle = CreditorChecksService.Label(b.PaymentType), b.Status, statusTitle = CreditorWorkflow.Title(b.Status),
+                b.ScheduledPayDate, b.DirectorName, b.DirectorSignedAt, b.AccountantName, b.AccountantApprovedAt, b.PreparedByName, b.BankExportedAt, b.PaidAt, b.ClosedAt,
+                amount = approved.Sum(i => i.Amount), items = approved.Count, popDone, popMissing = approved.Count - popDone,
+                lines = approved.Select(i => new { i.Id, i.SupplierName, i.Amount, i.InvoiceNumbers, i.Description, i.BankName, i.AccountNumber, i.PaymentReference, i.PaidAt, popDocId = Pop(i.Id) })
+            };
+        }).ToList();
+
+        return Ok(new
+        {
+            count = rows.Count, total = rows.Sum(r => r.amount), popMissing = rows.Sum(r => r.popMissing),
+            companies = companies.Select(c => new { code = c.Key, name = c.Value }).OrderBy(c => c.name),
+            batches = rows
+        });
+    }
+
     // ───────────────────────── executive (directors) ─────────────────────────
 
     /// <summary>Director's view: packs waiting for signature, the pipeline, the next pay-runs, and how each company is paying out.</summary>

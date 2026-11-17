@@ -836,9 +836,12 @@ export class NavbarComponent implements OnInit, OnDestroy {
     ]},
     { label: 'Oversight', items: [
       { label: 'Management', icon: 'insights', route: '/management', perm: 'management' },
-      { label: 'Executive', icon: 'workspace_premium', route: '/executive', perm: 'finance' },
       { label: 'Flows', icon: 'account_tree', route: '/flows', perm: 'flows' },
       { label: 'Support', icon: 'support_agent', route: '/support-ticket', perm: 'support_tickets' },
+    ]},
+    { label: 'Executive', items: [
+      { label: 'Directors', icon: 'workspace_premium', route: '/directors', perm: 'finance' },
+      { label: 'Treasury', icon: 'account_balance', route: '/treasury', perm: 'finance' },
     ]},
   ];
 

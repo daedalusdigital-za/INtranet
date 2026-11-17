@@ -1,71 +1,81 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ElementRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Chart } from 'chart.js/auto';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { CreditorPacksService, ExecutiveOverview } from '../../services/creditor-packs.service';
+import { FinanceCreditorsComponent } from '../finance/finance-creditors.component';
+import { FinancePaymentScheduleComponent } from '../finance/finance-payment-schedule.component';
+import { PaymentHistoryComponent } from '../finance/payment-history.component';
 
 const COMPANY_COLOURS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'];
+const TABS = ['overview', 'sign', 'payruns', 'insights', 'history'] as const;
+type Tab = typeof TABS[number];
 
 /**
- * Executive — the directors' cockpit.
- * Sign what is waiting, see what is booked for the next pay-runs, and watch the companies
- * (spend per month, per payment type, top suppliers, per-company health).
+ * Directors — the directors' module under the Executive section.
+ * Overview (what needs you), Sign payments (review & sign packs), Pay-runs, Companies & insights (Power-BI style), History.
  */
 @Component({
-  selector: 'app-executive',
+  selector: 'app-directors',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatIconModule, MatTooltipModule, MatProgressSpinnerModule, NavbarComponent, PageHeaderComponent],
+  imports: [CommonModule, MatButtonModule, MatIconModule, MatTabsModule, MatTooltipModule, MatProgressSpinnerModule, NavbarComponent, PageHeaderComponent,
+    FinanceCreditorsComponent, FinancePaymentScheduleComponent, PaymentHistoryComponent],
   template: `
 <app-navbar></app-navbar>
 <div class="ex-container">
   <div class="ex-inner">
-    <app-page-header [crumbs]="['Oversight', 'Executive']" title="Executive"
-                     subtitle="Approve and sign supplier payments, see what is booked for the Monday / Wednesday pay-runs, and how each company is doing.">
+    <app-page-header [crumbs]="['Executive', 'Directors']" title="Directors"
+                     subtitle="Review and sign supplier payments, see what is booked for the Monday / Wednesday pay-runs, and how each company is doing.">
       <button mat-stroked-button (click)="load()" [disabled]="loading"><mat-icon>refresh</mat-icon>Refresh</button>
-      <button mat-flat-button color="primary" (click)="goFinance()"><mat-icon>account_balance</mat-icon>Creditors</button>
+      @if (d && d.awaitingForMe > 0) { <button mat-flat-button color="primary" (click)="go('sign')"><mat-icon>draw</mat-icon>Sign {{ d.awaitingForMe }} waiting</button> }
     </app-page-header>
 
     @if (loading && !d) {
-      <div class="ex-loading"><mat-spinner diameter="36"></mat-spinner><span>Loading the executive view…</span></div>
+      <div class="ex-loading"><mat-spinner diameter="36"></mat-spinner><span>Loading the directors' view…</span></div>
     } @else if (error) {
-      <div class="ex-error"><mat-icon>lock</mat-icon><div><b>{{ error }}</b><p>The Executive page is for directors and administrators. Ask Finance to add you as a director on a company.</p></div></div>
+      <div class="ex-error"><mat-icon>lock</mat-icon><div><b>{{ error }}</b><p>The Directors module is for directors and administrators. Ask Finance to add you as a director on a company.</p></div></div>
     } @else if (d) {
 
       <!-- KPIs -->
       <div class="ex-kpis">
-        <div class="kpi accent" (click)="scrollTo('awaiting')">
+        <div class="kpi accent" (click)="go('sign')">
           <mat-icon>draw</mat-icon>
           <div><span class="v">{{ d.awaitingForMe }}</span><span class="l">Awaiting <b>your</b> signature</span>
             <span class="s">{{ d.awaiting.length }} in total · {{ d.awaitingAmount | currency:'ZAR':'R':'1.0-0' }}</span></div>
         </div>
-        <div class="kpi">
+        <div class="kpi click" (click)="go('payruns')">
           <mat-icon>event_available</mat-icon>
           <div><span class="v">{{ d.nextPayDay | date:'EEE d MMM' }}</span><span class="l">Next pay-run</span>
             <span class="s">{{ nextRun()?.count || 0 }} batches · {{ (nextRun()?.amount || 0) | currency:'ZAR':'R':'1.0-0' }}</span></div>
         </div>
-        <div class="kpi">
+        <div class="kpi click" (click)="go('history')">
           <mat-icon>verified</mat-icon>
           <div><span class="v">{{ d.signedLast30 }}</span><span class="l">Signed in last 30 days</span>
             <span class="s">{{ d.signedLast30Amount | currency:'ZAR':'R':'1.0-0' }}</span></div>
         </div>
-        <div class="kpi">
+        <div class="kpi click" (click)="go('insights')">
           <mat-icon>payments</mat-icon>
           <div><span class="v">{{ d.paidThisMonth | currency:'ZAR':'R':'1.0-0' }}</span><span class="l">Paid this month</span>
             <span class="s">all companies</span></div>
         </div>
-        <div class="kpi" [class.warn]="d.awaitingPopAmount > 0">
+        <div class="kpi click" [class.warn]="d.awaitingPopAmount > 0" (click)="go('payruns')">
           <mat-icon>receipt_long</mat-icon>
           <div><span class="v">{{ d.awaitingPopAmount | currency:'ZAR':'R':'1.0-0' }}</span><span class="l">Paid, POP outstanding</span>
-            <span class="s">treasurer to upload proof</span></div>
+            <span class="s">treasury to attach proof</span></div>
         </div>
       </div>
 
+    <mat-tab-group class="ex-tabs" [selectedIndex]="tabIndex" (selectedIndexChange)="onTab($event)" animationDuration="150ms">
+      <mat-tab>
+        <ng-template mat-tab-label><mat-icon class="tab-icon">dashboard</mat-icon>Overview</ng-template>
+        <div class="tab-body">
       <!-- Pipeline -->
       <section class="ex-card">
         <header><mat-icon>route</mat-icon><h3>Payment pipeline</h3><span class="muted">where every open batch sits right now</span></header>
@@ -142,9 +152,32 @@ const COMPANY_COLOURS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', 
               }
             </ul>
           }
-          <button mat-stroked-button class="full" (click)="goSchedule()"><mat-icon>open_in_new</mat-icon>Open payment schedule</button>
+          <button mat-stroked-button class="full" (click)="go('payruns')"><mat-icon>event_available</mat-icon>Open pay-runs</button>
         </section>
+      </div>
+        </div>
+      </mat-tab>
 
+      <mat-tab>
+        <ng-template mat-tab-label><mat-icon class="tab-icon">draw</mat-icon>Sign payments @if (d.awaiting.length) { <span class="tab-badge">{{ d.awaiting.length }}</span> }</ng-template>
+        <div class="tab-body">
+          <p class="intro">Packs the accountant has checked and that are waiting for a director. Open a pack, look at the invoices and the checks, approve or query each line, then <b>sign</b>. Signed packs go straight onto the next pay-run for Treasury.</p>
+          @if (tab === 'sign') { <app-finance-creditors></app-finance-creditors> }
+        </div>
+      </mat-tab>
+
+      <mat-tab>
+        <ng-template mat-tab-label><mat-icon class="tab-icon">event_available</mat-icon>Pay-runs</ng-template>
+        <div class="tab-body">
+          <p class="intro">What you have signed and where it stands with Treasury — to load, loaded, paid, proof of payment attached.</p>
+          @if (tab === 'payruns') { <app-finance-payment-schedule></app-finance-payment-schedule> }
+        </div>
+      </mat-tab>
+
+      <mat-tab>
+        <ng-template mat-tab-label><mat-icon class="tab-icon">insights</mat-icon>Companies &amp; insights</ng-template>
+        <div class="tab-body">
+      <div class="ex-grid">
         <!-- Charts -->
         <section class="ex-card span2">
           <header><mat-icon>bar_chart</mat-icon><h3>Paid per month, by company</h3><span class="muted">last 6 months</span></header>
@@ -189,6 +222,17 @@ const COMPANY_COLOURS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', 
           </div>
         </section>
       </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab>
+        <ng-template mat-tab-label><mat-icon class="tab-icon">history</mat-icon>History</ng-template>
+        <div class="tab-body">
+          <p class="intro">Everything that has been paid, with who prepared, checked and signed it and the proof of payment on every line.</p>
+          @if (tab === 'history') { <app-payment-history [defaultDays]="90"></app-payment-history> }
+        </div>
+      </mat-tab>
+    </mat-tab-group>
 
       <p class="gen">Generated {{ d.generatedAt | date:'d MMM yyyy HH:mm' }}</p>
     }
@@ -209,7 +253,12 @@ const COMPANY_COLOURS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', 
 .kpi .l { display:block; font-size:13px; color: var(--text-muted,#64748b); margin-top:2px; }
 .kpi .s { display:block; font-size:12px; color: var(--text-muted,#94a3b8); margin-top:2px; }
 .kpi.accent { cursor:pointer; background: linear-gradient(135deg, rgba(79,70,229,.12), rgba(14,165,233,.08)); border-color: rgba(79,70,229,.35); }
+.kpi.click { cursor:pointer; } .kpi.click:hover { border-color: var(--primary,#4f46e5); }
 .kpi.warn mat-icon { color:#f59e0b; }
+.tab-icon { margin-right:6px; }
+.tab-badge { margin-left:6px; background:#4f46e5; color:#fff; border-radius:999px; font-size:11px; padding:1px 7px; font-weight:700; }
+.tab-body { padding:16px 0; }
+.intro { color: var(--text-muted,#64748b); font-size:13.5px; margin:0 0 14px; }
 
 .ex-card { background: var(--surface,#fff); border:1px solid var(--border,#e5e7eb); border-radius:14px; padding:18px 20px; margin-bottom:16px; min-width:0; }
 .ex-card header { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
@@ -276,9 +325,10 @@ const COMPANY_COLOURS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', 
 .gen { text-align:right; font-size:11px; color: var(--text-muted,#94a3b8); margin-top:14px; }
   `]
 })
-export class ExecutiveComponent implements OnInit, AfterViewInit, OnDestroy {
+export class DirectorsComponent implements OnInit, AfterViewInit, OnDestroy {
   private api = inject(CreditorPacksService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   @ViewChild('monthChart') monthRef?: ElementRef<HTMLCanvasElement>;
   @ViewChild('typeChart') typeRef?: ElementRef<HTMLCanvasElement>;
@@ -287,10 +337,17 @@ export class ExecutiveComponent implements OnInit, AfterViewInit, OnDestroy {
   d: ExecutiveOverview | null = null;
   loading = false;
   error = '';
+  tab: Tab = 'overview';
+  get tabIndex() { return TABS.indexOf(this.tab); }
   private charts: Chart[] = [];
   private viewReady = false;
 
-  ngOnInit(): void { this.load(); }
+  ngOnInit(): void {
+    const t = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
+    if (t && TABS.includes(t)) this.tab = t;
+    else if (this.route.snapshot.queryParamMap.get('batch')) this.tab = 'sign';
+    this.load();
+  }
   ngAfterViewInit(): void { this.viewReady = true; this.draw(); }
   ngOnDestroy(): void { this.destroyCharts(); }
 
@@ -298,18 +355,27 @@ export class ExecutiveComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loading = true; this.error = '';
     this.api.executive().subscribe({
       next: d => { this.d = d; this.loading = false; setTimeout(() => this.draw()); },
-      error: e => { this.loading = false; this.error = e?.status === 403 ? 'Directors only' : (e?.error?.message || e?.error || 'Could not load the executive view'); }
+      error: e => { this.loading = false; this.error = e?.status === 403 ? 'Directors only' : (e?.error?.message || e?.error || 'Could not load the directors view'); }
     });
   }
+
+  go(t: Tab, extra: Record<string, any> = {}): void {
+    this.tab = t;
+    this.router.navigate([], { queryParams: { tab: t, batch: null, ...extra }, queryParamsHandling: 'merge', replaceUrl: true });
+    if (t === 'insights') setTimeout(() => this.draw(), 50);
+    if (t === 'overview') this.load();
+  }
+  onTab(i: number): void { this.go(TABS[i] ?? 'overview'); }
 
   nextRun() { return this.d?.schedule.find(s => s.date === this.d?.nextPayDay); }
   pct(n: number, of: number) { return of ? Math.round(n / of * 100) : 0; }
   colour(i: number) { return COMPANY_COLOURS[i % COMPANY_COLOURS.length]; }
-  scrollTo(id: string) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
-  openBatch(id: number) { this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'creditors', batch: id } }); }
-  goFinance() { this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'creditors' } }); }
-  goSchedule() { this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'schedule' } }); }
+  /** Open a pack in the Sign tab (the packs component reads ?batch= on init). */
+  openBatch(id: number) {
+    this.tab = 'overview'; // force re-create of the sign tab so it picks up the new batch
+    this.router.navigate([], { queryParams: { tab: 'sign', batch: id }, queryParamsHandling: 'merge', replaceUrl: true }).then(() => { this.tab = 'sign'; });
+  }
 
   private destroyCharts() { this.charts.forEach(c => c.destroy()); this.charts = []; }
 
