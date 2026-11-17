@@ -138,22 +138,6 @@
     </section>
   </div>
 
-  <!-- Debtors quick actions -->
-  <div class="ov-columns animate-in delay-3">
-    <section class="ov-card">
-      <header class="ov-card-head"><h2><mat-icon>bolt</mat-icon> Go to</h2></header>
-      <div class="qa-grid">
-        <button class="qa" (click)="goTab('aging')"><mat-icon>hourglass_bottom</mat-icon><span>Aging</span></button>
-        <button class="qa" (click)="goTab('remittances')"><mat-icon>payments</mat-icon><span>Remittances</span></button>
-        <button class="qa" (click)="goTab('pods')"><mat-icon>fact_check</mat-icon><span>PODs</span></button>
-        <button class="qa" (click)="goTab('credit-notes')"><mat-icon>undo</mat-icon><span>Credit notes</span></button>
-        <button class="qa" (click)="goTab('packs')"><mat-icon>folder_zip</mat-icon><span>Invoice packs</span></button>
-        <button class="qa" (click)="goToBooks()"><mat-icon>description</mat-icon><span>Books</span></button>
-        <button class="qa" (click)="goToDebtors()"><mat-icon>call_received</mat-icon><span>Debtors ledger</span></button>
-      </div>
-    </section>
-  </div>
-
   } @else {
   <!-- ───────── CREDITORS OVERVIEW ───────── -->
   <div class="kpi-grid animate-in delay-1">
@@ -248,24 +232,6 @@
         <button class="mini hot" (click)="openRequestedPayments()"><span class="n">{{ ov.invoices.paymentRequested }}</span><span class="l">Payment requested</span></button>
         <button class="mini bad" (click)="selectedStatus='Overdue'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.overdue }}</span><span class="l">Overdue</span></button>
         <button class="mini ok" (click)="selectedStatus='Paid'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.paid }}</span><span class="l">Paid</span></button>
-      </div>
-    </section>
-  </div>
-
-  <div class="ov-columns animate-in delay-3">
-    <section class="ov-card">
-      <header class="ov-card-head"><h2><mat-icon>bolt</mat-icon> Go to</h2></header>
-      <div class="qa-grid">
-        <button class="qa" (click)="goTab('approvals')"><mat-icon>approval</mat-icon><span>Approvals</span></button>
-        <button class="qa" (click)="goTab('creditors')"><mat-icon>payments</mat-icon><span>Payment packs</span></button>
-        <button class="qa" (click)="goTab('invoices')"><mat-icon>description</mat-icon><span>Supplier invoices</span></button>
-        <button class="qa" (click)="goTab('vault')"><mat-icon>shield</mat-icon><span>Compliance vault</span></button>
-        <button class="qa" routerLink="/finance/expenses"><mat-icon>receipt</mat-icon><span>Expenses</span></button>
-        <button class="qa" routerLink="/finance/purchase-orders"><mat-icon>shopping_cart</mat-icon><span>Purchase orders</span></button>
-        <button class="qa" routerLink="/finance/payments"><mat-icon>payment</mat-icon><span>Payments</span></button>
-        <button class="qa" (click)="goToCommitments()"><mat-icon>event_repeat</mat-icon><span>Commitments</span></button>
-        <button class="qa" (click)="goToCreditors()"><mat-icon>call_made</mat-icon><span>Creditors ledger</span></button>
-        <button class="qa" routerLink="/finance/categories"><mat-icon>category</mat-icon><span>Categories</span></button>
       </div>
     </section>
   </div>
