@@ -12,6 +12,7 @@ import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
 import { CompanyBatchesDialogComponent } from './company-batches-dialog.component';
 import { ExplainerDialogComponent } from './explainer-dialog.component';
+import { SchedulePreviewDialogComponent } from './schedule-preview-dialog.component';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule } from '../../services/creditor-packs.service';
@@ -387,7 +388,10 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           <header>
             <h3><mat-icon>event_repeat</mat-icon> Payment schedule</h3>
             <small>Generated from the payments below — updates as you add them. Nothing to upload.</small>
-            @if (b.items.length) { <button mat-stroked-button (click)="downloadSchedule()" [disabled]="busy()"><mat-icon>download</mat-icon> Download Excel</button> }
+            @if (b.items.length) {
+              <button mat-icon-button (click)="previewSchedule()" [disabled]="!schedule()?.lines?.length" matTooltip="Preview the schedule"><mat-icon>visibility</mat-icon></button>
+              <button mat-stroked-button (click)="downloadSchedule()" [disabled]="busy()"><mat-icon>download</mat-icon> Download Excel</button>
+            }
           </header>
           @if (schedule(); as s) {
             @if (s.lines.length) {
@@ -776,6 +780,10 @@ export class FinanceCreditorsComponent implements OnInit {
   downloadSchedule(): void {
     const b = this.batch()!;
     this.api.generatedScheduleXlsx(b.id).subscribe({ next: blob => { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `Payment-schedule-${b.batchNumber}.xlsx`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }, error: () => this.toast.error("Couldn't build the schedule.") });
+  }
+  previewSchedule(): void {
+    const s = this.schedule(); const b = this.batch(); if (!s || !b) return;
+    SchedulePreviewDialogComponent.open(this.dialog, { schedule: s, logo: companyWideLogo(b.companyCode), onDownload: () => this.downloadSchedule() });
   }
   companyFilter = signal('');
   statusFilter = signal('');
