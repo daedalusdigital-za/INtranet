@@ -3,8 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Logistics;
+using ProjectTracker.API.Services;
 using ProjectTracker.API.Services.Logistics;
 using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 
 namespace ProjectTracker.API.Controllers.Logistics
 {
@@ -15,11 +18,14 @@ namespace ProjectTracker.API.Controllers.Logistics
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<StockMovementsController> _logger;
+        private readonly IClaudeAIService? _claude;
 
-        public StockMovementsController(ApplicationDbContext context, ILogger<StockMovementsController> logger)
+        public StockMovementsController(ApplicationDbContext context, ILogger<StockMovementsController> logger,
+            IClaudeAIService? claude = null)
         {
             _context = context;
             _logger = logger;
+            _claude = claude;
         }
 
         private string CurrentUserName =>
@@ -945,6 +951,211 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        // ───────────────────────── Ask Welly: inter-company (same warehouse) transfer suggestions ─────────────────────────
+
+        /// <summary>
+        /// Looks at the lines that would go negative and finds other stock codes in the SAME warehouse that are the
+        /// same physical item (same code under another company, or the same name) with stock to spare.
+        /// Welly (Claude) ranks/explains the candidates; a deterministic fallback is used when AI is unavailable.
+        /// </summary>
+        [HttpPost("ask-welly")]
+        public async Task<ActionResult<object>> AskWelly([FromBody] AskWellyDto dto)
+        {
+            if (dto.WarehouseId <= 0 || dto.Lines == null || dto.Lines.Count == 0)
+                return BadRequest(new { message = "warehouseId and lines are required" });
+
+            var warehouse = await _context.Warehouses.AsNoTracking().FirstOrDefaultAsync(w => w.Id == dto.WarehouseId);
+            if (warehouse == null) return NotFound(new { message = "Warehouse not found" });
+
+            var inventory = await _context.WarehouseInventory.AsNoTracking()
+                .Where(i => i.WarehouseId == dto.WarehouseId)
+                .Select(i => new { i.CommodityId, i.QuantityOnHand, i.Commodity!.Code, i.Commodity.Name, i.Commodity.Category, i.Commodity.UnitOfMeasure })
+                .ToListAsync();
+            var onHandById = inventory.ToDictionary(i => i.CommodityId, i => i.QuantityOnHand);
+
+            var requestedIds = dto.Lines.Select(l => l.CommodityId).Distinct().ToList();
+            var requested = await _context.Commodities.AsNoTracking()
+                .Where(c => requestedIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.Code, c.Name, c.Category, c.UnitOfMeasure })
+                .ToListAsync();
+
+            var shortLines = new List<object>();
+            var suggestions = new List<WellySuggestion>();
+
+            foreach (var line in dto.Lines)
+            {
+                var c = requested.FirstOrDefault(r => r.Id == line.CommodityId);
+                if (c == null) continue;
+                var onHand = onHandById.TryGetValue(line.CommodityId, out var q) ? q : 0m;
+                var shortfall = line.Quantity - onHand;
+                if (shortfall <= 0) continue;
+
+                var normCode = CommodityCodeMatcher.Normalize(c.Code);
+                var normName = NormalizeName(c.Name);
+
+                var candidates = inventory
+                    .Where(i => i.CommodityId != c.Id && i.QuantityOnHand > 0)
+                    .Select(i =>
+                    {
+                        var iCode = CommodityCodeMatcher.Normalize(i.Code);
+                        var iName = NormalizeName(i.Name);
+                        int score = 0;
+                        string why;
+                        if (normCode.Length > 0 && iCode == normCode) { score = 100; why = "Same stock code under another company"; }
+                        else if (normCode.Length >= 6 && (iCode.StartsWith(normCode) || normCode.StartsWith(iCode)) && Math.Abs(iCode.Length - normCode.Length) <= 3)
+                        { score = 80; why = "Stock code differs only by a suffix"; }
+                        else if (normName.Length > 0 && iName == normName) { score = 75; why = "Same description"; }
+                        else if (normName.Length >= 8 && (iName.Contains(normName) || normName.Contains(iName))) { score = 55; why = "Description matches closely"; }
+                        else { why = ""; }
+                        return new { i, score, why };
+                    })
+                    .Where(x => x.score > 0)
+                    .OrderByDescending(x => x.score).ThenByDescending(x => x.i.QuantityOnHand)
+                    .Take(6)
+                    .ToList();
+
+                shortLines.Add(new
+                {
+                    commodityId = c.Id, code = c.Code, name = c.Name, company = c.Category, uom = c.UnitOfMeasure,
+                    requested = line.Quantity, onHand, shortfall
+                });
+
+                foreach (var cand in candidates)
+                {
+                    suggestions.Add(new WellySuggestion
+                    {
+                        ToCommodityId = c.Id, ToCode = c.Code ?? "", ToName = c.Name, ToCompany = c.Category, Shortfall = shortfall,
+                        FromCommodityId = cand.i.CommodityId, FromCode = cand.i.Code ?? "", FromName = cand.i.Name,
+                        FromCompany = cand.i.Category, FromOnHand = cand.i.QuantityOnHand,
+                        Quantity = Math.Min(shortfall, cand.i.QuantityOnHand),
+                        Confidence = cand.score, Reason = cand.why
+                    });
+                }
+            }
+
+            if (shortLines.Count == 0)
+                return Ok(new { note = "Nothing is short on this load – no transfers needed.", shortLines, suggestions });
+
+            string note;
+            if (suggestions.Count == 0)
+            {
+                note = $"I checked {inventory.Count} stock codes in {warehouse.Name} and couldn't find the same item under another code with stock to spare. " +
+                       "You'll need a receipt, a warehouse-to-warehouse transfer, or approve with a reason.";
+            }
+            else
+            {
+                note = await WellyNarrateAsync(warehouse.Name, shortLines, suggestions);
+            }
+
+            return Ok(new { note, shortLines, suggestions });
+        }
+
+        private async Task<string> WellyNarrateAsync(string warehouseName, List<object> shortLines, List<WellySuggestion> suggestions)
+        {
+            var fullyCoverable = suggestions.GroupBy(s => s.ToCommodityId)
+                .Count(g => g.Sum(s => s.Quantity) >= g.First().Shortfall);
+            var fallback = $"Found {suggestions.Count} possible inter-company transfer(s) in {warehouseName} for {shortLines.Count} short line(s); " +
+                (fullyCoverable == shortLines.Count ? "all shortfalls can be covered." : $"{fullyCoverable} of {shortLines.Count} can be fully covered.");
+
+            if (_claude == null) return fallback;
+            try
+            {
+                if (!await _claude.IsAvailableAsync()) return fallback;
+                var payload = JsonSerializer.Serialize(new
+                {
+                    warehouse = warehouseName,
+                    shortLines,
+                    suggestions = suggestions.Select(s => new
+                    {
+                        s.ToCode, s.ToName, s.ToCompany, s.Shortfall, s.FromCode, s.FromName, s.FromCompany, s.FromOnHand, s.Quantity, s.Confidence, s.Reason
+                    })
+                });
+                var system = "You are Welly, the warehouse assistant for a medical-supplies group (Promed, Access, Pharmacare, Sebenzani). " +
+                             "Different companies hold the same physical item under their own stock code in the same warehouse. " +
+                             "A dispatch is about to go negative. Given the short lines and the candidate inter-company transfers, write a short, " +
+                             "practical recommendation (max 4 sentences, plain text, no markdown, no lists): which transfers to do, quantities, and anything to double-check " +
+                             "(e.g. a candidate whose description suggests a different size/pack). Be direct and friendly.";
+                var text = await _claude.AnalyzeDocumentAsync(system, payload);
+                return string.IsNullOrWhiteSpace(text) ? fallback : text.Trim();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Welly narration failed; using fallback");
+                return fallback;
+            }
+        }
+
+        private static string NormalizeName(string? name) =>
+            new string((name ?? "").Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+
+        /// <summary>
+        /// Moves stock between two stock codes (companies) of the same item inside ONE warehouse:
+        /// -qty off the source code, +qty onto the target code, both as "Transfer" ledger rows.
+        /// </summary>
+        [HttpPost("intercompany-transfer")]
+        public async Task<ActionResult<object>> IntercompanyTransfer([FromBody] IntercompanyTransferDto dto)
+        {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = "Only stock approvers can do inter-company transfers" });
+            if (dto.Quantity <= 0) return BadRequest(new { message = "Quantity must be positive" });
+            if (dto.FromCommodityId == dto.ToCommodityId) return BadRequest(new { message = "Source and target stock codes must differ" });
+
+            var from = await _context.Commodities.FindAsync(dto.FromCommodityId);
+            var to = await _context.Commodities.FindAsync(dto.ToCommodityId);
+            if (from == null || to == null) return NotFound(new { message = "Stock code not found" });
+            if (!await _context.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId)) return NotFound(new { message = "Warehouse not found" });
+
+            var srcOnHand = await _context.WarehouseInventory
+                .Where(i => i.WarehouseId == dto.WarehouseId && i.CommodityId == dto.FromCommodityId)
+                .Select(i => (decimal?)i.QuantityOnHand).FirstOrDefaultAsync() ?? 0m;
+            if (srcOnHand < dto.Quantity && string.IsNullOrWhiteSpace(dto.Reason))
+                return BadRequest(new { message = $"Only {srcOnHand:0.##} on hand for {from.Code}; a reason is required to take it negative" });
+
+            string? loadNo = null;
+            if (dto.LoadId is int lid)
+                loadNo = await _context.Loads.Where(l => l.Id == lid).Select(l => l.LoadNumber).FirstOrDefaultAsync();
+
+            static string Tag(Commodity c) => string.IsNullOrWhiteSpace(c.Category) ? (c.Code ?? "") : $"{c.Category}/{c.Code}";
+            var reference = $"ICT {Tag(from)} → {Tag(to)}" + (loadNo != null ? $" ({loadNo})" : "");
+            var reason = string.IsNullOrWhiteSpace(dto.Reason) ? $"Inter-company transfer to cover {Tag(to)}" : dto.Reason.Trim();
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var outMv = await ApplyMovementAsync(dto.WarehouseId, dto.FromCommodityId, "Transfer", -dto.Quantity, dto.LoadId, null, reference, reason);
+                var inMv = await ApplyMovementAsync(dto.WarehouseId, dto.ToCommodityId, "Transfer", dto.Quantity, dto.LoadId, null, reference, reason);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                var balances = await _context.WarehouseInventory.AsNoTracking()
+                    .Where(i => i.WarehouseId == dto.WarehouseId && (i.CommodityId == dto.FromCommodityId || i.CommodityId == dto.ToCommodityId))
+                    .Select(i => new { i.CommodityId, i.QuantityOnHand }).ToListAsync();
+
+                _logger.LogInformation("Inter-company transfer {Qty} {From} -> {To} in warehouse {Wh} by {User}",
+                    dto.Quantity, from.Code, to.Code, dto.WarehouseId, CurrentUserName);
+
+                return Ok(new
+                {
+                    message = $"Moved {dto.Quantity:0.##} from {from.Code} to {to.Code}",
+                    reference,
+                    fromOnHand = balances.FirstOrDefault(b => b.CommodityId == dto.FromCommodityId)?.QuantityOnHand ?? 0m,
+                    toOnHand = balances.FirstOrDefault(b => b.CommodityId == dto.ToCommodityId)?.QuantityOnHand ?? 0m,
+                    movements = new[] { outMv, inMv }
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                await tx.RollbackAsync();
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _logger.LogError(ex, "Inter-company transfer failed");
+                return StatusCode(500, new { message = "An error occurred while transferring stock" });
+            }
+        }
+
         /// <summary>Posts the opposite of an approved movement and links the two (caller saves and commits).</summary>
         private async Task<WarehouseStockMovement> ReverseAsync(WarehouseStockMovement original, string reason)
         {
@@ -988,6 +1199,46 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string MovementType { get; set; } = string.Empty; // Receive | Return | Adjustment
         public decimal Quantity { get; set; }
         public string? Reference { get; set; }
+        public string? Reason { get; set; }
+    }
+
+    public class AskWellyDto
+    {
+        public int WarehouseId { get; set; }
+        public int? LoadId { get; set; }
+        public List<AskWellyLineDto> Lines { get; set; } = new();
+    }
+
+    public class AskWellyLineDto
+    {
+        public int CommodityId { get; set; }
+        public decimal Quantity { get; set; }
+    }
+
+    public class WellySuggestion
+    {
+        public int ToCommodityId { get; set; }
+        public string ToCode { get; set; } = "";
+        public string ToName { get; set; } = "";
+        public string? ToCompany { get; set; }
+        public decimal Shortfall { get; set; }
+        public int FromCommodityId { get; set; }
+        public string FromCode { get; set; } = "";
+        public string FromName { get; set; } = "";
+        public string? FromCompany { get; set; }
+        public decimal FromOnHand { get; set; }
+        public decimal Quantity { get; set; }
+        public int Confidence { get; set; }
+        public string Reason { get; set; } = "";
+    }
+
+    public class IntercompanyTransferDto
+    {
+        public int WarehouseId { get; set; }
+        public int FromCommodityId { get; set; }
+        public int ToCommodityId { get; set; }
+        public decimal Quantity { get; set; }
+        public int? LoadId { get; set; }
         public string? Reason { get; set; }
     }
 
@@ -1049,3 +1300,5 @@ namespace ProjectTracker.API.Controllers.Logistics
         public int CommodityId { get; set; }
     }
 }
+
+

@@ -1945,8 +1945,10 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
       width: '1100px', maxWidth: '96vw',
       data: { load, inventory: this.allInventory.filter(r => r.warehouseId === whId) }
     });
+    const inst = ref.componentInstance;
     ref.afterClosed().subscribe(done => {
       if (done) { this.deductedLoadIds.add(load.id); this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); }
+      else if (inst?.stockChanged) { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); }
     });
   }
 
@@ -4163,6 +4165,13 @@ export class TransferStockDialog {
   }
 }
 
+interface WellySuggestion {
+  toCommodityId: number; toCode: string; toName: string; toCompany: string | null; shortfall: number;
+  fromCommodityId: number; fromCode: string; fromName: string; fromCompany: string | null; fromOnHand: number;
+  quantity: number; confidence: number; reason: string;
+  applying: boolean; done: boolean;
+}
+
 // ═══ Approve Dispatch Dialog (picking slip review → stock deduction) ═══
 @Component({
   selector: 'app-approve-dispatch-dialog',
@@ -4260,11 +4269,49 @@ export class TransferStockDialog {
             <input matInput [(ngModel)]="negativeReason" placeholder="e.g. stock received but GRV not yet captured">
           </mat-form-field>
         }
+        @if (welly) {
+          <div class="ad-welly">
+            <div class="ad-welly-head">
+              <mat-icon>smart_toy</mat-icon>
+              <div class="ad-welly-note">{{ welly.note }}</div>
+              <button mat-icon-button (click)="welly = null" matTooltip="Dismiss"><mat-icon>close</mat-icon></button>
+            </div>
+            @if (welly.suggestions.length) {
+              <table class="app-table ad-table ad-table-sm">
+                <thead><tr><th>Short line</th><th>Take from</th><th class="num">Available</th><th class="num" style="width:130px;">Transfer</th><th>Why</th><th style="width:110px;"></th></tr></thead>
+                <tbody>
+                  @for (s of welly.suggestions; track s.fromCommodityId + '-' + s.toCommodityId) {
+                    <tr [class.ad-welly-done]="s.done">
+                      <td><span class="mono">{{ s.toCode }}</span> <small>{{ s.toCompany }}</small><br><small>short {{ s.shortfall | number }}</small></td>
+                      <td><span class="mono">{{ s.fromCode }}</span> <small>{{ s.fromCompany }}</small><br><small class="ad-welly-name" [matTooltip]="s.fromName">{{ s.fromName }}</small></td>
+                      <td class="num ad-big">{{ s.fromOnHand | number }}</td>
+                      <td class="num"><input class="ad-qty ad-qty-sm" type="number" min="0" [max]="s.fromOnHand" [(ngModel)]="s.quantity" [disabled]="s.done || s.applying"></td>
+                      <td><small>{{ s.reason }}</small> <span class="ad-tag" [class.ad-tag-ok]="s.confidence >= 80" [class.ad-tag-short]="s.confidence < 80">{{ s.confidence }}%</span></td>
+                      <td>
+                        @if (s.done) { <span class="ad-tag ad-tag-ok"><mat-icon>check</mat-icon> Moved</span> }
+                        @else {
+                          <button mat-stroked-button color="primary" [disabled]="s.applying || !(s.quantity > 0) || s.quantity > s.fromOnHand" (click)="applySuggestion(s)">
+                            <mat-icon>swap_horiz</mat-icon> Transfer
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        }
         <p class="ad-note"><mat-icon>info</mat-icon> Approving deducts the <b>Dispatch Qty</b> from stock on hand and writes ledger entries. Edit a quantity to record a short-pick; lines set to 0 are skipped.</p>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>
+      <span style="flex:1"></span>
+      <button mat-stroked-button [disabled]="askingWelly || saving || !hasShortfall()" (click)="askWelly()"
+              matTooltip="Welly checks this warehouse for the same item under another company's stock code and suggests inter-company transfers to cover the negatives">
+        <mat-icon>{{ askingWelly ? 'hourglass_top' : 'smart_toy' }}</mat-icon> {{ askingWelly ? 'Welly is looking…' : 'Ask Welly' }}
+      </button>
       <button mat-raised-button color="primary" [disabled]="!canSave() || saving" (click)="save()">
         <mat-icon>inventory</mat-icon> Approve & Deduct {{ totalQty() | number }} units
       </button>
@@ -4308,6 +4355,16 @@ export class TransferStockDialog {
     .ad-link-none { padding: 8px 10px; font-size: var(--text-xs); color: var(--color-text-3); }
     .ad-note { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--color-text-3); margin-top: 12px; }
     .ad-note mat-icon { font-size: var(--text-lg); width: 16px; height: 16px; color: var(--color-primary); }
+    .ad-welly { border: 1px solid var(--color-primary); background: var(--color-primary-soft); border-radius: var(--radius-md); padding: 10px 12px; margin-top: 14px; }
+    .ad-welly-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .ad-welly-head > mat-icon { color: var(--color-primary); font-size: 26px; width: 26px; height: 26px; flex: none; }
+    .ad-welly-note { flex: 1; font-size: var(--text-sm); color: var(--color-text); line-height: 1.45; padding-top: 3px; }
+    .ad-welly .ad-table-sm th { background: var(--color-primary-soft); color: var(--color-primary-hover); }
+    .ad-welly .mono { font-family: var(--font-mono); font-weight: 700; }
+    .ad-welly small { color: var(--color-text-3); }
+    .ad-welly-name { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .ad-qty-sm { width: 100px; font-size: var(--text-md); padding: 5px 8px; }
+    .ad-welly-done td { opacity: .6; }
   `]
 })
 export class ApproveDispatchDialog {
@@ -4317,6 +4374,10 @@ export class ApproveDispatchDialog {
   private invOptions: { commodityId: number; code: string; name: string; onHand: number }[] = [];
   negativeReason = '';
   saving = false;
+  askingWelly = false;
+  welly: { note: string; suggestions: WellySuggestion[] } | null = null;
+  /** Set when a transfer was applied so the caller refreshes inventory even if the dispatch is cancelled */
+  stockChanged = false;
 
   private http = inject(HttpClient);
   private toast = inject(ToastService);
@@ -4395,6 +4456,60 @@ export class ApproveDispatchDialog {
   totalQty(): number { return this.lines.reduce((s, l) => s + (+l.qty || 0), 0); }
 
   needsReason(): boolean { return this.lines.some(l => l.qty > l.onHand && l.qty > 0); }
+  hasShortfall(): boolean { return this.needsReason(); }
+
+  askWelly(): void {
+    this.askingWelly = true;
+    const payload = {
+      warehouseId: this.data.load.warehouseId,
+      loadId: this.data.load.id,
+      lines: this.lines.filter(l => l.qty > 0).map(l => ({ commodityId: l.commodityId, quantity: l.qty }))
+    };
+    this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/ask-welly`, payload).subscribe({
+      next: (r) => {
+        this.askingWelly = false;
+        this.welly = {
+          note: r?.note || '',
+          suggestions: (r?.suggestions || []).map((s: any) => ({ ...s, applying: false, done: false }))
+        };
+      },
+      error: (e) => { this.askingWelly = false; this.toast.error(e?.error?.message || 'Welly could not check the warehouse'); }
+    });
+  }
+
+  applySuggestion(s: WellySuggestion): void {
+    s.applying = true;
+    const body = {
+      warehouseId: this.data.load.warehouseId,
+      fromCommodityId: s.fromCommodityId,
+      toCommodityId: s.toCommodityId,
+      quantity: s.quantity,
+      loadId: this.data.load.id,
+      reason: `Inter-company transfer to cover ${this.data.load.loadNumber}`
+    };
+    this.http.post<any>(`${environment.apiUrl}/logistics/stock-movements/intercompany-transfer`, body).subscribe({
+      next: (r) => {
+        s.applying = false; s.done = true; this.stockChanged = true;
+        const moved = +s.quantity || 0;
+        // Update the dialog's view of stock
+        const target = this.lines.find(l => l.commodityId === s.toCommodityId);
+        if (target) target.onHand = r?.toOnHand ?? (target.onHand + moved);
+        const src = this.lines.find(l => l.commodityId === s.fromCommodityId);
+        if (src) src.onHand = r?.fromOnHand ?? (src.onHand - moved);
+        const inv = this.invOptions.find(o => o.commodityId === s.fromCommodityId);
+        if (inv) inv.onHand = r?.fromOnHand ?? (inv.onHand - moved);
+        if (this.welly) {
+          for (const o of this.welly.suggestions) {
+            if (o === s || o.done) continue;
+            if (o.fromCommodityId === s.fromCommodityId) { o.fromOnHand = Math.max(0, o.fromOnHand - moved); o.quantity = Math.min(o.quantity, o.fromOnHand); }
+            if (o.toCommodityId === s.toCommodityId) { o.shortfall = Math.max(0, o.shortfall - moved); o.quantity = Math.min(o.quantity, o.shortfall); }
+          }
+        }
+        this.toast.done(r?.message || `Moved ${moved} from ${s.fromCode} to ${s.toCode}`);
+      },
+      error: (e) => { s.applying = false; this.toast.error(e?.error?.message || 'Transfer failed'); }
+    });
+  }
 
   canSave(): boolean {
     if (!this.lines.length) return false;
