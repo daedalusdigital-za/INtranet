@@ -2,8 +2,8 @@ import { SubPage, findSubPage } from '../../ui/sub-pages';
 
 /** Admin settings sections, each at /settings/<slug>, in navigation order. */
 export type SettingsSlug =
-  | 'users' | 'payment-approvers' | 'clock-in' | 'email-accounts'
-  | 'announcements' | 'gallery' | 'document-templates'
+  | 'users' | 'payment-approvers' | 'cashflow' | 'clock-in' | 'email-accounts'
+  | 'announcements' | 'gallery' | 'company-branding' | 'document-templates'
   | 'pod-uploader' | 'client-locations' | 'assets' | 'data-import'
   | 'logs' | 'database';
 
@@ -15,10 +15,12 @@ export interface SettingsSection extends SubPage<SettingsSlug> {
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { group: 'People & access', slug: 'users', label: 'Users', icon: 'people', hint: 'Accounts, roles, departments and module permissions' },
   { group: 'People & access', slug: 'payment-approvers', label: 'Payment approvers', icon: 'approval', hint: 'Paying companies and who prepares, checks, signs and pays supplier payments' },
+  { group: 'People & access', slug: 'cashflow', label: 'Cashflow', icon: 'savings', hint: 'Bank balances, debit orders and recurring payments — normally kept by Treasury' },
   { group: 'People & access', slug: 'clock-in', label: 'Clock-in employees', icon: 'fingerprint', hint: 'Staff on the clock-in devices' },
   { group: 'People & access', slug: 'email-accounts', label: 'Email accounts', icon: 'email', hint: 'Company mailboxes and their passwords' },
   { group: 'Content', slug: 'announcements', label: 'Announcements', icon: 'campaign', hint: 'News shown to everyone on the intranet' },
   { group: 'Content', slug: 'gallery', label: 'Dashboard gallery', icon: 'photo_library', hint: 'Images for the dashboard slideshow' },
+  { group: 'Content', slug: 'company-branding', label: 'Company branding', icon: 'branding_watermark', hint: 'Logo and letterhead for each company' },
   { group: 'Content', slug: 'document-templates', label: 'Document templates', icon: 'auto_awesome', hint: 'Sage document layouts' },
   { group: 'Operations data', slug: 'pod-uploader', label: 'POD uploader', icon: 'fact_check', hint: 'Match proofs of delivery to invoices' },
   { group: 'Operations data', slug: 'client-locations', label: 'Client locations', icon: 'where_to_vote', hint: 'Verified delivery addresses and the maps key' },

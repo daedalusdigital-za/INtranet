@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -16,7 +16,7 @@ interface LineForm extends CashLineInput { id?: number }
 /**
  * Finance → Creditors → Cashflow. The group cashflow built the way the treasurer's workbook does it:
  * per company  Balance − Payments − Debit orders − Monthly payments = Closing balance.
- * Balance is typed in (bank), Payments come from the open payment packs, debit orders and monthly
+ * Balance is typed in by Treasury (bank), Payments come from the open payment packs, debit orders and monthly
  * payments are standing lines kept here. Export gives the same workbook (SUMMARY + a sheet per company).
  */
 @Component({
@@ -30,6 +30,7 @@ interface LineForm extends CashLineInput { id?: number }
     <div class="cf-toolbar">
       <label class="asat">As at <input type="date" [ngModel]="asAt()" (ngModelChange)="asAt.set($event); load()"></label>
       <span class="hint muted">Balances are the latest captured on or before this date. Payments are every pack not yet paid.</span>
+      @if (!canEdit()) { <span class="ro" matTooltip="Bank balances, debit orders and monthly payments are kept by Treasury (Executive › Treasury › Cashflow). Admins can also change them in Admin settings."><mat-icon>lock</mat-icon> View only · kept by Treasury</span> }
       <span class="sp"></span>
       <button mat-icon-button (click)="explain()" matTooltip="How the cashflow is worked out"><mat-icon>help_outline</mat-icon></button>
       <button mat-icon-button (click)="load()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
@@ -74,7 +75,7 @@ interface LineForm extends CashLineInput { id?: number }
       </table>
       </div>
       @if (missingBalances().length) {
-        <p class="note"><mat-icon>info</mat-icon> No bank balance captured yet for <strong>{{ missingBalances().join(', ') }}</strong> — click the company row to add one.</p>
+        <p class="note"><mat-icon>info</mat-icon> No bank balance captured yet for <strong>{{ missingBalances().join(', ') }}</strong> — {{ canEdit() ? 'click the company row to add one.' : 'Treasury captures these.' }}</p>
       }
     </div>
   }
@@ -85,7 +86,7 @@ interface LineForm extends CashLineInput { id?: number }
       <!-- Balance -->
       <section class="bal">
         <h4><mat-icon>savings</mat-icon> Bank balance</h4>
-        @if (cf()!.canEdit) {
+        @if (canEdit()) {
           <div class="balform">
             <label>As at <input type="date" [(ngModel)]="balForm.asAt"></label>
             <label>Balance (R) <input type="number" step="0.01" [(ngModel)]="balForm.balance" placeholder="0.00"></label>
@@ -120,7 +121,7 @@ interface LineForm extends CashLineInput { id?: number }
       @for (sec of sections; track sec.key) {
         <section>
           <h4><mat-icon>{{ sec.icon }}</mat-icon> {{ sec.title }} <span class="cnt">{{ linesFor(c, sec.key).length }}</span><span class="sp"></span><b>R {{ (sec.key === 'DebitOrder' ? c.debitOrders : c.monthly) | number:'1.2-2' }}</b>
-            @if (cf()!.canEdit) { <button mat-stroked-button (click)="startLine(c.code, sec.key)"><mat-icon>add</mat-icon> Add</button> }
+            @if (canEdit()) { <button mat-stroked-button (click)="startLine(c.code, sec.key)"><mat-icon>add</mat-icon> Add</button> }
           </h4>
           <p class="muted small">{{ sec.hint }}</p>
           @if (form() && form()!.companyCode === c.code && form()!.section === sec.key) {
@@ -139,13 +140,13 @@ interface LineForm extends CashLineInput { id?: number }
           }
           @if (linesFor(c, sec.key).length) {
             <table class="cf-lines">
-              <thead><tr><th>#</th><th>Payee</th><th>Reference</th><th>Frequency</th><th>Due</th><th>Description</th><th class="num">Amount</th>@if (cf()!.canEdit) { <th></th> }</tr></thead>
+              <thead><tr><th>#</th><th>Payee</th><th>Reference</th><th>Frequency</th><th>Due</th><th>Description</th><th class="num">Amount</th>@if (canEdit()) { <th></th> }</tr></thead>
               <tbody>
                 @for (l of linesFor(c, sec.key); track l.id; let i = $index) {
                   <tr>
                     <td>{{ i + 1 }}</td><td><b>{{ l.payee }}</b></td><td class="ref">{{ l.reference || '—' }}</td><td>{{ l.frequency || '—' }}</td><td>{{ l.dueDay ? ('Day ' + l.dueDay) : '—' }}</td>
                     <td class="desc">{{ l.description || '' }}</td><td class="num">{{ l.amount | number:'1.2-2' }}</td>
-                    @if (cf()!.canEdit) {
+                    @if (canEdit()) {
                       <td class="nowrap">
                         <button mat-icon-button (click)="editLine(l)" matTooltip="Edit"><mat-icon>edit</mat-icon></button>
                         <button mat-icon-button (click)="removeLine(l)" matTooltip="Remove"><mat-icon>delete_outline</mat-icon></button>
@@ -167,7 +168,8 @@ interface LineForm extends CashLineInput { id?: number }
     .cf-state { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-8) var(--space-4); color: var(--color-text-3); }
     .cf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3);
       .asat { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); font-weight: 600; input { height: 38px; padding: 0 10px; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font: inherit; } }
-      .hint { font-size: var(--text-xs); } }
+      .hint { font-size: var(--text-xs); }
+      .ro { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-3); color: var(--color-text-2); mat-icon { font-size: 14px; width: 14px; height: 14px; } } }
     .cf-card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: var(--space-4); margin-bottom: var(--space-4);
       header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; h3 { margin: 0; font-size: var(--text-md); display: flex; align-items: center; gap: 6px; mat-icon { color: var(--color-primary); } } small { color: var(--color-text-3); } }
       .note { display: flex; align-items: center; gap: 6px; margin: var(--space-3) 0 0; font-size: var(--text-sm); color: var(--color-text-2); mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); } } }
@@ -200,6 +202,10 @@ export class FinanceCashflowComponent implements OnInit {
   private dialog = inject(MatDialog);
   /** Ask the parent to open a payment pack (batch id). */
   @Output() openBatch = new EventEmitter<number>();
+  /** Finance › Creditors shows the cashflow view-only; it is edited in Treasury or Admin settings. */
+  @Input() readOnly = false;
+  /** Editable only where the host allows it AND the server says this user is Treasury or an admin. */
+  canEdit(): boolean { return !this.readOnly && !!this.cf()?.canEdit; }
 
   cf = signal<Cashflow | null>(null);
   busy = signal(false);
@@ -260,7 +266,7 @@ export class FinanceCashflowComponent implements OnInit {
       title: 'How the cashflow is worked out',
       intro: 'This is the group cashflow workbook, kept live. One row per paying company; click a row to see the detail that makes up each figure.',
       steps: [
-        { icon: 'savings', title: 'Balance', body: 'The bank balance the treasurer captured, as at a date. The latest balance on or before the "as at" date is used.' },
+        { icon: 'savings', title: 'Balance', body: 'The bank balance Treasury captured, as at a date. The latest balance on or before the "as at" date is used. Nothing in the system changes a captured balance — only Treasury (or an admin) does.' },
         { icon: 'receipt_long', title: 'Payments', body: 'Every payment in a pack that has not been paid yet — draft, with the accountant, with the director, approved or loaded on the bank. This is the Payment Schedule on the company sheet.' },
         { icon: 'autorenew', title: 'Debit orders', body: 'Standing amounts the bank takes automatically. Kept here as a list per company.' },
         { icon: 'event_repeat', title: 'Monthly payments', body: 'Fixed outflows paid outside packs: salaries, SARS, rent, intercompany.' },

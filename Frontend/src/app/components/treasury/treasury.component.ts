@@ -17,13 +17,14 @@ import { CreditorPacksService, PaymentSchedule } from '../../services/creditor-p
 import { FinancePaymentScheduleComponent } from '../finance/finance-payment-schedule.component';
 import { PaymentHistoryComponent } from '../finance/payment-history.component';
 import { PackPreviewDialogComponent } from '../finance/pack-preview-dialog.component';
+import { FinanceCashflowComponent } from '../finance/finance-cashflow.component';
 
 interface PaidInvoice {
   id: number; supplierName: string; invoiceNumber?: string; invoiceDate: string; total: number; companyName?: string; departmentName?: string;
   status: string; paymentDate?: string; paymentReference?: string; fileName?: string; hasPop: boolean; popFileName?: string; popUploadedAt?: string; popUploadedByName?: string;
 }
 
-const TABS = ['payruns', 'invoices', 'history'] as const;
+const TABS = ['payruns', 'invoices', 'cashflow', 'history'] as const;
 type Tab = typeof TABS[number];
 
 /**
@@ -34,7 +35,7 @@ type Tab = typeof TABS[number];
   selector: 'app-treasury',
   standalone: true,
   imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTabsModule, MatTooltipModule, MatProgressSpinnerModule,
-    NavbarComponent, PageHeaderComponent, FinancePaymentScheduleComponent, PaymentHistoryComponent],
+    NavbarComponent, PageHeaderComponent, FinancePaymentScheduleComponent, PaymentHistoryComponent, FinanceCashflowComponent],
   template: `
 <app-navbar></app-navbar>
 <div class="tr-container">
@@ -120,6 +121,14 @@ type Tab = typeof TABS[number];
       </mat-tab>
 
       <mat-tab>
+        <ng-template mat-tab-label><mat-icon class="tab-icon">savings</mat-icon>Cashflow</ng-template>
+        <div class="tab-body">
+          <p class="intro">You keep the group cashflow: capture each company's <b>bank balance</b>, and maintain the <b>debit orders</b> and <b>recurring monthly payments</b>. Finance › Creditors sees the same figures but cannot change them.</p>
+          @if (tab === 'cashflow') { <app-finance-cashflow (openBatch)="openPack($event)"></app-finance-cashflow> }
+        </div>
+      </mat-tab>
+
+      <mat-tab>
         <ng-template mat-tab-label><mat-icon class="tab-icon">history</mat-icon>History</ng-template>
         <div class="tab-body">
           <p class="intro">Everything that has been paid: who prepared, checked and signed it, when it was loaded and paid, and the proof of payment for every line. Export for the auditors.</p>
@@ -193,6 +202,8 @@ export class TreasuryComponent implements OnInit {
 
   go(t: Tab): void { this.tab = t; this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true }); if (t === 'invoices' && !this.invoices.length) this.loadInvoices(); }
   onTab(i: number): void { this.go(TABS[i] ?? 'payruns'); }
+  /** From the cashflow: open a payment pack in Finance › Creditors › Payment packs. */
+  openPack(batchId: number): void { if (batchId) this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'creditors', batch: batchId } }); }
 
   private countMissing(): void {
     this.http.get<any>(`${environment.apiUrl}/Books?status=Paid&pop=missing&page=1&pageSize=1`).subscribe({ next: r => this.invoicesMissingPop = r.totalCount || 0, error: () => {} });

@@ -41,6 +41,8 @@ import { PodUploaderComponent } from './pod-uploader.component';
 import { CreditorAdminComponent } from '../finance/creditor-admin.component';
 import { DocumentTemplatesComponent } from '../admin/document-templates/document-templates.component';
 import { ClientLocationsComponent } from '../admin/client-locations/client-locations.component';
+import { CompanyBrandingComponent } from '../admin/company-branding/company-branding.component';
+import { FinanceCashflowComponent } from '../finance/finance-cashflow.component';
 import { SETTINGS_SECTIONS, SettingsSlug, groupSections, settingsSection } from './settings-sections';
 import * as XLSX from 'xlsx';
 
@@ -79,7 +81,9 @@ import * as XLSX from 'xlsx';
     PodUploaderComponent,
     CreditorAdminComponent,
     DocumentTemplatesComponent,
-    ClientLocationsComponent
+    ClientLocationsComponent,
+    CompanyBrandingComponent,
+    FinanceCashflowComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -142,6 +146,20 @@ import * as XLSX from 'xlsx';
         @case ('payment-approvers') {
           <div class="tab-content">
             <app-creditor-admin></app-creditor-admin>
+          </div>
+        }
+
+        <!-- Cashflow (admin override; Treasury keeps it day to day) -->
+        @case ('cashflow') {
+          <div class="tab-content">
+            <app-finance-cashflow (openBatch)="openCashflowPack($event)"></app-finance-cashflow>
+          </div>
+        }
+
+        <!-- Company logos & letterheads -->
+        @case ('company-branding') {
+          <div class="tab-content">
+            <app-company-branding></app-company-branding>
           </div>
         }
 
@@ -3709,6 +3727,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   });
 
   private readonly router = inject(Router);
+  openCashflowPack(batchId: number): void { if (batchId) this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'creditors', batch: batchId } }); }
   private readonly route = inject(ActivatedRoute);
   private readonly subscriptions = new Subscription();
 

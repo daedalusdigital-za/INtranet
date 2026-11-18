@@ -15,7 +15,8 @@ namespace ProjectTracker.API.Controllers.Finance;
 /// per company <c>Balance − Payments − Debit orders − Monthly payments = Closing balance</c>.
 /// Balance is captured by the treasurer; Payments come from the open payment packs; debit orders
 /// and monthly payments are standing lines kept here. Export reproduces the workbook (SUMMARY +
-/// one sheet per company).
+/// one sheet per company). Everyone in Finance can read it; only Treasury and admins can change it
+/// (Executive › Treasury › Cashflow, or Admin settings › Cashflow).
 /// </summary>
 [Authorize]
 [ApiController]
@@ -46,6 +47,10 @@ public class CreditorCashflowController : ControllerBase
             return full.Length > 0 ? full : (User.FindFirst(ClaimTypes.Name)?.Value ?? "");
         }
     }
+    /// <summary>
+    /// Only Treasury (cred.bank — the person who makes the payments, attaches the POPs and knows the
+    /// debit orders) and admins may change balances or standing lines. Creditors clerks and accountants read only.
+    /// </summary>
     private async Task<bool> CanEditAsync()
     {
         if (IsSystemAdmin) return true;
@@ -53,7 +58,7 @@ public class CreditorCashflowController : ControllerBase
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (raw.TrimStart().StartsWith("[")) { try { foreach (var s in JsonSerializer.Deserialize<string[]>(raw) ?? Array.Empty<string>()) set.Add(s); } catch { } }
         else foreach (var s in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) set.Add(s);
-        return set.Contains("*") || set.Contains(CreditorWorkflow.RoleAdmin) || set.Contains(CreditorWorkflow.RoleClerk) || set.Contains(CreditorWorkflow.RoleAccountant) || set.Contains(CreditorWorkflow.RoleBank);
+        return set.Contains("*") || set.Contains(CreditorWorkflow.RoleAdmin) || set.Contains(CreditorWorkflow.RoleBank);
     }
 
     // ───────── model ─────────
