@@ -50,10 +50,10 @@ import { CreditorPacksService, CreditorMeta, CreditorCompany } from '../../servi
             <tr>
               <td><input class="code" [(ngModel)]="c.code" maxlength="10"></td>
               <td><input [(ngModel)]="c.name"><input class="act" [(ngModel)]="c.activity" placeholder="what the company does"></td>
-              <td><select [(ngModel)]="c.accountantUserId"><option [ngValue]="null">— not set —</option>@for (u of usersWith('cred.accountant'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
-              <td><select [(ngModel)]="c.backupApproverUserId"><option [ngValue]="null">—</option>@for (u of usersWith('cred.accountant'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
-              <td><select [(ngModel)]="c.directorUserId"><option [ngValue]="null">— not set —</option>@for (u of usersWith('cred.director'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
-              <td><select [(ngModel)]="c.delegateDirectorUserId"><option [ngValue]="null">—</option>@for (u of usersWith('cred.director'); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</select></td>
+              <td><select [(ngModel)]="c.accountantUserId"><option [ngValue]="null">— not set —</option><ng-container *ngTemplateOutlet="people; context: { role: 'cred.accountant' }"></ng-container></select></td>
+              <td><select [(ngModel)]="c.backupApproverUserId"><option [ngValue]="null">—</option><ng-container *ngTemplateOutlet="people; context: { role: 'cred.accountant' }"></ng-container></select></td>
+              <td><select [(ngModel)]="c.directorUserId"><option [ngValue]="null">— not set —</option><ng-container *ngTemplateOutlet="people; context: { role: 'cred.director' }"></ng-container></select></td>
+              <td><select [(ngModel)]="c.delegateDirectorUserId"><option [ngValue]="null">—</option><ng-container *ngTemplateOutlet="people; context: { role: 'cred.director' }"></ng-container></select></td>
               <td class="ctr"><mat-checkbox [(ngModel)]="c.isActive"></mat-checkbox></td>
               <td><button mat-flat-button color="primary" (click)="saveCompany(c)" [disabled]="busy() || !c.code || !c.name">Save</button></td>
             </tr>
@@ -61,8 +61,15 @@ import { CreditorPacksService, CreditorMeta, CreditorCompany } from '../../servi
         </tbody>
       </table>
     </div>
-    <p class="hint"><mat-icon>info</mat-icon> <span>Only people ticked as Accountant / Director in step 1 appear in these lists. Until a company has an accountant set, any accountant may approve its packs. Directors see their packs in <b>Executive › Directors</b>; Treasury works in <b>Executive › Treasury</b>.</span></p>
+    <p class="hint"><mat-icon>info</mat-icon> <span>People already ticked as Accountant / Director in step 1 are listed first; picking anyone else gives them that role when you press <b>Save</b>. Until a company has an accountant set, any accountant may approve its packs. Directors see their packs in <b>Executive › Directors</b>; Treasury works in <b>Executive › Treasury</b>.</span></p>
   </section>
+
+  <ng-template #people let-role="role">
+    @if (usersWith(role); as ticked) {
+      @if (ticked.length) { <optgroup [label]="roleTitle(role)">@for (u of ticked; track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</optgroup> }
+      <optgroup label="Other people (role is given on save)">@for (u of usersWithout(role); track u.id) { <option [ngValue]="u.id">{{ u.name }}</option> }</optgroup>
+    }
+  </ng-template>
 } @else { <p class="muted">Loading…</p> }
   `,
   styles: [`
@@ -91,6 +98,8 @@ export class CreditorAdminComponent implements OnInit {
 
   meta = signal<CreditorMeta | null>(null);
   users = signal<{ id: number; name: string; email: string; role: string; permissions?: string }[]>([]);
+  /** Everyone active, independent of the step-1 search box, for the step-2 pickers. */
+  allUsers = signal<{ id: number; name: string; email: string; role: string; permissions?: string }[]>([]);
   companies = signal<Partial<CreditorCompany>[]>([]);
   busy = signal(false);
   userSearch = '';
@@ -98,19 +107,33 @@ export class CreditorAdminComponent implements OnInit {
   ngOnInit(): void {
     this.api.meta().subscribe({ next: m => { this.meta.set(m); this.companies.set(m.companies.map(c => ({ ...c }))); }, error: () => this.toast.error("Couldn't load payment approvers.") });
     this.loadUsers();
+    this.api.users().subscribe({ next: u => this.allUsers.set(u), error: () => {} });
   }
   loadUsers(): void { this.api.users(this.userSearch || undefined).subscribe({ next: u => this.users.set(u), error: () => {} }); }
   hasRole(u: { permissions?: string }, role: string): boolean { return (u.permissions ?? '').split(/[,\[\]" ]+/).includes(role); }
-  usersWith(role: string) { return this.users().filter(u => this.hasRole(u, role) || u.role === 'Admin' || u.role === 'Super Admin'); }
+  roleTitle(role: string): string { return this.meta()?.roles.find(r => r.key === role)?.title ?? role; }
+  usersWith(role: string) { return this.allUsers().filter(u => this.hasRole(u, role) || u.role === 'Admin' || u.role === 'Super Admin'); }
+  usersWithout(role: string) { return this.allUsers().filter(u => !(this.hasRole(u, role) || u.role === 'Admin' || u.role === 'Super Admin')); }
   setRole(u: { id: number; permissions?: string }, role: string, grant: boolean): void {
-    this.api.toggleRole(u.id, role, grant).subscribe({ next: r => { u.permissions = r.permissions; this.users.set([...this.users()]); }, error: e => this.toast.error(e?.error?.message || "Couldn't change the role.") });
+    this.api.toggleRole(u.id, role, grant).subscribe({
+      next: r => {
+        u.permissions = r.permissions; this.users.set([...this.users()]);
+        const a = this.allUsers().find(x => x.id === u.id); if (a) a.permissions = r.permissions; this.allUsers.set([...this.allUsers()]);
+      },
+      error: e => this.toast.error(e?.error?.message || "Couldn't change the role.")
+    });
   }
   addCompanyRow(): void { this.companies.set([...this.companies(), { code: '', name: '', isActive: true, sortOrder: this.companies().length + 1, accountantUserId: null, backupApproverUserId: null, directorUserId: null, delegateDirectorUserId: null }]); }
   saveCompany(c: Partial<CreditorCompany>): void {
     this.busy.set(true);
     const req = c.id ? this.api.updateCompany(c.id, c) : this.api.addCompany(c);
     req.subscribe({
-      next: () => { this.busy.set(false); this.toast.done(`${c.code} saved`); this.api.meta().subscribe(m => { this.meta.set(m); this.companies.set(m.companies.map(x => ({ ...x }))); }); },
+      next: () => {
+        this.busy.set(false); this.toast.done(`${c.code} saved`);
+        this.api.meta().subscribe(m => { this.meta.set(m); this.companies.set(m.companies.map(x => ({ ...x }))); });
+        // roles may have been granted on save — refresh both people lists
+        this.loadUsers(); this.api.users().subscribe({ next: u => this.allUsers.set(u), error: () => {} });
+      },
       error: e => { this.busy.set(false); this.toast.error(e?.error?.message || "Couldn't save the company."); }
     });
   }

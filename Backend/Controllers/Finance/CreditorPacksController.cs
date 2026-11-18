@@ -138,6 +138,29 @@ public class CreditorPacksController : ControllerBase
 
     public record CompanyUpsert(string Code, string Name, string? Activity, int? AccountantUserId, int? BackupApproverUserId, int? DirectorUserId, int? DelegateDirectorUserId, bool IsActive, int SortOrder);
 
+    /// <summary>Picking someone as a company's accountant/director implies the role — grant it so they don't have to be ticked separately first.</summary>
+    private async Task EnsureRolesForCompanyAsync(CompanyUpsert dto)
+    {
+        var wanted = new List<(int? userId, string role)>
+        {
+            (dto.AccountantUserId, CreditorWorkflow.RoleAccountant), (dto.BackupApproverUserId, CreditorWorkflow.RoleAccountant),
+            (dto.DirectorUserId, CreditorWorkflow.RoleDirector), (dto.DelegateDirectorUserId, CreditorWorkflow.RoleDirector)
+        };
+        foreach (var (userId, role) in wanted)
+        {
+            if (userId is not int id) continue;
+            var u = await _db.Users.FindAsync(id);
+            if (u == null) continue;
+            var raw = u.Permissions ?? "";
+            List<string> set;
+            if (raw.TrimStart().StartsWith("[")) { try { set = (JsonSerializer.Deserialize<string[]>(raw) ?? Array.Empty<string>()).ToList(); } catch { set = new(); } }
+            else set = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            if (set.Any(s => s.Equals(role, StringComparison.OrdinalIgnoreCase))) continue;
+            set.Add(role);
+            u.Permissions = string.Join(",", set.Distinct());
+        }
+    }
+
     [HttpPut("companies/{id:int}")]
     public async Task<IActionResult> UpdateCompany(int id, [FromBody] CompanyUpsert dto)
     {
@@ -148,6 +171,7 @@ public class CreditorPacksController : ControllerBase
         c.AccountantUserId = dto.AccountantUserId; c.BackupApproverUserId = dto.BackupApproverUserId;
         c.DirectorUserId = dto.DirectorUserId; c.DelegateDirectorUserId = dto.DelegateDirectorUserId;
         c.IsActive = dto.IsActive; c.SortOrder = dto.SortOrder;
+        await EnsureRolesForCompanyAsync(dto);
         await _db.SaveChangesAsync();
         return Ok((await CompaniesDtoAsync()).First(x => (int)x.GetType().GetProperty("Id")!.GetValue(x)! == id));
     }
@@ -159,6 +183,7 @@ public class CreditorPacksController : ControllerBase
         if (await _db.CreditorCompanies.AnyAsync(c => c.Code == dto.Code.ToUpper())) return Conflict(new { message = "A company with that code already exists." });
         var c = new CreditorCompany { Code = dto.Code.Trim().ToUpperInvariant(), Name = dto.Name.Trim(), Activity = dto.Activity, AccountantUserId = dto.AccountantUserId, BackupApproverUserId = dto.BackupApproverUserId, DirectorUserId = dto.DirectorUserId, DelegateDirectorUserId = dto.DelegateDirectorUserId, IsActive = dto.IsActive, SortOrder = dto.SortOrder };
         _db.CreditorCompanies.Add(c);
+        await EnsureRolesForCompanyAsync(dto);
         await _db.SaveChangesAsync();
         return Ok(c);
     }
