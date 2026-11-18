@@ -1218,7 +1218,9 @@ public class CreditorPacksController : ControllerBase
     public async Task<IActionResult> Executive()
     {
         var isDirector = await HasAsync(CreditorWorkflow.RoleDirector);
-        if (!isDirector && !IsSystemAdmin && UserRole != "Manager") return Forbid();
+        var isExecRole = UserRole is "Manager" or "Director" or "Treasurer";
+        var hasExecPerm = await HasAsync("exec.dashboard") || await HasAsync(CreditorWorkflow.RoleBank);
+        if (!isDirector && !IsSystemAdmin && !isExecRole && !hasExecPerm) return Forbid();
 
         var now = DateTime.UtcNow;
         var scope = await ScopeAsync();

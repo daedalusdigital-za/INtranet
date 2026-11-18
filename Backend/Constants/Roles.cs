@@ -8,6 +8,8 @@ namespace ProjectTracker.API.Constants
         public const string SuperAdmin = "Super Admin";
         public const string Admin = "Admin";
         public const string Manager = "Manager";
+        public const string Director = "Director";
+        public const string Treasurer = "Treasurer";
         public const string Employee = "Employee";
         public const string HR = "HR";
         public const string ITSupport = "IT Support";

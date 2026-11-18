@@ -11,12 +11,17 @@ namespace ProjectTracker.API.Authorization
         public const string SuperAdmin = "Super Admin";
         public const string Admin = "Admin";
         public const string Manager = "Manager";
+        public const string Director = "Director";
+        public const string Treasurer = "Treasurer";
 
         /// <summary>Admin or Super Admin.</summary>
         public const string Admins = "Super Admin,Admin";
 
-        /// <summary>Admin, Super Admin or Manager.</summary>
-        public const string AdminsAndManagers = "Super Admin,Admin,Manager";
+        /// <summary>Admin, Super Admin, Manager, Director or Treasurer (anyone with line/exec authority).</summary>
+        public const string AdminsAndManagers = "Super Admin,Admin,Manager,Director,Treasurer";
+
+        /// <summary>Directors and the Treasurer – the executive tier.</summary>
+        public const string Executives = "Director,Treasurer";
     }
 
     public static class ClaimsPrincipalExtensions

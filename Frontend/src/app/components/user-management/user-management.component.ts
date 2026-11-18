@@ -156,6 +156,24 @@ interface Permission {
             <span class="stat-label">Administrators</span>
           </div>
         </mat-card>
+        <mat-card class="stat-card">
+          <div class="stat-icon exec">
+            <mat-icon>workspace_premium</mat-icon>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value">{{ tierCount('executive') }} <small>/ {{ tierCount('managers') }}</small></span>
+            <span class="stat-label">Directors & Treasurer / Managers</span>
+          </div>
+        </mat-card>
+      </div>
+
+      <!-- Who's who: tier tabs -->
+      <div class="tier-tabs" role="tablist">
+        @for (t of tiers; track t.key) {
+          <button type="button" role="tab" class="tier-tab" [class]="'tier-tab tier-' + t.key" [class.active]="tier === t.key" [attr.aria-selected]="tier === t.key" (click)="setTier(t.key)">
+            <mat-icon>{{ t.icon }}</mat-icon> {{ t.label }} <span class="count">{{ tierCount(t.key) }}</span>
+          </button>
+        }
       </div>
 
       <!-- Search and Filters -->
@@ -181,8 +199,20 @@ interface Permission {
             <mat-label>Department</mat-label>
             <mat-select [(ngModel)]="filterDepartment" (selectionChange)="filterUsers()">
               <mat-option value="">All Departments</mat-option>
+              <mat-option value="none">Unassigned</mat-option>
               @for (dept of departments; track dept.departmentId) {
                 <mat-option [value]="dept.departmentId">{{ dept.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Company</mat-label>
+            <mat-select [(ngModel)]="filterCompany" (selectionChange)="filterUsers()">
+              <mat-option value="">All Companies</mat-option>
+              <mat-option value="none">No company assigned</mat-option>
+              @for (c of companies; track c.operatingCompanyId) {
+                <mat-option [value]="c.operatingCompanyId">{{ c.name }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
@@ -211,6 +241,7 @@ interface Permission {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Department</th>
+                  <th>Companies</th>
                   <th>Status</th>
                   <th>Last Login</th>
                   <th>Actions</th>
@@ -218,7 +249,7 @@ interface Permission {
               </thead>
               <tbody>
                 @for (user of filteredUsers; track user.userId) {
-                  <tr [class.inactive-row]="!user.isActive">
+                  <tr [class.inactive-row]="!user.isActive" [class]="'tier-row-' + tierOf(user)">
                     <td>
                       <div class="user-cell">
                         <div class="avatar" [class.has-picture]="user.hasProfilePicture">
@@ -237,11 +268,17 @@ interface Permission {
                     </td>
                     <td>{{ user.email }}</td>
                     <td>
-                      <span class="role-chip" [class]="'role-' + user.role.toLowerCase().replace(' ', '-')">
-                        {{ user.role }}
+                      <span class="role-chip" [class]="'role-chip role-' + user.role.toLowerCase().replace(' ', '-')">
+                        <mat-icon>{{ roleIcon(user.role) }}</mat-icon> {{ user.role }}
                       </span>
                     </td>
                     <td>{{ user.departmentName || 'Unassigned' }}</td>
+                    <td>
+                      <div class="co-chips">
+                        @for (code of companyCodes(user); track code) { <span class="co-chip" [matTooltip]="companyName(code)">{{ code }}</span> }
+                        @empty { <span class="muted">—</span> }
+                      </div>
+                    </td>
                     <td>
                       <app-status-chip [status]="user.isActive ? 'Active' : 'Inactive'" [tone]="user.isActive ? 'ok' : 'danger'"></app-status-chip>
                     </td>
@@ -266,7 +303,7 @@ interface Permission {
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="7">
+                    <td colspan="8">
                       @if (users.length) {
                         <app-empty-state icon="filter_alt_off" title="No users match these filters"
                           message="Try another search, or clear the filters to see every user.">
@@ -464,14 +501,60 @@ interface Permission {
     }
 
     .role-chip {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       padding: 4px 12px;
       border-radius: 20px;
       font-size: var(--text-xs);
       font-weight: 600;
       background: var(--color-surface-2);
       color: var(--color-text-2);
+      white-space: nowrap;
     }
+    .role-chip mat-icon { font-size: 14px; width: 14px; height: 14px; }
+
+    .role-chip.role-super-admin {
+      background: #1f2937;
+      color: #fbbf24;
+    }
+
+    .role-chip.role-director {
+      background: linear-gradient(135deg, #312e81, #6d28d9);
+      color: #fff;
+      box-shadow: 0 0 0 1px rgba(109,40,217,.35);
+    }
+
+    .role-chip.role-treasurer {
+      background: linear-gradient(135deg, #065f46, #059669);
+      color: #fff;
+      box-shadow: 0 0 0 1px rgba(5,150,105,.35);
+    }
+
+    .co-chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 220px; }
+    .co-chip { font-size: 10px; font-weight: 700; letter-spacing: .3px; padding: 2px 6px; border-radius: 6px; background: var(--color-surface-2); color: var(--color-text-2); border: 1px solid var(--color-line); }
+    .muted { color: var(--color-text-3); }
+
+    .stat-icon.exec { background: linear-gradient(135deg, #312e81, #6d28d9); color: #fff; }
+    .stat-value small { font-size: var(--text-sm); color: var(--color-text-3); font-weight: 500; }
+
+    .tier-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 var(--space-4); }
+    .tier-tab {
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
+      border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-text-2);
+      font: inherit; font-size: var(--text-sm); font-weight: 600; cursor: pointer; transition: all .15s;
+    }
+    .tier-tab mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .tier-tab .count { background: var(--color-surface-2); border-radius: 999px; padding: 1px 8px; font-size: var(--text-xs); }
+    .tier-tab:hover { border-color: var(--color-primary); }
+    .tier-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+    .tier-tab.active .count { background: rgba(255,255,255,.25); color: #fff; }
+    .tier-tab.tier-executive.active { background: linear-gradient(135deg, #312e81, #6d28d9); border-color: #6d28d9; }
+    .tier-tab.tier-managers.active { background: linear-gradient(135deg, #1d4ed8, #2563eb); border-color: #2563eb; }
+    .tier-tab.tier-admins.active { background: linear-gradient(135deg, #92400e, #d97706); border-color: #d97706; }
+
+    tr.tier-row-executive td:first-child { border-left: 3px solid #6d28d9; }
+    tr.tier-row-managers td:first-child { border-left: 3px solid #2563eb; }
 
     .role-chip.role-admin {
       background: var(--color-cat-amber-soft);
@@ -547,8 +630,46 @@ export class UserManagementComponent implements OnInit {
   searchTerm = '';
   filterRole = '';
   filterDepartment: number | string = '';
+  filterCompany: number | string = '';
   filterStatus = '';
   isLoading = false;
+
+  /** Who's-who tiers: executive = Director / Treasurer, managers = Manager, admins = Admin / Super Admin, staff = everyone else. */
+  tier: 'all' | 'executive' | 'managers' | 'admins' | 'staff' = 'all';
+  readonly tiers: { key: 'all' | 'executive' | 'managers' | 'admins' | 'staff'; label: string; icon: string }[] = [
+    { key: 'all', label: 'Everyone', icon: 'groups' },
+    { key: 'executive', label: 'Directors & Treasurer', icon: 'workspace_premium' },
+    { key: 'managers', label: 'Managers', icon: 'supervisor_account' },
+    { key: 'admins', label: 'Administrators', icon: 'admin_panel_settings' },
+    { key: 'staff', label: 'Staff', icon: 'badge' },
+  ];
+
+  tierOf(u: User): 'executive' | 'managers' | 'admins' | 'staff' {
+    const r = (u.role || '').toLowerCase();
+    if (r === 'director' || r === 'treasurer') return 'executive';
+    if (r === 'manager') return 'managers';
+    if (r === 'admin' || r === 'super admin') return 'admins';
+    return 'staff';
+  }
+  tierCount(key: string): number { return key === 'all' ? this.users.length : this.users.filter(u => this.tierOf(u) === key).length; }
+  setTier(key: 'all' | 'executive' | 'managers' | 'admins' | 'staff'): void { this.tier = key; this.filterUsers(); }
+
+  roleIcon(role: string): string {
+    switch ((role || '').toLowerCase()) {
+      case 'super admin': return 'shield';
+      case 'admin': return 'admin_panel_settings';
+      case 'director': return 'workspace_premium';
+      case 'treasurer': return 'account_balance';
+      case 'manager': return 'supervisor_account';
+      case 'hr': return 'diversity_3';
+      case 'it support': return 'support_agent';
+      default: return 'person';
+    }
+  }
+  companyCodes(u: User): string[] {
+    return (u.companyIds || []).map(id => this.companies.find(c => c.operatingCompanyId === id)?.code || '').filter(Boolean).sort();
+  }
+  companyName(code: string): string { return this.companies.find(c => c.code === code)?.name || code; }
 
   constructor(
     private http: HttpClient,
@@ -648,8 +769,20 @@ export class UserManagementComponent implements OnInit {
       filtered = filtered.filter(u => u.role === this.filterRole);
     }
 
-    if (this.filterDepartment) {
+    if (this.tier !== 'all') {
+      filtered = filtered.filter(u => this.tierOf(u) === this.tier);
+    }
+
+    if (this.filterDepartment === 'none') {
+      filtered = filtered.filter(u => !u.departmentId);
+    } else if (this.filterDepartment) {
       filtered = filtered.filter(u => u.departmentId === this.filterDepartment);
+    }
+
+    if (this.filterCompany === 'none') {
+      filtered = filtered.filter(u => !(u.companyIds && u.companyIds.length));
+    } else if (this.filterCompany) {
+      filtered = filtered.filter(u => (u.companyIds || []).includes(this.filterCompany as number));
     }
 
     if (this.filterStatus) {
@@ -665,7 +798,9 @@ export class UserManagementComponent implements OnInit {
     this.searchTerm = '';
     this.filterRole = '';
     this.filterDepartment = '';
+    this.filterCompany = '';
     this.filterStatus = '';
+    this.tier = 'all';
     this.filterUsers();
   }
 
