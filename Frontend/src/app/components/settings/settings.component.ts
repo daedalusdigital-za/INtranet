@@ -1779,7 +1779,10 @@ import * as XLSX from 'xlsx';
                 <button [attr.aria-label]="showNewPassword ? 'Hide password' : 'Show password'" mat-icon-button matSuffix type="button" (click)="showNewPassword = !showNewPassword">
                   <mat-icon>{{ showNewPassword ? 'visibility_off' : 'visibility' }}</mat-icon>
                 </button>
-                <mat-hint>Minimum 6 characters</mat-hint>
+                <mat-hint>Minimum 8 characters</mat-hint>
+                @if (resetPasswordForm.get('newPassword')?.hasError('minlength') && resetPasswordForm.get('newPassword')?.touched) {
+                  <mat-error>Password must be at least 8 characters</mat-error>
+                }
               </mat-form-field>
 
               <mat-form-field appearance="outline" class="full-width">
@@ -4382,7 +4385,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   initResetPasswordForm(): void {
     this.resetPasswordForm = this.fb.group({
-      newPassword: ['', [Validators.required, Validators.minLength(6)]],
+      newPassword: ['', [Validators.required, Validators.minLength(8)]],
       confirmPassword: ['', Validators.required]
     });
   }
@@ -4802,7 +4805,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           console.error('Error resetting password:', err);
-          this.toast.error('Failed to reset password');
+          const msg = err?.error?.message
+            || (err?.status === 403 ? 'Only a Super Admin can reset a Super Admin\'s password.' : null)
+            || (err?.status === 401 ? 'Your session has expired – please sign in again.' : null)
+            || 'Failed to reset password';
+          this.toast.error(msg);
         }
       });
     }
