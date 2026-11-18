@@ -8,7 +8,7 @@ using ProjectTracker.API.Data;
 namespace ProjectTracker.API.Controllers;
 
 /// <summary>
-/// Company logos and letterheads, uploaded by an admin in Admin settings › Company branding.
+/// Company logos (wide + round) and letterheads, uploaded by an admin in Admin settings › Company branding.
 /// One file per company per kind, kept under <c>uploads/branding/{CODE}/{kind}.{ext}</c> (the
 /// uploads folder is a mounted volume, so files survive redeploys). Any signed-in user can read
 /// them; only admins can upload or remove.
@@ -22,6 +22,7 @@ public class CompanyBrandingController : ControllerBase
     private static readonly Dictionary<string, string[]> Allowed = new(StringComparer.OrdinalIgnoreCase)
     {
         ["logo"] = new[] { ".png", ".jpg", ".jpeg", ".webp" },
+        ["logo-round"] = new[] { ".png", ".webp" },
         ["letterhead"] = new[] { ".png", ".jpg", ".jpeg", ".webp", ".pdf", ".docx" },
     };
     private static readonly FileExtensionContentTypeProvider ContentTypes = new();
@@ -54,7 +55,7 @@ public class CompanyBrandingController : ControllerBase
     public async Task<IActionResult> List()
     {
         var companies = await _db.CreditorCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ThenBy(c => c.Name).Select(c => new { c.Code, c.Name }).ToListAsync();
-        return Ok(companies.Select(c => new { code = c.Code, name = c.Name, logo = Describe(c.Code, "logo"), letterhead = Describe(c.Code, "letterhead") }));
+        return Ok(companies.Select(c => new { code = c.Code, name = c.Name, logo = Describe(c.Code, "logo"), logoRound = Describe(c.Code, "logo-round"), letterhead = Describe(c.Code, "letterhead") }));
     }
 
     [HttpGet("{code}/{kind}")]
@@ -73,7 +74,7 @@ public class CompanyBrandingController : ControllerBase
     [RequestSizeLimit(MaxBytes)]
     public async Task<IActionResult> Upload(string code, string kind, IFormFile? file)
     {
-        if (!Allowed.TryGetValue(kind, out var exts)) return BadRequest(new { message = "Kind must be logo or letterhead." });
+        if (!Allowed.TryGetValue(kind, out var exts)) return BadRequest(new { message = "Kind must be logo, logo-round or letterhead." });
         var co = await CompanyAsync(code); if (co == null) return BadRequest(new { message = "Unknown company." });
         if (file == null || file.Length == 0) return BadRequest(new { message = "Choose a file to upload." });
         if (file.Length > MaxBytes) return BadRequest(new { message = "The file is larger than 15 MB." });
