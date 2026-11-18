@@ -13,6 +13,8 @@ namespace ProjectTracker.API.Authorization
         public const string Manager = "Manager";
         public const string Director = "Director";
         public const string Treasurer = "Treasurer";
+        public const string Accountant = "Accountant";
+        public const string Clerk = "Clerk";
 
         /// <summary>Admin or Super Admin.</summary>
         public const string Admins = "Super Admin,Admin";

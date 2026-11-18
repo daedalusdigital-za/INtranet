@@ -358,12 +358,47 @@ import * as XLSX from 'xlsx';
         @case ('users') {
           
           <div class="tab-content">
-            <div class="tab-toolbar">
+            <!-- Who's who -->
+            <div class="tier-tabs" role="tablist">
+              @for (t of userTiers; track t.key) {
+                <button type="button" role="tab" class="tier-tab" [class]="'tier-tab tier-' + t.key" [class.active]="userTier === t.key" [attr.aria-selected]="userTier === t.key" (click)="setUserTier(t.key)">
+                  <mat-icon>{{ t.icon }}</mat-icon> {{ t.label }} <span class="count">{{ userTierCount(t.key) }}</span>
+                </button>
+              }
+            </div>
+
+            <div class="tab-toolbar users-toolbar">
               <mat-form-field appearance="outline" class="search-field">
                 <mat-label>Search Users</mat-label>
                 <mat-icon matPrefix>search</mat-icon>
                 <input matInput [(ngModel)]="userSearchQuery" (input)="searchUsers()" placeholder="Search by name or email">
               </mat-form-field>
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>Role</mat-label>
+                <mat-select [(ngModel)]="userFilterRole" (selectionChange)="searchUsers()">
+                  <mat-option value="">All roles</mat-option>
+                  @for (r of roles; track r) { <mat-option [value]="r">{{ r }}</mat-option> }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>Department</mat-label>
+                <mat-select [(ngModel)]="userFilterDepartment" (selectionChange)="searchUsers()">
+                  <mat-option value="">All departments</mat-option>
+                  <mat-option value="none">Unassigned</mat-option>
+                  @for (d of departments; track d.departmentId) { <mat-option [value]="d.departmentId">{{ d.name }}</mat-option> }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>Company</mat-label>
+                <mat-select [(ngModel)]="userFilterCompany" (selectionChange)="searchUsers()">
+                  <mat-option value="">All companies</mat-option>
+                  <mat-option value="none">No company assigned</mat-option>
+                  @for (c of companies; track c.operatingCompanyId) { <mat-option [value]="c.operatingCompanyId">{{ c.name }}</mat-option> }
+                </mat-select>
+              </mat-form-field>
+              @if (userSearchQuery || userFilterRole || userFilterDepartment || userFilterCompany || userTier !== 'all') {
+                <button mat-stroked-button (click)="clearUserFilters()"><mat-icon>filter_alt_off</mat-icon> Clear</button>
+              }
               <button mat-raised-button color="primary" (click)="openCreateUserDialog()">
                 <mat-icon>person_add</mat-icon>
                 Add User
@@ -397,8 +432,8 @@ import * as XLSX from 'xlsx';
                   <ng-container matColumnDef="role">
                     <th mat-header-cell *matHeaderCellDef>Role</th>
                     <td mat-cell *matCellDef="let user">
-                      <mat-chip [style.background]="userService.getRoleColor(user.role) + '22'" [style.color]="userService.getRoleColor(user.role)">
-                        {{ user.role }}
+                      <mat-chip class="role-chip" [class.exec]="userTierOf(user) === 'executive'" [style.background]="userService.getRoleColor(user.role) + '22'" [style.color]="userService.getRoleColor(user.role)" [style.border-color]="userService.getRoleColor(user.role)">
+                        <mat-icon>{{ userService.getRoleIcon(user.role) }}</mat-icon> {{ user.role }}
                       </mat-chip>
                     </td>
                   </ng-container>
@@ -406,6 +441,16 @@ import * as XLSX from 'xlsx';
                   <ng-container matColumnDef="department">
                     <th mat-header-cell *matHeaderCellDef>Department</th>
                     <td mat-cell *matCellDef="let user">{{ user.departmentName || 'N/A' }}</td>
+                  </ng-container>
+
+                  <ng-container matColumnDef="companies">
+                    <th mat-header-cell *matHeaderCellDef>Companies</th>
+                    <td mat-cell *matCellDef="let user">
+                      <div class="co-chips">
+                        @for (code of userCompanyCodes(user); track code) { <span class="co-chip" [matTooltip]="userCompanyName(code)">{{ code }}</span> }
+                        @empty { <span style="color:var(--color-text-3)">—</span> }
+                      </div>
+                    </td>
                   </ng-container>
 
                   <ng-container matColumnDef="status">
@@ -439,7 +484,7 @@ import * as XLSX from 'xlsx';
                   </ng-container>
 
                   <tr mat-header-row *matHeaderRowDef="userColumns"></tr>
-                  <tr mat-row *matRowDef="let row; columns: userColumns;"></tr>
+                  <tr mat-row *matRowDef="let row; columns: userColumns;" [class]="'tier-row-' + userTierOf(row)"></tr>
                 </table>
               }
               
@@ -2057,6 +2102,33 @@ import * as XLSX from 'xlsx';
     .tab-content {
       padding: var(--space-5);
     }
+
+    .tier-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+    .tier-tab {
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
+      border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-text-2);
+      font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
+    }
+    .tier-tab mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .tier-tab .count { background: var(--color-surface-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+    .tier-tab:hover { border-color: var(--color-primary); }
+    .tier-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+    .tier-tab.active .count { background: rgba(255,255,255,.25); color: #fff; }
+    .tier-tab.tier-executive.active { background: linear-gradient(135deg, #312e81, #6d28d9); border-color: #6d28d9; }
+    .tier-tab.tier-managers.active { background: linear-gradient(135deg, #1d4ed8, #2563eb); border-color: #2563eb; }
+    .tier-tab.tier-finance.active { background: linear-gradient(135deg, #155e75, #0e7490); border-color: #0e7490; }
+    .tier-tab.tier-admins.active { background: linear-gradient(135deg, #7f1d1d, #dc2626); border-color: #dc2626; }
+    .users-toolbar { flex-wrap: wrap; }
+    .users-toolbar .filter-field { width: 190px; }
+    .role-chip { border: 1px solid transparent; font-weight: 600; }
+    .role-chip mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; vertical-align: middle; }
+    .role-chip.exec { box-shadow: 0 0 0 2px rgba(109,40,217,.18); }
+    .co-chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 200px; }
+    .co-chip { font-size: 10px; font-weight: 700; letter-spacing: .3px; padding: 2px 6px; border-radius: 6px; background: var(--color-surface-2); color: var(--color-text-2); border: 1px solid var(--color-line); }
+    tr.tier-row-executive td:first-child { border-left: 3px solid #6d28d9; }
+    tr.tier-row-managers td:first-child { border-left: 3px solid #2563eb; }
+    tr.tier-row-finance td:first-child { border-left: 3px solid #0e7490; }
+    tr.tier-row-admins td:first-child { border-left: 3px solid #dc2626; }
 
     .tab-toolbar {
       display: flex;
@@ -3776,7 +3848,19 @@ export class SettingsComponent implements OnInit, OnDestroy {
   users: User[] = [];
   filteredUsers: User[] = [];
   userSearchQuery = '';
-  userColumns = ['avatar', 'name', 'role', 'department', 'status', 'actions'];
+  userFilterRole = '';
+  userFilterDepartment: number | string = '';
+  userFilterCompany: number | string = '';
+  userTier: 'all' | 'executive' | 'managers' | 'finance' | 'admins' | 'staff' = 'all';
+  readonly userTiers: { key: 'all' | 'executive' | 'managers' | 'finance' | 'admins' | 'staff'; label: string; icon: string }[] = [
+    { key: 'all', label: 'Everyone', icon: 'groups' },
+    { key: 'executive', label: 'Directors & Treasurer', icon: 'workspace_premium' },
+    { key: 'managers', label: 'Managers', icon: 'supervisor_account' },
+    { key: 'finance', label: 'Accountants & Clerks', icon: 'calculate' },
+    { key: 'admins', label: 'Admins & Super Admins', icon: 'admin_panel_settings' },
+    { key: 'staff', label: 'Staff', icon: 'badge' },
+  ];
+  userColumns = ['avatar', 'name', 'role', 'department', 'companies', 'status', 'actions'];
   usersLoading = false;
   showUserDialog = false;
   editingUser: User | null = null;
@@ -4308,7 +4392,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.userService.getUsers().subscribe({
       next: (users) => {
         this.users = users;
-        this.filteredUsers = [...users];
+        this.searchUsers();
         this.usersLoading = false;
       },
       error: (err) => {
@@ -4415,8 +4499,36 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   searchUsers(): void {
-    this.filteredUsers = this.userService.searchUsers(this.userSearchQuery, this.users);
+    let list = this.userService.searchUsers(this.userSearchQuery, this.users);
+    if (this.userTier !== 'all') list = list.filter(u => this.userTierOf(u) === this.userTier);
+    if (this.userFilterRole) list = list.filter(u => u.role === this.userFilterRole);
+    if (this.userFilterDepartment === 'none') list = list.filter(u => !u.departmentId);
+    else if (this.userFilterDepartment) list = list.filter(u => u.departmentId === this.userFilterDepartment);
+    if (this.userFilterCompany === 'none') list = list.filter(u => !(u.companyIds && u.companyIds.length));
+    else if (this.userFilterCompany) list = list.filter(u => (u.companyIds || []).includes(this.userFilterCompany as number));
+    this.filteredUsers = list;
   }
+
+  clearUserFilters(): void {
+    this.userSearchQuery = ''; this.userFilterRole = ''; this.userFilterDepartment = ''; this.userFilterCompany = ''; this.userTier = 'all';
+    this.searchUsers();
+  }
+
+  /** executive = Director/Treasurer · managers = Manager · finance = Accountant/Clerk · admins = Admin/Super Admin · staff = rest */
+  userTierOf(u: User): 'executive' | 'managers' | 'finance' | 'admins' | 'staff' {
+    const r = (u.role || '').toLowerCase();
+    if (r === 'director' || r === 'treasurer') return 'executive';
+    if (r === 'manager') return 'managers';
+    if (r === 'accountant' || r === 'clerk') return 'finance';
+    if (r === 'admin' || r === 'super admin') return 'admins';
+    return 'staff';
+  }
+  userTierCount(key: string): number { return key === 'all' ? this.users.length : this.users.filter(u => this.userTierOf(u) === key).length; }
+  setUserTier(key: 'all' | 'executive' | 'managers' | 'finance' | 'admins' | 'staff'): void { this.userTier = key; this.searchUsers(); }
+  userCompanyCodes(u: User): string[] {
+    return (u.companyIds || []).map(id => this.companies.find(c => c.operatingCompanyId === id)?.code || '').filter(Boolean).sort();
+  }
+  userCompanyName(code: string): string { return this.companies.find(c => c.code === code)?.name || code; }
 
   openCreateUserDialog(): void {
     this.editingUser = null;

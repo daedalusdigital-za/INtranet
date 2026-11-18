@@ -318,7 +318,11 @@ export class UserManagementService {
     const colors: { [key: string]: string } = {
       'Admin': '#f44336',
       'Super Admin': '#9c27b0',
+      'Director': '#6d28d9',
+      'Treasurer': '#059669',
       'Manager': '#2196f3',
+      'Accountant': '#0e7490',
+      'Clerk': '#b45309',
       'HR': '#4caf50',
       'IT Support': '#ff9800',
       'Employee': '#607d8b'
@@ -331,7 +335,11 @@ export class UserManagementService {
     const icons: { [key: string]: string } = {
       'Admin': 'admin_panel_settings',
       'Super Admin': 'security',
+      'Director': 'workspace_premium',
+      'Treasurer': 'account_balance',
       'Manager': 'supervisor_account',
+      'Accountant': 'calculate',
+      'Clerk': 'receipt_long',
       'HR': 'people',
       'IT Support': 'support_agent',
       'Employee': 'person'

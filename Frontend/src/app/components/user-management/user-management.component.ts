@@ -530,6 +530,10 @@ interface Permission {
       color: #fff;
       box-shadow: 0 0 0 1px rgba(5,150,105,.35);
     }
+    .role-chip.role-accountant { background: #cffafe; color: #155e75; }
+    .role-chip.role-clerk { background: #fef3c7; color: #92400e; }
+    .tier-tab.tier-finance.active { background: linear-gradient(135deg, #155e75, #0e7490); border-color: #0e7490; }
+    tr.tier-row-finance td:first-child { border-left: 3px solid #0e7490; }
 
     .co-chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 220px; }
     .co-chip { font-size: 10px; font-weight: 700; letter-spacing: .3px; padding: 2px 6px; border-radius: 6px; background: var(--color-surface-2); color: var(--color-text-2); border: 1px solid var(--color-line); }
@@ -635,24 +639,26 @@ export class UserManagementComponent implements OnInit {
   isLoading = false;
 
   /** Who's-who tiers: executive = Director / Treasurer, managers = Manager, admins = Admin / Super Admin, staff = everyone else. */
-  tier: 'all' | 'executive' | 'managers' | 'admins' | 'staff' = 'all';
-  readonly tiers: { key: 'all' | 'executive' | 'managers' | 'admins' | 'staff'; label: string; icon: string }[] = [
+  tier: 'all' | 'executive' | 'managers' | 'finance' | 'admins' | 'staff' = 'all';
+  readonly tiers: { key: 'all' | 'executive' | 'managers' | 'finance' | 'admins' | 'staff'; label: string; icon: string }[] = [
     { key: 'all', label: 'Everyone', icon: 'groups' },
     { key: 'executive', label: 'Directors & Treasurer', icon: 'workspace_premium' },
     { key: 'managers', label: 'Managers', icon: 'supervisor_account' },
+    { key: 'finance', label: 'Accountants & Clerks', icon: 'calculate' },
     { key: 'admins', label: 'Administrators', icon: 'admin_panel_settings' },
     { key: 'staff', label: 'Staff', icon: 'badge' },
   ];
 
-  tierOf(u: User): 'executive' | 'managers' | 'admins' | 'staff' {
+  tierOf(u: User): 'executive' | 'managers' | 'finance' | 'admins' | 'staff' {
     const r = (u.role || '').toLowerCase();
     if (r === 'director' || r === 'treasurer') return 'executive';
     if (r === 'manager') return 'managers';
+    if (r === 'accountant' || r === 'clerk') return 'finance';
     if (r === 'admin' || r === 'super admin') return 'admins';
     return 'staff';
   }
   tierCount(key: string): number { return key === 'all' ? this.users.length : this.users.filter(u => this.tierOf(u) === key).length; }
-  setTier(key: 'all' | 'executive' | 'managers' | 'admins' | 'staff'): void { this.tier = key; this.filterUsers(); }
+  setTier(key: 'all' | 'executive' | 'managers' | 'finance' | 'admins' | 'staff'): void { this.tier = key; this.filterUsers(); }
 
   roleIcon(role: string): string {
     switch ((role || '').toLowerCase()) {
@@ -661,6 +667,8 @@ export class UserManagementComponent implements OnInit {
       case 'director': return 'workspace_premium';
       case 'treasurer': return 'account_balance';
       case 'manager': return 'supervisor_account';
+      case 'accountant': return 'calculate';
+      case 'clerk': return 'receipt_long';
       case 'hr': return 'diversity_3';
       case 'it support': return 'support_agent';
       default: return 'person';
