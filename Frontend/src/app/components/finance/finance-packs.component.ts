@@ -12,6 +12,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
+import { FinanceAccessService } from '../../services/finance-access.service';
 import { companyLogo, companyName, COMPANY_NAMES } from '../../core/company-logos';
 import { PackUploadDialogComponent, PACK_KINDS, Analysis } from './pack-upload-dialog.component';
 import { PackBatchDialogComponent } from './pack-batch-dialog.component';
@@ -52,9 +53,10 @@ interface Summary {
       <span class="pk-co-body"><span class="pk-co-top"><b>All companies</b><span>{{ summary()?.total ?? 0 }}</span></span><small>{{ summary()?.complete ?? 0 }} complete · {{ summary()?.incomplete ?? 0 }} missing items</small></span>
     </button>
     @for (c of companyCodes; track c) {
-      <button type="button" class="pk-co" [class.active]="company() === c" [class.dim]="company() !== '' && company() !== c" (click)="pickCompany(c)">
+      <button type="button" class="pk-co" [class.active]="company() === c" [class.dim]="company() !== '' && company() !== c" [class.locked]="!access.canSee(c)" [disabled]="!access.canSee(c)"
+              [matTooltip]="access.canSee(c) ? '' : access.lockReason(names[c])" (click)="pickCompany(c)">
         <img class="pk-logo" [src]="logo(c)" [alt]="names[c]" />
-        <span class="pk-co-body"><span class="pk-co-top"><b>{{ names[c] }}</b><span>{{ countFor(c) }}</span></span><small>{{ c }}</small></span>
+        <span class="pk-co-body"><span class="pk-co-top"><b>{{ names[c] }}</b><span>@if (access.canSee(c)) { {{ countFor(c) }} } @else { <mat-icon class="pk-lock">lock</mat-icon> }</span></span><small>{{ c }}</small></span>
       </button>
     }
   </div>
@@ -243,7 +245,9 @@ interface Summary {
     .pk-co { display:flex; align-items:center; gap:14px; text-align:left; font: inherit; color: inherit; cursor:pointer; background: var(--color-surface); border:2px solid var(--color-line); border-radius: 16px; padding:12px 16px; transition: border-color .15s, box-shadow .15s, opacity .15s, transform .15s;
       &:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-1px); }
       &.active { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
-      &.dim { opacity:.55; } }
+      &.dim { opacity:.55; }
+      &.locked, &:disabled { opacity:.4; filter: grayscale(1); cursor: not-allowed; &:hover { box-shadow:none; transform:none; } }
+      .pk-lock { font-size:16px; width:16px; height:16px; vertical-align:middle; } }
     .pk-logo { width:56px; height:56px; border-radius:50%; object-fit:cover; flex:0 0 56px; background:#f3f4f6; box-shadow:0 1px 3px rgba(0,0,0,.12); &--all { display:grid; place-items:center; color: var(--color-primary); mat-icon { font-size:28px; width:28px; height:28px; } } }
     .pk-co-body { flex:1; min-width:0; display:flex; flex-direction:column; small { color: var(--color-text-muted); } }
     .pk-co-top { display:flex; justify-content:space-between; gap:8px; b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } > span { font-weight:800; white-space:nowrap; } }
@@ -303,6 +307,7 @@ interface Summary {
 })
 export class FinancePacksComponent implements OnInit {
   private http = inject(HttpClient);
+  access = inject(FinanceAccessService);
   private dialog = inject(MatDialog);
   private toast = inject(ToastService);
   private router = inject(Router);
@@ -327,7 +332,7 @@ export class FinancePacksComponent implements OnInit {
   validation = signal('');
   expanded = signal<number | null>(null);
 
-  ngOnInit(): void { this.loadSummary(); this.reload(); }
+  ngOnInit(): void { this.access.load(); this.loadSummary(); this.reload(); }
 
   loadSummary(): void {
     this.http.get<Summary>(`${this.api}/finance/packs/summary`).subscribe({ next: s => this.summary.set(s), error: () => {} });
@@ -350,7 +355,7 @@ export class FinancePacksComponent implements OnInit {
   private searchTimer: any;
   onSearch(v: string): void { this.search.set(v ?? ''); this.pageIndex.set(0); clearTimeout(this.searchTimer); this.searchTimer = setTimeout(() => this.reload(), 300); }
   onPage(e: PageEvent): void { this.pageIndex.set(e.pageIndex); this.pageSize.set(e.pageSize); this.reload(); }
-  pickCompany(c: string): void { this.company.set(c); this.pageIndex.set(0); this.reload(); }
+  pickCompany(c: string): void { if (!this.access.canSee(c)) return; this.company.set(c); this.pageIndex.set(0); this.reload(); }
   countFor(c: string): number { return this.summary()?.byCompany.find(b => b.company === c)?.count ?? 0; }
   mostMissing(s: Summary): string {
     const m = s.missing; const pairs: [string, number][] = [['Delivery note', m.deliveryNote], ['Tax invoice', m.taxInvoice], ['Order confirmation', m.orderConfirmation], ['Customer order e-mail', m.orderEmail], ['Order form', m.orderForm]];

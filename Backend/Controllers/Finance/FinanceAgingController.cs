@@ -26,7 +26,12 @@ namespace ProjectTracker.API.Controllers.Finance
     {
         private readonly ApplicationDbContext _db;
         private readonly ILogger<FinanceAgingController> _logger;
-        public FinanceAgingController(ApplicationDbContext db, ILogger<FinanceAgingController> logger) { _db = db; _logger = logger; }
+        private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
+        public FinanceAgingController(ApplicationDbContext db, ILogger<FinanceAgingController> logger, Microsoft.Extensions.Caching.Memory.IMemoryCache cache) { _db = db; _logger = logger; _cache = cache; }
+
+        private ProjectTracker.API.Authorization.CompanyScope? _scope;
+        private async Task<ProjectTracker.API.Authorization.CompanyScope> ScopeAsync() => _scope ??= await ProjectTracker.API.Authorization.CompanyAccess.ForUserAsync(_db, User, _cache);
+        private ObjectResult NotYourCompany() => StatusCode(403, new { message = "You are not assigned to that company." });
 
         private int UserId => int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
 
@@ -39,15 +44,16 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpGet("snapshots")]
         public async Task<IActionResult> Snapshots()
         {
-            var rows = await _db.ArAgingSnapshots.AsNoTracking()
+            var scope = await ScopeAsync();
+            var rows = (await _db.ArAgingSnapshots.AsNoTracking()
                 .OrderByDescending(s => s.AsOfDate).ThenByDescending(s => s.Id)
                 .Select(s => new { s.Id, s.Company, s.AsOfDate, s.SourceFileName, s.UploadedAt, s.UploadedBy, s.CustomerCount, s.DocumentCount, s.TotalBalance, s.Notes })
-                .ToListAsync();
+                .ToListAsync()).Where(s => scope.Allows(s.Company)).ToList();
             var ids = rows.Select(r => r.UploadedBy).Distinct().ToList();
             var users = await _db.Users.AsNoTracking().Where(u => ids.Contains(u.UserId)).Select(u => new { Id = u.UserId, u.Name, u.Surname }).ToListAsync();
             return Ok(new
             {
-                companies = Companies,
+                companies = Companies.Where(c => scope.Allows(c)).ToArray(),
                 snapshots = rows.Select(r => new
                 {
                     r.Id, r.Company, r.AsOfDate, r.SourceFileName, r.UploadedAt, r.CustomerCount, r.DocumentCount, r.TotalBalance, r.Notes,
@@ -62,6 +68,7 @@ namespace ProjectTracker.API.Controllers.Finance
         {
             var s = await _db.ArAgingSnapshots.FindAsync(id);
             if (s == null) return NotFound();
+            if (!(await ScopeAsync()).Allows(s.Company)) return NotYourCompany();
             _db.ArAgingSnapshots.Remove(s);
             await _db.SaveChangesAsync();
             return NoContent();
@@ -79,6 +86,7 @@ namespace ProjectTracker.API.Controllers.Finance
         {
             if (file == null || file.Length == 0) return BadRequest(new { message = "Choose the aging workbook (.xlsx) exported from Sage." });
             if (string.IsNullOrWhiteSpace(company)) return BadRequest(new { message = "Choose which company this aging is for." });
+            if (!(await ScopeAsync()).Allows(company)) return NotYourCompany();
             if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)) return BadRequest(new { message = "Only .xlsx workbooks are supported." });
 
             List<ArAgingItem> items;
@@ -212,6 +220,7 @@ namespace ProjectTracker.API.Controllers.Finance
         {
             var snap = await _db.ArAgingSnapshots.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
             if (snap == null) return NotFound();
+            if (!(await ScopeAsync()).Allows(snap.Company)) return NotYourCompany();
 
             var q = _db.ArAgingItems.AsNoTracking().Where(i => i.SnapshotId == id);
             if (!string.IsNullOrWhiteSpace(search))
@@ -280,6 +289,9 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpGet("snapshots/{id:int}/customers/{code}")]
         public async Task<IActionResult> Customer(int id, string code)
         {
+            var snapCo = await _db.ArAgingSnapshots.AsNoTracking().Where(s => s.Id == id).Select(s => s.Company).FirstOrDefaultAsync();
+            if (snapCo == null) return NotFound();
+            if (!(await ScopeAsync()).Allows(snapCo)) return NotYourCompany();
             var items = await _db.ArAgingItems.AsNoTracking().Where(i => i.SnapshotId == id && i.CustomerCode == code)
                 .OrderBy(i => i.DocumentDate).ThenBy(i => i.DocumentNumber).ToListAsync();
             if (items.Count == 0) return NotFound();
@@ -322,6 +334,7 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpGet("invoice/{number}")]
         public async Task<IActionResult> Invoice(string number, [FromQuery] string? company, [FromQuery] int? snapshotId)
         {
+            if (!(await ScopeAsync()).Allows(company)) return NotYourCompany();
             var coCode = company switch { "Promed Technologies" => "PMT", "Access Medical" => "ACM", "Promed Pharmatech" => "PHT", "Sebenzani Trading" => "SBT", _ => company };
             var allLines = await _db.ImportedInvoices.AsNoTracking()
                 .Where(i => i.TransactionNumber == number)
@@ -390,6 +403,7 @@ namespace ProjectTracker.API.Controllers.Finance
         {
             var snap = await _db.ArAgingSnapshots.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
             if (snap == null) return NotFound();
+            if (!(await ScopeAsync()).Allows(snap.Company)) return NotYourCompany();
             var items = await _db.ArAgingItems.AsNoTracking().Where(i => i.SnapshotId == id).ToListAsync();
             var sb = new StringBuilder();
             sb.AppendLine($"{snap.Company} - Debtors age analysis as at {snap.AsOfDate:dd MMM yyyy}");

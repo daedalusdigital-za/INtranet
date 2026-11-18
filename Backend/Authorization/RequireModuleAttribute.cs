@@ -24,6 +24,9 @@ namespace ProjectTracker.API.Authorization
 
         public string[] Modules { get; }
 
+        /// <summary>Drop the cached permissions for a user (call after editing them so changes apply at once).</summary>
+        public static void Invalidate(IMemoryCache cache, int userId) => cache.Remove($"module-access:{userId}");
+
         /// <summary>Comma-separated roles that pass without the module permission.</summary>
         public string? AlsoAllowRoles { get; set; }
 

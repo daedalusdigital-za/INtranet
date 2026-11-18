@@ -8,6 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
+import { FinanceAccessService } from '../../services/finance-access.service';
 import { PACK_KINDS } from './pack-upload-dialog.component';
 
 export interface PackEditData {
@@ -33,7 +34,7 @@ export interface PackEditData {
       <label>Company
         <select [(ngModel)]="m.company">
           <option value="">—</option>
-          @for (c of companies; track c) { <option [value]="c">{{ c }}</option> }
+          @for (c of companies; track c) { <option [value]="c" [disabled]="!access.canSee(c)">{{ c }}{{ access.canSee(c) ? '' : ' (not assigned)' }}</option> }
         </select>
       </label>
       <label>Invoice date <input type="date" [(ngModel)]="m.invoiceDate" /></label>
@@ -76,6 +77,7 @@ export interface PackEditData {
 })
 export class PackEditDialogComponent {
   private http = inject(HttpClient);
+  access = inject(FinanceAccessService);
   private toast = inject(ToastService);
   ref = inject(MatDialogRef<PackEditDialogComponent>);
   data = inject<PackEditData>(MAT_DIALOG_DATA);

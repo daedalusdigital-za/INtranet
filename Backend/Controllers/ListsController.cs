@@ -11,6 +11,7 @@ namespace ProjectTracker.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
+    [ProjectTracker.API.Authorization.RequireModule("project_management")]
     public class ListsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

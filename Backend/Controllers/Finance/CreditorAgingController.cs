@@ -27,7 +27,12 @@ public class CreditorAgingController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
     private readonly ILogger<CreditorAgingController> _log;
-    public CreditorAgingController(ApplicationDbContext db, ILogger<CreditorAgingController> log) { _db = db; _log = log; }
+    private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
+    public CreditorAgingController(ApplicationDbContext db, ILogger<CreditorAgingController> log, Microsoft.Extensions.Caching.Memory.IMemoryCache cache) { _db = db; _log = log; _cache = cache; }
+
+    private CompanyScope? _scope;
+    private async Task<CompanyScope> ScopeAsync() => _scope ??= await CompanyAccess.ForUserAsync(_db, User, _cache);
+    private ObjectResult NotYourCompany() => StatusCode(403, new { message = "You are not assigned to that company." });
 
     private int UserId => int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
     private string UserName
@@ -48,11 +53,12 @@ public class CreditorAgingController : ControllerBase
     [HttpGet("snapshots")]
     public async Task<IActionResult> Snapshots()
     {
-        var companies = await _db.CreditorCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
-            .Select(c => new { c.Code, c.Name }).ToListAsync();
-        var snaps = await _db.ApAgingSnapshots.AsNoTracking().OrderByDescending(s => s.AsOfDate).ThenByDescending(s => s.Id)
+        var scope = await ScopeAsync();
+        var companies = (await _db.CreditorCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
+            .Select(c => new { c.Code, c.Name }).ToListAsync()).Where(c => scope.Allows(c.Code)).ToList();
+        var snaps = (await _db.ApAgingSnapshots.AsNoTracking().OrderByDescending(s => s.AsOfDate).ThenByDescending(s => s.Id)
             .Select(s => new { s.Id, s.CompanyCode, s.ReportCompany, s.AsOfDate, s.SourceFileName, s.UploadedAt, s.UploadedByName, s.VendorCount, s.ActiveVendorCount, s.TotalCurrent, s.TotalOverdue, s.TotalPayables, s.Notes })
-            .ToListAsync();
+            .ToListAsync()).Where(s => scope.Allows(s.CompanyCode)).ToList();
         return Ok(new { companies, snapshots = snaps });
     }
 
@@ -60,6 +66,7 @@ public class CreditorAgingController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var s = await _db.ApAgingSnapshots.FindAsync(id); if (s == null) return NotFound();
+        if (!(await ScopeAsync()).Allows(s.CompanyCode)) return NotYourCompany();
         _db.ApAgingSnapshots.Remove(s);
         await _db.SaveChangesAsync();
         return NoContent();
@@ -71,6 +78,7 @@ public class CreditorAgingController : ControllerBase
     {
         var snap = await _db.ApAgingSnapshots.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
         if (snap == null) return NotFound();
+        if (!(await ScopeAsync()).Allows(snap.CompanyCode)) return NotYourCompany();
         var q = _db.ApAgingVendors.AsNoTracking().Where(v => v.SnapshotId == id);
         if (activeOnly) q = q.Where(v => v.Total != 0 || v.Overdue != 0 || v.Current != 0);
         if (!string.IsNullOrWhiteSpace(search)) { var s = search.Trim(); q = q.Where(v => v.VendorName.Contains(s) || v.VendorCode.Contains(s)); }
@@ -109,6 +117,7 @@ public class CreditorAgingController : ControllerBase
     /// <summary>One vendor across every snapshot of its company — how the balance moved.</summary>
     [HttpGet("vendors/{company}/{code}/history")]
     public async Task<IActionResult> History(string company, string code) =>
+        !(await ScopeAsync()).Allows(company) ? NotYourCompany() :
         Ok(await _db.ApAgingVendors.AsNoTracking().Where(v => v.VendorCode == code && v.Snapshot!.CompanyCode == company)
             .OrderByDescending(v => v.Snapshot!.AsOfDate)
             .Select(v => new { v.Snapshot!.AsOfDate, v.Snapshot.Id, v.Current, d30 = v.Days30, d60 = v.Days60, d90 = v.Days90, v.Over90, v.Overdue, v.Total }).Take(24).ToListAsync());
@@ -120,6 +129,7 @@ public class CreditorAgingController : ControllerBase
     [HttpGet("vendors")]
     public async Task<IActionResult> Vendors([FromQuery] string company, [FromQuery] string? q, [FromQuery] int take = 20)
     {
+        if (!(await ScopeAsync()).Allows(company)) return NotYourCompany();
         var snapId = await _db.ApAgingSnapshots.AsNoTracking().Where(s => s.CompanyCode == company).OrderByDescending(s => s.AsOfDate).ThenByDescending(s => s.Id).Select(s => (int?)s.Id).FirstOrDefaultAsync();
         if (snapId == null) return Ok(Array.Empty<object>());
         var s = (q ?? "").Trim();
@@ -161,6 +171,7 @@ public class CreditorAgingController : ControllerBase
         if (code == "") code = DetectCompany(parsed.ReportCompany, companies) ?? "";
         if (code == "" || companies.All(c => c.Code != code))
             return BadRequest(new { message = $"Couldn't tell which company this report is for (header says \"{parsed.ReportCompany}\"). Pick the company and upload again.", reportCompany = parsed.ReportCompany });
+        if (!(await ScopeAsync()).Allows(code)) return NotYourCompany();
 
         var asOf = parsed.AsOf ?? DateTime.UtcNow.Date;
         if (replace)
@@ -300,6 +311,7 @@ public class CreditorAgingController : ControllerBase
     public async Task<IActionResult> Export(int id, [FromQuery] bool activeOnly = true)
     {
         var snap = await _db.ApAgingSnapshots.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id); if (snap == null) return NotFound();
+        if (!(await ScopeAsync()).Allows(snap.CompanyCode)) return NotYourCompany();
         var co = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(c => c.Code == snap.CompanyCode);
         var q = _db.ApAgingVendors.AsNoTracking().Where(v => v.SnapshotId == id);
         if (activeOnly) q = q.Where(v => v.Total != 0 || v.Overdue != 0 || v.Current != 0);

@@ -33,11 +33,18 @@ public class CreditorPacksController : ControllerBase
     private const long MaxFileBytes = 20L * 1024 * 1024;
 
     public CreditorPacksController(ApplicationDbContext db, CreditorChecksService checks, ISignatureService sign,
-        INotificationBroadcaster notify, IConfiguration cfg, ILogger<CreditorPacksController> log)
+        INotificationBroadcaster notify, IConfiguration cfg, ILogger<CreditorPacksController> log,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
     {
-        _db = db; _checks = checks; _sign = sign; _notify = notify; _log = log;
+        _db = db; _checks = checks; _sign = sign; _notify = notify; _log = log; _cache = cache;
         _root = cfg.GetValue<string>("DocumentsPath") ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
     }
+
+    private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
+    private CompanyScope? _scope;
+    /// <summary>Companies the caller may see (admins: all; others: their assigned operating companies).</summary>
+    private async Task<CompanyScope> ScopeAsync() => _scope ??= await CompanyAccess.ForUserAsync(_db, User, _cache);
+    private async Task<bool> InScopeAsync(string? companyCode) => (await ScopeAsync()).Allows(companyCode);
 
     // ───────────────────────── identity & roles ─────────────────────────
 
@@ -122,13 +129,15 @@ public class CreditorPacksController : ControllerBase
 
     private async Task<List<object>> CompaniesDtoAsync()
     {
+        var scope = await ScopeAsync();
         var cs = await _db.CreditorCompanies.AsNoTracking().OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync();
         var ids = cs.SelectMany(c => new[] { c.AccountantUserId, c.BackupApproverUserId, c.DirectorUserId, c.DelegateDirectorUserId }).Where(i => i != null).Select(i => i!.Value).Distinct().ToList();
         var names = await _db.Users.AsNoTracking().Where(u => ids.Contains(u.UserId)).ToDictionaryAsync(u => u.UserId, u => u.Name + " " + u.Surname);
         string? N(int? id) => id != null && names.TryGetValue(id.Value, out var n) ? n : null;
         return cs.Select(c => (object)new
         {
-            c.Id, c.Code, c.Name, c.Activity, c.IsActive, c.SortOrder,
+            c.Id, c.Code, c.Name, c.Activity, c.IsActive, c.SortOrder, c.OperatingCompanyId,
+            allowed = scope.Allows(c.Code),
             c.AccountantUserId, accountantName = N(c.AccountantUserId),
             c.BackupApproverUserId, backupApproverName = N(c.BackupApproverUserId),
             c.DirectorUserId, directorName = N(c.DirectorUserId),
@@ -136,7 +145,7 @@ public class CreditorPacksController : ControllerBase
         }).ToList();
     }
 
-    public record CompanyUpsert(string Code, string Name, string? Activity, int? AccountantUserId, int? BackupApproverUserId, int? DirectorUserId, int? DelegateDirectorUserId, bool IsActive, int SortOrder);
+    public record CompanyUpsert(string Code, string Name, string? Activity, int? AccountantUserId, int? BackupApproverUserId, int? DirectorUserId, int? DelegateDirectorUserId, bool IsActive, int SortOrder, int? OperatingCompanyId = null);
 
     /// <summary>Picking someone as a company's accountant/director implies the role — grant it so they don't have to be ticked separately first.</summary>
     private async Task EnsureRolesForCompanyAsync(CompanyUpsert dto)
@@ -171,6 +180,7 @@ public class CreditorPacksController : ControllerBase
         c.AccountantUserId = dto.AccountantUserId; c.BackupApproverUserId = dto.BackupApproverUserId;
         c.DirectorUserId = dto.DirectorUserId; c.DelegateDirectorUserId = dto.DelegateDirectorUserId;
         c.IsActive = dto.IsActive; c.SortOrder = dto.SortOrder;
+        if (dto.OperatingCompanyId != null) c.OperatingCompanyId = dto.OperatingCompanyId == 0 ? null : dto.OperatingCompanyId;
         await EnsureRolesForCompanyAsync(dto);
         await _db.SaveChangesAsync();
         return Ok((await CompaniesDtoAsync()).First(x => (int)x.GetType().GetProperty("Id")!.GetValue(x)! == id));
@@ -181,7 +191,7 @@ public class CreditorPacksController : ControllerBase
     {
         if (!await HasAsync(CreditorWorkflow.RoleAdmin)) return Forbid();
         if (await _db.CreditorCompanies.AnyAsync(c => c.Code == dto.Code.ToUpper())) return Conflict(new { message = "A company with that code already exists." });
-        var c = new CreditorCompany { Code = dto.Code.Trim().ToUpperInvariant(), Name = dto.Name.Trim(), Activity = dto.Activity, AccountantUserId = dto.AccountantUserId, BackupApproverUserId = dto.BackupApproverUserId, DirectorUserId = dto.DirectorUserId, DelegateDirectorUserId = dto.DelegateDirectorUserId, IsActive = dto.IsActive, SortOrder = dto.SortOrder };
+        var c = new CreditorCompany { Code = dto.Code.Trim().ToUpperInvariant(), Name = dto.Name.Trim(), Activity = dto.Activity, AccountantUserId = dto.AccountantUserId, BackupApproverUserId = dto.BackupApproverUserId, DirectorUserId = dto.DirectorUserId, DelegateDirectorUserId = dto.DelegateDirectorUserId, IsActive = dto.IsActive, SortOrder = dto.SortOrder, OperatingCompanyId = dto.OperatingCompanyId == 0 ? null : dto.OperatingCompanyId };
         _db.CreditorCompanies.Add(c);
         await EnsureRolesForCompanyAsync(dto);
         await _db.SaveChangesAsync();
@@ -222,8 +232,11 @@ public class CreditorPacksController : ControllerBase
     [HttpGet("batches")]
     public async Task<IActionResult> List([FromQuery] string? company, [FromQuery] string? status, [FromQuery] string? type, [FromQuery] int take = 200)
     {
+        var scope = await ScopeAsync();
+        if (!string.IsNullOrWhiteSpace(company) && !scope.Allows(company)) return StatusCode(403, new { message = "You are not assigned to that company." });
         var q = _db.PaymentBatches.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(company)) q = q.Where(b => b.CompanyCode == company);
+        else if (!scope.All) { var codes = scope.CreditorCodes.ToList(); q = q.Where(b => codes.Contains(b.CompanyCode)); }
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(b => b.Status == status);
         if (!string.IsNullOrWhiteSpace(type)) q = q.Where(b => b.PaymentType == type);
         var rows = await q.OrderByDescending(b => b.Id).Take(take).Select(b => new
@@ -240,8 +253,11 @@ public class CreditorPacksController : ControllerBase
     [HttpGet("summary")]
     public async Task<IActionResult> Summary()
     {
-        var by = await _db.PaymentBatches.AsNoTracking().GroupBy(b => b.Status).Select(g => new { status = g.Key, count = g.Count(), amount = g.Sum(b => b.TotalAmount) }).ToListAsync();
-        var openPrepay = await _db.PaymentBatchItems.AsNoTracking().CountAsync(i => i.PrepaymentOpen);
+        var scope = await ScopeAsync();
+        var codes = scope.CreditorCodes.ToList();
+        var batches = scope.All ? _db.PaymentBatches.AsNoTracking() : _db.PaymentBatches.AsNoTracking().Where(b => codes.Contains(b.CompanyCode));
+        var by = await batches.GroupBy(b => b.Status).Select(g => new { status = g.Key, count = g.Count(), amount = g.Sum(b => b.TotalAmount) }).ToListAsync();
+        var openPrepay = await _db.PaymentBatchItems.AsNoTracking().CountAsync(i => i.PrepaymentOpen && (scope.All || codes.Contains(i.Batch!.CompanyCode)));
         return Ok(new { byStatus = by, openPrepayments = openPrepay });
     }
 
@@ -251,6 +267,7 @@ public class CreditorPacksController : ControllerBase
     public async Task<IActionResult> Create([FromBody] BatchCreate dto)
     {
         if (!await HasAsync(CreditorWorkflow.RoleClerk)) return Forbid();
+        if (!await InScopeAsync(dto.CompanyCode)) return StatusCode(403, new { message = "You are not assigned to that company." });
         if (!await _db.CreditorCompanies.AnyAsync(c => c.Code == dto.CompanyCode && c.IsActive)) return BadRequest(new { message = "Unknown paying company." });
         if (!CreditorPaymentTypes.All.Any(p => p.Key == dto.PaymentType)) return BadRequest(new { message = "Unknown payment type." });
 
@@ -1076,9 +1093,11 @@ public class CreditorPacksController : ControllerBase
         var isBank = await HasAsync(CreditorWorkflow.RoleBank);
         var isClerk = await HasAsync(CreditorWorkflow.RoleClerk);
         var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.Name);
-        var batches = await _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
+        var scope = await ScopeAsync();
+        var batches = (await _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
             .Where(b => CreditorWorkflow.OnSchedule.Contains(b.Status))
-            .OrderBy(b => b.ScheduledPayDate).ThenBy(b => b.Id).ToListAsync();
+            .OrderBy(b => b.ScheduledPayDate).ThenBy(b => b.Id).ToListAsync())
+            .Where(b => scope.Allows(b.CompanyCode)).ToList();
 
         var rows = batches.Select(b =>
         {
@@ -1153,8 +1172,12 @@ public class CreditorPacksController : ControllerBase
     public async Task<IActionResult> History([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? company, [FromQuery] string? q, [FromQuery] int take = 300)
     {
         var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.Name);
+        var scope = await ScopeAsync();
+        if (!scope.All) companies = companies.Where(kv => scope.Allows(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+        if (!string.IsNullOrWhiteSpace(company) && !scope.Allows(company)) return StatusCode(403, new { message = "You are not assigned to that company." });
         var query = _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
             .Where(b => b.Status == CreditorWorkflow.Paid || b.Status == CreditorWorkflow.Closed);
+        if (!scope.All) { var codes = scope.CreditorCodes.ToList(); query = query.Where(b => codes.Contains(b.CompanyCode)); }
         if (from.HasValue) query = query.Where(b => (b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt) >= from.Value.Date);
         if (to.HasValue) { var t = to.Value.Date.AddDays(1); query = query.Where(b => (b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt) < t); }
         if (!string.IsNullOrWhiteSpace(company)) query = query.Where(b => b.CompanyCode == company);
@@ -1198,10 +1221,11 @@ public class CreditorPacksController : ControllerBase
         if (!isDirector && !IsSystemAdmin && UserRole != "Manager") return Forbid();
 
         var now = DateTime.UtcNow;
-        var companies = await _db.CreditorCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ToListAsync();
-        var all = await _db.PaymentBatches.AsNoTracking().Include(b => b.Items)
+        var scope = await ScopeAsync();
+        var companies = (await _db.CreditorCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ToListAsync()).Where(c => scope.Allows(c.Code)).ToList();
+        var all = (await _db.PaymentBatches.AsNoTracking().Include(b => b.Items)
             .Where(b => b.Status != CreditorWorkflow.Rejected && (b.Status != CreditorWorkflow.Closed || b.PaidAt >= now.AddMonths(-7)))
-            .ToListAsync();
+            .ToListAsync()).Where(b => scope.Allows(b.CompanyCode)).ToList();
         string Name(string code) => companies.FirstOrDefault(c => c.Code == code)?.Name ?? code;
         decimal Appr(PaymentBatch b) => b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount);
 
@@ -1278,9 +1302,10 @@ public class CreditorPacksController : ControllerBase
     [HttpGet("alerts")]
     public async Task<IActionResult> Alerts()
     {
-        var open = await _db.PaymentBatches.AsNoTracking()
+        var scope = await ScopeAsync();
+        var open = (await _db.PaymentBatches.AsNoTracking()
             .Where(b => b.Status != CreditorWorkflow.Closed && b.Status != CreditorWorkflow.Rejected && b.ChecksJson != null)
-            .Select(b => new { b.Id, b.BatchNumber, b.CompanyCode, b.Status, b.ChecksJson }).ToListAsync();
+            .Select(b => new { b.Id, b.BatchNumber, b.CompanyCode, b.Status, b.ChecksJson }).ToListAsync()).Where(b => scope.Allows(b.CompanyCode)).ToList();
         var alerts = new List<object>();
         foreach (var b in open)
         {
@@ -1292,18 +1317,23 @@ public class CreditorPacksController : ControllerBase
         }
         var stalePrepay = await _db.PaymentBatchItems.AsNoTracking().Where(i => i.PrepaymentOpen && i.PaidAt != null && i.PaidAt < DateTime.UtcNow.AddDays(-30))
             .Select(i => new { batchId = i.BatchId, i.Batch!.BatchNumber, i.Batch.CompanyCode, status = i.Batch.Status, Code = "C13", Title = "Prepayment open > 30 days", Severity = "REVIEW", Detail = $"{i.SupplierName} paid {i.PaidAt:dd MMM} — tax invoice / GRV still outstanding.", Supplier = i.SupplierName }).ToListAsync();
-        alerts.AddRange(stalePrepay);
+        alerts.AddRange(stalePrepay.Where(p => scope.Allows(p.CompanyCode)));
         return Ok(alerts);
     }
 
     // ───────────────────────── detail DTO ─────────────────────────
 
-    private Task<PaymentBatch?> Load(int id) => _db.PaymentBatches.Include(b => b.Items).Include(b => b.Documents).Include(b => b.Events).FirstOrDefaultAsync(b => b.Id == id);
+    /// <summary>Loads a batch for editing; null when it doesn't exist OR belongs to a company outside the caller's scope.</summary>
+    private async Task<PaymentBatch?> Load(int id)
+    {
+        var b = await _db.PaymentBatches.Include(b => b.Items).Include(b => b.Documents).Include(b => b.Events).FirstOrDefaultAsync(b => b.Id == id);
+        return b != null && await InScopeAsync(b.CompanyCode) ? b : null;
+    }
 
     private async Task<object?> DetailAsync(int id)
     {
         var b = await _db.PaymentBatches.AsNoTracking().Include(x => x.Items).Include(x => x.Documents).Include(x => x.Events).FirstOrDefaultAsync(x => x.Id == id);
-        if (b == null) return null;
+        if (b == null || !await InScopeAsync(b.CompanyCode)) return null;
         var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
         var sigs = await _sign.GetForEntityAsync("PaymentBatch", b.Id);
         var closing = CreditorWorkflow.Locked.Contains(b.Status);

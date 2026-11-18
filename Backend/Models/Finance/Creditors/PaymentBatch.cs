@@ -20,6 +20,8 @@ public class CreditorCompany
     public int? DelegateDirectorUserId { get; set; }
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
+    /// <summary>The operating company users are assigned to (StaffOperatingCompanies); drives who may see this company in Finance.</summary>
+    public int? OperatingCompanyId { get; set; }
 }
 
 /// <summary>

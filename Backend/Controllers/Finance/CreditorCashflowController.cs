@@ -25,7 +25,11 @@ namespace ProjectTracker.API.Controllers.Finance;
 public class CreditorCashflowController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
-    public CreditorCashflowController(ApplicationDbContext db) { _db = db; }
+    private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
+    public CreditorCashflowController(ApplicationDbContext db, Microsoft.Extensions.Caching.Memory.IMemoryCache cache) { _db = db; _cache = cache; }
+
+    private CompanyScope? _scope;
+    private async Task<CompanyScope> ScopeAsync() => _scope ??= await CompanyAccess.ForUserAsync(_db, User, _cache);
 
     /// <summary>Batches counted as cash going out: anything committed that has not been paid, closed or rejected.</summary>
     private static readonly string[] OutflowStatuses =
@@ -72,7 +76,9 @@ public class CreditorCashflowController : ControllerBase
 
     private async Task<Cashflow> BuildAsync(DateTime asAt)
     {
-        var companies = await _db.CreditorCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync();
+        var scope = await ScopeAsync();
+        var companies = (await _db.CreditorCompanies.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync())
+            .Where(c => scope.Allows(c.Code)).ToList();
         var balances = await _db.CreditorCashflowBalances.AsNoTracking().Where(b => b.AsAt <= asAt).OrderByDescending(b => b.AsAt).ThenByDescending(b => b.Id).ToListAsync();
         var lines = await _db.CreditorCashflowLines.AsNoTracking().Where(l => l.IsActive).OrderBy(l => l.SortOrder).ThenBy(l => l.Payee).ToListAsync();
         var batches = await _db.PaymentBatches.AsNoTracking().Include(b => b.Items)
@@ -114,6 +120,7 @@ public class CreditorCashflowController : ControllerBase
     public async Task<IActionResult> SetBalance([FromBody] BalanceDto dto)
     {
         if (!await CanEditAsync()) return Forbid();
+        if (!(await ScopeAsync()).Allows(dto.CompanyCode)) return StatusCode(403, new { message = "You are not assigned to that company." });
         if (!await _db.CreditorCompanies.AnyAsync(c => c.Code == dto.CompanyCode)) return BadRequest(new { message = "Unknown company." });
         var day = dto.AsAt.Date;
         var existing = await _db.CreditorCashflowBalances.FirstOrDefaultAsync(b => b.CompanyCode == dto.CompanyCode && b.AsAt == day);
@@ -125,6 +132,7 @@ public class CreditorCashflowController : ControllerBase
 
     [HttpGet("balance/{code}/history")]
     public async Task<IActionResult> BalanceHistory(string code) =>
+        !(await ScopeAsync()).Allows(code) ? StatusCode(403, new { message = "You are not assigned to that company." }) :
         Ok(await _db.CreditorCashflowBalances.AsNoTracking().Where(b => b.CompanyCode == code).OrderByDescending(b => b.AsAt).Take(60).ToListAsync());
 
     // ───────── standing lines ─────────
@@ -155,6 +163,7 @@ public class CreditorCashflowController : ControllerBase
     {
         if (!await CanEditAsync()) return Forbid();
         if (Validate(dto) is { } err) return BadRequest(new { message = err });
+        if (!(await ScopeAsync()).Allows(dto.CompanyCode)) return StatusCode(403, new { message = "You are not assigned to that company." });
         if (!await _db.CreditorCompanies.AnyAsync(c => c.Code == dto.CompanyCode)) return BadRequest(new { message = "Unknown company." });
         var l = new CreditorCashflowLine { CompanyCode = dto.CompanyCode };
         Apply(l, dto, UserName);
@@ -170,6 +179,7 @@ public class CreditorCashflowController : ControllerBase
         if (!await CanEditAsync()) return Forbid();
         if (Validate(dto) is { } err) return BadRequest(new { message = err });
         var l = await _db.CreditorCashflowLines.FindAsync(id); if (l == null) return NotFound();
+        if (!(await ScopeAsync()).Allows(l.CompanyCode)) return StatusCode(403, new { message = "You are not assigned to that company." });
         Apply(l, dto, UserName);
         await _db.SaveChangesAsync();
         return Ok(await BuildAsync(ParseAsAt(null)));
@@ -180,6 +190,7 @@ public class CreditorCashflowController : ControllerBase
     {
         if (!await CanEditAsync()) return Forbid();
         var l = await _db.CreditorCashflowLines.FindAsync(id); if (l == null) return NotFound();
+        if (!(await ScopeAsync()).Allows(l.CompanyCode)) return StatusCode(403, new { message = "You are not assigned to that company." });
         _db.CreditorCashflowLines.Remove(l);
         await _db.SaveChangesAsync();
         return Ok(await BuildAsync(ParseAsAt(null)));

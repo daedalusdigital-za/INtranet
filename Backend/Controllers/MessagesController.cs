@@ -12,6 +12,7 @@ namespace ProjectTracker.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
+    [ProjectTracker.API.Authorization.RequireModule("messaging")]
     public class MessagesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

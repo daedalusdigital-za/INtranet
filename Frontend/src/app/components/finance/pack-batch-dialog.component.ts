@@ -11,6 +11,7 @@ import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from 
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
+import { FinanceAccessService } from '../../services/finance-access.service';
 import { companyLogo, COMPANY_NAMES } from '../../core/company-logos';
 import { Analysis, PACK_KINDS } from './pack-upload-dialog.component';
 
@@ -188,7 +189,7 @@ export class BatchPageComponent {
                 @if (g.analysing) { <mat-spinner diameter="16"></mat-spinner> }
                 <span class="bt__sp"></span>
                 <div class="bt__cos">
-                  @for (c of companyCodes; track c) { <button type="button" class="bt__co" [class.on]="g.company === c" (click)="g.company = c; $event.stopPropagation()" [matTooltip]="companyNames[c]" [disabled]="!!g.saved"><img [src]="logo(c)" [alt]="c" /></button> }
+                  @for (c of companyCodes; track c) { <button type="button" class="bt__co" [class.on]="g.company === c" (click)="g.company = c; $event.stopPropagation()" [matTooltip]="access.canSee(c) ? companyNames[c] : access.lockReason(companyNames[c])" [style.opacity]="access.canSee(c) ? null : .4" [disabled]="!!g.saved || !access.canSee(c)"><img [src]="logo(c)" [alt]="c" /></button> }
                 </div>
                 <button mat-icon-button type="button" (click)="toggleDetails(g); $event.stopPropagation()" [matTooltip]="details.has(g.id) ? 'Hide details' : 'Order / customer / notes'"><mat-icon>{{ details.has(g.id) ? 'expand_less' : 'expand_more' }}</mat-icon></button>
                 <button mat-icon-button type="button" (click)="removeGroup(gi); $event.stopPropagation()" matTooltip="Dissolve this pack (pages go to unplaced)" [disabled]="!!g.saved"><mat-icon>playlist_remove</mat-icon></button>
@@ -436,6 +437,7 @@ export class BatchPageComponent {
 })
 export class PackBatchDialogComponent implements OnDestroy {
   private http = inject(HttpClient);
+  access = inject(FinanceAccessService);
   private toast = inject(ToastService);
   private ref = inject(MatDialogRef<PackBatchDialogComponent>);
   private api = environment.apiUrl;

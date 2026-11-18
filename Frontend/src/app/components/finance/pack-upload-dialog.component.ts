@@ -11,6 +11,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
+import { FinanceAccessService } from '../../services/finance-access.service';
 import { companyLogo, COMPANY_NAMES } from '../../core/company-logos';
 
 export type PackMode = 'scan' | 'assemble';
@@ -218,7 +219,7 @@ interface DetectResult {
             <label>Company</label>
             <div class="pk__cos">
               @for (c of companyCodes; track c) {
-                <button type="button" class="pk__co" [class.on]="company === c" (click)="company = c" [matTooltip]="companyNames[c]"><img [src]="logo(c)" [alt]="companyNames[c]" /><span>{{ c }}</span></button>
+                <button type="button" class="pk__co" [class.on]="company === c" [disabled]="!access.canSee(c)" [style.opacity]="access.canSee(c) ? null : .4" (click)="company = c" [matTooltip]="access.canSee(c) ? companyNames[c] : access.lockReason(companyNames[c])"><img [src]="logo(c)" [alt]="companyNames[c]" /><span>{{ c }}</span></button>
               }
             </div>
           </div>
@@ -328,6 +329,7 @@ interface DetectResult {
 })
 export class PackUploadDialogComponent {
   private http = inject(HttpClient);
+  access = inject(FinanceAccessService);
   private toast = inject(ToastService);
   private sanitizer = inject(DomSanitizer);
   private ref = inject(MatDialogRef<PackUploadDialogComponent>);

@@ -19,6 +19,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { RequisitionPreviewDialogComponent } from './requisition-preview-dialog.component';
 import { FinancePaymentScheduleComponent } from './finance-payment-schedule.component';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { FinanceAccessService } from '../../services/finance-access.service';
 import { MatMenuModule } from '@angular/material/menu';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
@@ -281,12 +282,14 @@ export class FinanceComponent implements OnInit {
     private requisitionForm: RequisitionFormService,
     private dialog: MatDialog,
     private tenderService: TenderService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    public companyAccess: FinanceAccessService
   ) {}
 
   safeUrl(u: string): SafeResourceUrl { return this.sanitizer.bypassSecurityTrustResourceUrl(u); }
 
   ngOnInit(): void {
+    this.companyAccess.load();
     this.loadDepartments();
     this.loadOverview();
     this.loadStationeryCounts();
@@ -547,11 +550,17 @@ export class FinanceComponent implements OnInit {
   }
 
   selectCompany(companyName: string): void {
+    if (!this.companyAccess.canSee(companyName)) {
+      this.accessError = this.companyAccess.lockReason(companyName);
+      this.toast.error(this.accessError);
+      return;
+    }
     this.selectedCompany = companyName;
     this.accessError = '';
     // Server-side role check replaces the old client-side password gate
-    this.http.get(`${environment.apiUrl}/finance/company-access`).subscribe({
-      next: () => {
+    this.http.get<{ allowed: boolean }>(`${environment.apiUrl}/finance/company-access`).subscribe({
+      next: a => {
+        if (!a?.allowed) { this.accessError = 'You are not assigned to any company.'; this.toast.error(this.accessError); return; }
         this.showCompanyDialog = false;
         this.loadRequestedPayments();
       },

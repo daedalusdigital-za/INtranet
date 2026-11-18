@@ -22,11 +22,25 @@ namespace ProjectTracker.API.Controllers.Finance
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<FinanceOverviewController> _logger;
+        private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
 
-        public FinanceOverviewController(ApplicationDbContext context, ILogger<FinanceOverviewController> logger)
+        public FinanceOverviewController(ApplicationDbContext context, ILogger<FinanceOverviewController> logger, Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
         {
             _context = context;
             _logger = logger;
+            _cache = cache;
+        }
+
+        private CompanyScope? _scope;
+        private async Task<CompanyScope> ScopeAsync() => _scope ??= await CompanyAccess.ForUserAsync(_context, User, _cache);
+        private ObjectResult NotYourCompany() => StatusCode(403, new { message = "You are not assigned to that company." });
+        /// <summary>Sage source-company codes (PMT, ACM, …) the caller may see; null = everything.</summary>
+        private async Task<List<string>?> AllowedSourceCompaniesAsync()
+        {
+            var scope = await ScopeAsync();
+            if (scope.All) return null;
+            var all = await _context.ImportedInvoices.AsNoTracking().Select(i => i.SourceCompany).Distinct().ToListAsync();
+            return all.Where(c => scope.Allows(c)).ToList();
         }
 
         // GET: api/finance/overview
@@ -82,9 +96,10 @@ namespace ProjectTracker.API.Controllers.Finance
                 pendingExpenses = pendingExpenses?.amount ?? 0m
             };
 
-            // Debtors = latest aging snapshot per company
-            var snaps = await _context.ArAgingSnapshots.AsNoTracking().GroupBy(s => s.Company)
-                .Select(g => g.OrderByDescending(s => s.AsOfDate).ThenByDescending(s => s.Id).First()).ToListAsync();
+            // Debtors = latest aging snapshot per company (only companies the caller is assigned to)
+            var scope = await ScopeAsync();
+            var snaps = (await _context.ArAgingSnapshots.AsNoTracking().GroupBy(s => s.Company)
+                .Select(g => g.OrderByDescending(s => s.AsOfDate).ThenByDescending(s => s.Id).First()).ToListAsync()).Where(s => scope.Allows(s.Company)).ToList();
             var snapIds = snaps.Select(s => s.Id).ToList();
             var bucketRows = snapIds.Count == 0 ? new() : await _context.ArAgingItems.AsNoTracking().Where(i => snapIds.Contains(i.SnapshotId))
                 .GroupBy(i => new { i.SnapshotId, i.Bucket }).Select(g => new { g.Key.SnapshotId, g.Key.Bucket, amount = g.Sum(i => i.Balance) }).ToListAsync();
@@ -342,11 +357,12 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpGet("creditors/by-company")]
         public async Task<IActionResult> GetCreditorsByCompany()
         {
-            var invoices = await _context.BookInvoices
+            var scope = await ScopeAsync();
+            var invoices = (await _context.BookInvoices
                 .Where(b => b.Status != "Paid" && b.PaymentDate == null &&
                             b.Status != "Draft" && b.Status != "Archived")
                 .Select(b => new { b.CompanyName, b.Total })
-                .ToListAsync();
+                .ToListAsync()).Where(b => scope.Allows(b.CompanyName)).ToList();
 
             var groups = invoices
                 .GroupBy(b => string.IsNullOrWhiteSpace(b.CompanyName) ? "Unassigned" : b.CompanyName!)
@@ -392,8 +408,11 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpGet("debtors/summary")]
         public async Task<IActionResult> GetDebtorsSummary([FromQuery] string? company, [FromQuery] int? year, [FromQuery] int? month)
         {
+            if (!(await ScopeAsync()).Allows(company)) return NotYourCompany();
+            var allowed = await AllowedSourceCompaniesAsync();
             var query = _context.ImportedInvoices.AsNoTracking().AsQueryable();
             if (!string.IsNullOrWhiteSpace(company)) query = query.Where(i => i.SourceCompany == company);
+            else if (allowed != null) query = query.Where(i => allowed.Contains(i.SourceCompany));
             if (year.HasValue) query = query.Where(i => i.Year == year.Value);
             if (month.HasValue) query = query.Where(i => i.TransactionDate.Month == month.Value);
 
@@ -405,6 +424,7 @@ namespace ProjectTracker.API.Controllers.Finance
             // Collections recorded against these customers (optionally scoped to company).
             var payQuery = _context.DebtorPayments.AsNoTracking().AsQueryable();
             if (!string.IsNullOrWhiteSpace(company)) payQuery = payQuery.Where(p => p.SourceCompany == company);
+            else if (allowed != null) payQuery = payQuery.Where(p => p.SourceCompany != null && allowed.Contains(p.SourceCompany));
             var payments = await payQuery
                 .Select(p => new { p.CustomerNumber, p.SourceCompany, p.Amount })
                 .ToListAsync();
@@ -572,8 +592,11 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpGet("debtors/payments")]
         public async Task<IActionResult> GetCollections([FromQuery] string? company, [FromQuery] string? customerNumber)
         {
+            if (!(await ScopeAsync()).Allows(company)) return NotYourCompany();
+            var allowed = await AllowedSourceCompaniesAsync();
             var q = _context.DebtorPayments.AsNoTracking().AsQueryable();
             if (!string.IsNullOrWhiteSpace(company)) q = q.Where(p => p.SourceCompany == company);
+            else if (allowed != null) q = q.Where(p => p.SourceCompany != null && allowed.Contains(p.SourceCompany));
             if (!string.IsNullOrWhiteSpace(customerNumber)) q = q.Where(p => p.CustomerNumber == customerNumber);
 
             var items = await q

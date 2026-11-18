@@ -9,6 +9,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 import { TenderService, ComplianceDocument, ComplianceSummary } from '../../services/tender.service';
 import { ToastService } from '../../ui/toast.service';
+import { FinanceAccessService } from '../../services/finance-access.service';
 import { ComplianceDialogComponent } from '../tenders/compliance-dialog.component';
 
 interface VaultCompany { code: string; name: string; color: string; }
@@ -78,7 +79,7 @@ type VaultFilter = '' | 'Valid' | 'Expiring' | 'Warning' | 'Expired' | 'Missing'
       </div>
       <select [ngModel]="company()" (ngModelChange)="company.set($event)" aria-label="Company">
         <option value="">All companies</option>
-        @for (c of companies; track c.code) { <option [value]="c.code">{{ c.name }}</option> }
+        @for (c of companies; track c.code) { <option [value]="c.code" [disabled]="!access.canSee(c.code)">{{ c.name }}{{ access.canSee(c.code) ? '' : ' (not assigned)' }}</option> }
       </select>
       <span class="fv-spacer"></span>
       <button mat-stroked-button (click)="checkAlerts()" matTooltip="Generate and email expiry alerts now">
@@ -220,8 +221,11 @@ export class FinanceVaultComponent implements OnInit {
   private tenders = inject(TenderService);
   private dialog = inject(MatDialog);
   private toast = inject(ToastService);
+  access = inject(FinanceAccessService);
 
   readonly companies = VAULT_COMPANIES;
+  /** Only the companies the caller is assigned to (admins see all). */
+  allowedCompanies = computed(() => { this.access.access(); return this.companies.filter(c => this.access.canSee(c.code)); });
   readonly docTypes = VAULT_DOC_TYPES;
 
   docs = signal<ComplianceDocument[]>([]);
@@ -231,20 +235,20 @@ export class FinanceVaultComponent implements OnInit {
   filter = signal<VaultFilter>('');
   company = signal('');
 
-  visibleCompanies = computed(() => this.company() ? this.companies.filter(c => c.code === this.company()) : this.companies);
+  visibleCompanies = computed(() => this.company() ? this.allowedCompanies().filter(c => c.code === this.company()) : this.allowedCompanies());
   missingCount = computed(() => {
     let n = 0;
-    for (const c of this.companies) for (const t of this.docTypes) if (!this.docFor(c.code, t.value)) n++;
+    for (const c of this.allowedCompanies()) for (const t of this.docTypes) if (!this.docFor(c.code, t.value)) n++;
     return n;
   });
   listRows = computed(() => {
     const f = this.filter(); const co = this.company();
     return this.docs()
-      .filter(d => (!co || d.companyCode === co) && (f === '' || f === 'Missing' ? true : d.computedStatus === f))
+      .filter(d => this.access.canSee(d.companyCode) && (!co || d.companyCode === co) && (f === '' || f === 'Missing' ? true : d.computedStatus === f))
       .sort((a, b) => a.daysLeft - b.daysLeft);
   });
 
-  ngOnInit(): void { this.load(); }
+  ngOnInit(): void { this.access.load(); this.load(); }
 
   load(): void {
     this.loading.set(true);
@@ -281,7 +285,7 @@ export class FinanceVaultComponent implements OnInit {
   }
 
   add(companyCode?: string, docType?: string): void {
-    this.dialog.open(ComplianceDialogComponent, { width: '600px', data: { mode: 'create', companies: this.companies, documentTypes: this.docTypes, companyCode, docType } })
+    this.dialog.open(ComplianceDialogComponent, { width: '600px', data: { mode: 'create', companies: this.allowedCompanies(), documentTypes: this.docTypes, companyCode, docType } })
       .afterClosed().subscribe(r => { if (r) this.load(); });
   }
   viewDoc(d: ComplianceDocument): void {
@@ -289,7 +293,7 @@ export class FinanceVaultComponent implements OnInit {
       .afterClosed().subscribe(r => { if (r) this.load(); });
   }
   edit(d: ComplianceDocument): void {
-    this.dialog.open(ComplianceDialogComponent, { width: '600px', data: { mode: 'edit', document: d, companies: this.companies, documentTypes: this.docTypes } })
+    this.dialog.open(ComplianceDialogComponent, { width: '600px', data: { mode: 'edit', document: d, companies: this.allowedCompanies(), documentTypes: this.docTypes } })
       .afterClosed().subscribe(r => { if (r) this.load(); });
   }
   preview(d: ComplianceDocument): void {

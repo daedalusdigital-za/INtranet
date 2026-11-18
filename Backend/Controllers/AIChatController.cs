@@ -18,6 +18,7 @@ namespace ProjectTracker.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
+    [ProjectTracker.API.Authorization.RequireModule("ai")]
     public class AIChatController : ControllerBase
     {
         private readonly ILogger<AIChatController> _logger;

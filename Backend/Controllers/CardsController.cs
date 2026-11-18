@@ -14,6 +14,7 @@ namespace ProjectTracker.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
+    [ProjectTracker.API.Authorization.RequireModule("project_management")]
     public class CardsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

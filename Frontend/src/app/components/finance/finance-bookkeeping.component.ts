@@ -13,6 +13,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { environment } from '../../../environments/environment';
 import { companyLogo } from '../../core/company-logos';
+import { FinanceAccessService } from '../../services/finance-access.service';
 
 interface CreditRef { number: string; date: string; amount: number; }
 interface Row {
@@ -62,9 +63,10 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
           <span class="co-text"><b>All companies</b><span>{{ s.invoices | number }} invoices · <em [class.zero]="s.needsPod === 0">{{ s.needsPod | number }} need POD</em></span></span>
         </button>
         @for (c of s.byCompany; track c.company) {
-          <button class="co-tile" [class.active]="company === c.company" [class.dim]="company && company !== c.company" (click)="setCompany(company === c.company ? '' : c.company)" [attr.aria-pressed]="company === c.company">
+          <button class="co-tile" [class.active]="company === c.company" [class.dim]="company && company !== c.company" [class.locked]="!access.canSee(c.company)" [disabled]="!access.canSee(c.company)"
+                  [title]="access.canSee(c.company) ? '' : access.lockReason(c.companyName)" (click)="setCompany(company === c.company ? '' : c.company)" [attr.aria-pressed]="company === c.company">
             <img class="co-logo" [src]="logo(c.company)" [alt]="c.companyName">
-            <span class="co-text"><b>{{ c.companyName }}</b><span>{{ c.invoices | number }} invoices · <em [class.zero]="c.needsPod === 0">{{ c.needsPod | number }} need POD</em></span></span>
+            <span class="co-text"><b>{{ c.companyName }} @if (!access.canSee(c.company)) { <mat-icon class="lock">lock</mat-icon> }</b><span>{{ c.invoices | number }} invoices · <em [class.zero]="c.needsPod === 0">{{ c.needsPod | number }} need POD</em></span></span>
           </button>
         }
       </div>
@@ -170,6 +172,8 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
     .co-tile:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-1px); }
     .co-tile.active { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
     .co-tile.dim { opacity: .55; }
+    .co-tile.locked, .co-tile:disabled { opacity: .4; filter: grayscale(1); cursor: not-allowed; }
+    .co-tile .lock { font-size: 14px; width: 14px; height: 14px; vertical-align: middle; }
     .co-logo { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: 0 0 56px; background: #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
     .co-logo.all-logo { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; }
     .co-logo.all-logo mat-icon { font-size: 30px; width: 30px; height: 30px; }
@@ -205,6 +209,7 @@ type Status = 'all' | 'needs-pod' | 'has-pod' | 'not-dispatched' | 'credited';
 })
 export class FinanceBookkeepingComponent implements OnInit {
   private http = inject(HttpClient);
+  access = inject(FinanceAccessService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private api = environment.apiUrl;
@@ -224,6 +229,7 @@ export class FinanceBookkeepingComponent implements OnInit {
   pageSize = 50;
 
   ngOnInit(): void {
+    this.access.load();
     const v = this.route.snapshot.queryParamMap.get('view');
     if (v === 'needs-pod' || v === 'has-pod' || v === 'not-dispatched' || v === 'credited') this.status = v;
     const s = this.route.snapshot.queryParamMap.get('search'); if (s) this.search = s;
@@ -231,7 +237,7 @@ export class FinanceBookkeepingComponent implements OnInit {
   }
 
   setStatus(s: Status): void { this.status = s; this.page = 1; this.load(); }
-  setCompany(c: string): void { this.company = c; this.page = 1; this.load(); }
+  setCompany(c: string): void { if (c && !this.access.canSee(c)) return; this.company = c; this.page = 1; this.load(); }
   onPage(e: PageEvent): void { this.page = e.pageIndex + 1; this.pageSize = e.pageSize; this.load(); }
 
   reload(withSummary = false): void {

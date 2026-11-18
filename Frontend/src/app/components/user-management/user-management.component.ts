@@ -716,11 +716,23 @@ export class UserManagementComponent implements OnInit {
               this.loadUsers();
             },
             error: (err) => {
-              this.toast.error(err.error?.message || 'Failed to create user');
+              this.toast.error(this.describeError(err, 'Failed to create user'));
             }
           });
       }
     });
+  }
+
+  /** Pulls the useful text out of an API error: message, or the first model-validation error. */
+  private describeError(err: any, fallback: string): string {
+    const e = err?.error;
+    if (e?.message) return e.message;
+    if (e?.errors && typeof e.errors === 'object') {
+      const first = Object.entries(e.errors).find(([k]) => k !== 'dto');
+      if (first) { const [field, msgs] = first as [string, any]; return `${field.replace(/^\$\./, '')}: ${Array.isArray(msgs) ? msgs[0] : msgs}`; }
+    }
+    if (e?.title) return e.title;
+    return fallback;
   }
 
   openEditDialog(user: User): void {
@@ -746,7 +758,7 @@ export class UserManagementComponent implements OnInit {
               this.loadUsers();
             },
             error: (err) => {
-              this.toast.error(err.error?.message || 'Failed to update user');
+              this.toast.error(this.describeError(err, 'Failed to update user'));
             }
           });
       }
@@ -1506,13 +1518,22 @@ export class UserFormDialogComponent {
     
     if (this.form.valid) {
       const formData = { ...this.form.value };
-      formData.permissions = this.selectedPermissions.join(',');
+      // The API expects an array of keys (a comma string used to make every edit fail with 400)
+      formData.permissions = [...this.selectedPermissions];
       formData.companyIds = this.selectedCompanies;
       // Ensure unlinking sends '' so backend clears the field (null is ignored)
       if (formData.linkedEmpId === null || formData.linkedEmpId === undefined) {
         formData.linkedEmpId = '';
       }
-      
+      // Empty date input → clear the birthday instead of sending "" (which the API cannot parse)
+      if (formData.birthday === '' || formData.birthday === null || formData.birthday === undefined) {
+        delete formData.birthday;
+        if (this.data.mode === 'edit') formData.clearBirthday = true;
+      }
+      if (formData.departmentId === null || formData.departmentId === undefined || formData.departmentId === '') {
+        formData.departmentId = this.data.mode === 'edit' ? 0 : undefined; // 0 = "no department" for the API
+      }
+
       // Remove password field if editing
       if (this.data.mode === 'edit') {
         delete formData.password;

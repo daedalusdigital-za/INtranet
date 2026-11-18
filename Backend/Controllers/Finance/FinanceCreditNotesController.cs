@@ -36,10 +36,26 @@ namespace ProjectTracker.API.Controllers.Finance
             ["PMT"] = "Promed Technologies", ["ACM"] = "Access Medical", ["PHT"] = "Promed Pharmatech", ["SBT"] = "Sebenzani Trading"
         };
 
-        public FinanceCreditNotesController(ApplicationDbContext db, IConfiguration cfg)
+        public FinanceCreditNotesController(ApplicationDbContext db, IConfiguration cfg, Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
         {
             _db = db;
+            _cache = cache;
             _root = cfg.GetValue<string>("DocumentsPath") ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+        }
+
+        private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
+        private ProjectTracker.API.Authorization.CompanyScope? _scope;
+        private async Task<ProjectTracker.API.Authorization.CompanyScope> ScopeAsync() => _scope ??= await ProjectTracker.API.Authorization.CompanyAccess.ForUserAsync(_db, User, _cache);
+        private ObjectResult NotYourCompany() => StatusCode(403, new { message = "You are not assigned to that company." });
+
+        /// <summary>Sage credit-note lines restricted to the caller's companies.</summary>
+        private async Task<IQueryable<ProjectTracker.API.Models.Logistics.ImportedInvoice>> ScopedCnAsync()
+        {
+            var q = _db.ImportedInvoices.AsNoTracking().Where(i => i.TransactionNumber.StartsWith("CN"));
+            var scope = await ScopeAsync();
+            if (scope.All) return q;
+            var allowed = (await _db.ImportedInvoices.AsNoTracking().Select(i => i.SourceCompany).Distinct().ToListAsync()).Where(c => scope.Allows(c)).ToList();
+            return q.Where(i => allowed.Contains(i.SourceCompany));
         }
 
         private int UserId => int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
@@ -89,7 +105,8 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpGet("summary")]
         public async Task<IActionResult> Summary()
         {
-            var cn = _db.ImportedInvoices.AsNoTracking().Where(i => i.TransactionNumber.StartsWith("CN"));
+            var cn = await ScopedCnAsync();
+            var scope = await ScopeAsync();
             var byCompany = await cn.GroupBy(i => i.SourceCompany)
                 .Select(g => new { company = g.Key, docs = g.Select(x => x.SourceCompany + "|" + x.TransactionNumber).Distinct().Count(), lines = g.Count(), value = -g.Sum(x => x.SalesAmount), first = g.Min(x => x.TransactionDate), last = g.Max(x => x.TransactionDate) })
                 .ToListAsync();
@@ -101,11 +118,11 @@ namespace ProjectTracker.API.Controllers.Finance
                 .Select(g => new { docs = g.Select(x => x.SourceCompany + "|" + x.TransactionNumber).Distinct().Count(), value = -g.Sum(x => x.SalesAmount) }).FirstOrDefaultAsync();
 
             var allKeys = (await cn.Select(i => new { i.SourceCompany, i.TransactionNumber }).Distinct().ToListAsync()).Select(x => Key(x.SourceCompany, x.TransactionNumber)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var docRows = await _db.CreditNoteDocuments.AsNoTracking().Select(d => new { d.Company, d.CreditNoteNumber }).Distinct().ToListAsync();
+            var docRows = (await _db.CreditNoteDocuments.AsNoTracking().Select(d => new { d.Company, d.CreditNoteNumber }).Distinct().ToListAsync()).Where(d => scope.Allows(d.Company)).ToList();
             var signedSet = docRows.Select(d => Key(d.Company, d.CreditNoteNumber)).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var signed = allKeys.Count(k => signedSet.Contains(k));
 
-            var open = await OpenCreditsAsync();
+            var open = (await OpenCreditsAsync()).Where(kv => scope.Allows(kv.Value.company)).ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
             var openValue = open.Values.Sum(v => -v.balance);
 
             // Credit as % of sales per company (how much of what we invoice we end up reversing)
@@ -160,7 +177,8 @@ namespace ProjectTracker.API.Controllers.Finance
                                               [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
         {
             page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 10, 500);
-            var q = _db.ImportedInvoices.AsNoTracking().Where(i => i.TransactionNumber.StartsWith("CN"));
+            if (!string.IsNullOrWhiteSpace(company) && company != "ALL" && !(await ScopeAsync()).Allows(company)) return NotYourCompany();
+            var q = await ScopedCnAsync();
             if (!string.IsNullOrWhiteSpace(company) && company != "ALL") { var code = CompanyCode(company) ?? company; q = q.Where(i => i.SourceCompany == code); }
             if (from.HasValue) q = q.Where(i => i.TransactionDate >= from.Value.Date);
             if (to.HasValue) { var t = to.Value.Date.AddDays(1); q = q.Where(i => i.TransactionDate < t); }
@@ -240,12 +258,14 @@ namespace ProjectTracker.API.Controllers.Finance
         public async Task<IActionResult> Get(string number, [FromQuery] string? company)
         {
             number = number.Trim();
+            var scope = await ScopeAsync();
+            if (!scope.Allows(company)) return NotYourCompany();
             var code = CompanyCode(company) ?? (string.IsNullOrWhiteSpace(company) ? null : company.ToUpperInvariant());
             var lq = _db.ImportedInvoices.AsNoTracking().Where(i => i.TransactionNumber == number);
             if (code != null) lq = lq.Where(i => i.SourceCompany == code);
-            var lines = await lq.OrderBy(i => i.ProductCode)
+            var lines = (await lq.OrderBy(i => i.ProductCode)
                 .Select(i => new { i.Id, i.ProductCode, i.ProductDescription, i.Brand, qty = -i.Quantity, value = -i.SalesAmount, cost = -i.CostOfSales, i.TransactionDate, i.CustomerNumber, i.CustomerName, i.SourceCompany })
-                .ToListAsync();
+                .ToListAsync()).Where(l => scope.Allows(l.SourceCompany)).ToList();
             // Same CN number can exist in two companies — without a company hint, take the most recent one
             var companiesHit = lines.Select(l => l.SourceCompany).Distinct().ToList();
             if (companiesHit.Count > 1)
@@ -258,7 +278,7 @@ namespace ProjectTracker.API.Controllers.Finance
 
             var dq = _db.CreditNoteDocuments.AsNoTracking().Where(d => d.CreditNoteNumber == number);
             if (code != null) dq = dq.Where(d => d.Company == null || d.Company == code);
-            var docs = await dq.OrderByDescending(d => d.UploadedAt).ToListAsync();
+            var docs = (await dq.OrderByDescending(d => d.UploadedAt).ToListAsync()).Where(d => scope.Allows(d.Company)).ToList();
             if (lines.Count == 0 && docs.Count == 0) return NotFound(new { message = $"No credit note {number} in the sales history or uploads." });
 
             var open = await OpenCreditsAsync();
@@ -421,6 +441,7 @@ namespace ProjectTracker.API.Controllers.Finance
                 .Select(i => new { i.CustomerNumber, i.SourceCompany, i.ProductCode, i.Quantity, i.SalesAmount, i.TransactionDate }).ToListAsync();
             if (inv.Count == 0) return Ok(new { invoiceNumber, credits = Array.Empty<object>(), creditedValue = 0m });
             var cust = inv[0].CustomerNumber; var co = inv[0].SourceCompany; var invDate = inv.Max(i => i.TransactionDate);
+            if (!(await ScopeAsync()).Allows(co)) return NotYourCompany();
             var prods = inv.Where(i => i.ProductCode != null).Select(i => i.ProductCode!).Distinct().ToList();
 
             var cns = await _db.ImportedInvoices.AsNoTracking()
@@ -446,8 +467,15 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpGet("by-customer/{customerNumber}")]
         public async Task<IActionResult> ByCustomer(string customerNumber, [FromQuery] string? company)
         {
+            var scope = await ScopeAsync();
+            if (!scope.Allows(company)) return NotYourCompany();
             var q = _db.ImportedInvoices.AsNoTracking().Where(i => i.CustomerNumber == customerNumber);
             if (!string.IsNullOrWhiteSpace(company)) { var code = CompanyCode(company) ?? company; q = q.Where(i => i.SourceCompany == code); }
+            else if (!scope.All)
+            {
+                var allowed = (await _db.ImportedInvoices.AsNoTracking().Where(i => i.CustomerNumber == customerNumber).Select(i => i.SourceCompany).Distinct().ToListAsync()).Where(c => scope.Allows(c)).ToList();
+                q = q.Where(i => allowed.Contains(i.SourceCompany));
+            }
             var sales = await q.Where(i => i.TransactionNumber.StartsWith("IN")).SumAsync(i => (decimal?)i.SalesAmount) ?? 0;
             var cns = await q.Where(i => i.TransactionNumber.StartsWith("CN")).GroupBy(i => new { i.TransactionNumber, i.SourceCompany })
                 .Select(g => new { number = g.Key.TransactionNumber, company = g.Key.SourceCompany, date = g.Min(x => x.TransactionDate), value = -g.Sum(x => x.SalesAmount), lines = g.Count() })
@@ -475,7 +503,8 @@ namespace ProjectTracker.API.Controllers.Finance
                 var s = search.Trim();
                 q = q.Where(d => d.CreditNoteNumber.Contains(s) || (d.CustomerName != null && d.CustomerName.Contains(s)) || (d.SignedBy != null && d.SignedBy.Contains(s)) || (d.InvoiceNumbers != null && d.InvoiceNumbers.Contains(s)) || (d.OriginalFileName != null && d.OriginalFileName.Contains(s)));
             }
-            var docs = await q.OrderByDescending(d => d.UploadedAt).Take(1000).ToListAsync();
+            var scope = await ScopeAsync();
+            var docs = (await q.OrderByDescending(d => d.UploadedAt).Take(1000).ToListAsync()).Where(d => scope.Allows(d.Company)).ToList();
             var nums = docs.Select(d => d.CreditNoteNumber).Distinct().ToList();
             var knownRows = await _db.ImportedInvoices.AsNoTracking().Where(i => nums.Contains(i.TransactionNumber)).GroupBy(i => new { i.TransactionNumber, i.SourceCompany })
                 .Select(g => new { number = g.Key.TransactionNumber, company = g.Key.SourceCompany, value = -g.Sum(x => x.SalesAmount), customer = g.Max(x => x.CustomerName), date = g.Min(x => x.TransactionDate) }).ToListAsync();
@@ -521,6 +550,7 @@ namespace ProjectTracker.API.Controllers.Finance
             if (form.File == null || form.File.Length == 0) return BadRequest(new { error = "Choose the signed credit note file." });
             var ext = Path.GetExtension(form.File.FileName).ToLowerInvariant();
             if (ext is not (".pdf" or ".jpg" or ".jpeg" or ".png")) return BadRequest(new { error = "Only PDF, JPG or PNG files are accepted." });
+            if (!(await ScopeAsync()).Allows(form.Company)) return NotYourCompany();
 
             var number = (form.CreditNoteNumber ?? "").Trim().ToUpperInvariant();
             if (string.IsNullOrEmpty(number))

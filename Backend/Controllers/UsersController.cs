@@ -20,12 +20,15 @@ namespace ProjectTracker.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<UsersController> _logger;
         private readonly IAuditLogService _auditLogService;
+        private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
 
-        public UsersController(ApplicationDbContext context, ILogger<UsersController> logger, IAuditLogService auditLogService)
+        public UsersController(ApplicationDbContext context, ILogger<UsersController> logger, IAuditLogService auditLogService,
+            Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
         {
             _context = context;
             _logger = logger;
             _auditLogService = auditLogService;
+            _cache = cache;
         }
 
         // GET: api/users
@@ -360,7 +363,8 @@ namespace ProjectTracker.API.Controllers
                 new ModulePermissionDto { Key = "support_tickets", Name = "Support Tickets", Icon = "support_agent", Description = "Access to support ticket system" },
                 new ModulePermissionDto { Key = "messaging", Name = "Messaging", Icon = "mail", Description = "Access to internal messaging system" },
                 new ModulePermissionDto { Key = "calendar", Name = "Calendar", Icon = "calendar_month", Description = "Access to meetings, events, and scheduling" },
-                new ModulePermissionDto { Key = "ai", Name = "AI Assistant", Icon = "smart_toy", Description = "Access to AI chat assistant" }
+                new ModulePermissionDto { Key = "ai", Name = "AI Assistant", Icon = "smart_toy", Description = "Welly chat assistant (floating button) and AI document analysis" },
+                new ModulePermissionDto { Key = "flows", Name = "Flows", Icon = "account_tree", Description = "Design and run automated business processes (anyone can complete tasks assigned to them)" }
             };
 
             return Ok(permissions);
@@ -493,8 +497,8 @@ namespace ProjectTracker.API.Controllers
             if (!string.IsNullOrEmpty(dto.Name))
                 user.Name = dto.Name;
 
-            if (!string.IsNullOrEmpty(dto.Surname))
-                user.Surname = dto.Surname;
+            if (dto.Surname != null)
+                user.Surname = dto.Surname.Trim();
 
             if (!string.IsNullOrEmpty(dto.Role))
                 user.Role = dto.Role;
@@ -534,6 +538,8 @@ namespace ProjectTracker.API.Controllers
 
             if (dto.Birthday.HasValue)
                 user.Birthday = dto.Birthday.Value;
+            else if (dto.ClearBirthday == true)
+                user.Birthday = null;
 
             // Update company assignments
             if (dto.CompanyIds != null)
@@ -560,6 +566,8 @@ namespace ProjectTracker.API.Controllers
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+            RequireModuleAttribute.Invalidate(_cache, id); // permission changes apply on the next request
+            CompanyAccess.Invalidate(_cache, id);
 
             _logger.LogInformation("User updated: {UserId} ({Email})", id, user.Email);
 
@@ -937,10 +945,32 @@ namespace ProjectTracker.API.Controllers
                 new PermissionDto { Key = "messages.send", Name = "Send Messages", Category = "Messages" },
                 new PermissionDto { Key = "kb.manage", Name = "Manage Knowledge Base", Category = "Knowledge Base" },
                 new PermissionDto { Key = "support.manage", Name = "Manage Support Tickets", Category = "Support" },
+                new PermissionDto { Key = "stock.view", Name = "View stock", Category = "Stock" },
+                new PermissionDto { Key = "stock.manage", Name = "Manage stock (counts, receipts, adjustments)", Category = "Stock" },
+                new PermissionDto { Key = "stock.transfers", Name = "Stock transfers", Category = "Stock" },
+                new PermissionDto { Key = "stock_dispatch_approver", Name = "Approve dispatches (deduct stock)", Category = "Stock" },
+                new PermissionDto { Key = "logistics.view", Name = "View logistics", Category = "Logistics" },
+                new PermissionDto { Key = "logistics.manage", Name = "Manage logistics", Category = "Logistics" },
+                new PermissionDto { Key = "logistics.tripsheets", Name = "Trip sheets", Category = "Logistics" },
+                new PermissionDto { Key = "logistics.drivers", Name = "Drivers", Category = "Logistics" },
+                new PermissionDto { Key = "logistics.vehicles", Name = "Vehicles", Category = "Logistics" },
+                new PermissionDto { Key = "logistics.warehouses", Name = "Warehouses", Category = "Logistics" },
+                new PermissionDto { Key = "logistics.tracking", Name = "Live tracking", Category = "Logistics" },
+                new PermissionDto { Key = "logistics.import", Name = "Import tripsheets / invoices", Category = "Logistics" },
+                new PermissionDto { Key = "sales.view", Name = "View sales", Category = "Sales" },
+                new PermissionDto { Key = "sales.invoices", Name = "Sales invoices", Category = "Sales" },
+                new PermissionDto { Key = "sales.manage", Name = "Manage sales", Category = "Sales" },
+                new PermissionDto { Key = "hr.payroll_input", Name = "Payroll input", Category = "Human Resource" },
+                new PermissionDto { Key = "req.creditors_clerk", Name = "Requisitions: creditors clerk", Category = "Finance › Requisitions" },
+                new PermissionDto { Key = "req.accountant", Name = "Requisitions: accountant / line-manager approval", Category = "Finance › Requisitions" },
+                new PermissionDto { Key = "req.finance_approver", Name = "Requisitions: finance approver", Category = "Finance › Requisitions" },
+                new PermissionDto { Key = "req.leona_review", Name = "Requisitions: Leona review", Category = "Finance › Requisitions" },
+                new PermissionDto { Key = "req.duran_approval", Name = "Requisitions: Duran approval", Category = "Finance › Requisitions" },
+                new PermissionDto { Key = "req.nash_payment", Name = "Requisitions: Nash payment", Category = "Finance › Requisitions" },
                 new PermissionDto { Key = "cred.clerk", Name = "Prepare payment packs", Category = "Finance › Creditors" },
                 new PermissionDto { Key = "cred.accountant", Name = "Company accountant (approve packs)", Category = "Finance › Creditors" },
                 new PermissionDto { Key = "cred.director", Name = "Director (sign packs)", Category = "Finance › Creditors" },
-                new PermissionDto { Key = "cred.bank", Name = "Bank loading / mark paid", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.bank", Name = "Treasury: bank loading, mark paid, edit cashflow", Category = "Finance › Creditors" },
                 new PermissionDto { Key = "cred.readonly", Name = "View packs (read-only / audit)", Category = "Finance › Creditors" },
                 new PermissionDto { Key = "cred.admin", Name = "Creditors admin (companies & approvers)", Category = "Finance › Creditors" }
             };
@@ -1007,6 +1037,35 @@ namespace ProjectTracker.API.Controllers
         public bool IsPrimary { get; set; }
     }
 
+    /// <summary>
+    /// Permissions arrive either as a JSON array (["sales","ai"]) or, from older forms, as one comma-separated
+    /// string ("sales,ai"). Accept both so an edit never fails with a 400 because of the shape.
+    /// </summary>
+    public sealed class PermissionListConverter : System.Text.Json.Serialization.JsonConverter<List<string>?>
+    {
+        public override List<string>? Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
+        {
+            switch (reader.TokenType)
+            {
+                case System.Text.Json.JsonTokenType.Null: return null;
+                case System.Text.Json.JsonTokenType.String:
+                    return (reader.GetString() ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                case System.Text.Json.JsonTokenType.StartArray:
+                    var list = new List<string>();
+                    while (reader.Read() && reader.TokenType != System.Text.Json.JsonTokenType.EndArray)
+                        if (reader.TokenType == System.Text.Json.JsonTokenType.String) { var s = reader.GetString(); if (!string.IsNullOrWhiteSpace(s)) list.Add(s.Trim()); }
+                    return list;
+                default:
+                    throw new System.Text.Json.JsonException("permissions must be an array of keys or a comma-separated string");
+            }
+        }
+        public override void Write(System.Text.Json.Utf8JsonWriter writer, List<string>? value, System.Text.Json.JsonSerializerOptions options)
+        {
+            if (value == null) { writer.WriteNullValue(); return; }
+            writer.WriteStartArray(); foreach (var v in value) writer.WriteStringValue(v); writer.WriteEndArray();
+        }
+    }
+
     public class CreateUserDto
     {
         public string Name { get; set; } = string.Empty;
@@ -1015,6 +1074,7 @@ namespace ProjectTracker.API.Controllers
         public string Password { get; set; } = string.Empty;
         public string? Role { get; set; }
         public string? Title { get; set; }
+        [System.Text.Json.Serialization.JsonConverter(typeof(PermissionListConverter))]
         public List<string>? Permissions { get; set; }
         public int? DepartmentId { get; set; }
         public bool? IsActive { get; set; }
@@ -1031,12 +1091,15 @@ namespace ProjectTracker.API.Controllers
         public string? Email { get; set; }
         public string? Role { get; set; }
         public string? Title { get; set; }
+        [System.Text.Json.Serialization.JsonConverter(typeof(PermissionListConverter))]
         public List<string>? Permissions { get; set; }
         public int? DepartmentId { get; set; }
         public bool? IsActive { get; set; }
         public List<int>? CompanyIds { get; set; }
         public string? LinkedEmpId { get; set; }
         public DateTime? Birthday { get; set; }
+        /// <summary>True when the form sent an empty birthday so it should be cleared (null alone means "unchanged").</summary>
+        public bool? ClearBirthday { get; set; }
     }
 
     public class ResetPasswordDto

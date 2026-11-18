@@ -36,18 +36,39 @@ namespace ProjectTracker.API.Controllers
         // now a server-side role check on the authenticated JWT.
         // ============================================================================
 
+        /// <summary>
+        /// Which companies the caller may work with in Finance. Admins see all; others only the operating
+        /// companies assigned to them under Admin › Users. The UI greys out the rest.
+        /// </summary>
         [HttpGet("company-access")]
-        public ActionResult VerifyCompanyAccess()
+        public async Task<ActionResult> VerifyCompanyAccess(
+            [FromServices] Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
         {
-            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? "";
-            var allowed = role is "Admin" or "Super Admin" or "Finance" or "Manager";
-            if (!allowed)
+            var scope = await Authorization.CompanyAccess.ForUserAsync(_context, User, cache);
+            var paying = await _context.CreditorCompanies.AsNoTracking().Where(c => c.IsActive)
+                .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
+                .Select(c => new { c.Id, c.Code, c.Name, c.OperatingCompanyId }).ToListAsync();
+            var operating = await _context.OperatingCompanies.AsNoTracking().Where(o => o.IsActive)
+                .OrderBy(o => o.Name).Select(o => new { o.OperatingCompanyId, o.Code, o.Name }).ToListAsync();
+
+            var companies = paying.Select(c => new
             {
-                _logger.LogWarning("Finance company access denied for {Email} (role: {Role})",
-                    GetCurrentUserEmail(), role);
-                return Forbid();
-            }
-            return Ok(new { allowed = true, role });
+                c.Code, c.Name, c.OperatingCompanyId,
+                allowed = scope.All || scope.CreditorCodes.Contains(c.Code) || (c.OperatingCompanyId != null && scope.OperatingCompanyIds.Contains(c.OperatingCompanyId.Value))
+            }).ToList();
+            var operatingOut = operating.Select(o => new { o.OperatingCompanyId, o.Code, o.Name, allowed = scope.All || scope.OperatingCompanyIds.Contains(o.OperatingCompanyId) }).ToList();
+
+            if (!scope.All && companies.All(c => !c.allowed))
+                _logger.LogWarning("Finance: {Email} has no company assignments – nothing will be visible", GetCurrentUserEmail());
+
+            return Ok(new
+            {
+                allowed = scope.All || companies.Any(c => c.allowed),
+                all = scope.All,
+                companies,
+                operatingCompanies = operatingOut,
+                tokens = scope.All ? Array.Empty<string>() : scope.Tokens.ToArray()
+            });
         }
 
         // ============================================================================

@@ -806,12 +806,13 @@
       </div>
       <div class="company-grid">
         @for (company of companies; track company.name) {
-          <button class="company-card" (click)="selectCompany(company.name)">
+          <button class="company-card" [class.locked]="!companyAccess.canSee(company.name)" [disabled]="!companyAccess.canSee(company.name)"
+                  [matTooltip]="companyAccess.canSee(company.name) ? '' : companyAccess.lockReason(company.name)" (click)="selectCompany(company.name)">
             <div class="company-card-icon">
-              <mat-icon>{{ company.icon }}</mat-icon>
+              <mat-icon>{{ companyAccess.canSee(company.name) ? company.icon : 'lock' }}</mat-icon>
             </div>
             <span class="company-card-name">{{ company.name }}</span>
-            <mat-icon class="company-card-arrow">chevron_right</mat-icon>
+            <mat-icon class="company-card-arrow">{{ companyAccess.canSee(company.name) ? 'chevron_right' : 'lock' }}</mat-icon>
           </button>
         }
       </div>
