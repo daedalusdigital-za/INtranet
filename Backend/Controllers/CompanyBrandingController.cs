@@ -42,7 +42,8 @@ public class CompanyBrandingController : ControllerBase
         var path = Find(code, kind);
         if (path == null) return null;
         var fi = new FileInfo(path);
-        return new { fileName = $"{code}-{kind}{fi.Extension}", extension = fi.Extension.ToLowerInvariant(), size = fi.Length, updatedAt = fi.LastWriteTimeUtc, isImage = fi.Extension.ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".webp" };
+        return new { fileName = $"{code}-{kind}{fi.Extension}", extension = fi.Extension.ToLowerInvariant(), size = fi.Length, updatedAt = fi.LastWriteTimeUtc, isImage = fi.Extension.ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".webp",
+            url = $"/api/company-branding/{code}/{kind}?v={fi.LastWriteTimeUtc.Ticks}" };
     }
     /// <summary>The company's code exactly as stored, or null — also keeps anything odd out of the file path.</summary>
     private async Task<(string Code, string Name)?> CompanyAsync(string code)
@@ -58,15 +59,24 @@ public class CompanyBrandingController : ControllerBase
         return Ok(companies.Select(c => new { code = c.Code, name = c.Name, logo = Describe(c.Code, "logo"), logoRound = Describe(c.Code, "logo-round"), letterhead = Describe(c.Code, "letterhead") }));
     }
 
+    /// <summary>
+    /// Logos are public (they are shown in &lt;img&gt; tags, which cannot send the bearer token, and are
+    /// not confidential); letterheads still need a signed-in user. <c>?v=</c> is a cache-buster the UI
+    /// derives from the file's timestamp, so a replaced logo shows immediately.
+    /// </summary>
     [HttpGet("{code}/{kind}")]
+    [AllowAnonymous]
     public async Task<IActionResult> Download(string code, string kind)
     {
         if (!Allowed.ContainsKey(kind)) return NotFound();
+        kind = kind.ToLowerInvariant();
+        if (kind == "letterhead" && User.Identity?.IsAuthenticated != true) return Unauthorized();
         var co = await CompanyAsync(code); if (co == null) return NotFound();
-        var path = Find(co.Value.Code, kind.ToLowerInvariant()); if (path == null) return NotFound();
+        var path = Find(co.Value.Code, kind); if (path == null) return NotFound();
         if (!ContentTypes.TryGetContentType(path, out var type)) type = "application/octet-stream";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
-        return PhysicalFile(path, type, $"{co.Value.Code}-{kind.ToLowerInvariant()}{Path.GetExtension(path)}");
+        Response.Headers["Cache-Control"] = kind == "letterhead" ? "private, no-store" : "public, max-age=86400";
+        return PhysicalFile(path, type, kind == "letterhead" ? $"{co.Value.Code}-{kind}{Path.GetExtension(path)}" : null, enableRangeProcessing: false);
     }
 
     [HttpPost("{code}/{kind}")]

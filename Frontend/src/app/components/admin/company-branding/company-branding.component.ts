@@ -7,9 +7,10 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../ui/toast.service';
+import { BrandingService } from '../../../services/branding.service';
 
 type Kind = 'logo' | 'logo-round' | 'letterhead';
-interface BrandFile { fileName: string; extension: string; size: number; updatedAt: string; isImage: boolean; }
+interface BrandFile { fileName: string; extension: string; size: number; updatedAt: string; isImage: boolean; url: string; }
 interface BrandCompany { code: string; name: string; logo: BrandFile | null; logoRound: BrandFile | null; letterhead: BrandFile | null; }
 
 /**
@@ -21,7 +22,7 @@ interface BrandCompany { code: string; name: string; logo: BrandFile | null; log
   standalone: true,
   imports: [CommonModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule],
   template: `
-  <p class="lead">Upload each company's <b>logo</b> (PNG, JPG or WebP), a <b>round logo</b> (square PNG/WebP with a transparent background — used for avatars and small marks) and a <b>letterhead</b> (image, PDF or Word). Uploading again replaces the current file. Up to 15 MB each.</p>
+  <p class="lead">Upload each company's <b>logo</b> (PNG, JPG or WebP), a <b>round logo</b> (square PNG/WebP with a transparent background — used for avatars and small marks) and a <b>letterhead</b> (image, PDF or Word). Uploading again replaces the current file. Up to 15 MB each. Uploaded logos are used across the intranet (Finance, Sales, documents) in place of the built-in ones.</p>
   @if (loading()) { <div class="state"><mat-spinner diameter="28"></mat-spinner> Loading companies…</div> }
   @else if (!companies().length) { <div class="state">No paying companies yet — add them under Payment approvers.</div> }
   @else {
@@ -84,6 +85,7 @@ interface BrandCompany { code: string; name: string; logo: BrandFile | null; log
 export class CompanyBrandingComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
+  private branding = inject(BrandingService);
   private base = `${environment.apiUrl}/company-branding`;
 
   readonly kinds: { key: Kind; title: string; icon: string; accept: string }[] = [
@@ -133,7 +135,7 @@ export class CompanyBrandingComponent implements OnInit, OnDestroy {
     const fd = new FormData(); fd.append('file', file);
     this.busy.set(c.code + k);
     this.http.post<BrandFile>(`${this.base}/${c.code}/${k}`, fd).subscribe({
-      next: f => { this.busy.set(null); this.setFile(c.code, k, f); this.dropPreview(c.code, k); if (f.isImage) this.loadPreview(c.code, k); this.toast.done(`${c.name} ${this.label(k)} saved`); },
+      next: f => { this.busy.set(null); this.setFile(c.code, k, f); this.dropPreview(c.code, k); if (f.isImage) this.loadPreview(c.code, k); this.branding.load(); this.toast.done(`${c.name} ${this.label(k)} saved`); },
       error: e => { this.busy.set(null); this.toast.error(e?.error?.message || 'Upload failed.'); }
     });
   }
@@ -147,7 +149,7 @@ export class CompanyBrandingComponent implements OnInit, OnDestroy {
     if (!confirm(`Remove the ${this.label(k)} for ${c.name}?`)) return;
     this.busy.set(c.code + k);
     this.http.delete(`${this.base}/${c.code}/${k}`).subscribe({
-      next: () => { this.busy.set(null); this.setFile(c.code, k, null); this.dropPreview(c.code, k); this.toast.done(`${c.name} ${this.label(k)} removed`); },
+      next: () => { this.busy.set(null); this.setFile(c.code, k, null); this.dropPreview(c.code, k); this.branding.load(); this.toast.done(`${c.name} ${this.label(k)} removed`); },
       error: e => { this.busy.set(null); this.toast.error(e?.error?.message || "Couldn't remove the file."); }
     });
   }

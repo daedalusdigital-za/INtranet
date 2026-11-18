@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap, catchError, of } from 'rxjs';
 import { Router } from '@angular/router';
@@ -6,6 +6,7 @@ import { LoginRequest, LoginResponse, User } from '../models/models';
 import { environment } from '../../environments/environment';
 import { MODULE_KEYS, ModuleKey, MODULES, getPermissionModules } from '../core/modules.config';
 import { LoggingService } from './logging.service';
+import { BrandingService } from './branding.service';
 
 // Re-export module types for backward compatibility
 export const MODULE_PERMISSIONS = MODULE_KEYS;
@@ -51,6 +52,7 @@ function isJwtExpired(token: string): boolean {
 export class AuthService {
   private apiUrl = environment.apiUrl;
   private currentUserSubject = new BehaviorSubject<User | null>(null);
+  private branding = inject(BrandingService);
   public currentUser$ = this.currentUserSubject.asObservable();
 
   constructor(
@@ -207,6 +209,7 @@ export class AuthService {
           localStorage.setItem('token', response.token);
           localStorage.setItem('currentUser', JSON.stringify(response.user));
           this.currentUserSubject.next(response.user);
+          void this.branding.load(); // uploaded company logos (needs the token)
         })
       );
   }
