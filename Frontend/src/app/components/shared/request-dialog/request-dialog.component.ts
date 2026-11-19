@@ -17,7 +17,7 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormControl } 
 import { LeaveRequestDialogComponent } from '../leave-request-dialog/leave-request-dialog.component';
 import { PayslipRequestDialogComponent } from '../payslip-request-dialog/payslip-request-dialog.component';
 import { PrivateMeetingRequestDialogComponent } from '../private-meeting-request-dialog/private-meeting-request-dialog.component';
-import { FinanceMenuComponent } from '../finance-request-dialog/finance-request-dialog.component';
+import { FinanceMenuComponent, QuotationRequestDialogComponent } from '../finance-request-dialog/finance-request-dialog.component';
 import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -188,10 +188,10 @@ export class RequestDialogComponent {
       type: 'hr'
     },
     {
-      name: 'Stationery',
-      icon: 'edit_note',
+      name: 'Quotation',
+      icon: 'request_quote',
       tone: 'amber',
-      description: 'Request pens, paper, and office supplies',
+      description: 'Stationery, equipment, supplies — ask Finance to approve a purchase',
       type: 'stationery'
     }
   ];
@@ -229,8 +229,9 @@ export class RequestDialogComponent {
         });
         break;
       case 'stationery':
-        this.dialog.open(StationeryRequestDialogComponent, {
-          width: '580px',
+        // Stationery / equipment is now a quotation request, approved on Finance › Approvals.
+        this.dialog.open(QuotationRequestDialogComponent, {
+          width: '640px', maxHeight: '92vh',
           autoFocus: false,
           panelClass: 'no-scroll-dialog'
         });

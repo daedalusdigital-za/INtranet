@@ -39,6 +39,7 @@ import { FinanceAlertsComponent } from './finance-alerts.component';
 import { FinanceBookkeepingComponent } from './finance-bookkeeping.component';
 import { FinancePacksComponent } from './finance-packs.component';
 import { TenderService } from '../../services/tender.service';
+import { CreditorPacksService, BatchRow, CreditorMeta } from '../../services/creditor-packs.service';
 
 /**
  * Finance is split in two, like Company projects: Debtors (money owed to us) and Creditors (money we owe).
@@ -180,7 +181,7 @@ export class FinanceComponent implements OnInit {
   get commitmentsMonthly(): number { return this.ov?.commitmentsMonthly ?? 0; }
   get debtorsOverduePct(): number { const d = this.ov?.debtors; return d && d.total > 0 ? Math.round((d.overdue / d.total) * 100) : 0; }
   get attentionCount(): number {
-    return (this.ov?.invoices.paymentRequested ?? 0) + (this.ov?.requisitions.requested ?? 0) + (this.stationeryCounts.pending || 0)
+    return (this.ov?.invoices.paymentRequested ?? 0) + (this.ov?.requisitions.requested ?? 0) + (this.quoteCounts.pending || 0) + this.packsForMe.length
       + (this.ov?.remittances.new ?? 0) + (this.ov?.vault.expired ?? 0);
   }
   get staleCompanies(): number { return (this.ov?.debtors.byCompany ?? []).filter(c => c.stale).length; }
@@ -188,24 +189,24 @@ export class FinanceComponent implements OnInit {
     return (this.ov?.remittances.new ?? 0) + (this.ov?.pods.unlinked ?? 0) + ((this.ov?.debtors.d120 ?? 0) > 0 ? 1 : 0) + this.staleCompanies;
   }
   get creditorsAttentionCount(): number {
-    return (this.ov?.invoices.paymentRequested ?? 0) + (this.ov?.requisitions.requested ?? 0) + (this.stationeryCounts.pending || 0)
+    return (this.ov?.invoices.paymentRequested ?? 0) + (this.ov?.requisitions.requested ?? 0) + (this.quoteCounts.pending || 0) + this.packsForMe.length
       + (this.ov?.invoices.overdue ?? 0) + (this.ov?.vault.expired ?? 0);
   }
 
   // ── Approvals panels: minimise/expand (remembered per browser) ──
-  collapsed: Record<'payments' | 'requisitions' | 'stationery', boolean> = this.loadCollapsed();
-  togglePanel(p: 'payments' | 'requisitions' | 'stationery'): void {
+  collapsed: Record<'payments' | 'packs' | 'requisitions' | 'quotes', boolean> = this.loadCollapsed();
+  togglePanel(p: 'payments' | 'packs' | 'requisitions' | 'quotes'): void {
     this.collapsed[p] = !this.collapsed[p];
-    try { localStorage.setItem('finance.approvals.collapsed', JSON.stringify(this.collapsed)); } catch { /* ignore */ }
+    try { localStorage.setItem('finance.approvals.collapsed.v2', JSON.stringify(this.collapsed)); } catch { /* ignore */ }
   }
-  private loadCollapsed(): Record<'payments' | 'requisitions' | 'stationery', boolean> {
-    const d = { payments: false, requisitions: false, stationery: false };
-    try { return { ...d, ...JSON.parse(localStorage.getItem('finance.approvals.collapsed') || '{}') }; } catch { return d; }
+  private loadCollapsed(): Record<'payments' | 'packs' | 'requisitions' | 'quotes', boolean> {
+    const d = { payments: false, packs: false, requisitions: false, quotes: false };
+    try { return { ...d, ...JSON.parse(localStorage.getItem('finance.approvals.collapsed.v2') || '{}') }; } catch { return d; }
   }
   barPct(part: number, whole: number): number { return whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0; }
 
   get approvalsBadge(): number {
-    return (this.ov?.invoices.paymentRequested ?? 0) + (this.requisitionCounts.requested || 0) + (this.stationeryCounts.pending || 0);
+    return (this.ov?.invoices.paymentRequested ?? 0) + (this.requisitionCounts.requested || 0) + (this.quoteCounts.pending || 0) + this.packsForMe.length;
   }
 
   // Invoice management
@@ -245,12 +246,17 @@ export class FinanceComponent implements OnInit {
   showCompanyDialog = false;
   showRequestedPaymentsPanel = false;
 
-  // Stationery Requests
-  showStationeryPanel = false;
-  stationeryRequests: any[] = [];
-  stationeryLoading = false;
-  stationeryFilter = 'all';
-  stationeryCounts = { pending: 0, approved: 0, declined: 0, total: 0 };
+  // Quotation requests (replaced stationery requests)
+  quoteRequests: any[] = [];
+  quotesLoading = false;
+  quoteFilter = 'Pending';
+  quoteCounts = { pending: 0, approved: 0, declined: 0, total: 0 };
+
+  // Payment packs waiting for the signed-in accountant (prepared & checked by the clerks)
+  packMeta: CreditorMeta | null = null;
+  packsAwaiting: BatchRow[] = [];
+  packsLoading = false;
+  packBusyId: number | null = null;
 
   // Requisitions (finance payment workflow: Requested / Paid / Rejected)
   showRequisitionsPanel = false;
@@ -283,6 +289,7 @@ export class FinanceComponent implements OnInit {
     private dialog: MatDialog,
     private tenderService: TenderService,
     private sanitizer: DomSanitizer,
+    private packs: CreditorPacksService,
     public companyAccess: FinanceAccessService
   ) {}
 
@@ -292,10 +299,11 @@ export class FinanceComponent implements OnInit {
     this.companyAccess.load();
     this.loadDepartments();
     this.loadOverview();
-    this.loadStationeryCounts();
+    this.loadQuoteCounts();
     this.loadRequisitionCounts();
+    this.loadPacksAwaiting();
 
-    // Deep link: /finance?side=creditors&tab=approvals (&section=stationery|requisitions). A tab alone implies its side.
+    // Deep link: /finance?side=creditors&tab=approvals (&section=quotes|requisitions|packs). A tab alone implies its side.
     this.route.queryParamMap.subscribe(q => {
       const t = (q.get('tab') || '') as FinanceTab;
       const s = (q.get('side') || '') as FinanceSide;
@@ -315,7 +323,8 @@ export class FinanceComponent implements OnInit {
     if (tab === 'approvals' && !this.approvalsLoaded) {
       this.approvalsLoaded = true;
       this.loadRequisitions();
-      this.loadStationeryRequests();
+      this.loadQuoteRequests();
+      this.loadPacksAwaiting();
     }
     if (tab === 'invoices' && this.invoices.length === 0 && !this.loading) this.loadInvoices();
     this.router.navigate([], { relativeTo: this.route, queryParams: { side: this.side, tab: tab === 'overview' ? null : tab }, queryParamsHandling: 'merge', replaceUrl: true });
@@ -661,53 +670,96 @@ export class FinanceComponent implements OnInit {
 
   downloadRequestedPayment(payment: RequestedPayment): void { this.fetchFile(`${environment.apiUrl}/Books/${payment.id}/download`, false, payment.fileName); }
 
-  // ─── Stationery Requests ───
+  // ─── Quotation Requests ───
 
-  loadStationeryCounts(): void {
-    this.http.get<any>(`${environment.apiUrl}/stationery-requests/counts`).subscribe({
-      next: c => this.stationeryCounts = c,
+  loadQuoteCounts(): void {
+    this.http.get<any>(`${environment.apiUrl}/quotation-requests/counts`).subscribe({
+      next: c => this.quoteCounts = c,
       error: () => {}
     });
   }
 
-  toggleStationeryPanel(): void {
-    this.showStationeryPanel = !this.showStationeryPanel;
-    if (this.showStationeryPanel) this.loadStationeryRequests();
+  setQuoteFilter(f: string): void {
+    this.quoteFilter = f;
+    this.loadQuoteRequests();
   }
 
-  setStationeryFilter(f: string): void {
-    this.stationeryFilter = f;
-    this.loadStationeryRequests();
-  }
-
-  loadStationeryRequests(): void {
-    this.stationeryLoading = true;
-    const q = this.stationeryFilter !== 'all' ? `?status=${this.stationeryFilter}` : '';
-    this.http.get<any[]>(`${environment.apiUrl}/stationery-requests${q}`).subscribe({
-      next: r => { this.stationeryRequests = r; this.stationeryLoading = false; },
-      error: () => { this.stationeryLoading = false; }
+  loadQuoteRequests(): void {
+    this.quotesLoading = true;
+    const q = this.quoteFilter !== 'all' ? `?status=${this.quoteFilter}` : '';
+    this.http.get<any[]>(`${environment.apiUrl}/quotation-requests${q}`).subscribe({
+      next: r => { this.quoteRequests = r; this.quotesLoading = false; },
+      error: () => { this.quotesLoading = false; }
     });
   }
 
-  reviewStationery(req: any, status: 'Approved' | 'Declined'): void {
-    this.http.put(`${environment.apiUrl}/stationery-requests/${req.stationeryRequestId}/review`,
-      { status, notes: null }).subscribe({
-      next: () => {
-        req.status = status;
-        this.loadStationeryCounts();
-        this.toast.done(`Stationery request ${status.toLowerCase()}`);
+  reviewQuote(req: any, status: 'Approved' | 'Declined' | 'Pending'): void {
+    let notes: string | null = null;
+    if (status === 'Declined') { notes = window.prompt(`Why is "${req.subject}" declined? (the requester will see this)`); if (!notes) return; }
+    else if (status === 'Approved') { notes = window.prompt('Note for the requester / clerk (optional — e.g. which quote to take):', '') ; if (notes === null) return; }
+    this.http.put<any>(`${environment.apiUrl}/quotation-requests/${req.id}/review`, { status, notes: notes || null }).subscribe({
+      next: r => {
+        Object.assign(req, r);
+        this.loadQuoteCounts();
+        if (this.quoteFilter !== 'all' && this.quoteFilter !== status) this.quoteRequests = this.quoteRequests.filter(x => x.id !== req.id);
+        this.toast.done(status === 'Pending' ? 'Moved back to pending' : `Quotation request ${status.toLowerCase()}`);
       },
-      error: () => this.toast.error("Couldn't update the stationery request. Try again.")
+      error: e => this.toast.error(e?.error?.message || "Couldn't update the quotation request. Try again.")
     });
   }
+
+  quoteFileUrl(req: any, fileId: number): string { return `${environment.apiUrl}/quotation-requests/${req.id}/files/${fileId}`; }
+  openQuoteFile(req: any, fileId: number): void { this.fetchFile(this.quoteFileUrl(req, fileId), true); }
 
   spInitials(name: string): string {
     if (!name) return '?';
     return name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase();
   }
 
-  getQuoteUrl(id: number, n: number): string {
-    return `${environment.apiUrl}/stationery-requests/${id}/quote/${n}`;
+  // ─── Payment packs awaiting the accountant ───
+
+  /** Packs in "Awaiting accountant" that the signed-in user is responsible for (company accountant / back-up, or any accountant if the company has none set). */
+  get packsForMe(): BatchRow[] {
+    const m = this.packMeta; if (!m) return [];
+    if (!(m.me.accountant || m.me.isAdmin)) return [];
+    return this.packsAwaiting.filter(b => {
+      if (b.preparedByUserId === m.me.userId && !m.me.isAdmin) return false;
+      const c = m.companies.find(x => x.code === b.companyCode);
+      if (m.me.isAdmin) return true;
+      if (!c || (!c.accountantUserId && !c.backupApproverUserId)) return true;
+      return c.accountantUserId === m.me.userId || c.backupApproverUserId === m.me.userId;
+    });
+  }
+  /** Awaiting-accountant packs that belong to someone else's company (shown greyed, for context). */
+  get packsForOthers(): BatchRow[] { const mine = new Set(this.packsForMe.map(b => b.id)); return this.packsAwaiting.filter(b => !mine.has(b.id)); }
+  get packsForMeTotal(): number { return this.packsForMe.reduce((s, b) => s + (b.totalAmount || 0), 0); }
+  packCompanyName(code: string): string { return this.packMeta?.companies.find(c => c.code === code)?.name ?? code; }
+  packAccountantName(code: string): string { const c = this.packMeta?.companies.find(x => x.code === code); return c?.accountantName || c?.backupApproverName || 'any accountant'; }
+
+  loadPacksAwaiting(): void {
+    this.packsLoading = true;
+    const done = () => { this.packsLoading = false; };
+    if (!this.packMeta) this.packs.meta().subscribe({ next: m => { this.packMeta = m; }, error: () => {} });
+    this.packs.list({ status: 'AwaitingAccountant' }).subscribe({ next: r => { this.packsAwaiting = r; done(); }, error: done });
+  }
+
+  approvePack(b: BatchRow): void {
+    const note = window.prompt(`Approve ${b.batchNumber} (${this.packCompanyName(b.companyCode)} · R ${Math.round(b.totalAmount).toLocaleString('en-ZA')}) and send it to the director?\n\nOptional note:`, '');
+    if (note === null) return;
+    this.packBusyId = b.id;
+    this.packs.accountant(b.id, 'approve', note || undefined).subscribe({
+      next: () => { this.packBusyId = null; this.toast.done(`${b.batchNumber} approved — with the director for signature`); this.loadPacksAwaiting(); },
+      error: e => { this.packBusyId = null; this.toast.error(e?.error?.message || "Couldn't approve this pack."); }
+    });
+  }
+  sendBackPack(b: BatchRow): void {
+    const reason = window.prompt(`Send ${b.batchNumber} back to ${b.preparedByName || 'the clerk'}. What needs fixing?`);
+    if (!reason) return;
+    this.packBusyId = b.id;
+    this.packs.accountant(b.id, 'query', reason).subscribe({
+      next: () => { this.packBusyId = null; this.toast.done(`${b.batchNumber} sent back`); this.loadPacksAwaiting(); },
+      error: e => { this.packBusyId = null; this.toast.error(e?.error?.message || "Couldn't send this pack back."); }
+    });
   }
 
   // ── Requisitions (finance payment workflow) ──────────────────────────────

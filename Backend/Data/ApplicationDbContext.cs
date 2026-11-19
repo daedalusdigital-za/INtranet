@@ -292,6 +292,8 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Finance.Creditors.ApAgingSnapshot> ApAgingSnapshots { get; set; }
         public DbSet<Models.Finance.Creditors.ApAgingVendor> ApAgingVendors { get; set; }
         public DbSet<Models.Finance.Creditors.ApAgingDocument> ApAgingDocuments { get; set; }
+        public DbSet<QuotationRequest> QuotationRequests { get; set; }
+        public DbSet<QuotationRequestFile> QuotationRequestFiles { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -354,6 +356,16 @@ namespace ProjectTracker.API.Data
                 foreach (var p in new[] { "Current", "Days30", "Days60", "Days90", "Over90", "Overdue", "Total" })
                     e.Property<decimal>(p).HasPrecision(18, 2);
             });
+
+            // Quotation requests (Finance › Approvals)
+            modelBuilder.Entity<QuotationRequest>(e =>
+            {
+                e.HasIndex(x => x.Status);
+                e.HasIndex(x => x.UserId);
+                e.Property(x => x.EstimatedAmount).HasPrecision(18, 2);
+                e.HasMany(x => x.Files).WithOne(f => f.Request).HasForeignKey(f => f.QuotationRequestId).OnDelete(DeleteBehavior.Cascade);
+            });
+            modelBuilder.Entity<QuotationRequestFile>(e => e.HasIndex(x => x.QuotationRequestId));
 
             // Cortex
             modelBuilder.Entity<Models.Cortex.CortexNode>(e =>

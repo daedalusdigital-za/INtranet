@@ -166,7 +166,7 @@
       <div class="kpi-value">{{ ov.requisitions.requested }}</div>
       <div class="kpi-foot">
         <span>{{ ov.requisitions.requestedAmount | currency:'ZAR':'R':'1.0-0' }} petty cash / e-wallet / diesel</span>
-        <span class="kpi-sub">{{ stationeryCounts.pending }} stationery request{{ stationeryCounts.pending === 1 ? '' : 's' }} also pending</span>
+        <span class="kpi-sub">{{ quoteCounts.pending }} quotation request{{ quoteCounts.pending === 1 ? '' : 's' }} also pending</span>
       </div>
     </button>
 
@@ -198,9 +198,16 @@
           <div class="attn-text"><b>{{ ov.requisitions.requested }}</b> requisition{{ ov.requisitions.requested === 1 ? '' : 's' }} to pay<small>{{ ov.requisitions.requestedAmount | currency:'ZAR':'R':'1.0-0' }} petty cash / e-wallet / diesel</small></div>
           <mat-icon class="chev">chevron_right</mat-icon>
         </li>
-        <li class="attn" [class.zero]="stationeryCounts.pending === 0" (click)="goTab('approvals', 'stationery')">
-          <mat-icon>edit_note</mat-icon>
-          <div class="attn-text"><b>{{ stationeryCounts.pending }}</b> stationery request{{ stationeryCounts.pending === 1 ? '' : 's' }} to approve</div>
+        @if (packMeta?.me?.accountant || packMeta?.me?.isAdmin) {
+          <li class="attn" [class.zero]="packsForMe.length === 0" (click)="goTab('approvals', 'packs')">
+            <mat-icon>fact_check</mat-icon>
+            <div class="attn-text"><b>{{ packsForMe.length }}</b> payment pack{{ packsForMe.length === 1 ? '' : 's' }} waiting for your approval<small>{{ packsForMeTotal | currency:'ZAR':'R':'1.0-0' }} · prepared and checked by the clerks</small></div>
+            <mat-icon class="chev">chevron_right</mat-icon>
+          </li>
+        }
+        <li class="attn" [class.zero]="quoteCounts.pending === 0" (click)="goTab('approvals', 'quotes')">
+          <mat-icon>request_quote</mat-icon>
+          <div class="attn-text"><b>{{ quoteCounts.pending }}</b> quotation request{{ quoteCounts.pending === 1 ? '' : 's' }} to approve</div>
           <mat-icon class="chev">chevron_right</mat-icon>
         </li>
         <li class="attn" (click)="goTab('schedule')">
@@ -300,6 +307,54 @@
       }
     </div>
 
+    <!-- Payment packs awaiting the accountant -->
+    @if (packMeta?.me?.accountant || packMeta?.me?.isAdmin || packsAwaiting.length) {
+    <div class="stationery-panel animate-in" id="packs" [class.collapsed]="collapsed.packs">
+      <div class="sp-header">
+        <div class="sp-title"><mat-icon>fact_check</mat-icon><h3>Payment packs for your approval</h3></div>
+        <div class="sp-filters">
+          <span class="sp-filter sp-pending active">Yours ({{ packsForMe.length }})</span>
+          @if (packsForMeTotal) { <span class="sp-filter">{{ packsForMeTotal | currency:'ZAR':'R':'1.0-0' }}</span> }
+          @if (packsForOthers.length) { <span class="sp-filter" matTooltip="Awaiting another company's accountant">Other accountants ({{ packsForOthers.length }})</span> }
+        </div>
+        <button mat-icon-button [disabled]="packsLoading" matTooltip="Refresh" aria-label="Refresh" (click)="loadPacksAwaiting()"><mat-icon>refresh</mat-icon></button>
+        <button mat-icon-button class="sp-collapse" [attr.aria-label]="collapsed.packs ? 'Expand' : 'Minimise'" [matTooltip]="collapsed.packs ? 'Expand' : 'Minimise'" [attr.aria-expanded]="!collapsed.packs" (click)="togglePanel('packs')"><mat-icon>{{ collapsed.packs ? 'expand_more' : 'expand_less' }}</mat-icon></button>
+      </div>
+      @if (collapsed.packs) {
+      } @else if (packsLoading && !packsAwaiting.length) {
+        <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
+      } @else if (!packsForMe.length) {
+        <div class="sp-empty"><mat-icon>task_alt</mat-icon><p>No packs waiting for you{{ packsForOthers.length ? ' — ' + packsForOthers.length + ' with other accountants' : '' }}</p></div>
+      } @else {
+        <p class="sp-hint">Prepared and checked by the clerks, now needing the <b>company accountant</b>. Open the pack to see every payment and document; approve to send it to the director for signature, or send it back with what must be fixed.</p>
+        <div class="sp-list">
+          @for (b of packsForMe; track b.id) {
+            <div class="sp-item sp-pending">
+              <div class="sp-avatar">{{ b.companyCode }}</div>
+              <div class="sp-info">
+                <div class="sp-name">{{ b.batchNumber }} <span class="sp-dept">{{ packCompanyName(b.companyCode) }}</span></div>
+                <div class="sp-items-text"><mat-icon>payments</mat-icon> {{ b.items }} payment{{ b.items === 1 ? '' : 's' }} · {{ b.totalAmount | currency:'ZAR':'R':'1.2-2' }} · {{ b.documents }} document{{ b.documents === 1 ? '' : 's' }}</div>
+                <div class="sp-meta">
+                  <span class="sp-priority" [class]="'prio-' + (b.checksStatus === 'REVIEW' ? 'high' : 'normal')">Checks: {{ b.checksStatus || 'n/a' }}</span>
+                  <span class="sp-date">Prepared by {{ b.preparedByName || '—' }} · submitted {{ (b.submittedAt || b.updatedAt || b.createdAt) | date:'d MMM, HH:mm' }}</span>
+                  @if (b.openPrepayments) { <span class="sp-priority prio-urgent">{{ b.openPrepayments }} open prepayment{{ b.openPrepayments === 1 ? '' : 's' }}</span> }
+                </div>
+              </div>
+              <div class="sp-right">
+                <span class="sp-status spill-pending">{{ b.statusTitle }}</span>
+                <div class="sp-actions">
+                  <button aria-label="Open pack" mat-icon-button matTooltip="Open the pack" (click)="openPack(b.id)"><mat-icon>open_in_new</mat-icon></button>
+                  <button aria-label="Approve" mat-icon-button class="sp-approve" matTooltip="Approve → director" [disabled]="packBusyId === b.id" (click)="approvePack(b)"><mat-icon>check_circle</mat-icon></button>
+                  <button aria-label="Send back" mat-icon-button class="sp-decline" matTooltip="Send back to the clerk" [disabled]="packBusyId === b.id" (click)="sendBackPack(b)"><mat-icon>undo</mat-icon></button>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+    }
+
     <!-- Requisitions -->
     <div class="stationery-panel animate-in" id="requisitions" [class.collapsed]="collapsed.requisitions">
     <div class="sp-header">
@@ -356,54 +411,58 @@
     }
     </div>
 
-    <!-- Stationery -->
-    <div class="stationery-panel animate-in" id="stationery" [class.collapsed]="collapsed.stationery">
+    <!-- Quotation requests -->
+    <div class="stationery-panel animate-in" id="quotes" [class.collapsed]="collapsed.quotes">
     <div class="sp-header">
-      <div class="sp-title"><mat-icon>edit_note</mat-icon><h3>Stationery Requests</h3></div>
+      <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Quotation Requests</h3></div>
       <div class="sp-filters">
-        <button class="sp-filter" [class.active]="stationeryFilter==='all'" (click)="setStationeryFilter('all')">All ({{stationeryCounts.total}})</button>
-        <button class="sp-filter sp-pending" [class.active]="stationeryFilter==='Pending'" (click)="setStationeryFilter('Pending')">Pending ({{stationeryCounts.pending}})</button>
-        <button class="sp-filter sp-approved" [class.active]="stationeryFilter==='Approved'" (click)="setStationeryFilter('Approved')">Approved ({{stationeryCounts.approved}})</button>
-        <button class="sp-filter sp-declined" [class.active]="stationeryFilter==='Declined'" (click)="setStationeryFilter('Declined')">Declined ({{stationeryCounts.declined}})</button>
+        <button class="sp-filter sp-pending" [class.active]="quoteFilter==='Pending'" (click)="setQuoteFilter('Pending')">Pending ({{quoteCounts.pending}})</button>
+        <button class="sp-filter sp-approved" [class.active]="quoteFilter==='Approved'" (click)="setQuoteFilter('Approved')">Approved ({{quoteCounts.approved}})</button>
+        <button class="sp-filter sp-declined" [class.active]="quoteFilter==='Declined'" (click)="setQuoteFilter('Declined')">Declined ({{quoteCounts.declined}})</button>
+        <button class="sp-filter" [class.active]="quoteFilter==='all'" (click)="setQuoteFilter('all')">All ({{quoteCounts.total}})</button>
       </div>
-      <button mat-icon-button class="sp-collapse" [attr.aria-label]="collapsed.stationery ? 'Expand' : 'Minimise'" [matTooltip]="collapsed.stationery ? 'Expand' : 'Minimise'" [attr.aria-expanded]="!collapsed.stationery" (click)="togglePanel('stationery')"><mat-icon>{{ collapsed.stationery ? 'expand_more' : 'expand_less' }}</mat-icon></button>
+      <button mat-icon-button class="sp-collapse" [attr.aria-label]="collapsed.quotes ? 'Expand' : 'Minimise'" [matTooltip]="collapsed.quotes ? 'Expand' : 'Minimise'" [attr.aria-expanded]="!collapsed.quotes" (click)="togglePanel('quotes')"><mat-icon>{{ collapsed.quotes ? 'expand_more' : 'expand_less' }}</mat-icon></button>
     </div>
-    @if (collapsed.stationery) {
-    } @else if (stationeryLoading) {
+    @if (collapsed.quotes) {
+    } @else if (quotesLoading) {
       <div class="sp-loading"><mat-spinner diameter="32"></mat-spinner></div>
-    } @else if (stationeryRequests.length === 0) {
-      <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No stationery requests</p></div>
+    } @else if (quoteRequests.length === 0) {
+      <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No quotation requests{{ quoteFilter !== 'all' ? ' (' + quoteFilter.toLowerCase() + ')' : '' }}</p></div>
     } @else {
+      <p class="sp-hint">Staff ask for goods, equipment or services here (the <b>Quotation</b> option on New request), attaching any quotes they already have. Approve to let the clerks buy / add it to a pack; decline with a reason.</p>
       <div class="sp-list">
-        @for (req of stationeryRequests; track req.stationeryRequestId) {
+        @for (req of quoteRequests; track req.id) {
           <div class="sp-item" [class]="'sp-' + req.status.toLowerCase()">
             <div class="sp-avatar">{{spInitials(req.requestedBy)}}</div>
             <div class="sp-info">
-              <div class="sp-name">{{req.requestedBy}} <span class="sp-dept">{{req.department || ''}}</span></div>
-              <div class="sp-items-text"><mat-icon>inventory_2</mat-icon> {{req.items}}</div>
-              @if (req.purpose) { <div class="sp-purpose">{{req.purpose}}</div> }
+              <div class="sp-name">{{req.requestedBy}} <span class="sp-dept">{{req.department || ''}}</span>@if (req.company) { <span class="sp-dept">{{ req.company }}</span> }</div>
+              <div class="sp-items-text"><mat-icon>shopping_cart</mat-icon> {{req.subject}}@if (req.estimatedAmount) { · ~{{ req.estimatedAmount | currency:'ZAR':'R':'1.0-0' }} }</div>
+              @if (req.details) { <div class="sp-purpose">{{req.details}}</div> }
               <div class="sp-meta">
                 <span class="sp-priority" [class]="'prio-' + req.priority.toLowerCase()">{{req.priority}}</span>
-                <span class="sp-date">{{req.submittedAt | date:'d MMM yyyy'}}</span>
+                <span class="sp-date">{{req.submittedAt | date:'d MMM yyyy, HH:mm'}}</span>
+                @if (req.paperlessDocumentId) { <span class="sp-priority prio-normal" matTooltip="Also routed for sign-off in Paperless">Paperless</span> }
               </div>
-              @if (req.reviewNotes) { <div class="sp-rnote"><mat-icon>comment</mat-icon> {{req.reviewNotes}}</div> }
+              @if (req.reviewNotes) { <div class="sp-rnote"><mat-icon>comment</mat-icon> {{req.reviewNotes}}<small> — {{ req.reviewedBy }}</small></div> }
             </div>
             <div class="sp-right">
               <span class="sp-status" [class]="'spill-' + req.status.toLowerCase()">{{req.status}}</span>
-              @if (req.hasQuotes) {
+              @if (req.files?.length) {
                 <div class="sp-quote-links">
-                  @for (n of [1,2,3]; track n) {
-                    <a [attr.aria-label]="'View Quote ' + n" [href]="getQuoteUrl(req.stationeryRequestId, n)" target="_blank" mat-icon-button [matTooltip]="'View Quote ' + n" class="sp-quote-btn">
+                  @for (f of req.files; track f.id; let i = $index) {
+                    <button [attr.aria-label]="'View ' + f.fileName" mat-icon-button [matTooltip]="f.fileName" class="sp-quote-btn" (click)="openQuoteFile(req, f.id)">
                       <mat-icon>attach_file</mat-icon>
-                    </a>
+                    </button>
                   }
                 </div>
-              }
+              } @else { <small class="sp-noquote">No quotes attached</small> }
               @if (req.status === 'Pending') {
                 <div class="sp-actions">
-                  <button aria-label="Approve" mat-icon-button class="sp-approve" matTooltip="Approve" (click)="reviewStationery(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
-                  <button aria-label="Decline" mat-icon-button class="sp-decline" matTooltip="Decline" (click)="reviewStationery(req, 'Declined')"><mat-icon>cancel</mat-icon></button>
+                  <button aria-label="Approve" mat-icon-button class="sp-approve" matTooltip="Approve" (click)="reviewQuote(req, 'Approved')"><mat-icon>check_circle</mat-icon></button>
+                  <button aria-label="Decline" mat-icon-button class="sp-decline" matTooltip="Decline" (click)="reviewQuote(req, 'Declined')"><mat-icon>cancel</mat-icon></button>
                 </div>
+              } @else {
+                <button aria-label="Move back to pending" mat-icon-button matTooltip="Move back to pending" (click)="reviewQuote(req, 'Pending')"><mat-icon>undo</mat-icon></button>
               }
             </div>
           </div>

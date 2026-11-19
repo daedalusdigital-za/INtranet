@@ -188,13 +188,19 @@ public class CreditorPacksController : ControllerBase
         return Ok(c);
     }
 
-    /// <summary>Lightweight user list for the approver pickers.</summary>
+    /// <summary>Lightweight user list for the approver pickers. <c>effective</c> = ticked permissions ∪ what the job role implies.</summary>
     [HttpGet("users")]
     public async Task<IActionResult> Users([FromQuery] string? search)
     {
         var q = _db.Users.AsNoTracking().Where(u => u.IsActive);
         if (!string.IsNullOrWhiteSpace(search)) q = q.Where(u => u.Name.Contains(search) || u.Surname.Contains(search) || u.Email.Contains(search));
-        return Ok(await q.OrderBy(u => u.Name).Take(200).Select(u => new { Id = u.UserId, name = u.Name + " " + u.Surname, u.Email, u.Role, u.Permissions }).ToListAsync());
+        var rows = await q.OrderBy(u => u.Name).Take(300).Select(u => new { u.UserId, u.Name, u.Surname, u.Email, u.Role, u.Title, u.Permissions, Department = u.Department != null ? u.Department.Name : null }).ToListAsync();
+        return Ok(rows.Select(u =>
+        {
+            var eff = FinanceAuthority.Parse(u.Permissions);
+            foreach (var p in FinanceAuthority.ImpliedBy(u.Role, u.Department)) eff.Add(p);
+            return new { Id = u.UserId, name = (u.Name + " " + u.Surname).Trim(), u.Email, u.Role, u.Title, u.Department, u.Permissions, effective = eff.OrderBy(x => x).ToArray() };
+        }));
     }
 
     /// <summary>Grant/revoke a creditors role on a user (admin only). Keeps other permissions intact.</summary>

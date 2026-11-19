@@ -69,7 +69,7 @@ export class CreditorPacksService {
   private base = `${environment.apiUrl}/finance/creditors`;
 
   meta(): Observable<CreditorMeta> { return this.http.get<CreditorMeta>(`${this.base}/meta`); }
-  users(search?: string): Observable<{ id: number; name: string; email: string; role: string; permissions?: string }[]> {
+  users(search?: string): Observable<{ id: number; name: string; email: string; role: string; title?: string | null; department?: string | null; permissions?: string; effective?: string[] }[]> {
     return this.http.get<any[]>(`${this.base}/users`, { params: search ? { search } : {} });
   }
   toggleRole(userId: number, role: string, grant: boolean) { return this.http.post<{ id: number; permissions: string }>(`${this.base}/roles`, { userId, role, grant }); }

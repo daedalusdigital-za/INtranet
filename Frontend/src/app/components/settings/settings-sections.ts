@@ -14,7 +14,7 @@ export interface SettingsSection extends SubPage<SettingsSlug> {
 /** The sections, grouped so any one is a click away in the side navigation. */
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { group: 'People & access', slug: 'users', label: 'Users', icon: 'people', hint: 'Accounts, roles, departments and module permissions' },
-  { group: 'People & access', slug: 'payment-approvers', label: 'Payment approvers', icon: 'approval', hint: 'Paying companies and who prepares, checks, signs and pays supplier payments' },
+  { group: 'People & access', slug: 'payment-approvers', label: 'Payment approvers', icon: 'approval', hint: 'Which accountant approves and which director signs each paying company\'s payment packs' },
   { group: 'People & access', slug: 'cashflow', label: 'Cashflow', icon: 'savings', hint: 'Bank balances, debit orders and recurring payments — normally kept by Treasury' },
   { group: 'People & access', slug: 'clock-in', label: 'Clock-in employees', icon: 'fingerprint', hint: 'Staff on the clock-in devices' },
   { group: 'People & access', slug: 'email-accounts', label: 'Email accounts', icon: 'email', hint: 'Company mailboxes and their passwords' },

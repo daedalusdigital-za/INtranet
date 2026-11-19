@@ -10,6 +10,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatChipsModule } from '@angular/material/chips';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import { PaperlessService, PaperlessUser, RecipientRole } from '../../../services/paperless.service';
 import { ToastService } from '../../../ui/toast.service';
 
@@ -550,6 +553,30 @@ export class PaymentRequestDialogComponent {
                     placeholder="Describe the goods/services, quantity, deadline…"></textarea>
         </mat-form-field>
 
+        <div class="row3">
+          <mat-form-field appearance="outline">
+            <mat-label>Priority</mat-label>
+            <mat-select [(ngModel)]="priority">
+              <mat-option value="Low">Low</mat-option>
+              <mat-option value="Normal">Normal</mat-option>
+              <mat-option value="High">High</mat-option>
+              <mat-option value="Urgent">Urgent</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Paying company (optional)</mat-label>
+            <mat-select [(ngModel)]="company">
+              <mat-option [value]="''">Not sure</mat-option>
+              @for (c of companies; track c) { <mat-option [value]="c">{{ c }}</mat-option> }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Estimated value (R, optional)</mat-label>
+            <input matInput type="number" min="0" step="0.01" [(ngModel)]="estimatedAmount">
+          </mat-form-field>
+        </div>
+        <p class="route-note"><mat-icon inline>info</mat-icon> Goes to <b>Finance › Approvals › Quotation requests</b>. You'll see the outcome under your requests.</p>
+
         <div class="uploaded">
           <div class="up-head">
             <span>Attach quotes already received (optional)</span>
@@ -650,6 +677,8 @@ export class PaymentRequestDialogComponent {
     .close-btn { color: var(--color-text-2); position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
     .dialog-content { padding: 22px 2px 8px; }
     .full-width { width: 100%; }
+    .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } @media (max-width: 640px) { .row3 { grid-template-columns: 1fr; } }
+    .route-note { display: flex; align-items: center; gap: 6px; margin: -4px 0 12px; font-size: var(--text-xs); color: var(--color-text-2); }
     .uploaded { margin-bottom: 14px; }
     .up-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 10px; color: var(--color-text-2); font-size: var(--text-md); }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -678,9 +707,14 @@ export class QuotationRequestDialogComponent {
   private dialogRef = inject(MatDialogRef<QuotationRequestDialogComponent>);
   private toast = inject(ToastService);
   private paperlessSvc = inject(PaperlessService);
+  private http = inject(HttpClient);
 
   subject = '';
   details = '';
+  priority: 'Low' | 'Normal' | 'High' | 'Urgent' = 'Normal';
+  company = '';
+  estimatedAmount: number | null = null;
+  readonly companies = ['Promed Technologies', 'Access Medical', 'Promed Pharmatech', 'Sebenzani Trading', 'SA Wellness', 'KOG', 'Rocket Freight'];
   files: File[] = [];
 
   paperless = false;
@@ -736,26 +770,37 @@ export class QuotationRequestDialogComponent {
     this.submitting = true;
 
     try {
-      if (this.files.length > 0) {
+      let paperlessId: string | null = null;
+      if (this.files.length > 0 && this.paperless) {
         const primary = await this.paperlessSvc.uploadPrimary(this.files[0], 'ThreeQuote' as any);
         if (primary) {
+          paperlessId = primary.id;
           for (let i = 1; i < this.files.length; i++) {
             await this.paperlessSvc.addStackItem(primary.id, 'Invoice', this.files[i], 'ThreeQuote' as any);
           }
-          if (this.paperless) {
-            const signers = this.picked.filter(p => p.role === 'signer');
-            const approvers = this.picked.filter(p => p.role === 'approver');
-            for (const s of signers) this.paperlessSvc.addRecipient(primary.id, s.name, 'signer', s.email);
-            for (const a of approvers) this.paperlessSvc.addRecipient(primary.id, a.name, 'approver', a.email);
-            this.paperlessSvc.sendForSignature(primary.id);
-          }
+          const signers = this.picked.filter(p => p.role === 'signer');
+          const approvers = this.picked.filter(p => p.role === 'approver');
+          for (const s of signers) this.paperlessSvc.addRecipient(primary.id, s.name, 'signer', s.email);
+          for (const a of approvers) this.paperlessSvc.addRecipient(primary.id, a.name, 'approver', a.email);
+          this.paperlessSvc.sendForSignature(primary.id);
         }
       }
 
+      // The request itself always goes to Finance › Approvals, with the quotes attached.
+      const fd = new FormData();
+      fd.append('subject', this.subject.trim());
+      if (this.details) fd.append('details', this.details.trim());
+      fd.append('priority', this.priority);
+      if (this.company) fd.append('company', this.company);
+      if (this.estimatedAmount != null && this.estimatedAmount !== ('' as any)) fd.append('estimatedAmount', String(this.estimatedAmount));
+      if (paperlessId && /^\d+$/.test(String(paperlessId))) fd.append('paperlessDocumentId', String(paperlessId));
+      for (const f of this.files) fd.append('files', f, f.name);
+      await firstValueFrom(this.http.post(`${environment.apiUrl}/quotation-requests`, fd));
+
       this.toast.done(
-        this.paperless
-          ? `Quotation workflow created and sent to ${this.picked.length} recipient(s).`
-          : 'Quotation request submitted.');
+        this.paperless && paperlessId
+          ? `Quotation request sent to Finance and routed to ${this.picked.length} recipient(s) for sign-off.`
+          : 'Quotation request sent to Finance for approval.');
       this.submitting = false;
       this.dialogRef.close(true);
     } catch {
