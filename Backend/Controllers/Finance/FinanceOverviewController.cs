@@ -557,6 +557,8 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpPost("debtors/collect")]
         public async Task<IActionResult> RecordCollection([FromBody] DebtorCollectionDto dto)
         {
+            if (!await FinanceAuthority.HasAsync(_context, User, FinanceAuthority.DebtorClerk, "cred.accountant", "cred.bank", "cred.director"))
+                return StatusCode(403, new { message = "You need the Debtor Clerk (or a finance approver) role to record collections." });
             if (dto == null || string.IsNullOrWhiteSpace(dto.CustomerNumber))
                 return BadRequest(new { error = "CustomerNumber is required." });
             if (dto.Amount <= 0)
@@ -624,6 +626,8 @@ namespace ProjectTracker.API.Controllers.Finance
         [HttpDelete("debtors/payments/{id}")]
         public async Task<IActionResult> DeleteCollection(int id)
         {
+            if (!await FinanceAuthority.HasAsync(_context, User, FinanceAuthority.DebtorClerk, "cred.accountant", "cred.bank", "cred.director"))
+                return StatusCode(403, new { message = "You need the Debtor Clerk (or a finance approver) role to remove collections." });
             var p = await _context.DebtorPayments.FindAsync(id);
             if (p == null) return NotFound();
             _context.DebtorPayments.Remove(p);

@@ -916,7 +916,7 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("roles")]
         public ActionResult<IEnumerable<string>> GetRoles()
         {
-            var roles = new[] { "Super Admin", "Admin", "Director", "Treasurer", "Manager", "Accountant", "Clerk", "Employee", "HR", "IT Support" };
+            var roles = new[] { "Super Admin", "Admin", "Director", "Treasurer", "Manager", "Accountant", "Creditor Clerk", "Debtor Clerk", "Clerk", "Employee", "HR", "IT Support" };
             return Ok(roles);
         }
 
@@ -967,8 +967,9 @@ namespace ProjectTracker.API.Controllers
                 new PermissionDto { Key = "req.leona_review", Name = "Requisitions: Leona review", Category = "Finance › Requisitions" },
                 new PermissionDto { Key = "req.duran_approval", Name = "Requisitions: Duran approval", Category = "Finance › Requisitions" },
                 new PermissionDto { Key = "req.nash_payment", Name = "Requisitions: Nash payment", Category = "Finance › Requisitions" },
-                new PermissionDto { Key = "cred.clerk", Name = "Prepare payment packs", Category = "Finance › Creditors" },
-                new PermissionDto { Key = "cred.accountant", Name = "Company accountant (approve packs)", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.clerk", Name = "Creditor clerk: prepare & submit payment packs, create batches", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.accountant", Name = "Accountant: approve payment packs (also implied for Accountants & Finance managers)", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "debt.clerk", Name = "Debtor clerk: upload debtors aging, credit notes, record collections", Category = "Finance › Debtors" },
                 new PermissionDto { Key = "cred.director", Name = "Director: sign & release payment packs, executive view", Category = "Executive" },
                 new PermissionDto { Key = "cred.bank", Name = "Treasurer: bank loading, mark paid, edit cashflow", Category = "Executive" },
                 new PermissionDto { Key = "exec.dashboard", Name = "Executive dashboard (all companies summary)", Category = "Executive" },

@@ -653,7 +653,7 @@ export class UserManagementComponent implements OnInit {
     const r = (u.role || '').toLowerCase();
     if (r === 'director' || r === 'treasurer') return 'executive';
     if (r === 'manager') return 'managers';
-    if (r === 'accountant' || r === 'clerk') return 'finance';
+    if (r === 'accountant' || r.endsWith('clerk')) return 'finance';
     if (r === 'admin' || r === 'super admin') return 'admins';
     return 'staff';
   }
@@ -668,7 +668,8 @@ export class UserManagementComponent implements OnInit {
       case 'treasurer': return 'account_balance';
       case 'manager': return 'supervisor_account';
       case 'accountant': return 'calculate';
-      case 'clerk': return 'receipt_long';
+      case 'clerk': case 'creditor clerk': return 'receipt_long';
+      case 'debtor clerk': return 'request_quote';
       case 'hr': return 'diversity_3';
       case 'it support': return 'support_agent';
       default: return 'person';

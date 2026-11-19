@@ -64,18 +64,8 @@ public class CreditorPacksController : ControllerBase
     private bool IsSystemAdmin => UserRole is "Admin" or "Super Admin";
 
     private HashSet<string>? _perms;
-    private async Task<HashSet<string>> PermsAsync()
-    {
-        if (_perms != null) return _perms;
-        var raw = await _db.Users.AsNoTracking().Where(u => u.UserId == UserId).Select(u => u.Permissions).FirstOrDefaultAsync() ?? "";
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (raw.TrimStart().StartsWith("["))
-        {
-            try { foreach (var s in JsonSerializer.Deserialize<string[]>(raw) ?? Array.Empty<string>()) set.Add(s); } catch { }
-        }
-        else foreach (var s in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) set.Add(s);
-        return _perms = set;
-    }
+    // Explicit ticks ∪ what the job role implies (Director → sign, Treasurer → bank, Accountant / Finance Manager → approve, Creditor Clerk → prepare)
+    private async Task<HashSet<string>> PermsAsync() => _perms ??= await FinanceAuthority.EffectiveAsync(_db, User);
 
     private async Task<bool> HasAsync(string role) => IsSystemAdmin || (await PermsAsync()).Contains(role) || (await PermsAsync()).Contains("*");
 
@@ -1219,7 +1209,7 @@ public class CreditorPacksController : ControllerBase
     {
         var isDirector = await HasAsync(CreditorWorkflow.RoleDirector);
         var isExecRole = UserRole is "Manager" or "Director" or "Treasurer";
-        var hasExecPerm = await HasAsync("exec.dashboard") || await HasAsync(CreditorWorkflow.RoleBank);
+        var hasExecPerm = await HasAsync(FinanceAuthority.ExecDashboard) || await HasAsync(CreditorWorkflow.RoleBank);
         if (!isDirector && !IsSystemAdmin && !isExecRole && !hasExecPerm) return Forbid();
 
         var now = DateTime.UtcNow;

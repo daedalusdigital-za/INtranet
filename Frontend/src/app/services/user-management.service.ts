@@ -323,6 +323,8 @@ export class UserManagementService {
       'Manager': '#2196f3',
       'Accountant': '#0e7490',
       'Clerk': '#b45309',
+      'Creditor Clerk': '#b45309',
+      'Debtor Clerk': '#0369a1',
       'HR': '#4caf50',
       'IT Support': '#ff9800',
       'Employee': '#607d8b'
@@ -340,6 +342,8 @@ export class UserManagementService {
       'Manager': 'supervisor_account',
       'Accountant': 'calculate',
       'Clerk': 'receipt_long',
+      'Creditor Clerk': 'receipt_long',
+      'Debtor Clerk': 'request_quote',
       'HR': 'people',
       'IT Support': 'support_agent',
       'Employee': 'person'

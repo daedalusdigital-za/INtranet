@@ -4522,7 +4522,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     const r = (u.role || '').toLowerCase();
     if (r === 'director' || r === 'treasurer') return 'executive';
     if (r === 'manager') return 'managers';
-    if (r === 'accountant' || r === 'clerk') return 'finance';
+    if (r === 'accountant' || r.endsWith('clerk')) return 'finance';
     if (r === 'admin' || r === 'super admin') return 'admins';
     return 'staff';
   }
