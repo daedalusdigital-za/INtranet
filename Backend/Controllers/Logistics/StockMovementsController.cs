@@ -951,6 +951,185 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
         }
 
+        // ═══ POST: reconcile tripsheet line quantities against the Sales invoice lines ═══
+        // Older tripsheet imports parsed "20 x 50" as 2050. For every stop line whose invoice
+        // number matches a Sales-imported invoice exactly, rebuild the lines from the Sales
+        // quantities (one line per product, linked by stock code) and, where stock was already
+        // deducted for that load, post the difference so the ledger matches the corrected lines.
+        // Dry-run by default — pass apply=true to write.
+        [HttpPost("reconcile-tripsheet-quantities")]
+        public async Task<ActionResult<object>> ReconcileTripsheetQuantities([FromBody] ReconcileTripsheetDto dto)
+        {
+            if (!await IsDispatchApproverAsync())
+                return StatusCode(403, new { message = "You need the Stock Dispatch Approver permission to reconcile quantities" });
+
+            static string Norm(string? s) => (s ?? "").Trim().ToUpperInvariant().Replace(" ", "").Replace("-", "");
+
+            // Sales-imported invoice lines (authoritative quantities)
+            var salesRows = await _context.ImportedInvoices.AsNoTracking()
+                .Where(i => i.ProductCode != "IMP" && i.Quantity > 0
+                         && (i.SourceSystem == null || !i.SourceSystem.StartsWith("TripSheet")))
+                .Select(i => new { i.Id, i.TransactionNumber, i.ProductCode, i.ProductDescription, i.Quantity })
+                .ToListAsync();
+            var salesByInv = salesRows.GroupBy(r => Norm(r.TransactionNumber))
+                .ToDictionary(g => g.Key, g => g.OrderBy(r => r.Id).ToList());
+
+            // Tripsheet lines, grouped per load + invoice (single-invoice lines only)
+            var tripQuery = _context.StopCommodities.Include(sc => sc.LoadStop)
+                .Where(sc => sc.InvoiceNumber != null && sc.InvoiceNumber != "" && !sc.InvoiceNumber.Contains(","));
+            if (dto.LoadId is int onlyLoad) tripQuery = tripQuery.Where(sc => sc.LoadStop.LoadId == onlyLoad);
+            var tripLines = await tripQuery.ToListAsync();
+            var tripGroups = tripLines.GroupBy(sc => (sc.LoadStop.LoadId, Inv: Norm(sc.InvoiceNumber))).ToList();
+
+            var codes = salesRows.Select(r => r.ProductCode).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
+            var commodityByCode = (await _context.Commodities.AsNoTracking()
+                    .Where(c => c.Code != null && codes.Contains(c.Code))
+                    .Select(c => new { c.Code, c.Id }).ToListAsync())
+                .GroupBy(c => c.Code!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+            var fixes = new List<object>();
+            var touchedLoads = new HashSet<int>();
+            var removedIds = new HashSet<int>();
+            var added = new List<(int LoadId, StopCommodity Line)>();
+            int linesRemoved = 0, linesAdded = 0, unresolvedLines = 0;
+
+            foreach (var g in tripGroups)
+            {
+                if (!salesByInv.TryGetValue(g.Key.Inv, out var sales)) continue;
+                var old = g.OrderBy(x => x.Id).ToList();
+                var oldSum = old.Sum(x => x.Quantity);
+                var salesSum = sales.Sum(s => s.Quantity);
+                if (oldSum == salesSum) continue;
+
+                var first = old[0];
+                var valueTotal = old.Sum(x => x.TotalPrice ?? 0);
+                var unitTotal = old.Sum(x => x.UnitPrice ?? 0);
+                var newLines = new List<StopCommodity>();
+                for (int i = 0; i < sales.Count; i++)
+                {
+                    var s = sales[i];
+                    int? commodityId = null;
+                    if (!string.IsNullOrWhiteSpace(s.ProductCode) && commodityByCode.TryGetValue(s.ProductCode, out var cid)) commodityId = cid;
+                    else if (old.Count == 1 && sales.Count == 1) commodityId = first.CommodityId;
+                    else
+                    {
+                        var byName = old.FirstOrDefault(o => o.CommodityId != null &&
+                            string.Equals(NormalizeName(o.Comment), NormalizeName(s.ProductDescription), StringComparison.OrdinalIgnoreCase));
+                        commodityId = byName?.CommodityId;
+                    }
+                    if (commodityId == null) unresolvedLines++;
+
+                    newLines.Add(new StopCommodity
+                    {
+                        LoadStopId = first.LoadStopId,
+                        CommodityId = commodityId,
+                        ProductCode = string.IsNullOrWhiteSpace(s.ProductCode) ? first.ProductCode : s.ProductCode,
+                        Quantity = s.Quantity,
+                        UnitOfMeasure = first.UnitOfMeasure,
+                        UnitPrice = i == 0 ? unitTotal : 0,
+                        TotalPrice = i == 0 ? valueTotal : 0,
+                        InvoiceNumber = first.InvoiceNumber,
+                        OrderNumber = first.OrderNumber,
+                        Brand = first.Brand,
+                        Comment = string.IsNullOrWhiteSpace(s.ProductDescription) ? first.Comment : s.ProductDescription,
+                        CreatedAt = first.CreatedAt
+                    });
+                }
+
+                fixes.Add(new
+                {
+                    loadId = g.Key.LoadId, invoice = first.InvoiceNumber,
+                    tripQty = oldSum, salesQty = salesSum, oldLines = old.Count, newLines = newLines.Count,
+                    unlinked = newLines.Count(n => n.CommodityId == null)
+                });
+                touchedLoads.Add(g.Key.LoadId);
+                linesRemoved += old.Count; linesAdded += newLines.Count;
+                foreach (var o in old) removedIds.Add(o.Id);
+                foreach (var n in newLines) added.Add((g.Key.LoadId, n));
+
+                if (dto.Apply)
+                {
+                    _context.StopCommodities.RemoveRange(old);
+                    _context.StopCommodities.AddRange(newLines);
+                }
+            }
+
+            // Stock ledger: where a touched load already had stock deducted, bring the deduction in line
+            var stockFixes = new List<object>();
+            decimal unitsReturned = 0, unitsDeducted = 0;
+            if (touchedLoads.Count > 0)
+            {
+                var loadIds = touchedLoads.ToList();
+                var live = await _context.WarehouseStockMovements
+                    .Where(m => m.LoadId != null && loadIds.Contains(m.LoadId.Value) && m.MovementType == "Dispatch"
+                             && m.Status == "Approved" && m.ReversedByMovementId == null)
+                    .Select(m => new { LoadId = m.LoadId!.Value, m.WarehouseId, m.CommodityId, m.Quantity })
+                    .ToListAsync();
+                var loadNos = await _context.Loads.AsNoTracking().Where(l => loadIds.Contains(l.Id))
+                    .ToDictionaryAsync(l => l.Id, l => l.LoadNumber);
+
+                // planned per (load, commodity) AFTER the fix: surviving single-invoice lines + new lines + other lines
+                var planned = new Dictionary<(int, int), decimal>();
+                void AddPlanned(int loadId, int? commodityId, decimal qty)
+                {
+                    if (commodityId == null || qty <= 0 || !touchedLoads.Contains(loadId)) return;
+                    var k = (loadId, commodityId.Value);
+                    planned[k] = (planned.TryGetValue(k, out var p) ? p : 0) + qty;
+                }
+                foreach (var t in tripLines.Where(t => !removedIds.Contains(t.Id))) AddPlanned(t.LoadStop.LoadId, t.CommodityId, t.Quantity);
+                foreach (var a in added) AddPlanned(a.LoadId, a.Line.CommodityId, a.Line.Quantity);
+                var otherLines = await _context.StopCommodities.AsNoTracking()
+                    .Where(sc => loadIds.Contains(sc.LoadStop.LoadId) && sc.CommodityId != null && sc.Quantity > 0
+                              && (sc.InvoiceNumber == null || sc.InvoiceNumber == "" || sc.InvoiceNumber.Contains(",")))
+                    .Select(sc => new { sc.LoadStop.LoadId, CommodityId = sc.CommodityId!.Value, sc.Quantity })
+                    .ToListAsync();
+                foreach (var o in otherLines) AddPlanned(o.LoadId, o.CommodityId, o.Quantity);
+
+                foreach (var grp in live.GroupBy(m => (m.LoadId, m.WarehouseId, m.CommodityId)))
+                {
+                    var deducted = grp.Sum(m => Math.Abs(m.Quantity));
+                    // Zero-quantity "Dispatch" rows are stock-count baseline markers ("already reflected in
+                    // the count"), not real deductions — the corrected lines are already in that count too.
+                    if (deducted == 0) continue;
+                    var want = planned.TryGetValue((grp.Key.LoadId, grp.Key.CommodityId), out var p) ? p : 0;
+                    var delta = deducted - want; // positive = we took too much, give it back
+                    if (delta == 0) continue;
+                    var loadNo = loadNos.TryGetValue(grp.Key.LoadId, out var ln) ? ln : grp.Key.LoadId.ToString();
+                    stockFixes.Add(new { loadId = grp.Key.LoadId, loadNumber = loadNo, commodityId = grp.Key.CommodityId, deducted, corrected = want, adjustment = delta });
+                    if (delta > 0) unitsReturned += delta; else unitsDeducted -= delta;
+                    if (dto.Apply)
+                    {
+                        // Always an Adjustment (either sign): the live Dispatch row per load+item is unique,
+                        // so a second Dispatch for the same pair would violate UX_WarehouseStockMovements_LiveDispatch.
+                        await ApplyMovementAsync(grp.Key.WarehouseId, grp.Key.CommodityId,
+                            "Adjustment", delta, grp.Key.LoadId, null,
+                            $"QTY-FIX {loadNo}",
+                            $"Tripsheet quantity corrected from Sales invoice lines ({deducted:0.##} → {want:0.##}); '20 x 50' had been read as 2050");
+                    }
+                }
+            }
+
+            if (dto.Apply)
+            {
+                await _context.SaveChangesAsync();
+                _logger.LogWarning("Tripsheet quantity reconciliation applied by {User}: {Groups} invoice group(s), {Loads} load(s), {Stock} stock correction(s)",
+                    CurrentUserName, fixes.Count, touchedLoads.Count, stockFixes.Count);
+            }
+
+            return Ok(new
+            {
+                applied = dto.Apply,
+                invoiceGroupsFixed = fixes.Count,
+                loadsTouched = touchedLoads.Count,
+                linesRemoved, linesAdded, unresolvedLines,
+                stockCorrections = stockFixes.Count,
+                stockUnitsReturned = unitsReturned,
+                stockUnitsDeducted = unitsDeducted,
+                fixes, stockFixes
+            });
+        }
+
         // ───────────────────────── Ask Welly: inter-company (same warehouse) transfer suggestions ─────────────────────────
 
         /// <summary>
@@ -1181,6 +1360,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             }
             return new { commodityId, movementType, quantity = signedQty, balanceAfter = movement.BalanceAfter };
         }
+    }
+
+    public class ReconcileTripsheetDto
+    {
+        public bool Apply { get; set; }
+        public int? LoadId { get; set; }
     }
 
     public class ForceDeductDto
