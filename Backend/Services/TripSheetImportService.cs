@@ -263,6 +263,49 @@ public class TripSheetImportService
                         try
                         {
                             // Create StopCommodity rows for the PDF.
+                            //
+                            // PREFERRED SOURCE: the Sales-imported invoice lines. They carry the
+                            // real per-product quantity and stock code, so Stock deducts the
+                            // right amount. The Excel cell is only a fallback — sheets often
+                            // write "20 x 50" (packs x units) which is NOT a quantity of 2050.
+                            var salesLines = await GetSalesLinesForInvoiceAsync(confirmation.InvoiceNumber);
+                            if (salesLines.Count > 0)
+                            {
+                                var codes = salesLines.Select(l => l.ProductCode).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
+                                var commodityByCode = codes.Count == 0
+                                    ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                                    : (await _context.Commodities
+                                        .Where(c => c.Code != null && codes.Contains(c.Code))
+                                        .Select(c => new { c.Code, c.Id })
+                                        .ToListAsync())
+                                      .GroupBy(c => c.Code!, StringComparer.OrdinalIgnoreCase)
+                                      .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+                                for (int li = 0; li < salesLines.Count; li++)
+                                {
+                                    var sl = salesLines[li];
+                                    _context.StopCommodities.Add(new StopCommodity
+                                    {
+                                        LoadStopId = stop.Id,
+                                        CommodityId = !string.IsNullOrWhiteSpace(sl.ProductCode) && commodityByCode.TryGetValue(sl.ProductCode, out var cid) ? cid : null,
+                                        ProductCode = string.IsNullOrWhiteSpace(sl.ProductCode) ? null : sl.ProductCode,
+                                        Quantity = sl.Quantity,
+                                        UnitPrice = li == 0 ? (confirmation.SalesAmount ?? 0) : 0,
+                                        TotalPrice = li == 0 ? (confirmation.SalesAmount ?? 0) : 0,
+                                        InvoiceNumber = confirmation.InvoiceNumber,
+                                        OrderNumber = confirmation.CustomerNumber,
+                                        Brand = confirmation.Brand,
+                                        Comment = string.IsNullOrWhiteSpace(sl.ProductDescription) ? (confirmation.ProductDescription ?? "Imported Item") : sl.ProductDescription,
+                                        CreatedAt = DateTime.UtcNow
+                                    });
+                                }
+                                _logger.LogInformation("Invoice {Inv}: built {Count} stop line(s) from Sales quantities instead of trip-sheet text",
+                                    confirmation.InvoiceNumber, salesLines.Count);
+                                totalValue += confirmation.SalesAmount ?? 0;
+                            }
+                            else
+                            {
+                            // FALLBACK (no Sales record yet):
                             // A merged invoice row carries its products as
                             // "NAME xQty; NAME xQty; ..." — split them back into ONE
                             // commodity per product so trip sheets show each item
@@ -308,6 +351,7 @@ public class TripSheetImportService
                             }
 
                             totalValue += confirmation.SalesAmount ?? 0;
+                            }
 
                             // Create or update ImportedInvoice
                             var invoice = new ImportedInvoice
@@ -582,6 +626,63 @@ public class TripSheetImportService
     /// One invoice can span several Excel rows (one per product line item); we sum the
     /// quantities and amounts and combine the product descriptions so the preview and
     /// commit both treat it as one delivery/invoice — no duplicates.
+    /// <summary>
+    /// Parse a trip-sheet quantity cell safely. Sheets often write pack x unit, e.g.
+    /// "20 x 50", "20x50ml", "20 X 50's". The OLD parser stripped every non-digit and
+    /// turned that into 2050 — which then tried to deduct 2050 from stock. We now take
+    /// the pack COUNT (the number before the x) and ignore the unit size. Also tolerates
+    /// "x20" (leading x), thousands separators ("1,000") and trailing text ("20 boxes").
+    /// </summary>
+    internal static decimal? ParseTripsheetQuantity(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var s = raw.Trim().Replace('×', 'x').Replace('*', 'x').Replace('X', 'x');
+
+        // "20 x 50" / "20x50ml" → 20
+        var m = Regex.Match(s, @"^\s*(\d{1,3}(?:[ ,]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*x\s*\d");
+        if (m.Success) return ParseNum(m.Groups[1].Value);
+
+        // "x20" → 20
+        m = Regex.Match(s, @"^\s*x\s*(\d+(?:\.\d+)?)");
+        if (m.Success) return ParseNum(m.Groups[1].Value);
+
+        // First number in the cell ("20 boxes", "1,000", "20.5")
+        m = Regex.Match(s, @"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)");
+        return m.Success ? ParseNum(m.Groups[1].Value) : null;
+
+        static decimal? ParseNum(string v)
+        {
+            v = v.Replace(",", "").Replace(" ", "");
+            return decimal.TryParse(v, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+        }
+    }
+
+    /// <summary>
+    /// Look up the Sales-imported line items for an invoice number. These carry the
+    /// real per-product quantities from the sales report and are authoritative over
+    /// whatever was typed on the trip-sheet Excel.
+    /// </summary>
+    private async Task<List<ImportedInvoice>> GetSalesLinesForInvoiceAsync(string? invoiceNumber)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber)) return new List<ImportedInvoice>();
+        var normalized = NormalizeInvoiceNumber(invoiceNumber);
+        var trimmed = invoiceNumber.Trim();
+
+        var candidates = await _context.ImportedInvoices
+            .Where(i => i.ProductCode != "IMP"
+                     && (i.SourceSystem == null || !i.SourceSystem.StartsWith("TripSheet"))
+                     && i.Quantity > 0
+                     && (i.TransactionNumber == trimmed || i.TransactionNumber.Contains(normalized)))
+            .ToListAsync();
+
+        return candidates
+            .Where(i => NormalizeInvoiceNumber(i.TransactionNumber) == normalized)
+            .OrderBy(i => i.Id)
+            .ToList();
+    }
+
+    /// <summary>
     /// Rows without an invoice number are left as-is (can't be safely merged).
     /// </summary>
     private List<TripSheetImportRowDto> MergeRowsByInvoice(List<TripSheetImportRowDto> rows)
@@ -748,13 +849,8 @@ public class TripSheetImportService
                     SourceRowIndex = rowIndex
                 };
 
-                // Parse quantity
-                var qtyStr = dto.QuantityText;
-                if (!string.IsNullOrEmpty(qtyStr) && decimal.TryParse(
-                    Regex.Replace(qtyStr, @"[^\d.]", ""), out decimal qty))
-                {
-                    dto.Quantity = qty;
-                }
+                // Parse quantity ("20 x 50" = 20 packs, never 2050)
+                dto.Quantity = ParseTripsheetQuantity(dto.QuantityText);
 
                 // Parse sales amount
                 var amountStr = GetCellValue(row, columnMap, "SalesAmount");
@@ -780,8 +876,7 @@ public class TripSheetImportService
                 var continuationQtyStr = GetCellValue(row, columnMap, "Quantity");
                 var continuationAmountStr = GetCellValue(row, columnMap, "SalesAmount");
 
-                bool hasQuantity = !string.IsNullOrEmpty(continuationQtyStr) && 
-                    decimal.TryParse(Regex.Replace(continuationQtyStr, @"[^\d.]", ""), out _);
+                bool hasQuantity = ParseTripsheetQuantity(continuationQtyStr).HasValue;
                 bool hasAmount = !string.IsNullOrEmpty(continuationAmountStr) && 
                     decimal.TryParse(Regex.Replace(continuationAmountStr, @"[^\d.,\-]", ""), out _);
 
@@ -809,12 +904,8 @@ public class TripSheetImportService
                         SourceRowIndex = rowIndex
                     };
 
-                    // Parse quantity
-                    if (!string.IsNullOrEmpty(continuationQtyStr) && decimal.TryParse(
-                        Regex.Replace(continuationQtyStr, @"[^\d.]", ""), out decimal contQty))
-                    {
-                        continuationDto.Quantity = contQty;
-                    }
+                    // Parse quantity ("20 x 50" = 20 packs, never 2050)
+                    continuationDto.Quantity = ParseTripsheetQuantity(continuationQtyStr);
 
                     // Parse sales amount
                     if (!string.IsNullOrEmpty(continuationAmountStr))
