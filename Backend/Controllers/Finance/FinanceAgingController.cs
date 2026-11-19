@@ -64,6 +64,7 @@ namespace ProjectTracker.API.Controllers.Finance
 
         /// <summary>DELETE api/finance/aging/snapshots/{id}</summary>
         [HttpDelete("snapshots/{id:int}")]
+        [Authorize(Roles = "Super Admin,Admin")]
         public async Task<IActionResult> Delete(int id)
         {
             var s = await _db.ArAgingSnapshots.FindAsync(id);
@@ -81,6 +82,7 @@ namespace ProjectTracker.API.Controllers.Finance
         /// "Customer Transaction" sheet. asOfDate defaults to the latest document date in the file.
         /// </summary>
         [HttpPost("import")]
+        [Authorize(Roles = "Super Admin,Admin")]
         [RequestSizeLimit(60_000_000)]
         public async Task<IActionResult> Import([FromForm] IFormFile file, [FromForm] string company, [FromForm] DateTime? asOfDate, [FromForm] string? notes)
         {

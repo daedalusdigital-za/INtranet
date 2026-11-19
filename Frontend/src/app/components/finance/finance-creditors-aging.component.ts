@@ -8,6 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
+import { AuthService } from '../../services/auth.service';
 import { CreditorPacksService, ApAgingIndex, ApAgingSnapshot, ApAging, ApAgingVendor, ApAgingHistoryRow, ApAgingDocument, ApAgingVendorDocs } from '../../services/creditor-packs.service';
 
 type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' | 'overdue';
@@ -42,19 +43,10 @@ type DocSortKey = 'vendorName' | 'docNumber' | 'docDate' | 'dueDate' | 'daysOver
       }
     </div>
 
-    <!-- Upload -->
-    <div class="ag-upload-row">
-      <label class="ag-upload" [class.busy]="uploading()">
-        <mat-icon>upload_file</mat-icon> {{ uploading() ? 'Reading report…' : 'Upload aged payables (.xls / .xlsx)' }}
-        <input type="file" accept=".xls,.xlsx" multiple hidden (change)="upload($event)" [disabled]="uploading()">
-      </label>
-      <small class="muted">Sage 300 › A/P › Aged Payables by Due Date — <b>Detail by Document Date</b> (one row per invoice; preferred) or <b>Summary</b>. The company is read from the report header; several files can be dropped at once. Re-uploading the same day replaces that snapshot.</small>
-    </div>
-
     @if (!company()) {
       <div class="ag-state"><mat-icon>account_balance_wallet</mat-icon><h3>Pick a company</h3><p>Choose a paying company above to see who it owes and how old the balances are.</p></div>
     } @else if (!snapshot() && !loading()) {
-      <div class="ag-state"><mat-icon>upload_file</mat-icon><h3>No aging for {{ companyName() }} yet</h3><p>Export the aged payables from Sage and upload it above.</p></div>
+      <div class="ag-state"><mat-icon>upload_file</mat-icon><h3>No aging for {{ companyName() }} yet</h3><p>Aged payables are uploaded by an administrator under Settings › Data Import › Creditors aging.</p></div>
     } @else {
       <div class="ag-snap">
         <mat-icon>event</mat-icon>
@@ -63,7 +55,7 @@ type DocSortKey = 'vendorName' | 'docNumber' | 'docDate' | 'dueDate' | 'daysOver
         </select>
         @if (snapshot(); as s) {
           @if (s.hasDetail) { <span class="badge detail" matTooltip="Uploaded from the Detail report — every open invoice, credit note and prepayment is available per vendor"><mat-icon>receipt_long</mat-icon> Detailed · {{ s.documentCount | number }} documents</span> }
-          @else { <span class="badge" matTooltip="Summary report — vendor totals only. Upload the Detail by Document Date export to see the invoices behind each balance">Summary only</span> }
+          @else { <span class="badge" matTooltip="Summary report — vendor totals only. Ask an administrator to upload the Detail by Document Date export (Settings › Data Import) to see the invoices behind each balance">Summary only</span> }
           <small class="muted">Uploaded {{ s.uploadedAt | date:'dd MMM, HH:mm' }}{{ s.uploadedByName ? ' by ' + s.uploadedByName : '' }} · {{ s.sourceFileName }}{{ s.reportCompany ? ' · "' + s.reportCompany + '"' : '' }}</small>
         }
         <span class="sp"></span>
@@ -74,8 +66,10 @@ type DocSortKey = 'vendorName' | 'docNumber' | 'docDate' | 'dueDate' | 'daysOver
           </div>
         }
         <button mat-stroked-button (click)="exportXlsx()"><mat-icon>download</mat-icon> Excel</button>
-        <button mat-icon-button [matMenuTriggerFor]="more"><mat-icon>more_vert</mat-icon></button>
-        <mat-menu #more="matMenu"><button mat-menu-item (click)="deleteSnapshot()"><mat-icon>delete</mat-icon> Delete this snapshot</button></mat-menu>
+        @if (isAdmin) {
+          <button mat-icon-button [matMenuTriggerFor]="more"><mat-icon>more_vert</mat-icon></button>
+          <mat-menu #more="matMenu"><button mat-menu-item (click)="deleteSnapshot()"><mat-icon>delete</mat-icon> Delete this snapshot</button></mat-menu>
+        }
       </div>
 
       @if (loading()) { <div class="ag-state"><mat-spinner diameter="36"></mat-spinner><p>Building the aging…</p></div> }
@@ -242,8 +236,6 @@ type DocSortKey = 'vendorName' | 'docNumber' | 'docDate' | 'dueDate' | 'daysOver
       .n { font-weight: 600; font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .v { font-size: var(--text-md); font-weight: 700; line-height: 1.1; font-family: var(--font-mono); } .d { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; }
       .stale { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 999px; background: var(--color-ok-soft); color: var(--color-ok); &.amber { background: var(--color-warn-soft); color: #b45309; } &.red { background: var(--color-danger-soft, #fee2e2); color: var(--color-danger); } }
       &:hover { box-shadow: var(--shadow-sm); } &.active { border-color: var(--color-primary); background: var(--color-primary-soft); } &.dim { opacity: .6; } &.empty .mark { filter: grayscale(1); opacity: .7; } }
-    .ag-upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); small { flex: 1; min-width: 260px; font-size: var(--text-xs); } }
-    .ag-upload { display: inline-flex; align-items: center; gap: 8px; padding: 0 var(--space-4); height: 40px; cursor: pointer; font-weight: 600; color: #fff; background: var(--color-primary); border-radius: var(--radius-control); white-space: nowrap; &:hover { filter: brightness(1.05); } &.busy { opacity: .7; cursor: progress; } }
     .ag-snap { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); mat-icon { color: var(--color-text-3); }
       select { height: 36px; padding: 0 var(--space-3); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font: inherit; } }
     .ag-buckets { display: grid; grid-template-columns: 1.4fr repeat(5, 1fr); gap: var(--space-2); margin-bottom: var(--space-3); @media (max-width: 1100px) { grid-template-columns: repeat(3, 1fr); } }
@@ -294,6 +286,8 @@ type DocSortKey = 'vendorName' | 'docNumber' | 'docDate' | 'dueDate' | 'daysOver
 export class FinanceCreditorsAgingComponent implements OnInit {
   private api = inject(CreditorPacksService);
   private toast = inject(ToastService);
+  private auth = inject(AuthService);
+  get isAdmin(): boolean { return this.auth.isAdmin; }
   /** Start a payment for this vendor in a new pack for the company. */
   @Output() pay = new EventEmitter<{ company: string; vendor: ApAgingVendor }>();
   @Output() openBatch = new EventEmitter<number>();
@@ -303,7 +297,6 @@ export class FinanceCreditorsAgingComponent implements OnInit {
   snapshotId = signal<number | null>(null);
   aging = signal<ApAging | null>(null);
   loading = signal(false);
-  uploading = signal(false);
   search = signal('');
   bucket = signal<number | null>(null);
   onlyOverdue = signal(false);
@@ -417,28 +410,6 @@ export class FinanceCreditorsAgingComponent implements OnInit {
     }
   }
 
-  upload(ev: Event): void {
-    const input = ev.target as HTMLInputElement; const files = Array.from(input.files ?? []); input.value = '';
-    if (!files.length) return;
-    this.uploading.set(true);
-    const results: string[] = []; const errors: string[] = [];
-    const next = (i: number) => {
-      if (i >= files.length) {
-        this.uploading.set(false);
-        if (results.length) this.toast.done(`Imported ${results.join(', ')}`);
-        if (errors.length) this.toast.error(errors.join(' · '));
-        this.loadIndex(true);
-        if (!this.company() && results.length) { /* leave the user to pick */ }
-        return;
-      }
-      // If a company is selected and only one file is given, assume it's for that company unless the header says otherwise.
-      this.api.apAgingImport(files[i], undefined).subscribe({
-        next: s => { results.push(`${s.companyCode} (${s.activeVendorCount} vendors${s.hasDetail ? ', ' + s.documentCount + ' docs' : ''})`); if (!this.company()) this.company.set(s.companyCode); next(i + 1); },
-        error: e => { errors.push(`${files[i].name}: ${e?.error?.message || 'failed'}`); next(i + 1); }
-      });
-    };
-    next(0);
-  }
   exportXlsx(): void {
     const id = this.snapshotId(); if (!id) return;
     this.api.apAgingExport(id, !this.showZero()).subscribe({ next: b => { const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = `Creditors-aging-${this.company()}-${this.snapshot()?.asOfDate.slice(0, 10)}.xlsx`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }, error: () => this.toast.error("Couldn't export.") });

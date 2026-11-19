@@ -63,6 +63,7 @@ public class CreditorAgingController : ControllerBase
     }
 
     [HttpDelete("snapshots/{id:int}")]
+    [Authorize(Roles = "Super Admin,Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         var s = await _db.ApAgingSnapshots.FindAsync(id); if (s == null) return NotFound();
@@ -212,6 +213,7 @@ public class CreditorAgingController : ControllerBase
     /// Replaces an existing snapshot for the same company + as-at date.
     /// </summary>
     [HttpPost("import")]
+    [Authorize(Roles = "Super Admin,Admin")]
     [RequestSizeLimit(60_000_000)]
     public async Task<IActionResult> Import([FromForm] IFormFile file, [FromForm] string? company, [FromForm] string? notes, [FromForm] bool replace = true)
     {

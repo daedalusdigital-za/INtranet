@@ -11,6 +11,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
+import { AuthService } from '../../services/auth.service';
 import { companyLogo } from '../../core/company-logos';
 import { InvoiceDetailDialogComponent } from './invoice-detail-dialog.component';
 
@@ -57,8 +58,10 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
         @if (snapshot(); as s) { <small class="muted">Uploaded {{ s.uploadedAt | date:'dd MMM, HH:mm' }}{{ s.uploadedBy ? ' by ' + s.uploadedBy : '' }} · {{ s.sourceFileName }}</small> }
         <span class="ag-spacer"></span>
         <button mat-stroked-button (click)="exportCsv()" matTooltip="Download the customer aging as a spreadsheet"><mat-icon>download</mat-icon> Export</button>
-        <button mat-icon-button [matMenuTriggerFor]="more" aria-label="More"><mat-icon>more_vert</mat-icon></button>
-        <mat-menu #more="matMenu"><button mat-menu-item (click)="deleteSnapshot()"><mat-icon>delete</mat-icon> Delete this snapshot</button></mat-menu>
+        @if (isAdmin) {
+          <button mat-icon-button [matMenuTriggerFor]="more" aria-label="More"><mat-icon>more_vert</mat-icon></button>
+          <mat-menu #more="matMenu"><button mat-menu-item (click)="deleteSnapshot()"><mat-icon>delete</mat-icon> Delete this snapshot</button></mat-menu>
+        }
       </div>
 
       @if (loading()) {
@@ -286,6 +289,8 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
 export class FinanceAgingComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
+  private auth = inject(AuthService);
+  get isAdmin(): boolean { return this.auth.isAdmin; }
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private dialog = inject(MatDialog);

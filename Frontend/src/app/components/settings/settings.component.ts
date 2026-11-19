@@ -1060,8 +1060,37 @@ import * as XLSX from 'xlsx';
                       <small>Sage age analysis per company (Finance › Aging)</small>
                     </div>
                   </div>
+                  <div class="import-type-card"
+                       [class.selected]="selectedImportType === 'ap-aging'"
+                       (click)="selectImportType('ap-aging')">
+                    <mat-icon>account_balance_wallet</mat-icon>
+                    <div class="type-info">
+                      <span>Creditors aging</span>
+                      <small>Sage aged payables per company (Finance › Creditors › Aging)</small>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              @if (selectedImportType === 'ap-aging') {
+                <div class="company-selector">
+                  <h4><mat-icon>account_balance_wallet</mat-icon> Aged payables (creditors)</h4>
+                  <p class="import-note"><mat-icon inline>info</mat-icon> Sage 300 › A/P › <b>Aged Payables by Due Date</b> — export <b>Detail by Document Date</b> (one row per invoice; preferred) or <b>Summary</b> to Excel. The paying company is read from the report header, so several files can be chosen at once. Re-uploading for the same as-at date replaces that snapshot.</p>
+                  <div class="file-drop-zone" style="margin-top:12px">
+                    <mat-icon>upload_file</mat-icon>
+                    <p>{{ apAgingUploading ? 'Importing…' : 'Choose the Sage aged payables report(s) (.xls / .xlsx)' }}</p>
+                    <button mat-raised-button color="primary" [disabled]="apAgingUploading" (click)="apAgingFile.click()">
+                      <mat-icon>folder_open</mat-icon> Browse Files
+                    </button>
+                    <input #apAgingFile type="file" hidden accept=".xls,.xlsx" multiple (change)="uploadApAging($event)">
+                  </div>
+                  @if (apAgingResults.length) {
+                    <ul class="import-note" style="margin-top:12px">
+                      @for (r of apAgingResults; track r) { <li>{{ r }}</li> }
+                    </ul>
+                  }
+                </div>
+              }
 
               @if (selectedImportType === 'aging') {
                 <div class="company-selector">
@@ -1087,7 +1116,7 @@ import * as XLSX from 'xlsx';
                 </div>
               }
 
-              @if (selectedImportType && selectedImportType !== 'aging') {
+              @if (selectedImportType && selectedImportType !== 'aging' && selectedImportType !== 'ap-aging') {
                 <!-- File Upload Area -->
                 <div class="file-upload-section">
                   <h4>Upload File</h4>
@@ -5016,6 +5045,31 @@ export class SettingsComponent implements OnInit, OnDestroy {
       next: r => { this.agingUploading = false; this.toast.done(`Imported ${r.documentCount} documents for ${r.customerCount} customers · R ${Number(r.totalBalance).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`); },
       error: e => { this.agingUploading = false; this.toast.error(e?.error?.message || "Couldn't import this workbook."); }
     });
+  }
+
+  apAgingUploading = false;
+  apAgingResults: string[] = [];
+  uploadApAging(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []); input.value = '';
+    if (!files.length) return;
+    if (!window.confirm(`Import ${files.length === 1 ? `"${files[0].name}"` : files.length + ' files'} as creditors aged payables? The company is read from each report header.`)) return;
+    this.apAgingUploading = true; this.apAgingResults = [];
+    const next = (i: number) => {
+      if (i >= files.length) {
+        this.apAgingUploading = false;
+        const ok = this.apAgingResults.filter(r => !r.startsWith('✗')).length;
+        if (ok) this.toast.done(`Imported ${ok} of ${files.length} aged payables report${files.length === 1 ? '' : 's'}`);
+        if (ok < files.length) this.toast.error(`${files.length - ok} file${files.length - ok === 1 ? '' : 's'} failed — see the list below.`);
+        return;
+      }
+      const fd = new FormData(); fd.append('file', files[i]);
+      this.http.post<any>(`${this.apiUrl}/finance/creditors/aging/import`, fd).subscribe({
+        next: s => { this.apAgingResults = [...this.apAgingResults, `✓ ${files[i].name} → ${s.companyCode} · ${s.activeVendorCount} vendors${s.hasDetail ? ' · ' + s.documentCount + ' documents' : ' (summary)'} · R ${Number(s.totalPayables).toLocaleString('en-ZA', { minimumFractionDigits: 2 })} · as at ${new Date(s.asOfDate).toLocaleDateString('en-ZA')}`]; next(i + 1); },
+        error: e => { this.apAgingResults = [...this.apAgingResults, `✗ ${files[i].name}: ${e?.error?.message || 'import failed'}`]; next(i + 1); }
+      });
+    };
+    next(0);
   }
 
   selectImportType(type: string): void {
