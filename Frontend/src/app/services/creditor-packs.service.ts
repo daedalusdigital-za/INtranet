@@ -103,6 +103,8 @@ export class CreditorPacksService {
   apAgingDelete(id: number) { return this.http.delete(`${this.base}/aging/snapshots/${id}`); }
   apAgingExport(id: number, activeOnly = true) { return this.http.get(`${this.base}/aging/snapshots/${id}/export`, { params: { activeOnly }, responseType: 'blob' }); }
   apAgingHistory(company: string, code: string) { return this.http.get<ApAgingHistoryRow[]>(`${this.base}/aging/vendors/${company}/${encodeURIComponent(code)}/history`); }
+  apAgingVendorDocs(snapshotId: number, code: string) { return this.http.get<ApAgingVendorDocs>(`${this.base}/aging/snapshots/${snapshotId}/vendors/${encodeURIComponent(code)}/documents`); }
+  apAgingDocuments(snapshotId: number, f: { bucket?: number | null; type?: string; search?: string } = {}) { let p = new HttpParams(); if (f.bucket !== undefined && f.bucket !== null) p = p.set('bucket', f.bucket); if (f.type) p = p.set('type', f.type); if (f.search) p = p.set('search', f.search); return this.http.get<ApAgingDocument[]>(`${this.base}/aging/snapshots/${snapshotId}/documents`, { params: p }); }
   apAgingImport(file: File, company?: string, notes?: string) { const fd = new FormData(); fd.append('file', file); if (company) fd.append('company', company); if (notes) fd.append('notes', notes); return this.http.post<ApAgingSnapshot>(`${this.base}/aging/import`, fd); }
   readInvoice(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead>(`${this.base}/read-invoice`, fd); }
   readRecon(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead & { invoiceNumbers?: string[] }>(`${this.base}/read-recon`, fd); }
@@ -189,9 +191,11 @@ export interface PaymentSchedule {
   totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number };
   batches: ScheduleBatch[];
 }
-export interface ApAgingSnapshot { id: number; companyCode: string; reportCompany?: string | null; asOfDate: string; sourceFileName?: string | null; uploadedAt: string; uploadedByName?: string | null; vendorCount: number; activeVendorCount: number; totalCurrent: number; totalOverdue: number; totalPayables: number; notes?: string | null; }
+export interface ApAgingSnapshot { id: number; companyCode: string; reportCompany?: string | null; asOfDate: string; sourceFileName?: string | null; uploadedAt: string; uploadedByName?: string | null; vendorCount: number; activeVendorCount: number; totalCurrent: number; totalOverdue: number; totalPayables: number; notes?: string | null; hasDetail?: boolean; documentCount?: number; }
 export interface ApAgingIndex { companies: { code: string; name: string }[]; snapshots: ApAgingSnapshot[]; }
-export interface ApAgingVendor { id: number; code: string; name: string; currency?: string | null; current: number; d30: number; d60: number; d90: number; over90: number; overdue: number; total: number; oldestBucket: number; inPacks: number; packs?: { batchId: number; batchNumber: string; status: string }[] | null; }
+export interface ApAgingVendor { id: number; code: string; name: string; currency?: string | null; current: number; d30: number; d60: number; d90: number; over90: number; overdue: number; total: number; oldestBucket: number; inPacks: number; packs?: { batchId: number; batchNumber: string; status: string }[] | null; docCount?: number; }
+export interface ApAgingDocument { id: number; vendorCode?: string; vendorName?: string; docType: string; typeLabel: string; docNumber: string; docDate?: string | null; dueDate?: string | null; current: number; d30: number; d60: number; d90: number; over90: number; overdue: number; total: number; bucket: number; daysOverdue: number; packs?: { batchId: number; batchNumber: string; status: string }[] | null; }
+export interface ApAgingVendorDocs { snapshot: { id: number; companyCode: string; asOfDate: string; hasDetail: boolean }; documents: ApAgingDocument[]; totals: { current: number; d30: number; d60: number; d90: number; over90: number; overdue: number; total: number }; }
 export interface ApAging { snapshot: ApAgingSnapshot; buckets: { index: number; label: string; amount: number; pct: number }[]; total: number; overdue: number; vendors: ApAgingVendor[]; }
 export interface ApAgingHistoryRow { asOfDate: string; id: number; current: number; d30: number; d60: number; d90: number; over90: number; overdue: number; total: number; }
 export type CashSection = 'DebitOrder' | 'Monthly';

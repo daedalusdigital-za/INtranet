@@ -26,8 +26,12 @@ public class ApAgingSnapshot
     public decimal TotalOverdue { get; set; }
     public decimal TotalPayables { get; set; }
     [MaxLength(500)] public string? Notes { get; set; }
+    /// <summary>True when the upload was the Detail-by-Document report, so per-invoice rows exist in ApAgingDocuments.</summary>
+    public bool HasDetail { get; set; }
+    public int DocumentCount { get; set; }
 
     public virtual ICollection<ApAgingVendor> Vendors { get; set; } = new List<ApAgingVendor>();
+    public virtual ICollection<ApAgingDocument> Documents { get; set; } = new List<ApAgingDocument>();
 }
 
 /// <summary>One vendor row off the aged payables report: Current / 1–30 / 31–60 / 61–90 / Over 90.</summary>
@@ -45,6 +49,34 @@ public class ApAgingVendor
     public decimal Over90 { get; set; }
     public decimal Overdue { get; set; }
     public decimal Total { get; set; }
+
+    [ForeignKey(nameof(SnapshotId))] public virtual ApAgingSnapshot? Snapshot { get; set; }
+}
+
+/// <summary>
+/// One open document off the "A/P Aged Payables by Due Date — Detail by Document Date" report:
+/// an invoice, credit note, prepayment, adjustment… with its date, due date and the bucket it sits in.
+/// </summary>
+public class ApAgingDocument
+{
+    [Key] public int Id { get; set; }
+    [Required] public int SnapshotId { get; set; }
+    [Required, MaxLength(50)] public string VendorCode { get; set; } = "";
+    [Required, MaxLength(255)] public string VendorName { get; set; } = "";
+    public DateTime? DocDate { get; set; }
+    /// <summary>Sage doc type: IN, CR, DB, PI, AD, IT, PY…</summary>
+    [MaxLength(5)] public string DocType { get; set; } = "";
+    [Required, MaxLength(60)] public string DocNumber { get; set; } = "";
+    public DateTime? DueDate { get; set; }
+    public decimal Current { get; set; }
+    public decimal Days30 { get; set; }
+    public decimal Days60 { get; set; }
+    public decimal Days90 { get; set; }
+    public decimal Over90 { get; set; }
+    public decimal Overdue { get; set; }
+    public decimal Total { get; set; }
+    /// <summary>0 = current … 4 = over 90; the bucket this document's balance sits in.</summary>
+    public int Bucket { get; set; }
 
     [ForeignKey(nameof(SnapshotId))] public virtual ApAgingSnapshot? Snapshot { get; set; }
 }

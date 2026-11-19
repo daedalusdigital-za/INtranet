@@ -291,6 +291,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Finance.Creditors.CreditorCashflowLine> CreditorCashflowLines { get; set; }
         public DbSet<Models.Finance.Creditors.ApAgingSnapshot> ApAgingSnapshots { get; set; }
         public DbSet<Models.Finance.Creditors.ApAgingVendor> ApAgingVendors { get; set; }
+        public DbSet<Models.Finance.Creditors.ApAgingDocument> ApAgingDocuments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -338,10 +339,18 @@ namespace ProjectTracker.API.Data
                 foreach (var p in new[] { nameof(Models.Finance.Creditors.ApAgingSnapshot.TotalCurrent), nameof(Models.Finance.Creditors.ApAgingSnapshot.TotalOverdue), nameof(Models.Finance.Creditors.ApAgingSnapshot.TotalPayables) })
                     e.Property<decimal>(p).HasPrecision(18, 2);
                 e.HasMany(x => x.Vendors).WithOne(v => v.Snapshot).HasForeignKey(v => v.SnapshotId).OnDelete(DeleteBehavior.Cascade);
+                e.HasMany(x => x.Documents).WithOne(v => v.Snapshot).HasForeignKey(v => v.SnapshotId).OnDelete(DeleteBehavior.Cascade);
             });
             modelBuilder.Entity<Models.Finance.Creditors.ApAgingVendor>(e =>
             {
                 e.HasIndex(x => new { x.SnapshotId, x.VendorCode });
+                foreach (var p in new[] { "Current", "Days30", "Days60", "Days90", "Over90", "Overdue", "Total" })
+                    e.Property<decimal>(p).HasPrecision(18, 2);
+            });
+            modelBuilder.Entity<Models.Finance.Creditors.ApAgingDocument>(e =>
+            {
+                e.HasIndex(x => new { x.SnapshotId, x.VendorCode });
+                e.HasIndex(x => x.DocNumber);
                 foreach (var p in new[] { "Current", "Days30", "Days60", "Days90", "Over90", "Overdue", "Total" })
                     e.Property<decimal>(p).HasPrecision(18, 2);
             });

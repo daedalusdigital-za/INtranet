@@ -8,9 +8,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, ApAgingIndex, ApAgingSnapshot, ApAging, ApAgingVendor, ApAgingHistoryRow } from '../../services/creditor-packs.service';
+import { CreditorPacksService, ApAgingIndex, ApAgingSnapshot, ApAging, ApAgingVendor, ApAgingHistoryRow, ApAgingDocument, ApAgingVendorDocs } from '../../services/creditor-packs.service';
 
 type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' | 'overdue';
+type DocSortKey = 'vendorName' | 'docNumber' | 'docDate' | 'dueDate' | 'daysOverdue' | 'total';
 
 /**
  * Finance → Creditors → Aging. The Sage 300 "A/P Aged Payables by Due Date" per paying company,
@@ -47,7 +48,7 @@ type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' |
         <mat-icon>upload_file</mat-icon> {{ uploading() ? 'Reading report…' : 'Upload aged payables (.xls / .xlsx)' }}
         <input type="file" accept=".xls,.xlsx" multiple hidden (change)="upload($event)" [disabled]="uploading()">
       </label>
-      <small class="muted">Sage 300 › A/P › Aged Payables by Due Date, <b>Summary</b>, exported to Excel. The company is read from the report header; several files can be dropped at once. Re-uploading the same day replaces that snapshot.</small>
+      <small class="muted">Sage 300 › A/P › Aged Payables by Due Date — <b>Detail by Document Date</b> (one row per invoice; preferred) or <b>Summary</b>. The company is read from the report header; several files can be dropped at once. Re-uploading the same day replaces that snapshot.</small>
     </div>
 
     @if (!company()) {
@@ -58,10 +59,20 @@ type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' |
       <div class="ag-snap">
         <mat-icon>event</mat-icon>
         <select [ngModel]="snapshotId()" (ngModelChange)="loadSnapshot($event)">
-          @for (s of snapshotsFor(company()!); track s.id) { <option [ngValue]="s.id">As at {{ s.asOfDate | date:'dd MMM yyyy' }} · {{ s.activeVendorCount }} of {{ s.vendorCount }} vendors with balances</option> }
+          @for (s of snapshotsFor(company()!); track s.id) { <option [ngValue]="s.id">As at {{ s.asOfDate | date:'dd MMM yyyy' }} · {{ s.activeVendorCount }} of {{ s.vendorCount }} vendors with balances{{ s.hasDetail ? ' · ' + s.documentCount + ' documents' : ' · summary only' }}</option> }
         </select>
-        @if (snapshot(); as s) { <small class="muted">Uploaded {{ s.uploadedAt | date:'dd MMM, HH:mm' }}{{ s.uploadedByName ? ' by ' + s.uploadedByName : '' }} · {{ s.sourceFileName }}{{ s.reportCompany ? ' · "' + s.reportCompany + '"' : '' }}</small> }
+        @if (snapshot(); as s) {
+          @if (s.hasDetail) { <span class="badge detail" matTooltip="Uploaded from the Detail report — every open invoice, credit note and prepayment is available per vendor"><mat-icon>receipt_long</mat-icon> Detailed · {{ s.documentCount | number }} documents</span> }
+          @else { <span class="badge" matTooltip="Summary report — vendor totals only. Upload the Detail by Document Date export to see the invoices behind each balance">Summary only</span> }
+          <small class="muted">Uploaded {{ s.uploadedAt | date:'dd MMM, HH:mm' }}{{ s.uploadedByName ? ' by ' + s.uploadedByName : '' }} · {{ s.sourceFileName }}{{ s.reportCompany ? ' · "' + s.reportCompany + '"' : '' }}</small>
+        }
         <span class="sp"></span>
+        @if (snapshot()?.hasDetail) {
+          <div class="ag-view">
+            <button [class.on]="view() === 'vendors'" (click)="setView('vendors')"><mat-icon>groups</mat-icon> By vendor</button>
+            <button [class.on]="view() === 'documents'" (click)="setView('documents')"><mat-icon>receipt_long</mat-icon> All documents</button>
+          </div>
+        }
         <button mat-stroked-button (click)="exportXlsx()"><mat-icon>download</mat-icon> Excel</button>
         <button mat-icon-button [matMenuTriggerFor]="more"><mat-icon>more_vert</mat-icon></button>
         <mat-menu #more="matMenu"><button mat-menu-item (click)="deleteSnapshot()"><mat-icon>delete</mat-icon> Delete this snapshot</button></mat-menu>
@@ -85,6 +96,51 @@ type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' |
           }
         </div>
 
+        @if (view() === 'documents') {
+          <div class="ag-filters">
+            <div class="ag-search"><mat-icon>search</mat-icon><input type="text" placeholder="Search document number or vendor…" [ngModel]="docSearch()" (ngModelChange)="docSearch.set($event)">@if (docSearch()) { <button mat-icon-button (click)="docSearch.set('')"><mat-icon>close</mat-icon></button> }</div>
+            <select class="ag-sel" [ngModel]="docType()" (ngModelChange)="docType.set($event)">
+              <option value="">All types</option>
+              @for (t of docTypes(); track t.code) { <option [value]="t.code">{{ t.label }} ({{ t.n }})</option> }
+            </select>
+            <label class="ag-check"><input type="checkbox" [ngModel]="docOverdueOnly()" (ngModelChange)="docOverdueOnly.set($event)"> Only overdue</label>
+            <span class="sp"></span>
+            <small class="muted">{{ visibleDocs().length }} of {{ docs().length }} documents{{ bucket() !== null ? ' · in ' + a.buckets[bucket()!].label : '' }}</small>
+          </div>
+          @if (docsLoading()) { <div class="ag-state"><mat-spinner diameter="32"></mat-spinner><p>Loading documents…</p></div> }
+          @else {
+          <div class="ag-table-wrap">
+            <table class="ag-table docs">
+              <thead><tr>
+                <th class="sort" (click)="docSortBy('vendorName')">Vendor <mat-icon>{{ docSortIcon('vendorName') }}</mat-icon></th>
+                <th class="sort" (click)="docSortBy('docNumber')">Document <mat-icon>{{ docSortIcon('docNumber') }}</mat-icon></th>
+                <th class="sort" (click)="docSortBy('docDate')">Doc date <mat-icon>{{ docSortIcon('docDate') }}</mat-icon></th>
+                <th class="sort" (click)="docSortBy('dueDate')">Due <mat-icon>{{ docSortIcon('dueDate') }}</mat-icon></th>
+                <th class="num sort" (click)="docSortBy('daysOverdue')">Days over <mat-icon>{{ docSortIcon('daysOverdue') }}</mat-icon></th>
+                <th>Bucket</th>
+                <th class="num sort" (click)="docSortBy('total')">Amount <mat-icon>{{ docSortIcon('total') }}</mat-icon></th>
+                <th></th>
+              </tr></thead>
+              <tbody>
+                @for (d of visibleDocs(); track d.id) {
+                  <tr class="doc" [class.risk]="d.bucket === 4" [class.creditrow]="d.total < 0">
+                    <td><div class="ag-name"><b>{{ d.vendorName }}</b><small>{{ d.vendorCode }}</small></div></td>
+                    <td><div class="ag-name"><b class="mono">{{ d.docNumber }}</b><small><span class="ty ty-{{ d.docType }}">{{ d.typeLabel }}</span></small></div></td>
+                    <td class="dt">{{ d.docDate | date:'dd MMM yyyy' }}</td>
+                    <td class="dt">{{ d.dueDate | date:'dd MMM yyyy' }}</td>
+                    <td class="num" [class.danger]="d.daysOverdue > 90" [class.warn]="d.daysOverdue > 30 && d.daysOverdue <= 90">{{ d.daysOverdue || '—' }}</td>
+                    <td><span class="pill b{{ d.bucket }}">{{ a.buckets[d.bucket].label }}</span></td>
+                    <td class="num total" [class.credit]="d.total < 0">{{ d.total | number:'1.2-2' }}</td>
+                    <td class="chev"><button mat-icon-button (click)="openVendor(d.vendorCode!)" matTooltip="Show this vendor"><mat-icon>person_search</mat-icon></button></td>
+                  </tr>
+                }
+                @if (!visibleDocs().length) { <tr><td colspan="8"><div class="ag-state small"><mat-icon>inbox</mat-icon><p>No documents match these filters.</p></div></td></tr> }
+              </tbody>
+              <tfoot><tr class="grand"><td colspan="6">Total ({{ visibleDocs().length }} documents)</td><td class="num total">{{ sumDocs() | number:'1.2-2' }}</td><td></td></tr></tfoot>
+            </table>
+          </div>
+          }
+        } @else {
         <div class="ag-filters">
           <div class="ag-search"><mat-icon>search</mat-icon><input type="text" placeholder="Search vendor name or number…" [ngModel]="search()" (ngModelChange)="search.set($event)">@if (search()) { <button mat-icon-button (click)="search.set('')"><mat-icon>close</mat-icon></button> }</div>
           <label class="ag-check"><input type="checkbox" [ngModel]="onlyOverdue()" (ngModelChange)="onlyOverdue.set($event)"> Only vendors overdue</label>
@@ -111,7 +167,7 @@ type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' |
             <tbody>
               @for (v of visible(); track v.id) {
                 <tr class="vend" [class.open]="expanded() === v.code" [class.risk]="v.over90 > 0" (click)="toggle(v)">
-                  <td><div class="ag-name"><b>{{ v.name }}</b><small>{{ v.code }}{{ v.currency && v.currency !== 'ZAR' ? ' · ' + v.currency : '' }}</small></div></td>
+                  <td><div class="ag-name"><b>{{ v.name }}</b><small>{{ v.code }}{{ v.currency && v.currency !== 'ZAR' ? ' · ' + v.currency : '' }}{{ v.docCount ? ' · ' + v.docCount + ' doc' + (v.docCount === 1 ? '' : 's') : '' }}</small></div></td>
                   <td class="num" [class.zero]="!v.current">{{ v.current | number:'1.2-2' }}</td>
                   <td class="num" [class.zero]="!v.d30">{{ v.d30 | number:'1.2-2' }}</td>
                   <td class="num" [class.zero]="!v.d60">{{ v.d60 | number:'1.2-2' }}</td>
@@ -127,6 +183,30 @@ type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' |
                     <div class="ag-detail">
                       <div class="pills">@for (b of a.buckets; track b.index) { <span class="pill b{{ b.index }}">{{ b.label }}: <b>{{ bucketOf(v, b.index) | number:'1.0-0' }}</b></span> }</div>
                       @if (v.packs?.length) { <div class="packs"><mat-icon>inventory_2</mat-icon> In payment packs: @for (p of v.packs; track p.batchId) { <button class="lnk" (click)="openBatch.emit(p.batchId); $event.stopPropagation()">{{ p.batchNumber }}</button><small>{{ p.status }}</small> }</div> }
+                      @if (snapshot()?.hasDetail) {
+                        @if (vendorDocsLoading()) { <div class="ag-inline"><mat-spinner diameter="18"></mat-spinner> Loading documents…</div> }
+                        @else { @if (vendorDocs(); as vd) {
+                          <div class="ag-docs-head"><mat-icon>receipt_long</mat-icon> <b>{{ vd.documents.length }}</b> open document{{ vd.documents.length === 1 ? '' : 's' }} behind this balance</div>
+                          <table class="ag-hist docs">
+                            <thead><tr><th>Type</th><th>Document</th><th>Doc date</th><th>Due</th><th class="num">Days over</th><th>Bucket</th><th class="num">Amount</th><th>In pack</th></tr></thead>
+                            <tbody>
+                              @for (d of vd.documents; track d.id) {
+                                <tr [class.creditrow]="d.total < 0">
+                                  <td><span class="ty ty-{{ d.docType }}">{{ d.typeLabel }}</span></td>
+                                  <td class="mono">{{ d.docNumber }}</td>
+                                  <td>{{ d.docDate | date:'dd MMM yyyy' }}</td>
+                                  <td>{{ d.dueDate | date:'dd MMM yyyy' }}</td>
+                                  <td class="num" [class.danger]="d.daysOverdue > 90" [class.warn]="d.daysOverdue > 30 && d.daysOverdue <= 90">{{ d.daysOverdue || '—' }}</td>
+                                  <td><span class="pill b{{ d.bucket }}">{{ a.buckets[d.bucket].label }}</span></td>
+                                  <td class="num total" [class.credit]="d.total < 0">{{ d.total | number:'1.2-2' }}</td>
+                                  <td>@if (d.packs?.length) { @for (p of d.packs; track p.batchId) { <button class="lnk" (click)="openBatch.emit(p.batchId); $event.stopPropagation()">{{ p.batchNumber }}</button> } } @else { <span class="muted">—</span> }</td>
+                                </tr>
+                              }
+                            </tbody>
+                            <tfoot><tr class="cur"><td colspan="6">Vendor total</td><td class="num total">{{ vd.totals.total | number:'1.2-2' }}</td><td></td></tr></tfoot>
+                          </table>
+                        } }
+                      }
                       @if (historyLoading()) { <div class="ag-inline"><mat-spinner diameter="18"></mat-spinner> Loading history…</div> }
                       @else if (history().length > 1) {
                         <table class="ag-hist"><thead><tr><th>As at</th><th class="num">Current</th><th class="num">1–30</th><th class="num">31–60</th><th class="num">61–90</th><th class="num">Over 90</th><th class="num">Total</th></tr></thead>
@@ -146,6 +226,7 @@ type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' |
             </tr></tfoot>
           </table>
         </div>
+        }
       }
     }
   }
@@ -193,7 +274,19 @@ type SortKey = 'name' | 'current' | 'd30' | 'd60' | 'd90' | 'over90' | 'total' |
       .lnk { font: inherit; font-family: var(--font-mono); font-weight: 600; color: var(--color-primary); background: none; border: 0; padding: 0; cursor: pointer; &:hover { text-decoration: underline; } } }
     .ag-hist { width: 100%; border-collapse: collapse; font-size: var(--text-xs); th { text-align: left; color: var(--color-text-3); padding: 4px 8px; border-bottom: 1px solid var(--color-line); } td { padding: 4px 8px; border-bottom: 1px solid var(--color-line); } .num { text-align: right; font-variant-numeric: tabular-nums; } tr.cur td { background: var(--color-primary-soft); font-weight: 600; } }
     .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; color: #fff; background: var(--color-line-strong); &.b0 { background: var(--color-ok); } &.b1 { background: #14b8a6; } &.b2 { background: #f59e0b; } &.b3 { background: #f97316; } &.b4 { background: var(--color-danger); } }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-2); &.ok { background: var(--color-ok-soft); color: var(--color-ok); } }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-2); &.ok { background: var(--color-ok-soft); color: var(--color-ok); }
+      &.detail { display: inline-flex; align-items: center; gap: 4px; background: var(--color-primary-soft); color: var(--color-primary); mat-icon { font-size: 14px; width: 14px; height: 14px; } } }
+    .ag-view { display: inline-flex; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); overflow: hidden;
+      button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-2); background: var(--color-surface); border: 0; cursor: pointer; mat-icon { font-size: 18px; width: 18px; height: 18px; }
+        & + button { border-left: 1px solid var(--color-line-strong); } &.on { background: var(--color-primary); color: #fff; } } }
+    .ag-sel { height: 40px; padding: 0 var(--space-3); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); font: inherit; }
+    .mono { font-family: var(--font-mono); }
+    .dt { white-space: nowrap; color: var(--color-text-2); }
+    .ty { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; background: var(--color-surface-2); color: var(--color-text-2);
+      &.ty-IN { background: #e0e7ff; color: #3730a3; } &.ty-CR, &.ty-PI { background: var(--color-ok-soft); color: var(--color-ok); } &.ty-DB, &.ty-IT { background: var(--color-warn-soft); color: #b45309; } &.ty-AD { background: #f3e8ff; color: #6b21a8; } }
+    tr.creditrow td { color: var(--color-ok); }
+    .ag-docs-head { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--color-text-2); mat-icon { color: var(--color-primary); font-size: 18px; width: 18px; height: 18px; } }
+    .ag-hist.docs { font-size: var(--text-sm); tfoot td { font-weight: 700; border-top: 2px solid var(--color-line-strong); } }
     .ag-inline { display: flex; align-items: center; gap: 8px; color: var(--color-text-3); font-size: var(--text-sm); }
     .ag-state { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-8) var(--space-4); color: var(--color-text-3); text-align: center; mat-icon { font-size: 44px; width: 44px; height: 44px; } h3 { margin: 0; color: var(--color-text); } p { margin: 0; } &.small { padding: var(--space-4); } }
   `]
@@ -221,6 +314,36 @@ export class FinanceCreditorsAgingComponent implements OnInit {
   historyLoading = signal(false);
   sortKey = signal<SortKey>('total');
   sortDir = signal<1 | -1>(-1);
+
+  // Detail (per-document) view
+  view = signal<'vendors' | 'documents'>('vendors');
+  vendorDocs = signal<ApAgingVendorDocs | null>(null);
+  vendorDocsLoading = signal(false);
+  docs = signal<ApAgingDocument[]>([]);
+  docsLoading = signal(false);
+  docSearch = signal('');
+  docType = signal('');
+  docOverdueOnly = signal(false);
+  docSortKey = signal<DocSortKey>('dueDate');
+  docSortDir = signal<1 | -1>(1);
+  docTypes = computed(() => {
+    const m = new Map<string, { code: string; label: string; n: number }>();
+    for (const d of this.docs()) { const e = m.get(d.docType); if (e) e.n++; else m.set(d.docType, { code: d.docType, label: d.typeLabel, n: 1 }); }
+    return [...m.values()].sort((a, b) => b.n - a.n);
+  });
+  visibleDocs = computed(() => {
+    const q = this.docSearch().trim().toLowerCase(); const b = this.bucket(); const t = this.docType();
+    let rows = this.docs().filter(d => (!q || d.docNumber.toLowerCase().includes(q) || (d.vendorName ?? '').toLowerCase().includes(q) || (d.vendorCode ?? '').toLowerCase().includes(q))
+      && (b === null || d.bucket === b) && (!t || d.docType === t) && (!this.docOverdueOnly() || d.daysOverdue > 0));
+    const k = this.docSortKey(), dir = this.docSortDir();
+    rows = [...rows].sort((x, y) => {
+      const a = x[k] as any, c = y[k] as any;
+      if (k === 'vendorName' || k === 'docNumber') return dir * String(a ?? '').localeCompare(String(c ?? ''));
+      if (k === 'docDate' || k === 'dueDate') return dir * ((a ? new Date(a).getTime() : 0) - (c ? new Date(c).getTime() : 0));
+      return dir * ((a ?? 0) - (c ?? 0));
+    });
+    return rows;
+  });
 
   logo = companyWideLogo; monogram = companyMonogram; hue = companyHue;
 
@@ -254,20 +377,44 @@ export class FinanceCreditorsAgingComponent implements OnInit {
   sum(k: keyof ApAgingVendor): number { return this.visible().reduce((t, v) => t + ((v[k] as number) || 0), 0); }
   sortBy(k: SortKey): void { if (this.sortKey() === k) this.sortDir.set(this.sortDir() === 1 ? -1 : 1); else { this.sortKey.set(k); this.sortDir.set(k === 'name' ? 1 : -1); } }
   sortIcon(k: SortKey): string { return this.sortKey() !== k ? 'unfold_more' : this.sortDir() === 1 ? 'expand_less' : 'expand_more'; }
+  docSortBy(k: DocSortKey): void { if (this.docSortKey() === k) this.docSortDir.set(this.docSortDir() === 1 ? -1 : 1); else { this.docSortKey.set(k); this.docSortDir.set(k === 'total' || k === 'daysOverdue' ? -1 : 1); } }
+  docSortIcon(k: DocSortKey): string { return this.docSortKey() !== k ? 'unfold_more' : this.docSortDir() === 1 ? 'expand_less' : 'expand_more'; }
+  sumDocs(): number { return this.visibleDocs().reduce((t, d) => t + (d.total || 0), 0); }
+
+  setView(v: 'vendors' | 'documents'): void {
+    this.view.set(v);
+    if (v === 'documents' && !this.docs().length) this.loadDocs();
+  }
+  private loadDocs(): void {
+    const id = this.snapshotId(); if (!id || !this.snapshot()?.hasDetail) return;
+    this.docsLoading.set(true);
+    this.api.apAgingDocuments(id).subscribe({ next: d => { this.docs.set(d); this.docsLoading.set(false); }, error: () => { this.docsLoading.set(false); this.toast.error("Couldn't load the documents."); } });
+  }
+  /** From the documents view: jump to the vendor row and expand it. */
+  openVendor(code: string): void {
+    this.view.set('vendors'); this.search.set(''); this.bucket.set(null);
+    const v = this.aging()?.vendors.find(x => x.code === code);
+    if (v) { this.expanded.set(null); this.toggle(v); }
+  }
 
   pickCompany(code: string): void {
-    this.company.set(code); this.expanded.set(null); this.bucket.set(null); this.aging.set(null);
+    this.company.set(code); this.expanded.set(null); this.bucket.set(null); this.aging.set(null); this.view.set('vendors'); this.docs.set([]);
     const latest = this.latestFor(code); if (latest) this.loadSnapshot(latest.id); else this.snapshotId.set(null);
   }
   loadSnapshot(id: number): void {
-    this.snapshotId.set(id); this.loading.set(true); this.expanded.set(null);
-    this.api.apAging(id, undefined, !this.showZero()).subscribe({ next: a => { this.aging.set(a); this.loading.set(false); }, error: () => { this.loading.set(false); this.toast.error("Couldn't build the aging."); } });
+    this.snapshotId.set(id); this.loading.set(true); this.expanded.set(null); this.docs.set([]); this.vendorDocs.set(null);
+    this.api.apAging(id, undefined, !this.showZero()).subscribe({ next: a => { this.aging.set(a); this.loading.set(false); if (!a.snapshot.hasDetail) this.view.set('vendors'); else if (this.view() === 'documents') this.loadDocs(); }, error: () => { this.loading.set(false); this.toast.error("Couldn't build the aging."); } });
   }
   toggleZero(v: boolean): void { this.showZero.set(v); const id = this.snapshotId(); if (id) this.loadSnapshot(id); }
   toggle(v: ApAgingVendor): void {
     if (this.expanded() === v.code) { this.expanded.set(null); return; }
-    this.expanded.set(v.code); this.history.set([]); this.historyLoading.set(true);
+    this.expanded.set(v.code); this.history.set([]); this.historyLoading.set(true); this.vendorDocs.set(null);
     this.api.apAgingHistory(this.company()!, v.code).subscribe({ next: h => { this.history.set(h); this.historyLoading.set(false); }, error: () => this.historyLoading.set(false) });
+    const id = this.snapshotId();
+    if (id && this.snapshot()?.hasDetail) {
+      this.vendorDocsLoading.set(true);
+      this.api.apAgingVendorDocs(id, v.code).subscribe({ next: d => { this.vendorDocs.set(d); this.vendorDocsLoading.set(false); }, error: () => this.vendorDocsLoading.set(false) });
+    }
   }
 
   upload(ev: Event): void {
@@ -286,7 +433,7 @@ export class FinanceCreditorsAgingComponent implements OnInit {
       }
       // If a company is selected and only one file is given, assume it's for that company unless the header says otherwise.
       this.api.apAgingImport(files[i], undefined).subscribe({
-        next: s => { results.push(`${s.companyCode} (${s.activeVendorCount} vendors)`); if (!this.company()) this.company.set(s.companyCode); next(i + 1); },
+        next: s => { results.push(`${s.companyCode} (${s.activeVendorCount} vendors${s.hasDetail ? ', ' + s.documentCount + ' docs' : ''})`); if (!this.company()) this.company.set(s.companyCode); next(i + 1); },
         error: e => { errors.push(`${files[i].name}: ${e?.error?.message || 'failed'}`); next(i + 1); }
       });
     };
