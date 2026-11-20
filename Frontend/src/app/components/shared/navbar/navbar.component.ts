@@ -40,6 +40,8 @@ interface NavItem {
   route?: string;
   query?: Record<string, string>;
   perm?: string;
+  /** Extra gate beyond the module permission. */
+  gate?: 'executive' | 'flows';
   exact?: boolean;
   sub?: boolean;
   action?: 'paperless';
@@ -836,20 +838,26 @@ export class NavbarComponent implements OnInit, OnDestroy {
     ]},
     { label: 'Oversight', items: [
       { label: 'Management', icon: 'insights', route: '/management', perm: 'management' },
-      { label: 'Flows', icon: 'account_tree', route: '/flows', perm: 'flows' },
+      { label: 'Flows', icon: 'account_tree', route: '/flows', perm: 'flows', gate: 'flows' },
       { label: 'Support', icon: 'support_agent', route: '/support-ticket', perm: 'support_tickets' },
     ]},
     { label: 'Executive', items: [
-      { label: 'Directors', icon: 'workspace_premium', route: '/directors', perm: 'finance' },
-      { label: 'Treasury', icon: 'account_balance', route: '/treasury', perm: 'finance' },
+      { label: 'Directors', icon: 'workspace_premium', route: '/directors', perm: 'finance', gate: 'executive' },
+      { label: 'Treasury', icon: 'account_balance', route: '/treasury', perm: 'finance', gate: 'executive' },
     ]},
   ];
 
   /** Groups with only the items this person may open; empty groups are dropped. */
   visibleNavGroups(): NavGroup[] {
     return this.navGroups
-      .map(g => ({ ...g, items: g.items.filter(i => !i.perm || this.hasPermission(i.perm)) }))
+      .map(g => ({ ...g, items: g.items.filter(i => (!i.perm || this.hasPermission(i.perm)) && this.passesGate(i)) }))
       .filter(g => g.items.length > 0);
+  }
+
+  private passesGate(i: NavItem): boolean {
+    if (i.gate === 'executive') return this.authService.isExecutive;
+    if (i.gate === 'flows') return this.authService.canOpenFlows;
+    return true;
   }
 
   toggleCollapsed(): void {

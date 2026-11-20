@@ -130,6 +130,42 @@ export class AuthService {
     return this.currentUserValue?.role === 'Manager' || this.isAdmin;
   }
 
+  /** Accountants and clerks: finance operations staff who prepare/approve packs but are not executives. */
+  get isFinanceStaff(): boolean {
+    const role = (this.currentUserValue?.role || '').toLowerCase().trim();
+    return role === 'accountant' || role === 'clerk' || role === 'creditor clerk' || role === 'debtor clerk';
+  }
+
+  /**
+   * May open the Executive section (Directors, Treasury): Directors, Treasurers, Admins, or anyone
+   * explicitly granted exec.dashboard / cred.director / cred.bank. Accountants and clerks never qualify.
+   */
+  get isExecutive(): boolean {
+    if (this.isAdmin) return true;
+    if (this.isFinanceStaff) return false;
+    const role = (this.currentUserValue?.role || '').toLowerCase().trim();
+    if (role === 'director' || role === 'treasurer') return true;
+    const perms = this.parsePermissions();
+    return perms.includes('exec.dashboard') || perms.includes('cred.director') || perms.includes('cred.bank');
+  }
+
+  /** Flows is open to staff generally, but not to accountants/clerks unless the 'flows' module was granted explicitly. */
+  get canOpenFlows(): boolean {
+    if (this.isAdmin) return true;
+    if (this.isFinanceStaff) return this.parsePermissions().includes('flows');
+    return true;
+  }
+
+  private parsePermissions(): string[] {
+    const raw = this.currentUserValue?.permissions;
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map((p: string) => String(p).toLowerCase().trim());
+    } catch { /* comma-separated */ }
+    return raw.toLowerCase().split(',').map(p => p.trim()).filter(Boolean);
+  }
+
   /**
    * Check if the current user has permission to access a specific module
    * Admins and Super Admins have access to all modules

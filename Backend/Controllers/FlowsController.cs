@@ -40,6 +40,19 @@ namespace ProjectTracker.API.Controllers
             return perms.Contains("all", StringComparer.OrdinalIgnoreCase) || perms.Contains("flows", StringComparer.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Accountants and clerks don't get the Flows module (catalog, definitions, runs, stats) unless the
+        /// 'flows' module was granted to them explicitly. Their own tasks (tasks/mine) stay reachable for the home widgets.
+        /// </summary>
+        private async Task<bool> IsModuleBlockedAsync()
+        {
+            if (User.IsAdmin()) return false;
+            var u = await _db.Users.AsNoTracking().Where(x => x.UserId == Uid).Select(x => new { x.Role, x.Permissions }).FirstOrDefaultAsync();
+            var role = (u?.Role ?? "").Trim().ToLowerInvariant();
+            var financeStaff = role is "accountant" or "clerk" or "creditor clerk" or "debtor clerk";
+            return financeStaff && !await IsDesignerAsync();
+        }
+
         // ── DTOs ──────────────────────────────────────────────────────────────────────
 
         public class FlowDefinitionDto
@@ -154,6 +167,7 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("catalog")]
         public async Task<IActionResult> Catalog()
         {
+            if (await IsModuleBlockedAsync()) return Forbid();
             var designer = await IsDesignerAsync();
             var userRows = await _db.Users.AsNoTracking().Where(u => u.IsActive).OrderBy(u => u.Name).ThenBy(u => u.Surname)
                 .Select(u => new { id = u.UserId, name = u.Name + " " + u.Surname, email = u.Email, role = u.Role, departmentId = u.DepartmentId, u.Permissions, u.Title }).ToListAsync();
@@ -211,6 +225,7 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("definitions")]
         public async Task<IActionResult> ListDefinitions([FromQuery] bool templates = false)
         {
+            if (await IsModuleBlockedAsync()) return Forbid();
             var designer = await IsDesignerAsync();
             var (role, perms, deptId) = await MeAsync();
             var defs = await _db.FlowDefinitions.AsNoTracking().Include(d => d.CreatedByUser).Where(d => d.IsTemplate == templates).OrderBy(d => d.Level).ThenBy(d => d.Name).ToListAsync();
@@ -554,6 +569,7 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("runs")]
         public async Task<IActionResult> Runs([FromQuery] string? status, [FromQuery] int? definitionId, [FromQuery] string? q, [FromQuery] bool mine = false, [FromQuery] int take = 100)
         {
+            if (await IsModuleBlockedAsync()) return Forbid();
             var designer = await IsDesignerAsync();
             var query = _db.FlowRuns.AsNoTracking().Include(r => r.Definition).Include(r => r.StartedByUser).Include(r => r.Tasks).AsQueryable();
             if (!string.IsNullOrWhiteSpace(status))
@@ -698,6 +714,7 @@ namespace ProjectTracker.API.Controllers
         [HttpGet("stats")]
         public async Task<IActionResult> Stats()
         {
+            if (await IsModuleBlockedAsync()) return Forbid();
             var now = DateTime.UtcNow;
             var since = now.AddDays(-30);
             var uid = Uid;

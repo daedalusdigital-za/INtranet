@@ -66,4 +66,22 @@ export const moduleGuard: CanActivateFn = (route: ActivatedRouteSnapshot, state)
   return false;
 };
 
+/** Executive section (Directors, Treasury). Accountants and clerks are sent back to Finance. */
+export const executiveGuard: CanActivateFn = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+  if (!authService.isAuthenticated) return router.createUrlTree(['/login']);
+  if (authService.isExecutive) return true;
+  return router.createUrlTree([authService.hasModulePermission('finance' as any) ? '/finance' : '/dashboard']);
+};
+
+/** Flows: everyone except accountants/clerks (unless the module was granted to them explicitly). */
+export const flowsGuard: CanActivateFn = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+  if (!authService.isAuthenticated) return router.createUrlTree(['/login']);
+  if (authService.canOpenFlows) return true;
+  return router.createUrlTree(['/dashboard']);
+};
+
 

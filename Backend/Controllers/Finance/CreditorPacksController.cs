@@ -1368,7 +1368,9 @@ public class CreditorPacksController : ControllerBase
         var isDirector = await HasAsync(CreditorWorkflow.RoleDirector);
         var isExecRole = UserRole is "Manager" or "Director" or "Treasurer";
         var hasExecPerm = await HasAsync(FinanceAuthority.ExecDashboard) || await HasAsync(CreditorWorkflow.RoleBank);
-        if (!isDirector && !IsSystemAdmin && !isExecRole && !hasExecPerm) return Forbid();
+        // Accountants and clerks never see the executive view, whatever else they've been granted.
+        var isFinanceStaff = (UserRole ?? "").Trim().ToLowerInvariant() is "accountant" or "clerk" or "creditor clerk" or "debtor clerk";
+        if (!IsSystemAdmin && (isFinanceStaff || (!isDirector && !isExecRole && !hasExecPerm))) return Forbid();
 
         var now = DateTime.UtcNow;
         var scope = await ScopeAsync();

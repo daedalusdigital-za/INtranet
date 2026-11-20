@@ -12,7 +12,7 @@
  */
 
 import { Routes } from '@angular/router';
-import { authGuard, moduleGuard, adminGuard } from '../guards/auth.guard';
+import { authGuard, moduleGuard, adminGuard, executiveGuard, flowsGuard } from '../guards/auth.guard';
 import { subPageRoutes } from '../ui/sub-pages';
 import { LOGISTICS_SECTIONS } from '../components/logistics/logistics-sections';
 import { SALES_SECTIONS } from '../components/sales/sales-sections';
@@ -626,27 +626,28 @@ export function getModuleRoutes(): Routes {
       data: { module: 'management' }
     },
 
-    // Flows — automated business processes. Any signed-in user can open it (to see/complete
-    // tasks assigned to them); designing flows is gated server-side by the 'flows' permission.
+    // Flows — automated business processes. Open to staff (to see/complete tasks assigned to them)
+    // except accountants and clerks; designing flows is gated server-side by the 'flows' permission.
     {
       path: 'flows',
       title: 'Flows',
       loadComponent: () => import('../components/flows/flows.component').then(m => m.FlowsComponent),
-      canActivate: [authGuard]
+      canActivate: [authGuard, flowsGuard]
     },
 
-    // Executive section — Directors (sign payments, company insights) and Treasury (load/pay/POP). Role-gated server-side.
+    // Executive section — Directors (sign payments, company insights) and Treasury (load/pay/POP).
+    // Directors, Treasurers and admins only; accountants and clerks are redirected. Also role-gated server-side.
     {
       path: 'directors',
       title: 'Directors',
       loadComponent: () => import('../components/directors/directors.component').then(m => m.DirectorsComponent),
-      canActivate: [authGuard]
+      canActivate: [authGuard, executiveGuard]
     },
     {
       path: 'treasury',
       title: 'Treasury',
       loadComponent: () => import('../components/treasury/treasury.component').then(m => m.TreasuryComponent),
-      canActivate: [authGuard]
+      canActivate: [authGuard, executiveGuard]
     },
     { path: 'executive', redirectTo: 'directors' },
 
