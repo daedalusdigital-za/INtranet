@@ -183,16 +183,76 @@ public class ServerOcrService
             {
                 if (!_pdftoppmAvailable) throw new InvalidOperationException("pdftoppm (poppler-utils) is required to OCR PDFs but is not installed.");
                 var outPrefix = Path.Combine(workDir, "page");
-                await RunProcessAsync("pdftoppm", $"-png -r 300 \"{filePath}\" \"{outPrefix}\"", 180_000);
+                // Grayscale: a third of the bytes of RGB, and tesseract / ZXing work on luminance anyway.
+                await RunProcessAsync("pdftoppm", $"-png -gray -r 300 -l {maxPages} \"{filePath}\" \"{outPrefix}\"", 180_000);
                 images = Directory.GetFiles(workDir, "page*.png").OrderBy(p => p).Take(maxPages).ToList();
             }
             else images = new List<string> { filePath };
 
-            var pages = new List<PackPage>();
-            var pageNo = 0;
-            foreach (var img in images)
+            // Pages are independent, so they run side by side (one tesseract process per core; each is pinned to a
+            // single thread via OMP_THREAD_LIMIT so they don't fight over the CPU). Order is restored afterwards.
+            var results = new PackPage[images.Count];
+            using var gate = new SemaphoreSlim(Parallelism);
+            await Task.WhenAll(images.Select(async (img, idx) =>
             {
-                pageNo++;
+                await gate.WaitAsync();
+                try { results[idx] = await ProcessPackPageAsync(img, idx + 1, workDir, keepImagesIn); }
+                finally { gate.Release(); }
+            }));
+            return results.ToList();
+        }
+        finally { try { Directory.Delete(workDir, true); } catch { } }
+    }
+
+    /// <summary>How many tesseract processes to run at once.</summary>
+    private static readonly int Parallelism = Math.Clamp(Environment.ProcessorCount, 2, 8);
+
+    /// <summary>
+    /// Text-only OCR for documents where layout, barcodes and word boxes don't matter (creditors packs: invoices,
+    /// recons, bank letters). Renders at 200 DPI, skips orientation detection / deskew / header band / barcodes and
+    /// runs the pages in parallel — several times faster than <see cref="ExtractPackPagesAsync"/>. A page that comes
+    /// back nearly empty is retried with orientation detection (sideways scan) and sparse-text mode.
+    /// </summary>
+    public async Task<List<string>> ExtractPageTextsFastAsync(string filePath, string? contentType, int maxPages = 15)
+    {
+        if (!_tesseractAvailable) throw new InvalidOperationException("tesseract binary is not available on this host.");
+        var isPdf = (contentType?.Contains("pdf", StringComparison.OrdinalIgnoreCase) ?? false) || filePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+        var workDir = Path.Combine(Path.GetTempPath(), "fast-ocr-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workDir);
+        try
+        {
+            List<string> images;
+            if (isPdf)
+            {
+                if (!_pdftoppmAvailable) throw new InvalidOperationException("pdftoppm (poppler-utils) is required to OCR PDFs but is not installed.");
+                var outPrefix = Path.Combine(workDir, "page");
+                await RunProcessAsync("pdftoppm", $"-png -gray -r 200 -l {maxPages} \"{filePath}\" \"{outPrefix}\"", 120_000);
+                images = Directory.GetFiles(workDir, "page*.png").OrderBy(p => p).Take(maxPages).ToList();
+            }
+            else images = new List<string> { filePath };
+
+            var texts = new string[images.Count];
+            using var gate = new SemaphoreSlim(Parallelism);
+            await Task.WhenAll(images.Select(async (img, idx) =>
+            {
+                await gate.WaitAsync();
+                try
+                {
+                    var t = await RunTesseractAsync(img, psm: 3);
+                    if (WordScore(t) < 25) { var t1 = await RunTesseractAsync(img, psm: 1); if (WordScore(t1) > WordScore(t)) t = t1; }
+                    if (t.Trim().Length < 60) t += "\n" + await RunTesseractAsync(img, psm: 11);
+                    texts[idx] = t;
+                }
+                catch (Exception ex) { _logger.LogDebug(ex, "Fast OCR failed for page {Idx}", idx + 1); texts[idx] = ""; }
+                finally { gate.Release(); }
+            }));
+            return texts.ToList();
+        }
+        finally { try { Directory.Delete(workDir, true); } catch { } }
+    }
+
+    private async Task<PackPage> ProcessPackPageAsync(string img, int pageNo, string workDir, string? keepImagesIn)
+    {
                 var page = new PackPage();
                 // 1. Rotation: OSD gives the angle; rotate the bitmap upright so cropping (header band),
                 //    barcode decoding and word positions all refer to a straight page.
@@ -271,11 +331,7 @@ public class ServerOcrService
                     }
                     catch (Exception ex) { _logger.LogDebug(ex, "Could not keep page image {Page}", pageNo); }
                 }
-                pages.Add(page);
-            }
-            return pages;
-        }
-        finally { try { Directory.Delete(workDir, true); } catch { } }
+                return page;
     }
 
     /// <summary>
@@ -518,6 +574,8 @@ public class ServerOcrService
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        // We run several tesseract processes side by side; stop each one spinning up OpenMP threads of its own.
+        psi.Environment["OMP_THREAD_LIMIT"] = "1";
 
         using var process = new Process { StartInfo = psi };
         var stdout = new StringBuilder();

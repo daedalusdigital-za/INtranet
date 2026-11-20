@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
+import { Observable, filter, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 export interface CreditorCompany {
@@ -117,19 +117,31 @@ export class CreditorPacksService {
   apAgingVendorDocs(snapshotId: number, code: string) { return this.http.get<ApAgingVendorDocs>(`${this.base}/aging/snapshots/${snapshotId}/vendors/${encodeURIComponent(code)}/documents`); }
   apAgingDocuments(snapshotId: number, f: { bucket?: number | null; type?: string; search?: string } = {}) { let p = new HttpParams(); if (f.bucket !== undefined && f.bucket !== null) p = p.set('bucket', f.bucket); if (f.type) p = p.set('type', f.type); if (f.search) p = p.set('search', f.search); return this.http.get<ApAgingDocument[]>(`${this.base}/aging/snapshots/${snapshotId}/documents`, { params: p }); }
   apAgingImport(file: File, company?: string, notes?: string) { const fd = new FormData(); fd.append('file', file); if (company) fd.append('company', company); if (notes) fd.append('notes', notes); return this.http.post<ApAgingSnapshot>(`${this.base}/aging/import`, fd); }
-  readInvoice(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead>(`${this.base}/read-invoice`, fd); }
-  readRecon(file: File) { const fd = new FormData(); fd.append('file', file, file.name); return this.http.post<InvoiceRead & { invoiceNumbers?: string[] }>(`${this.base}/read-recon`, fd); }
+  readInvoice(file: File, onProgress?: (pct: number) => void) { const fd = new FormData(); fd.append('file', file, file.name); return this.postProgress<InvoiceRead>(`${this.base}/read-invoice`, fd, onProgress); }
+  readRecon(file: File, onProgress?: (pct: number) => void) { const fd = new FormData(); fd.append('file', file, file.name); return this.postProgress<InvoiceRead & { invoiceNumbers?: string[] }>(`${this.base}/read-recon`, fd, onProgress); }
   booksInvoices(q: string, company?: string, take = 20) { let p = new HttpParams().set('q', q).set('take', take); if (company) p = p.set('company', company); return this.http.get<BooksInvoiceHit[]>(`${this.base}/books-invoices`, { params: p }); }
   linkInvoice(id: number, itemId: number, bookInvoiceId: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/link-invoice`, { bookInvoiceId }); }
 
-  upload(id: number, file: File, docType?: string, itemId?: number | null, supersedesDocumentId?: number, versionReason?: string) {
+  /** POST multipart and report the upload percentage (0–100) as the bytes go up; resolves with the body once the server replies. */
+  private postProgress<T>(url: string, fd: FormData, onProgress?: (pct: number) => void): Observable<T> {
+    return this.http.post<T>(url, fd, { reportProgress: true, observe: 'events' }).pipe(
+      map(ev => {
+        if (ev.type === HttpEventType.UploadProgress && onProgress) onProgress(ev.total ? Math.min(100, Math.round(ev.loaded * 100 / ev.total)) : 0);
+        return ev;
+      }),
+      filter(ev => ev.type === HttpEventType.Response),
+      map(ev => (ev as any).body as T)
+    );
+  }
+
+  upload(id: number, file: File, docType?: string, itemId?: number | null, supersedesDocumentId?: number, versionReason?: string, onProgress?: (pct: number) => void) {
     const fd = new FormData();
     fd.append('file', file, file.name);
     if (docType) fd.append('docType', docType);
     if (itemId) fd.append('itemId', String(itemId));
     if (supersedesDocumentId) fd.append('supersedesDocumentId', String(supersedesDocumentId));
     if (versionReason) fd.append('versionReason', versionReason);
-    return this.http.post<BatchDetail>(`${this.base}/batches/${id}/documents`, fd);
+    return this.postProgress<BatchDetail>(`${this.base}/batches/${id}/documents`, fd, onProgress);
   }
   markNa(id: number, docType: string, itemId: number | null, reason: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/documents/na`, { docType, itemId, reason }); }
   updateDoc(id: number, docId: number, dto: { docType?: string; itemId?: number; documentDate?: string }) { return this.http.put<BatchDetail>(`${this.base}/batches/${id}/documents/${docId}`, dto); }

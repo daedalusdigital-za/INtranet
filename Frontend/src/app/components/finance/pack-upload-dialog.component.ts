@@ -1,14 +1,15 @@
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpEventType } from '@angular/common/http';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, filter, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
 import { FinanceAccessService } from '../../services/finance-access.service';
@@ -46,7 +47,7 @@ interface DetectResult {
 @Component({
   selector: 'app-pack-upload-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatProgressBarModule],
   template: `
   <div class="pk">
     <!-- ───────── header ───────── -->
@@ -115,7 +116,10 @@ interface DetectResult {
         <!-- Contents + rules -->
         <h3 class="pk__h pk__h--mt">What's in the pack</h3>
         @if (detecting()) {
-          <div class="pk__busy"><mat-spinner diameter="18"></mat-spinner> Reading each page…</div>
+          <div class="pk__prog">
+            <div class="pk__prog-head"><mat-icon>{{ upPct() < 100 ? 'cloud_upload' : 'document_scanner' }}</mat-icon><span>{{ upPct() < 100 ? 'Uploading the scan' : 'Reading each page…' }}</span><b>{{ upPct() < 100 ? upPct() + '%' : '' }}</b></div>
+            <mat-progress-bar [mode]="upPct() < 100 ? 'determinate' : 'indeterminate'" [value]="upPct()"></mat-progress-bar>
+          </div>
         }
         <ul class="pk__contents">
           @for (k of kinds; track k.key) {
@@ -237,7 +241,13 @@ interface DetectResult {
     <!-- ───────── footer ───────── -->
     <footer class="pk__foot">
       <div class="pk__status">
-        @if (error()) { <span class="pk__err"><mat-icon>error</mat-icon> {{ error() }}</span> }
+        @if (saving()) {
+          <div class="pk__prog pk__prog--foot">
+            <div class="pk__prog-head"><mat-icon>{{ upPct() < 100 ? 'cloud_upload' : 'save' }}</mat-icon><span>{{ upPct() < 100 ? 'Uploading' : (mode() === 'scan' ? 'Saving the pack…' : 'Combining and saving…') }}</span><b>{{ upPct() < 100 ? upPct() + '%' : '' }}</b></div>
+            <mat-progress-bar [mode]="upPct() < 100 ? 'determinate' : 'indeterminate'" [value]="upPct()"></mat-progress-bar>
+          </div>
+        }
+        @else if (error()) { <span class="pk__err"><mat-icon>error</mat-icon> {{ error() }}</span> }
         @else if (!hasFiles()) { <mat-icon>looks_one</mat-icon> Add the document{{ mode() === 'assemble' ? 's' : '' }} to begin. }
         @else if (!verified()) { <mat-icon>looks_two</mat-icon> Confirm the invoice number. }
         @else if (!company) { <mat-icon>looks_3</mat-icon> Pick the company the invoice was issued from. }
@@ -257,6 +267,9 @@ interface DetectResult {
   `,
   styles: [`
     :host { display:block; }
+    .pk__prog { display:grid; gap:6px; margin:6px 0 10px; }
+    .pk__prog--foot { flex:1; margin:0; }
+    .pk__prog-head { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--color-text-2); mat-icon { font-size:18px; width:18px; height:18px; color:var(--color-primary); } span { flex:1; } b { font-variant-numeric: tabular-nums; color:var(--color-primary); } }
     .pk__welly { margin-top:12px; border:1px solid var(--color-line); border-radius:10px; padding:10px 12px; background: color-mix(in srgb, var(--color-primary, #4f46e5) 6%, var(--color-surface, #fff)); }
     .pk__welly-head { display:flex; align-items:center; gap:8px; font-size:13px; mat-icon { font-size:18px; width:18px; height:18px; color: var(--color-primary, #4f46e5); } small { color: var(--color-text-muted); } .pk__sp { flex:1; } }
     .pk__welly-body { margin:6px 0 0; white-space:pre-wrap; font: inherit; font-size:12.5px; line-height:1.45; color: var(--color-text); }
@@ -450,11 +463,22 @@ export class PackUploadDialogComponent {
   }
 
   // ───── detect ─────
+  /** Upload percentage for the current detect / save request; 100 = bytes are up, server is working. */
+  upPct = signal(0);
+  private postProgress<T>(url: string, form: FormData): Promise<T> {
+    this.upPct.set(0);
+    return firstValueFrom(this.http.post<T>(url, form, { reportProgress: true, observe: 'events' }).pipe(
+      map(ev => { if (ev.type === HttpEventType.UploadProgress) this.upPct.set(ev.total ? Math.min(100, Math.round(ev.loaded * 100 / ev.total)) : 0); return ev; }),
+      filter(ev => ev.type === HttpEventType.Response),
+      map(ev => (ev as any).body as T)
+    ));
+  }
+
   private async runDetect(file: File): Promise<void> {
     this.detecting.set(true); this.detect.set(null); this.error.set('');
     try {
       const form = new FormData(); form.append('file', file);
-      const r = await firstValueFrom(this.http.post<DetectResult>(`${this.api}/finance/packs/detect`, form));
+      const r = await this.postProgress<DetectResult>(`${this.api}/finance/packs/detect`, form);
       this.detect.set(r);
       if (r.analysis && r.analysis.status !== 'UNKNOWN') {
         const found = new Set(r.analysis.typesFound);
@@ -539,10 +563,10 @@ export class PackUploadDialogComponent {
       url = `${this.api}/finance/packs/assemble`;
       this.parts().forEach(p => { form.append('files', p.file); form.append('kinds', p.kind); });
     }
-    this.http.post<any>(url, form).subscribe({
-      next: r => { this.saving.set(false); this.toast.info(`Pack ${r?.pack?.packNumber ?? ''} saved for ${this.invoice()}.`); this.ref.close(r?.pack ?? true); },
-      error: e => { this.saving.set(false); this.error.set(e?.error?.error || e?.error?.message || 'Saving the pack failed.'); },
-    });
+    this.postProgress<any>(url, form).then(
+      r => { this.saving.set(false); this.toast.info(`Pack ${r?.pack?.packNumber ?? ''} saved for ${this.invoice()}.`); this.ref.close(r?.pack ?? true); },
+      e => { this.saving.set(false); this.error.set(e?.error?.error || e?.error?.message || 'Saving the pack failed.'); }
+    );
   }
 
   fmtSize(b: number): string { return b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`; }

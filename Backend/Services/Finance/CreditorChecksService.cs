@@ -111,7 +111,7 @@ public class CreditorChecksService
         {
             try
             {
-                var pages = await _ocr.ExtractPageTextsAsync(absolutePath, contentType, 15);
+                var pages = await _ocr.ExtractPageTextsFastAsync(absolutePath, contentType, 15);
                 ex.Text = string.Join("\n", pages);
                 if (ex.Text.Trim().Length > 0) ex.Method = "ocr";
                 if (ex.Pages == 0) ex.Pages = pages.Count;

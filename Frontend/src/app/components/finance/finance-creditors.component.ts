@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
@@ -33,7 +34,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 @Component({
   selector: 'app-finance-creditors',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule, SecureSrcDirective, PaymentHistoryComponent],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatProgressBarModule, MatCheckboxModule, SecureSrcDirective, PaymentHistoryComponent],
   template: `
   @if (!meta()) {
     <div class="cr-state"><mat-spinner diameter="36"></mat-spinner><p>Opening creditors…</p></div>
@@ -261,6 +262,18 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     }
 
     <!-- Shared digital-signature block: saved signature from the profile, or draw one now -->
+    @if (progress(); as p) {
+      <div class="up-strip" role="status" aria-live="polite">
+        <div class="up-head">
+          <mat-icon>{{ p.pct < 100 ? 'cloud_upload' : 'document_scanner' }}</mat-icon>
+          <span class="up-label">{{ p.label }}</span>
+          <b class="up-pct">{{ p.pct < 100 ? p.pct + '%' : 'reading…' }}</b>
+        </div>
+        <mat-progress-bar [mode]="p.pct < 100 ? 'determinate' : 'indeterminate'" [value]="p.pct"></mat-progress-bar>
+        <small>{{ p.pct < 100 ? 'Uploading ' + p.file : 'Uploaded — reading the text off the pages (scans take longer)' }}@if (p.total > 1) { · file {{ p.index }} of {{ p.total }} }</small>
+      </div>
+    }
+
     <ng-template #sigBlock let-caption>
       <div class="sig-block">
         <div class="sig-head"><mat-icon>verified_user</mat-icon> <b>Digital signature</b> <small>{{ caption }}</small></div>
@@ -774,6 +787,9 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         .who { display: flex; flex-direction: column; min-width: 0; b { font-size: var(--text-sm); } small { color: var(--color-text-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } }
       .hint.warn { color: var(--color-warn); mat-icon { color: inherit; } } }
     .sent-to { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-primary); mat-icon { font-size: 18px; width: 18px; height: 18px; } }
+    .up-strip { position: fixed; right: 20px; bottom: 20px; z-index: 1200; width: min(380px, calc(100vw - 40px)); background: var(--color-surface, #fff); border: 1px solid var(--color-line); border-radius: var(--radius-md, 10px); box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 10px 14px 12px; display: grid; gap: 6px;
+      .up-head { display: flex; align-items: center; gap: 8px; mat-icon { color: var(--color-primary); } .up-label { flex: 1; font-weight: 600; font-size: var(--text-sm); } .up-pct { font-variant-numeric: tabular-nums; color: var(--color-primary); } }
+      small { color: var(--color-text-2); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
     .sig-block { border: 1px solid var(--color-line); border-radius: var(--radius-sm); padding: 10px 12px; margin: 0 0 var(--space-3); background: var(--color-canvas, #f8fafc);
       .sig-head { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); margin-bottom: 8px; mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); } small { color: var(--color-text-3); } }
       .sig-modes { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -1213,17 +1229,18 @@ export class FinanceCreditorsComponent implements OnInit {
         const itemId = f === 'new' ? (r.items[r.items.length - 1]?.id ?? 0) : (f as number);
         this.itemForm.set(null); this.apply(r); this.openItem.set(itemId); this.clearInvoice();
         if (!itemId) return;
+        const total = (file ? 1 : 0) + (recon ? 1 : 0) + (sage ? 1 : 0); let n = 0;
         const attachSage = (afterMsg: string) => {
-          if (!sage) { this.toast.done(afterMsg); return; }
+          if (!sage) { this.untrack(); this.toast.done(afterMsg); return; }
           this.busy.set(true);
-          this.api.upload(b.id, sage, 'SageAgedPayables', itemId).subscribe({ next: x => this.apply(x, afterMsg + ' + Sage aged payables'), error: e => this.fail(e, 'Saved, but the Sage aged payables PDF could not be attached — upload it under the payment.') });
+          this.api.upload(b.id, sage, 'SageAgedPayables', itemId, undefined, undefined, this.track('Attaching Sage aged payables', sage, ++n, total)).subscribe({ next: x => { this.untrack(); this.apply(x, afterMsg + ' + Sage aged payables'); }, error: e => { this.untrack(); this.fail(e, 'Saved, but the Sage aged payables PDF could not be attached — upload it under the payment.'); } });
         };
         const attachRecon = (afterMsg: string) => {
           if (!recon) { attachSage(afterMsg); return; }
           this.busy.set(true);
-          this.api.upload(b.id, recon, 'SupplierRecon', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachSage(afterMsg + ' + recon'); }, error: e => this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.') });
+          this.api.upload(b.id, recon, 'SupplierRecon', itemId, undefined, undefined, this.track('Attaching the recon', recon, ++n, total)).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachSage(afterMsg + ' + recon'); }, error: e => { this.untrack(); this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.'); } });
         };
-        if (file) { this.busy.set(true); this.api.upload(b.id, file, this.primaryDocType(), itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon(this.isPrepayment() ? 'Payment added and quote attached' : 'Payment added and invoice attached'); }, error: e => this.fail(e, this.isPrepayment() ? 'Payment saved but the quote could not be attached.' : 'Payment saved but the invoice could not be attached.') }); }
+        if (file) { this.busy.set(true); this.api.upload(b.id, file, this.primaryDocType(), itemId, undefined, undefined, this.track(this.isPrepayment() ? 'Attaching the quote' : 'Attaching the invoice', file, ++n, total)).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon(this.isPrepayment() ? 'Payment added and quote attached' : 'Payment added and invoice attached'); }, error: e => { this.untrack(); this.fail(e, this.isPrepayment() ? 'Payment saved but the quote could not be attached.' : 'Payment saved but the invoice could not be attached.'); } }); }
         else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and linked to the Books invoice'); }, error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
       },
       error: e => this.fail(e, "Couldn't save the payment.")
@@ -1260,9 +1277,9 @@ export class FinanceCreditorsComponent implements OnInit {
     const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
     if (!/\.pdf$/i.test(f.name)) { this.toast.warn('PDF only.'); return; }
     this.pendingInvoiceFile = f; this.pendingLink = null; this.reading.set(true); this.readInfo.set('');
-    this.api.readInvoice(f).subscribe({
+    this.api.readInvoice(f, this.track(this.isPrepayment() ? 'Reading the quote' : 'Reading the invoice', f)).subscribe({
       next: r => {
-        this.reading.set(false); const d = this.itemDraft; const filled: string[] = [];
+        this.untrack(); this.reading.set(false); const d = this.itemDraft; const filled: string[] = [];
         if (r.supplierName && !d.supplierName) { d.supplierName = r.supplierName; filled.push('supplier'); }
         if (r.amount && !d.amount) { d.amount = r.amount; filled.push('amount'); }
         if (r.vatNumber && !d.supplierVatNumber) d.supplierVatNumber = r.vatNumber;
@@ -1278,7 +1295,7 @@ export class FinanceCreditorsComponent implements OnInit {
         const want = this.primaryDocType();
         if (r.suggestedType && r.suggestedType !== want && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a ${this.isPrepayment() ? 'quote' : 'tax invoice'} — it will still be attached as the ${this.isPrepayment() ? 'quote' : 'invoice'}.`);
       },
-      error: e => { this.reading.set(false); this.readInfo.set('could not read'); this.toast.error(e?.error?.message || "Couldn't read the PDF — it will still be attached."); }
+      error: e => { this.untrack(); this.reading.set(false); this.readInfo.set('could not read'); this.toast.error(e?.error?.message || "Couldn't read the PDF — it will still be attached."); }
     });
   }
   openPicker(): void { this.picker.set(true); this.pickerQ = this.itemDraft.supplierName || ''; this.searchBooks(); }
@@ -1296,12 +1313,20 @@ export class FinanceCreditorsComponent implements OnInit {
     if (!h.hasPdf) this.toast.warn('That Books invoice has no PDF — the link will be recorded but you may still need to upload the invoice.');
   }
   clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingReconFile = null; this.pendingSageFile = null; this.reconInfo.set(''); this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
+  /** Upload progress strip (bottom-right): pct <100 = bytes going up, 100 = server is reading the document. */
+  progress = signal<{ label: string; file: string; pct: number; index: number; total: number } | null>(null);
+  private track(label: string, file: File, index = 1, total = 1): (pct: number) => void {
+    this.progress.set({ label, file: file.name, pct: 0, index, total });
+    return pct => this.progress.update(p => p ? { ...p, pct } : p);
+  }
+  private untrack(): void { this.progress.set(null); }
   reconChosen(e: Event): void {
     const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
     if (!/\.(xlsx|xls|csv|pdf)$/i.test(f.name)) { this.toast.warn('The recon must be an Excel file (.xlsx/.xls), CSV or PDF.'); return; }
     this.pendingReconFile = f; this.reconInfo.set('reading…');
-    this.api.readRecon(f).subscribe({
+    this.api.readRecon(f, this.track('Reading the recon', f)).subscribe({
       next: r => {
+        this.untrack();
         const d = this.itemDraft; const filled: string[] = [];
         if (r.supplierName && !d.supplierName) { d.supplierName = r.supplierName; filled.push('supplier'); }
         if (r.amount && !d.amount) { d.amount = Math.abs(r.amount); filled.push('amount'); }
@@ -1327,10 +1352,10 @@ export class FinanceCreditorsComponent implements OnInit {
     const pdfs = files.filter(f => /\.pdf$/i.test(f.name) || (sheetOk && /\.(xlsx|xls|csv)$/i.test(f.name)));
     if (!pdfs.length) { this.toast.warn(sheetOk ? 'PDF or Excel/CSV files only.' : 'PDF files only — one document per file. Excel recons go in the Supplier recon slot (use its Upload button).'); return; }
     if (!sheetOk && files.some(f => /\.(xlsx|xls|csv)$/i.test(f.name))) { const items = this.batch()?.items ?? []; const it = items.find(i => i.id === itemId); const slot = (it?.required ?? []).find(r => r.docType === 'SupplierRecon'); if (slot && files.filter(f => /\.(xlsx|xls|csv)$/i.test(f.name)).length === 1 && pdfs.length === files.length - 1) { /* a spreadsheet dropped with PDFs — send it to the recon slot */ const sheet = files.find(f => /\.(xlsx|xls|csv)$/i.test(f.name))!; this.api.upload(b.id, sheet, 'SupplierRecon', itemId).subscribe({ next: r => { this.batch.set(r); this.toast.done('Spreadsheet attached as the supplier recon'); }, error: e => this.toast.error(`${sheet.name}: ${e?.error?.message || 'upload failed'}`) }); } else this.toast.warn('Spreadsheets are only accepted as the supplier recon — use that slot\'s Upload button.'); }
-    this.busy.set(true); let i = 0; this.toast.info(pdfs.length === 1 ? 'Reading the document…' : `Reading ${pdfs.length} documents… scanned PDFs take a little longer`);
-    const next = () => { if (i >= pdfs.length) { this.busy.set(false); this.toast.done(docType ? 'Attached' : `${pdfs.length} file(s) attached — check the document type we guessed`); return; }
+    this.busy.set(true); let i = 0;
+    const next = () => { if (i >= pdfs.length) { this.untrack(); this.busy.set(false); this.toast.done(docType ? 'Attached' : `${pdfs.length} file(s) attached — check the document type we guessed`); return; }
       const f = pdfs[i++]; const rep = this.pendingReplace;
-      this.api.upload(b.id, f, docType || undefined, itemId, rep?.id, rep?.versionReason).subscribe({ next: r => { this.batch.set(r); this.pendingReplace = null; next(); }, error: e => { this.toast.error(`${f.name}: ${e?.error?.message || 'upload failed'}`); next(); } }); };
+      this.api.upload(b.id, f, docType || undefined, itemId, rep?.id, rep?.versionReason, this.track(docType ? `Attaching ${this.docTitle(docType)}` : 'Attaching document', f, i, pdfs.length)).subscribe({ next: r => { this.batch.set(r); this.pendingReplace = null; next(); }, error: e => { this.toast.error(`${f.name}: ${e?.error?.message || 'upload failed'}`); next(); } }); };
     next();
   }
   retype(d: BatchDoc, t: string): void { const b = this.batch()!; this.api.updateDoc(b.id, d.id, { docType: t }).subscribe({ next: r => this.batch.set(r), error: e => this.fail(e, "Couldn't change the type.") }); }

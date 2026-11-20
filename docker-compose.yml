@@ -120,8 +120,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2g
-          cpus: '4.0'
+          # OCR (tesseract/pdftoppm) runs one process per core and ~300 MB per page; the host has 48 cores / 255 GB.
+          memory: 8g
+          cpus: '12.0'
 
   # SearXNG - Self-hosted web search engine for Welly
   searxng:
