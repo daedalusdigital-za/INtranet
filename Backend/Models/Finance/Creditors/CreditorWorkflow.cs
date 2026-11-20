@@ -136,7 +136,7 @@ public static class CreditorDocTypes
     public const string ProofOfWork = "ProofOfWork";
     public const string BankLetter = "BankLetter";
     public const string WrittenInstruction = "WrittenInstruction";
-    /// <summary>Legacy — requisitions / payment requests live in their own module now and are no longer attached to packs.</summary>
+    /// <summary>Internal request / requisition form — optional supporting paper on prepayments.</summary>
     public const string Requisition = "Requisition";
     public const string CreditNoteForm = "CreditNoteForm";
     public const string CustomerReason = "CustomerReason";
@@ -157,6 +157,7 @@ public static class CreditorDocTypes
         (PurchaseOrder, "Purchase order", "item"),
         (Grv, "GRV / delivery note / POD", "item"),
         (ProofOfWork, "Proof of work (photos, reg, sign-off)", "item"),
+        (Requisition, "Request form", "item"),
         (BankLetter, "Bank letter < 3 months + AVS", "item"),
         (SageAgedPayables, "Sage aged payables (PDF)", "item"),
         (WrittenInstruction, "Written instruction + invoices settled", "item"),
@@ -203,18 +204,22 @@ public static class CreditorDocRules
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
             new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
+        // Prepayment: paid before delivery on the strength of the PO and quote(s); the request form is optional.
+        // Invoice, recon and GRV only become required when the prepayment is closed after delivery.
         [CreditorPaymentTypes.Prepayment] = new[]
         {
-            new Rule(CreditorDocTypes.TaxInvoice, false, AfterDelivery: true), new Rule(CreditorDocTypes.SupplierRecon, false, AfterDelivery: true),
-            new Rule(CreditorDocTypes.Quote, false), new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false, AfterDelivery: true),
-            new Rule(CreditorDocTypes.BankLetter, false), Sage,
+            new Rule(CreditorDocTypes.PurchaseOrder, true), new Rule(CreditorDocTypes.Quote, true),
+            new Rule(CreditorDocTypes.Requisition, false), new Rule(CreditorDocTypes.BankLetter, false),
+            new Rule(CreditorDocTypes.TaxInvoice, false, AfterDelivery: true), new Rule(CreditorDocTypes.SupplierRecon, false, AfterDelivery: true), new Rule(CreditorDocTypes.Grv, false, AfterDelivery: true),
+            Sage,
         },
+        // Intercompany: no tax invoice or written instruction — the recon, statement and supplier recon carry the pack.
         [CreditorPaymentTypes.Intercompany] = new[]
         {
             new Rule(CreditorDocTypes.CreditorsRecon, true),
             new Rule(CreditorDocTypes.SupplierStatement, true),
-            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
-            new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage, new Rule(CreditorDocTypes.WrittenInstruction, true),
+            new Rule(CreditorDocTypes.SupplierRecon, true),
+            new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
         [CreditorPaymentTypes.Utility] = new[]
         {

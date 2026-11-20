@@ -493,7 +493,7 @@ public class CreditorChecksService
 
     public static string Label(string key)
     {
-        if (key == CreditorDocTypes.Requisition) return "Requisition / payment request (legacy)";
+        if (key == CreditorDocTypes.Requisition) return "Request form";
         var d = CreditorDocTypes.All.FirstOrDefault(x => x.Key == key);
         if (d.Key != null) return d.Title;
         var p = CreditorPaymentTypes.All.FirstOrDefault(x => x.Key == key);
