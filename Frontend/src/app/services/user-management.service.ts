@@ -19,6 +19,8 @@ export interface User {
   createdAt: Date;
   permissions?: string[];
   hasProfilePicture: boolean;
+  /** A saved hand-signature image is on file (stamped on payment packs etc.). */
+  hasSignature?: boolean;
   companyIds?: number[];
   linkedEmpId?: string;
   linkedEmployeeName?: string;

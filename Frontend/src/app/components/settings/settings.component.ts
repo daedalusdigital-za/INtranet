@@ -37,6 +37,7 @@ import { ConfirmService } from '../../ui/confirm.service';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { environment } from '../../../environments/environment';
+import { SecureSrcDirective } from '../../directives/secure-src.directive';
 import { PodUploaderComponent } from './pod-uploader.component';
 import { CreditorAdminComponent } from '../finance/creditor-admin.component';
 import { DocumentTemplatesComponent } from '../admin/document-templates/document-templates.component';
@@ -78,6 +79,7 @@ import * as XLSX from 'xlsx';
     PageHeaderComponent,
     SkeletonRowsComponent,
     EmptyStateComponent,
+    SecureSrcDirective,
     PodUploaderComponent,
     CreditorAdminComponent,
     DocumentTemplatesComponent,
@@ -449,6 +451,21 @@ import * as XLSX from 'xlsx';
                       <div class="co-chips">
                         @for (code of userCompanyCodes(user); track code) { <span class="co-chip" [matTooltip]="userCompanyName(code)">{{ code }}</span> }
                         @empty { <span style="color:var(--color-text-3)">—</span> }
+                      </div>
+                    </td>
+                  </ng-container>
+
+                  <ng-container matColumnDef="signature">
+                    <th mat-header-cell *matHeaderCellDef matTooltip="Saved hand signature — stamped on payment packs and other documents this person signs">Signature</th>
+                    <td mat-cell *matCellDef="let user">
+                      <div class="sig-cell">
+                        @if (user.hasSignature) {
+                          <img class="sig-thumb" [appSecureSrc]="signatureUrl(user)" alt="Signature" matTooltip="Click to replace" (click)="sigInput.click()">
+                          <button mat-icon-button class="sig-x" matTooltip="Remove signature" aria-label="Remove signature" (click)="removeSignature(user)"><mat-icon>close</mat-icon></button>
+                        } @else {
+                          <button mat-stroked-button class="sig-add" (click)="sigInput.click()" [disabled]="sigBusy === user.userId"><mat-icon>draw</mat-icon> {{ sigBusy === user.userId ? 'Uploading…' : 'Upload' }}</button>
+                        }
+                        <input #sigInput type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="uploadSignature(user, $event)">
                       </div>
                     </td>
                   </ng-container>
@@ -2156,6 +2173,10 @@ import * as XLSX from 'xlsx';
     .role-chip mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; vertical-align: middle; }
     .role-chip.exec { box-shadow: 0 0 0 2px rgba(109,40,217,.18); }
     .co-chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 200px; }
+    .sig-cell { display: flex; align-items: center; gap: 4px; }
+    .sig-thumb { height: 34px; max-width: 120px; object-fit: contain; background: #fff; border: 1px solid var(--color-line, #e5e7eb); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
+    .sig-x { width: 28px; height: 28px; line-height: 28px; mat-icon { font-size: 16px; width: 16px; height: 16px; } }
+    .sig-add { height: 30px; line-height: 30px; font-size: 12px; padding: 0 10px; mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 2px; } }
     .co-chip { font-size: 10px; font-weight: 700; letter-spacing: .3px; padding: 2px 6px; border-radius: 6px; background: var(--color-surface-2); color: var(--color-text-2); border: 1px solid var(--color-line); }
     tr.tier-row-executive td:first-child { border-left: 3px solid #6d28d9; }
     tr.tier-row-managers td:first-child { border-left: 3px solid #2563eb; }
@@ -3892,7 +3913,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
     { key: 'admins', label: 'Admins & Super Admins', icon: 'admin_panel_settings' },
     { key: 'staff', label: 'Staff', icon: 'badge' },
   ];
-  userColumns = ['avatar', 'name', 'role', 'department', 'companies', 'status', 'actions'];
+  userColumns = ['avatar', 'name', 'role', 'department', 'companies', 'signature', 'status', 'actions'];
+
+  // ── Saved signatures (stamped on payment packs and other signed documents) ──
+  sigBusy: number | null = null;
+  private sigStamp: Record<number, number> = {};
+  signatureUrl(u: any): string { return `${environment.apiUrl}/users/${u.userId}/signature?v=${this.sigStamp[u.userId] || 0}`; }
+  uploadSignature(u: any, e: Event): void {
+    const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { this.toast.warn('Signature image must be 2 MB or smaller.'); return; }
+    const fd = new FormData(); fd.append('file', f);
+    this.sigBusy = u.userId;
+    this.http.put(`${environment.apiUrl}/users/${u.userId}/signature`, fd).subscribe({
+      next: () => { this.sigBusy = null; u.hasSignature = true; this.sigStamp[u.userId] = Date.now(); this.toast.done(`Signature saved for ${u.name} ${u.surname}`); },
+      error: err => { this.sigBusy = null; this.toast.error(err?.error?.message || "Couldn't upload the signature."); }
+    });
+  }
+  async removeSignature(u: any): Promise<void> {
+    if (!await this.confirmDialog.ask({ title: 'Remove signature?', message: `${u.name} ${u.surname} will have to draw a signature each time they sign until a new one is uploaded.`, confirmText: 'Remove', danger: true })) return;
+    this.http.delete(`${environment.apiUrl}/users/${u.userId}/signature`).subscribe({
+      next: () => { u.hasSignature = false; this.toast.done('Signature removed'); },
+      error: err => this.toast.error(err?.error?.message || "Couldn't remove the signature.")
+    });
+  }
   usersLoading = false;
   showUserDialog = false;
   editingUser: User | null = null;
