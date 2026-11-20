@@ -131,6 +131,7 @@ public class CreditorPacksController : ControllerBase
             companies,
             paymentTypes = CreditorPaymentTypes.All.Select(p => new { key = p.Key, title = p.Title }),
             docTypes = CreditorDocTypes.All.Select(d => new { key = d.Key, title = d.Title, scope = d.Scope }),
+            paymentModes = CreditorPaymentModes.All.Select(m => new { key = m, title = CreditorPaymentModes.Title(m) }),
             rules = CreditorPaymentTypes.All.ToDictionary(p => p.Key, p => CreditorDocRules.For(p.Key).Select(r => new { r.DocType, r.Required, r.AfterDelivery, r.IfReturned, r.WithRecon })),
             statuses = new[] { CreditorWorkflow.Draft, CreditorWorkflow.ChecksFailed, CreditorWorkflow.AwaitingAccountant, CreditorWorkflow.QueriedByAccountant, CreditorWorkflow.AwaitingDirector, CreditorWorkflow.QueriedByDirector, CreditorWorkflow.Rejected, CreditorWorkflow.Approved, CreditorWorkflow.LoadedOnBank, CreditorWorkflow.Paid, CreditorWorkflow.Closed }
                 .Select(s => new { key = s, title = CreditorWorkflow.Title(s) }),
@@ -363,7 +364,8 @@ public class CreditorPacksController : ControllerBase
     // ───────────────────────── items ─────────────────────────
 
     public record ItemDto(string SupplierName, string? SupplierVatNumber, string? InvoiceNumbers, string? Description, decimal Amount,
-        string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string? PaymentReference, bool StockReturned);
+        string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string? PaymentReference, bool StockReturned,
+        bool IsUrgent = false, string? PaymentMode = null);
 
     [HttpPost("batches/{id:int}/items")]
     public async Task<IActionResult> AddItem(int id, [FromBody] ItemDto dto)
@@ -414,6 +416,7 @@ public class CreditorPacksController : ControllerBase
     {
         it.SupplierName = d.SupplierName.Trim(); it.SupplierVatNumber = d.SupplierVatNumber?.Replace(" ", ""); it.InvoiceNumbers = d.InvoiceNumbers?.Trim();
         it.Description = d.Description; it.Amount = d.Amount; it.PaymentReference = d.PaymentReference; it.StockReturned = d.StockReturned;
+        it.IsUrgent = d.IsUrgent; it.PaymentMode = CreditorPaymentModes.Normalise(d.PaymentMode);
         if (paymentType == CreditorPaymentTypes.Prepayment)
         {
             // Prepayments are paid off the quote; Treasury loads the beneficiary manually from the bank letter, so nothing is captured here.
@@ -711,7 +714,11 @@ public class CreditorPacksController : ControllerBase
         if (locked && type == CreditorDocTypes.ProofOfPayment && itemId != null) b.Items.First(i => i.Id == itemId).PaidAt ??= DateTime.UtcNow;
 
         b.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        // Re-check right before saving: the OCR above can take a while and a second click on "Upload" with the same file
+        // may have been racing us (both passed the in-memory check above). The filtered unique index is the last line of defence.
+        if (await _db.PaymentBatchDocuments.AsNoTracking().AnyAsync(d => d.BatchId == id && d.Sha256 == sha)) { TryDelete(abs); return Conflict(new { message = "This exact file is already on the batch." }); }
+        try { await _db.SaveChangesAsync(); }
+        catch (DbUpdateException dup) when (dup.InnerException?.Message.Contains("UX_PaymentBatchDocuments_Batch_Sha") == true) { TryDelete(abs); return Conflict(new { message = "This exact file is already on the batch." }); }
         return Ok(await DetailAsync(id));
     }
 
@@ -1555,7 +1562,8 @@ public class CreditorPacksController : ControllerBase
             items = b.Items.OrderBy(i => i.SortOrder).Select(i => new
             {
                 i.Id, i.SupplierName, i.SupplierVatNumber, i.InvoiceNumbers, i.Description, i.Amount, i.BankName, i.AccountNumber, i.BranchCode, i.AccountHolder, i.PaymentReference,
-                i.StockReturned, i.DecisionStatus, i.DecisionComment, i.DecidedAt, i.PrepaymentOpen, i.PaidAt, i.SortOrder,
+                i.StockReturned, i.IsUrgent, i.PaymentMode, paymentModeTitle = CreditorPaymentModes.Title(i.PaymentMode),
+                i.DecisionStatus, i.DecisionComment, i.DecidedAt, i.PrepaymentOpen, i.PaidAt, i.SortOrder,
                 required = itemReq[i.Id],
                 recommended = itemRec[i.Id],
                 documents = b.Documents.Where(d => d.ItemId == i.Id).OrderBy(d => d.DocType).ThenBy(d => d.Version).Select(DocDto)

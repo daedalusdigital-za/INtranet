@@ -150,7 +150,7 @@ public class CreditorPackPdfService
         var approved = items.Where(i => i.DecisionStatus != "Rejected").Sum(i => i.Amount);
         var prepay = b.PaymentType == CreditorPaymentTypes.Prepayment;
         string Row(PaymentBatchItem i, int n) => $@"<tr class='{(i.DecisionStatus == "Rejected" ? "rej" : "")}'>
-<td>{n}</td><td>{E(i.SupplierName)}</td><td>{E(i.InvoiceNumbers)}</td><td>{E(i.Description)}</td><td>{(prepay && string.IsNullOrEmpty(i.AccountNumber) ? "<em>Treasury</em>" : E(i.AccountNumber))}</td><td class='r'>{i.Amount:N2}</td><td>{E(i.DecisionStatus)}</td></tr>";
+<td>{n}</td><td>{E(i.SupplierName)}{(i.IsUrgent ? " <b style='color:#b91c1c'>URGENT</b>" : "")}{(i.PaymentMode == CreditorPaymentModes.PayAndClear ? " <em>(pay &amp; clear)</em>" : "")}</td><td>{E(i.InvoiceNumbers)}</td><td>{E(i.Description)}</td><td>{(prepay && string.IsNullOrEmpty(i.AccountNumber) ? "<em>Treasury</em>" : E(i.AccountNumber))}</td><td class='r'>{i.Amount:N2}</td><td>{E(i.DecisionStatus)}</td></tr>";
 
         string Slot(Slot s)
         {

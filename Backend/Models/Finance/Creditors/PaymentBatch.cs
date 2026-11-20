@@ -97,6 +97,15 @@ public class PaymentBatch
     public virtual ICollection<PaymentBatchEvent> Events { get; set; } = new List<PaymentBatchEvent>();
 }
 
+public static class CreditorPaymentModes
+{
+    public const string Normal = "Normal";
+    public const string PayAndClear = "PayAndClear";
+    public static readonly string[] All = { Normal, PayAndClear };
+    public static string Title(string? m) => m == PayAndClear ? "Pay and clear" : "Normal payment";
+    public static string Normalise(string? m) => m == PayAndClear ? PayAndClear : Normal;
+}
+
 /// <summary>One payment (one beneficiary) inside a batch — a line on the payment schedule.</summary>
 public class PaymentBatchItem
 {
@@ -118,6 +127,11 @@ public class PaymentBatchItem
 
     /// <summary>Credit notes only: stock physically came back → warehouse GRV + collection slip are mandatory.</summary>
     public bool StockReturned { get; set; }
+
+    /// <summary>Flagged by the preparer: this one must go out ahead of the normal run.</summary>
+    public bool IsUrgent { get; set; }
+    /// <summary>Normal (default) | PayAndClear — pay and clear the supplier account in the same run.</summary>
+    [Required, MaxLength(20)] public string PaymentMode { get; set; } = CreditorPaymentModes.Normal;
 
     /// <summary>Pending | Approved | Queried | Rejected — the director's decision per payment.</summary>
     [Required, MaxLength(20)] public string DecisionStatus { get; set; } = "Pending";

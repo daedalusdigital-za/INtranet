@@ -204,12 +204,12 @@ public static class CreditorDocRules
             new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true),
             new Rule(CreditorDocTypes.PurchaseOrder, false), new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage,
         },
-        // Prepayment: paid before delivery on the strength of the PO and quote(s); the request form is optional.
+        // Prepayment: starts from the signed request form, then the quote, bank letter and PO — all four are required before it can go up.
         // Invoice, recon and GRV only become required when the prepayment is closed after delivery.
         [CreditorPaymentTypes.Prepayment] = new[]
         {
-            new Rule(CreditorDocTypes.PurchaseOrder, true), new Rule(CreditorDocTypes.Quote, true),
-            new Rule(CreditorDocTypes.Requisition, false), new Rule(CreditorDocTypes.BankLetter, false),
+            new Rule(CreditorDocTypes.Requisition, true), new Rule(CreditorDocTypes.Quote, true),
+            new Rule(CreditorDocTypes.BankLetter, true), new Rule(CreditorDocTypes.PurchaseOrder, true),
             new Rule(CreditorDocTypes.TaxInvoice, false, AfterDelivery: true), new Rule(CreditorDocTypes.SupplierRecon, false, AfterDelivery: true), new Rule(CreditorDocTypes.Grv, false, AfterDelivery: true),
             Sage,
         },

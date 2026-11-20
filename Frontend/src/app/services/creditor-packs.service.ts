@@ -43,6 +43,7 @@ export interface BatchDoc {
 export interface BatchItem {
   id: number; supplierName: string; supplierVatNumber?: string; invoiceNumbers?: string; description?: string; amount: number;
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
+  isUrgent: boolean; paymentMode: 'Normal' | 'PayAndClear'; paymentModeTitle?: string;
   decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string; decidedAt?: string; prepaymentOpen: boolean; paidAt?: string; sortOrder: number;
   required: RequiredDoc[]; recommended: RequiredDoc[]; documents: BatchDoc[];
 }
@@ -68,6 +69,7 @@ export interface BatchApprovers { accountants: ApproverOption[]; accountantsFall
 export interface ItemInput {
   supplierName: string; supplierVatNumber?: string; invoiceNumbers?: string; description?: string; amount: number;
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
+  isUrgent: boolean; paymentMode: 'Normal' | 'PayAndClear';
 }
 export interface CreditorAlert { batchId: number; batchNumber: string; companyCode: string; status: string; code: string; title: string; severity: string; detail?: string; supplier?: string; }
 export interface SupplierHit { name: string; vatNumber?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; supplierAccount?: string; payments: number; invoices: number; lastUsed?: string; source: string; vendorCode?: string | null; agingBalance?: number | null; agingOverdue?: number | null; agingCompany?: string | null; }

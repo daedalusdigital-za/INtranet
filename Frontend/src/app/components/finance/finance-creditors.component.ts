@@ -24,7 +24,7 @@ import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, B
 type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
 
-const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoiceNumbers: '', description: '', amount: 0, bankName: '', accountNumber: '', branchCode: '', accountHolder: '', paymentReference: '', stockReturned: false };
+const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoiceNumbers: '', description: '', amount: 0, bankName: '', accountNumber: '', branchCode: '', accountHolder: '', paymentReference: '', stockReturned: false, isUrgent: false, paymentMode: 'Normal' };
 
 /**
  * Finance → Creditors. Payment packs per paying company. The screen is organised around
@@ -308,12 +308,12 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <div class="cr-itemform">
               <h4>{{ itemForm() === 'new' ? 'New payment' : 'Edit payment' }}</h4>
 
-              <h5>1 · {{ isPrepayment() ? 'Quote' : 'Invoice and recon' }}</h5>
+              <h5>1 · {{ isPrepayment() ? 'Request form' : 'Invoice and recon' }}</h5>
               <div class="inv-src">
                 @if (!pendingInvoiceFile && !pendingLink) {
-                  <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> {{ isPrepayment() ? 'Upload quote' : 'Upload invoice' }}</button>
+                  <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> {{ isPrepayment() ? 'Upload request form' : 'Upload invoice' }}</button>
                   @if (!isPrepayment()) { <button mat-stroked-button (click)="openPicker()"><mat-icon>link</mat-icon> Link from Books</button> }
-                  @if (isPrepayment()) { <small class="muted">A prepayment starts from the supplier's quote — we read the PDF and fill in who is being paid, the amount, quote number and description. The tax invoice comes later, once the goods are delivered.</small> }
+                  @if (isPrepayment()) { <small class="muted">A prepayment starts from the signed <strong>request form</strong> — we read it and fill in who is being paid, the amount and what it's for. Once the payment is added, attach the <strong>quote</strong>, <strong>bank letter</strong> and <strong>purchase order</strong> under it. The tax invoice comes later, once the goods are delivered.</small> }
                   @else { <small class="muted">We read the PDF and fill in who is being paid, the amount, invoice number, description and any bank details printed on it. Or link an invoice already captured in Books.</small> }
                   @if (reading()) { <mat-spinner diameter="18"></mat-spinner> }
                 } @else if (pendingInvoiceFile) {
@@ -391,7 +391,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 
               <h5>3 · What is it for</h5>
               <div class="row">
-                <label class="grow">{{ isPrepayment() ? 'Quote / PO numbers' : 'Invoice / reference numbers being paid' }} <input [(ngModel)]="itemDraft.invoiceNumbers" [placeholder]="isPrepayment() ? 'Q1234, PO5678' : 'INV123, INV124'"></label>
+                <label class="grow">{{ isPrepayment() ? 'Request / quote / PO numbers' : 'Invoice / reference numbers being paid' }} <input [(ngModel)]="itemDraft.invoiceNumbers" [placeholder]="isPrepayment() ? 'REQ12, Q1234, PO5678' : 'INV123, INV124'"></label>
                 <label class="grow">Description <input [(ngModel)]="itemDraft.description" placeholder="e.g. March stock, repairs to bakkie…"></label>
               </div>
 
@@ -410,6 +410,16 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               @if (b.paymentType === 'CreditNote') {
                 <mat-checkbox [(ngModel)]="itemDraft.stockReturned">Stock physically came back (warehouse GRV + collection slip will be required)</mat-checkbox>
               }
+              <h5>{{ isPrepayment() ? '4' : '5' }} · How it should be paid</h5>
+              <div class="row mode">
+                <label class="grow">Payment
+                  <select [(ngModel)]="itemDraft.paymentMode">
+                    <option value="Normal">Normal payment (default)</option>
+                    <option value="PayAndClear">Pay and clear — settle and clear the supplier account</option>
+                  </select>
+                </label>
+                <mat-checkbox [(ngModel)]="itemDraft.isUrgent" class="urgent"><mat-icon>priority_high</mat-icon> Urgent — must go out ahead of the normal run</mat-checkbox>
+              </div>
               <div class="actions">
                 @if (itemForm() === 'new' && needsRecon() && !pendingReconFile) { <small class="warn-txt"><mat-icon>warning</mat-icon> Attach the supplier recon before adding this payment.</small> }
                 @else if (itemForm() === 'new' && needsSage()) { <small class="warn-txt"><mat-icon>warning</mat-icon> The recon must come with the Sage aged payables PDF.</small> }
@@ -435,6 +445,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   {{ filledCount(it.required) }}/{{ it.required.length }} docs
                 </span>
                 @if (findingsFor(it.id).length) { <span class="flag" [class.fail]="hasFail(it.id)" [matTooltip]="findingsFor(it.id).length + ' check(s) to look at'"><mat-icon>flag</mat-icon>{{ findingsFor(it.id).length }}</span> }
+                @if (it.isUrgent) { <span class="urg" matTooltip="Flagged urgent by the preparer"><mat-icon>priority_high</mat-icon> Urgent</span> }
+                @if (it.paymentMode === 'PayAndClear') { <span class="pre pac" matTooltip="Pay and clear the supplier account">pay &amp; clear</span> }
                 @if (it.prepaymentOpen && it.paidAt) { <span class="pre">awaiting invoice + GRV</span> }
                 @if (it.decisionStatus !== 'Pending') { <span [class]="'dec ' + it.decisionStatus.toLowerCase()">{{ it.decisionStatus }}</span> }
                 <span class="amt">R {{ it.amount | number:'1.2-2' }}</span>
@@ -601,7 +613,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   @else if (b.can.uploadAfterLock && !d.isNotApplicable) { <button mat-icon-button matTooltip="Replace (reason required)" (click)="replaceDoc(d)"><mat-icon>published_with_changes</mat-icon></button> }
                 }
                 @if (!r.filled && (b.can.edit || b.can.uploadAfterLock)) {
-                  <button mat-stroked-button class="sm" (click)="pickFor(r.docType, itemId)"><mat-icon>upload</mat-icon> Upload</button>
+                  <button mat-stroked-button class="sm" [disabled]="busy()" (click)="pickFor(r.docType, itemId)"><mat-icon>upload</mat-icon> Upload</button>
                   @if (b.can.edit) { <button mat-button class="sm" (click)="markNa(r, itemId)">N/A</button> }
                 }
               </div>
@@ -629,7 +641,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                     @if (b.can.edit) { <button mat-icon-button matTooltip="Remove" (click)="removeDoc(d)"><mat-icon>close</mat-icon></button> }
                   }
                   @if (b.can.edit || b.can.uploadAfterLock) {
-                    <button mat-stroked-button class="sm" (click)="pickFor(r.docType, itemId)"><mat-icon>upload</mat-icon> {{ r.filled ? 'Add another' : 'Upload' }}</button>
+                    <button mat-stroked-button class="sm" [disabled]="busy()" (click)="pickFor(r.docType, itemId)"><mat-icon>upload</mat-icon> {{ r.filled ? 'Add another' : 'Upload' }}</button>
                     @if (b.can.edit && !r.filled) { <button mat-button class="sm" (click)="markNa(r, itemId)">N/A</button> }
                   }
                 </div>
@@ -815,6 +827,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       .inv-src { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; small { flex-basis: 100%; } }
       .inv-src.recon { padding: 8px 10px; border-radius: var(--radius-md); border: 1px dashed var(--color-line); small { display: inline-flex; align-items: center; gap: 4px; flex-basis: auto; color: var(--color-text-3); mat-icon { font-size: 16px; width: 16px; height: 16px; } } &.missing { border-color: var(--color-warn); background: var(--color-warn-soft, rgba(245,158,11,.08)); small { color: var(--color-warn); } } }
       .actions .warn-txt { display: inline-flex; align-items: center; gap: 4px; color: var(--color-warn); font-size: var(--text-xs); margin-right: auto; mat-icon { font-size: 16px; width: 16px; height: 16px; } }
+      .row.mode { align-items: flex-end; select { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); font: inherit; background: var(--color-surface); } .urgent { padding-bottom: 4px; mat-icon { font-size: 16px; width: 16px; height: 16px; vertical-align: -3px; color: var(--color-danger); } } }
       .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: var(--text-sm); background: var(--color-surface-3); mat-icon { font-size: 18px; width: 18px; height: 18px; } &.ok { background: var(--color-ok-soft); color: var(--color-ok); } }
       .picker { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 10px; margin-bottom: 10px;
         input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); font: inherit; margin-bottom: 6px; }
@@ -833,7 +846,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         .flag { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-xs); font-weight: 700; color: var(--color-warn); mat-icon { font-size: 16px; width: 16px; height: 16px; } &.fail { color: var(--color-danger); } }
         .amt { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; min-width: 120px; text-align: right; font-size: var(--text-md); }
         .dec { font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: 999px; &.approved { background: var(--color-ok-soft); color: var(--color-ok); } &.queried { background: var(--color-warn-soft); color: var(--color-warn); } &.rejected { background: var(--color-danger-soft); color: var(--color-danger); } }
-        .pre { font-size: var(--text-xs); color: var(--color-warn); font-weight: 600; } }
+        .pre { font-size: var(--text-xs); color: var(--color-warn); font-weight: 600; &.pac { color: var(--color-info, #2563eb); } }
+        .urg { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-xs); font-weight: 700; padding: 2px 8px 2px 4px; border-radius: 999px; background: var(--color-danger-soft); color: var(--color-danger); mat-icon { font-size: 14px; width: 14px; height: 14px; } } }
       .decide { display: flex; align-items: center; gap: 8px; padding: 6px 12px 10px 40px; font-size: var(--text-sm); color: var(--color-text-2); flex-wrap: wrap; border-top: 1px dashed var(--color-line);
         button mat-icon { font-size: 16px; width: 16px; height: 16px; } .sel-ok { background: var(--color-ok-soft); border-color: var(--color-ok); color: var(--color-ok); } .sel-warn { background: var(--color-warn-soft); border-color: var(--color-warn); color: var(--color-warn); } .sel-bad { background: var(--color-danger-soft); border-color: var(--color-danger); color: var(--color-danger); } em { color: var(--color-text-3); } }
       .deccomment { display: flex; align-items: center; gap: 6px; padding: 4px 12px 8px 40px; font-size: var(--text-xs); color: var(--color-text-2); mat-icon { font-size: 14px; width: 14px; height: 14px; } }
@@ -1047,7 +1061,9 @@ export class FinanceCreditorsComponent implements OnInit {
   rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned && !r.withRecon).map(r => this.docTitle(r.docType)); const withRecon = rules.filter(r => r.withRecon).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (withRecon.length ? ` · with every recon: ${withRecon.join(', ')}` : '') + (opt.length ? ` · optional: ${opt.join(', ')}` : ''); }
   isPrepayment(): boolean { return this.batch()?.paymentType === 'Prepayment'; }
   /** Doc type the "first upload" in the add-payment form is stored as: the quote for prepayments, the tax invoice otherwise. */
-  primaryDocType(): string { return this.isPrepayment() ? 'Quote' : 'TaxInvoice'; }
+  primaryDocType(): string { return this.isPrepayment() ? 'Requisition' : 'TaxInvoice'; }
+  /** Human name of the step-1 document ("request form" / "invoice"). */
+  primaryName(): string { return this.isPrepayment() ? 'request form' : 'invoice'; }
   reconSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); }
   needsRecon(): boolean { return this.reconSlot() && !!(this.pendingInvoiceFile || this.pendingLink); }
   sageSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SageAgedPayables' && r.withRecon); }
@@ -1217,7 +1233,7 @@ export class FinanceCreditorsComponent implements OnInit {
   bankFile(): void { const b = this.batch()!; this.api.bankFile(b.id).subscribe({ next: blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.batchNumber}-bank.csv`; a.click(); URL.revokeObjectURL(a.href); this.open(b.id); }, error: e => this.fail(e, "Couldn't export.") }); }
 
   // ── items ──
-  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned } : { ...EMPTY_ITEM }; this.clearInvoice(); this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new'); }
+  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned, isUrgent: !!it.isUrgent, paymentMode: it.paymentMode === 'PayAndClear' ? 'PayAndClear' : 'Normal' } : { ...EMPTY_ITEM }; this.clearInvoice(); this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new'); }
   cancelItem(): void { this.itemForm.set(null); this.clearInvoice(); }
   saveItem(): void {
     const b = this.batch()!; const f = this.itemForm(); this.busy.set(true);
@@ -1240,7 +1256,7 @@ export class FinanceCreditorsComponent implements OnInit {
           this.busy.set(true);
           this.api.upload(b.id, recon, 'SupplierRecon', itemId, undefined, undefined, this.track('Attaching the recon', recon, ++n, total)).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachSage(afterMsg + ' + recon'); }, error: e => { this.untrack(); this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.'); } });
         };
-        if (file) { this.busy.set(true); this.api.upload(b.id, file, this.primaryDocType(), itemId, undefined, undefined, this.track(this.isPrepayment() ? 'Attaching the quote' : 'Attaching the invoice', file, ++n, total)).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon(this.isPrepayment() ? 'Payment added and quote attached' : 'Payment added and invoice attached'); }, error: e => { this.untrack(); this.fail(e, this.isPrepayment() ? 'Payment saved but the quote could not be attached.' : 'Payment saved but the invoice could not be attached.'); } }); }
+        if (file) { this.busy.set(true); this.api.upload(b.id, file, this.primaryDocType(), itemId, undefined, undefined, this.track(`Attaching the ${this.primaryName()}`, file, ++n, total)).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon(this.isPrepayment() ? 'Payment added and request form attached — now add the quote, bank letter and purchase order below' : 'Payment added and invoice attached'); }, error: e => { this.untrack(); this.fail(e, `Payment saved but the ${this.primaryName()} could not be attached.`); } }); }
         else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and linked to the Books invoice'); }, error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
       },
       error: e => this.fail(e, "Couldn't save the payment.")
@@ -1277,13 +1293,13 @@ export class FinanceCreditorsComponent implements OnInit {
     const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
     if (!/\.pdf$/i.test(f.name)) { this.toast.warn('PDF only.'); return; }
     this.pendingInvoiceFile = f; this.pendingLink = null; this.reading.set(true); this.readInfo.set('');
-    this.api.readInvoice(f, this.track(this.isPrepayment() ? 'Reading the quote' : 'Reading the invoice', f)).subscribe({
+    this.api.readInvoice(f, this.track(`Reading the ${this.primaryName()}`, f)).subscribe({
       next: r => {
         this.untrack(); this.reading.set(false); const d = this.itemDraft; const filled: string[] = [];
         if (r.supplierName && !d.supplierName) { d.supplierName = r.supplierName; filled.push('supplier'); }
         if (r.amount && !d.amount) { d.amount = r.amount; filled.push('amount'); }
         if (r.vatNumber && !d.supplierVatNumber) d.supplierVatNumber = r.vatNumber;
-        if (r.invoiceNumber && !d.invoiceNumbers) { d.invoiceNumbers = r.invoiceNumber; filled.push(this.isPrepayment() ? 'quote no.' : 'invoice no.'); }
+        if (r.invoiceNumber && !d.invoiceNumbers) { d.invoiceNumbers = r.invoiceNumber; filled.push(this.isPrepayment() ? 'reference no.' : 'invoice no.'); }
         if (r.description && !d.description) { d.description = r.description; filled.push('description'); }
         else if (!d.description && r.orderNumber) { d.description = `Order ${r.orderNumber}`; filled.push('order no.'); }
         if (r.customerAccount && !d.paymentReference) { d.paymentReference = r.customerAccount; filled.push('reference'); }
@@ -1293,7 +1309,7 @@ export class FinanceCreditorsComponent implements OnInit {
         else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details printed on the invoice — verify against the bank letter'); }
         this.readInfo.set(!r.readable ? 'could not read the text — fill in by hand' : filled.length ? 'filled: ' + filled.join(', ') : 'read, nothing recognised');
         const want = this.primaryDocType();
-        if (r.suggestedType && r.suggestedType !== want && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a ${this.isPrepayment() ? 'quote' : 'tax invoice'} — it will still be attached as the ${this.isPrepayment() ? 'quote' : 'invoice'}.`);
+        if (r.suggestedType && r.suggestedType !== want && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a ${this.isPrepayment() ? 'request form' : 'tax invoice'} — it will still be attached as the ${this.primaryName()}.`);
       },
       error: e => { this.untrack(); this.reading.set(false); this.readInfo.set('could not read'); this.toast.error(e?.error?.message || "Couldn't read the PDF — it will still be attached."); }
     });
@@ -1342,10 +1358,10 @@ export class FinanceCreditorsComponent implements OnInit {
   }
 
   // ── documents ──
-  pickFor(docType: string, itemId: number | null): void { this.pendingType = docType; this.pendingItem = itemId; this.pendingReplace = null; this.pickAccept = this.isSheetSlot(docType) ? '.xlsx,.xls,.csv,application/pdf' : 'application/pdf'; setTimeout(() => this.fileInput?.nativeElement.click()); }
+  pickFor(docType: string, itemId: number | null): void { if (this.busy()) { this.toast.info('Still attaching the previous file — one moment.'); return; } this.pendingType = docType; this.pendingItem = itemId; this.pendingReplace = null; this.pickAccept = this.isSheetSlot(docType) ? '.xlsx,.xls,.csv,application/pdf' : 'application/pdf'; setTimeout(() => this.fileInput?.nativeElement.click()); }
   replaceDoc(d: BatchDoc): void { const reason = prompt('Why is this document being replaced? (kept in the history)'); if (!reason) return; this.pendingType = d.docType; this.pendingItem = d.itemId ?? null; this.pendingReplace = { ...d, versionReason: reason }; this.pickAccept = this.isSheetSlot(d.docType) ? '.xlsx,.xls,.csv,application/pdf' : 'application/pdf'; setTimeout(() => this.fileInput?.nativeElement.click()); }
   filesChosen(e: Event): void { const inp = e.target as HTMLInputElement; const files = Array.from(inp.files ?? []); inp.value = ''; this.uploadAll(files, this.pendingItem, this.pendingType); }
-  drop(e: DragEvent, itemId: number | null): void { e.preventDefault(); this.uploadAll(Array.from(e.dataTransfer?.files ?? []), itemId, ''); }
+  drop(e: DragEvent, itemId: number | null): void { e.preventDefault(); if (this.busy()) { this.toast.info('Still attaching the previous file — one moment.'); return; } this.uploadAll(Array.from(e.dataTransfer?.files ?? []), itemId, ''); }
   private uploadAll(files: File[], itemId: number | null, docType: string): void {
     const b = this.batch()!;
     const sheetOk = this.isSheetSlot(docType);
