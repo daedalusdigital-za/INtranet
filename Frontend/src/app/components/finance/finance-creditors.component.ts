@@ -108,9 +108,9 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           <label class="grow">Note for the approvers (optional) <input type="text" [(ngModel)]="newBatch.notes" placeholder="e.g. Week 46 daily creditors"></label>
         </div>
         @if (companyFor(newBatch.companyCode); as co) {
-          <p class="hint" [class.warn]="!co.accountantUserId">
-            <mat-icon>{{ co.accountantUserId ? 'verified_user' : 'warning' }}</mat-icon>
-            <span>This pack will go to <strong>{{ co.accountantName || 'any accountant (none assigned yet)' }}</strong> for approval and then to <strong>{{ co.directorName || 'a director (none assigned yet)' }}</strong> to sign.</span>
+          <p class="hint" [class.warn]="!co.approvers?.accountants?.length">
+            <mat-icon>{{ co.approvers?.accountants?.length ? 'verified_user' : 'warning' }}</mat-icon>
+            <span>This pack will go to <strong>{{ names(co.approvers?.accountants) || 'any accountant (none assigned to this company yet)' }}</strong> for approval and then to <strong>{{ names(co.approvers?.directors) || 'a director (none assigned to this company yet)' }}</strong> to sign.</span>
           </p>
         }
         <p class="hint"><mat-icon>checklist</mat-icon> <span>Documents needed per payment for <strong>{{ typeTitle(newBatch.paymentType) }}</strong>: {{ rulesSummary(newBatch.paymentType) }}</span></p>
@@ -889,13 +889,14 @@ export class FinanceCreditorsComponent implements OnInit {
   private responsibleFor(code: string, kind: 'acc' | 'dir'): boolean {
     const me = this.meta()!.me; if (me.isAdmin) return true;
     const c = this.companyFor(code); if (!c) return true;
-    return kind === 'acc' ? (!c.accountantUserId && !c.backupApproverUserId) || c.accountantUserId === me.userId || c.backupApproverUserId === me.userId
-                          : (!c.directorUserId && !c.delegateDirectorUserId) || c.directorUserId === me.userId || c.delegateDirectorUserId === me.userId;
+    const list = (kind === 'acc' ? c.approvers?.accountants : c.approvers?.directors) ?? [];
+    return list.length === 0 || list.some(p => p.userId === me.userId);
   }
   count(s: string): number { return this.rows().filter(r => r.status === s).length; }
   countOpen(): number { return this.rows().filter(r => !['Closed', 'Rejected'].includes(r.status)).length; }
   isSentBack(s: string) { return this.sentBack.includes(s); }
   companyFor(code: string) { return this.meta()?.companies.find(c => c.code === code); }
+  names(list?: { name: string }[] | null): string { return (list ?? []).map(p => p.name).join(' / '); }
   typeTitle(k: string) { return this.meta()?.paymentTypes.find(p => p.key === k)?.title ?? k; }
   statusTitle(k: string) { return this.meta()?.statuses.find(s => s.key === k)?.title ?? k; }
   docTitle(k: string) { return this.meta()?.docTypes.find(d => d.key === k)?.title ?? k; }
@@ -908,7 +909,7 @@ export class FinanceCreditorsComponent implements OnInit {
   needsSage(): boolean { return this.sageSlot() && !!this.pendingReconFile && !this.pendingSageFile; }
   sageChosen(e: Event): void { const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return; if (!/\.pdf$/i.test(f.name)) { this.toast.warn('Sage aged payables must be a PDF.'); return; } this.pendingSageFile = f; }
   isSheetSlot(t: string) { return ['SupplierRecon', 'CreditorsRecon', 'PaymentSchedule'].includes(t); }
-  responsibleName(id?: number) { if (!id) return ''; for (const x of this.meta()?.companies ?? []) { if (x.accountantUserId === id) return x.accountantName ?? ''; if (x.backupApproverUserId === id) return x.backupApproverName ?? ''; if (x.directorUserId === id) return x.directorName ?? ''; if (x.delegateDirectorUserId === id) return x.delegateDirectorName ?? ''; } return ''; }
+  responsibleName(id?: number) { if (!id) return ''; for (const x of this.meta()?.companies ?? []) { const a = x.approvers; const hit = [...(a?.accountants ?? []), ...(a?.directors ?? []), ...(a?.treasurers ?? []), ...(a?.clerks ?? [])].find(p => p.userId === id); if (hit) return hit.name; } return ''; }
 
   waitingOn(r: BatchRow): string {
     const c = this.companyFor(r.companyCode);

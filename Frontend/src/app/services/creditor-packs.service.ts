@@ -9,6 +9,13 @@ export interface CreditorCompany {
   backupApproverUserId?: number | null; backupApproverName?: string | null;
   directorUserId?: number | null; directorName?: string | null;
   delegateDirectorUserId?: number | null; delegateDirectorName?: string | null;
+  /** Resolved from job role + Users › Companies (or the pinned override above). */
+  approvers?: CompanyApprovers;
+}
+export interface Approver { userId: number; name: string; role: string; email?: string | null; pinned: boolean; }
+export interface CompanyApprovers {
+  accountants: Approver[]; directors: Approver[]; treasurers: Approver[]; clerks: Approver[];
+  accountantsPinned: boolean; directorsPinned: boolean;
 }
 export interface DocRule { docType: string; required: boolean; afterDelivery: boolean; ifReturned: boolean; withRecon?: boolean; }
 export interface CreditorMeta {

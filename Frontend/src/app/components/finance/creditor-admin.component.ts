@@ -29,9 +29,9 @@ interface Person { id: number; name: string; email: string; role: string; title?
   <div class="ca-state"><mat-spinner diameter="28"></mat-spinner> Loading paying companies…</div>
 } @else {
   <p class="lead">
-    Each paying company needs an <b>accountant</b> who must approve every payment pack after the clerks have prepared and checked it, and a <b>director</b> who signs it off.
-    A back-up / delegate can step in when they're away. Who <i>can</i> be an accountant, director, clerk or treasurer comes from the person's job role under
-    <a routerLink="/settings/users">Settings › Users</a> — nothing to tick here.
+    Who approves, signs, pays and prepares a company's payment packs is worked out automatically from <a routerLink="/settings/users">Settings › Users</a>:
+    the person's <b>job role</b> (Accountant / Finance Manager → approves · Director → signs · Treasurer → pays · Creditor Clerk → prepares) and the <b>companies</b> assigned to them.
+    Nothing has to be set here — only use <i>Override</i> if a specific company must be approved by one particular person regardless of the Users setup.
   </p>
 
   <!-- Who can do what, from job roles -->
@@ -66,10 +66,32 @@ interface Person { id: number; name: string; email: string; role: string; title?
           </div>
           <input class="act" [(ngModel)]="c.activity" placeholder="What the company does (shown on packs)">
 
+          <!-- Resolved from Users (job role + companies) -->
+          @if (c.id) {
+            <div class="resolved">
+              @for (r of resolvedRows(c); track r.key) {
+                <div class="rr" [class.none]="!r.people.length">
+                  <mat-icon [matTooltip]="r.title">{{ r.icon }}</mat-icon>
+                  <b>{{ r.title }}</b>
+                  <span class="rr-people">
+                    @if (r.people.length) { @for (p of r.people; track p.userId) { <span class="chip" [class.pin]="p.pinned" [matTooltip]="p.role + (p.pinned ? ' · pinned here' : ' · from Users')">{{ p.name }}</span> } }
+                    @else { <i>{{ r.empty }}</i> }
+                  </span>
+                </div>
+              }
+            </div>
+          }
+
+          <button type="button" class="ovr-toggle" (click)="toggleOverride(c)">
+            <mat-icon>{{ showOverride(c) ? 'expand_less' : 'tune' }}</mat-icon>
+            {{ showOverride(c) ? 'Hide override' : (hasPins(c) ? 'Override in use — edit' : 'Override (pin a specific person)') }}
+          </button>
+
+          @if (showOverride(c)) {
           <div class="pick">
-            <label>Accountant <small>must approve every pack</small></label>
+            <label>Accountant <small>pin one person; blank = from Users</small></label>
             <select [(ngModel)]="c.accountantUserId">
-              <option [ngValue]="null">— not set (any accountant may approve) —</option>
+              <option [ngValue]="null">— from Users (recommended) —</option>
               @for (p of accountants(); track p.id) { <option [ngValue]="p.id">{{ p.name }} · {{ p.role }}</option> }
             </select>
           </div>
@@ -81,9 +103,9 @@ interface Person { id: number; name: string; email: string; role: string; title?
             </select>
           </div>
           <div class="pick">
-            <label>Director <small>signs and releases the pack</small></label>
+            <label>Director <small>pin one person; blank = from Users</small></label>
             <select [(ngModel)]="c.directorUserId">
-              <option [ngValue]="null">— not set (any director may sign) —</option>
+              <option [ngValue]="null">— from Users (recommended) —</option>
               @for (p of directors(); track p.id) { <option [ngValue]="p.id">{{ p.name }} · {{ p.role }}</option> }
             </select>
           </div>
@@ -94,9 +116,10 @@ interface Person { id: number; name: string; email: string; role: string; title?
               @for (p of directors(); track p.id) { @if (p.id !== c.directorUserId) { <option [ngValue]="p.id">{{ p.name }} · {{ p.role }}</option> } }
             </select>
           </div>
+          }
 
           <div class="co-foot">
-            @if (!c.accountantUserId || !c.directorUserId) { <span class="warn"><mat-icon>warning_amber</mat-icon> {{ !c.accountantUserId && !c.directorUserId ? 'No accountant or director set' : !c.accountantUserId ? 'No accountant set' : 'No director set' }}</span> }
+            @if (!c.approvers?.accountants?.length || !c.approvers?.directors?.length) { <span class="warn"><mat-icon>warning_amber</mat-icon> {{ !c.approvers?.accountants?.length && !c.approvers?.directors?.length ? 'No accountant or director assigned to this company' : !c.approvers?.accountants?.length ? 'No accountant assigned to this company' : 'No director assigned to this company' }}</span> }
             @else { <span class="ok"><mat-icon>check_circle</mat-icon> Ready</span> }
             <span class="grow"></span>
             @if (isDirty(c)) { <button mat-button (click)="revert(c)">Revert</button> }
@@ -105,7 +128,7 @@ interface Person { id: number; name: string; email: string; role: string; title?
         </div>
       }
     </div>
-    <p class="hint"><mat-icon>info</mat-icon> <span>Until a company has an accountant set, <b>any</b> accountant may approve its packs (same for directors). The preparer can never approve their own pack. Directors work in <b>Executive › Directors</b>; the treasurer loads and pays from <b>Finance › Creditors › Schedule</b>.</span></p>
+    <p class="hint"><mat-icon>info</mat-icon> <span>To change who approves a company, open the person under <b>Settings › Users</b> and set their job role and companies. If a company has no accountant assigned at all, <b>any</b> accountant may approve its packs (same for directors). The preparer can never approve their own pack. Directors work in <b>Executive › Directors</b>; the treasurer loads and pays from <b>Finance › Creditors › Schedule</b>.</span></p>
   </section>
 }
   `,
@@ -135,6 +158,13 @@ interface Person { id: number; name: string; email: string; role: string; title?
 .co-head .name { flex: 1; font-weight: 600; }
 .co-head .active { display:flex; align-items:center; gap:4px; font-size: 12px; white-space:nowrap; color: var(--color-text-2,#475569); input { width:auto; min-width:0; height:auto; } }
 .act { font-size: 12px; }
+.resolved { display:flex; flex-direction:column; gap:6px; padding: 8px 10px; border-radius: 10px; background: var(--color-canvas,#f8fafc); border: 1px solid var(--color-line,#e5e7eb); }
+.rr { display:flex; align-items:flex-start; gap:6px; font-size: 12.5px; mat-icon { font-size:16px; width:16px; height:16px; color: var(--color-primary,#4f46e5); margin-top:1px; } b { min-width: 72px; color: var(--color-text-2,#475569); font-weight:600; } }
+.rr.none i { color: var(--color-warn,#b45309); font-style: normal; }
+.rr-people { display:flex; flex-wrap:wrap; gap:4px; flex:1; }
+.chip { background: var(--color-surface,#fff); border:1px solid var(--color-line-strong,#cbd5e1); border-radius: 999px; padding: 1px 8px; font-size: 12px; white-space:nowrap; }
+.chip.pin { border-color: var(--color-primary,#4f46e5); color: var(--color-primary,#4f46e5); font-weight:600; }
+.ovr-toggle { align-self:flex-start; display:inline-flex; align-items:center; gap:4px; background:none; border:none; padding:2px 0; font: inherit; font-size: 12px; color: var(--color-text-3,#64748b); cursor:pointer; mat-icon { font-size:16px; width:16px; height:16px; } &:hover { color: var(--color-primary,#4f46e5); } }
 .pick { display:flex; flex-direction:column; gap: 3px; label { font-size: 12px; font-weight: 600; color: var(--color-text-2,#475569); small { font-weight: 400; color: var(--color-text-3,#64748b); margin-left: 4px; } } }
 input, select { height:36px; padding:0 8px; border:1px solid var(--color-line-strong,#cbd5e1); border-radius:8px; background: var(--color-surface,#fff); color: inherit; font: inherit; font-size:13px; width:100%; min-width: 0; }
 input:disabled { background: var(--color-canvas,#f8fafc); color: var(--color-text-3,#64748b); }
@@ -194,6 +224,21 @@ export class CreditorAdminComponent implements OnInit {
   }
 
   addCompanyRow(): void { this.companies.set([...this.companies(), { code: '', name: '', isActive: true, sortOrder: this.companies().length + 1, accountantUserId: null, backupApproverUserId: null, directorUserId: null, delegateDirectorUserId: null }]); }
+
+  /** Who the workflow will actually use for this company (from Users, or the pinned override). */
+  resolvedRows(c: Partial<CreditorCompany>) {
+    const a = c.approvers;
+    return [
+      { key: 'clerk', title: 'Prepares', icon: 'edit_document', people: a?.clerks ?? [], empty: 'No creditor clerk assigned to this company' },
+      { key: 'acc', title: 'Approves', icon: 'fact_check', people: a?.accountants ?? [], empty: 'No accountant assigned — any accountant may approve' },
+      { key: 'dir', title: 'Signs', icon: 'draw', people: a?.directors ?? [], empty: 'No director assigned — any director may sign' },
+      { key: 'bank', title: 'Pays', icon: 'account_balance', people: a?.treasurers ?? [], empty: 'No treasurer assigned to this company' },
+    ];
+  }
+  private overrideOpen = new Set<number>();
+  hasPins(c: Partial<CreditorCompany>): boolean { return !!(c.accountantUserId || c.backupApproverUserId || c.directorUserId || c.delegateDirectorUserId); }
+  showOverride(c: Partial<CreditorCompany>): boolean { return !c.id || this.overrideOpen.has(c.id) || this.hasPins(c); }
+  toggleOverride(c: Partial<CreditorCompany>): void { if (!c.id) return; if (this.overrideOpen.has(c.id)) this.overrideOpen.delete(c.id); else this.overrideOpen.add(c.id); }
 
   saveCompany(c: Partial<CreditorCompany>): void {
     if (c.backupApproverUserId && c.backupApproverUserId === c.accountantUserId) c.backupApproverUserId = null;

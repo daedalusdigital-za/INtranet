@@ -718,16 +718,15 @@ export class FinanceComponent implements OnInit {
 
   // ─── Payment packs awaiting the accountant ───
 
-  /** Packs in "Awaiting accountant" that the signed-in user is responsible for (company accountant / back-up, or any accountant if the company has none set). */
+  /** Packs in "Awaiting accountant" that the signed-in user is responsible for: accountants assigned to the paying company (Users › Companies), or any accountant if the company has none. */
   get packsForMe(): BatchRow[] {
     const m = this.packMeta; if (!m) return [];
     if (!(m.me.accountant || m.me.isAdmin)) return [];
     return this.packsAwaiting.filter(b => {
       if (b.preparedByUserId === m.me.userId && !m.me.isAdmin) return false;
-      const c = m.companies.find(x => x.code === b.companyCode);
       if (m.me.isAdmin) return true;
-      if (!c || (!c.accountantUserId && !c.backupApproverUserId)) return true;
-      return c.accountantUserId === m.me.userId || c.backupApproverUserId === m.me.userId;
+      const accs = m.companies.find(x => x.code === b.companyCode)?.approvers?.accountants ?? [];
+      return accs.length === 0 || accs.some(a => a.userId === m.me.userId);
     });
   }
   /** Awaiting-accountant packs that belong to someone else's company (shown greyed, for context). */

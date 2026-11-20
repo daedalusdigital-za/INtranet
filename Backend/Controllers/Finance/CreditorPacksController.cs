@@ -69,20 +69,31 @@ public class CreditorPacksController : ControllerBase
 
     private async Task<bool> HasAsync(string role) => IsSystemAdmin || (await PermsAsync()).Contains(role) || (await PermsAsync()).Contains("*");
 
+    private Dictionary<string, CompanyApprovers>? _approvers;
+    /// <summary>Approvers per paying company (job role + company assignment, or the pinned override). Loaded once per request.</summary>
+    private async Task<Dictionary<string, CompanyApprovers>> ApproversAsync() => _approvers ??= await ApproverResolver.AllAsync(_db);
+    private async Task<CompanyApprovers> ApproversForAsync(string? code)
+    {
+        var all = await ApproversAsync();
+        return code != null && all.TryGetValue(code, out var a) ? a : new CompanyApprovers { CompanyCode = code ?? "" };
+    }
+
     private async Task<bool> IsAccountantForAsync(CreditorCompany? c)
     {
         if (IsSystemAdmin) return true;
         if (!await HasAsync(CreditorWorkflow.RoleAccountant)) return false;
-        if (c == null || (c.AccountantUserId == null && c.BackupApproverUserId == null)) return true; // not yet configured: any accountant
-        return c.AccountantUserId == UserId || c.BackupApproverUserId == UserId;
+        if (c == null) return true;
+        var a = await ApproversForAsync(c.Code);
+        return a.Accountants.Count == 0 || a.IsAccountant(UserId); // nobody assigned to this company yet: any accountant
     }
 
     private async Task<bool> IsDirectorForAsync(CreditorCompany? c)
     {
         if (IsSystemAdmin) return true;
         if (!await HasAsync(CreditorWorkflow.RoleDirector)) return false;
-        if (c == null || (c.DirectorUserId == null && c.DelegateDirectorUserId == null)) return true;
-        return c.DirectorUserId == UserId || c.DelegateDirectorUserId == UserId;
+        if (c == null) return true;
+        var a = await ApproversForAsync(c.Code);
+        return a.Directors.Count == 0 || a.IsDirector(UserId);
     }
 
     private async Task<bool> CanPrepareAsync(PaymentBatch b) =>
@@ -123,15 +134,27 @@ public class CreditorPacksController : ControllerBase
         var cs = await _db.CreditorCompanies.AsNoTracking().OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync();
         var ids = cs.SelectMany(c => new[] { c.AccountantUserId, c.BackupApproverUserId, c.DirectorUserId, c.DelegateDirectorUserId }).Where(i => i != null).Select(i => i!.Value).Distinct().ToList();
         var names = await _db.Users.AsNoTracking().Where(u => ids.Contains(u.UserId)).ToDictionaryAsync(u => u.UserId, u => u.Name + " " + u.Surname);
+        var approvers = await ApproversAsync();
         string? N(int? id) => id != null && names.TryGetValue(id.Value, out var n) ? n : null;
-        return cs.Select(c => (object)new
+        return cs.Select(c =>
         {
-            c.Id, c.Code, c.Name, c.Activity, c.IsActive, c.SortOrder, c.OperatingCompanyId,
-            allowed = scope.Allows(c.Code),
-            c.AccountantUserId, accountantName = N(c.AccountantUserId),
-            c.BackupApproverUserId, backupApproverName = N(c.BackupApproverUserId),
-            c.DirectorUserId, directorName = N(c.DirectorUserId),
-            c.DelegateDirectorUserId, delegateDirectorName = N(c.DelegateDirectorUserId),
+            approvers.TryGetValue(c.Code, out var a);
+            object People(IEnumerable<Approver>? list) => (list ?? Enumerable.Empty<Approver>()).Select(p => new { userId = p.UserId, p.Name, p.Role, p.Email, p.Pinned }).ToList();
+            return (object)new
+            {
+                c.Id, c.Code, c.Name, c.Activity, c.IsActive, c.SortOrder, c.OperatingCompanyId,
+                allowed = scope.Allows(c.Code),
+                c.AccountantUserId, accountantName = N(c.AccountantUserId),
+                c.BackupApproverUserId, backupApproverName = N(c.BackupApproverUserId),
+                c.DirectorUserId, directorName = N(c.DirectorUserId),
+                c.DelegateDirectorUserId, delegateDirectorName = N(c.DelegateDirectorUserId),
+                // Who actually approves / signs / pays / prepares for this company (job role + Users › Companies, or the pinned override)
+                approvers = new
+                {
+                    accountants = People(a?.Accountants), directors = People(a?.Directors), treasurers = People(a?.Treasurers), clerks = People(a?.Clerks),
+                    accountantsPinned = a?.AccountantsPinned ?? false, directorsPinned = a?.DirectorsPinned ?? false
+                }
+            };
         }).ToList();
     }
 
@@ -880,8 +903,8 @@ public class CreditorPacksController : ControllerBase
             b.ReturnReason = null;
             foreach (var it in b.Items.Where(i => i.DecisionStatus == "Queried")) { it.DecisionStatus = "Pending"; it.DecisionComment = null; }
             b.Events.Add(Ev("Submitted", from, b.Status, res.Status == "REVIEW" ? $"{res.Review} item(s) for the accountant to review" : "All checks passed"));
-            var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
-            await NotifyAsync(new[] { c?.AccountantUserId, c?.BackupApproverUserId }, "Payment pack awaiting your approval", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · {CreditorChecksService.Label(b.PaymentType)}", b.Id);
+            var accs = (await ApproversForAsync(b.CompanyCode)).Accountants.Select(a => (int?)a.UserId).Where(id => id != UserId);
+            await NotifyAsync(accs, "Payment pack awaiting your approval", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · {CreditorChecksService.Label(b.PaymentType)}", b.Id);
         }
         await _db.SaveChangesAsync();
         return Ok(await DetailAsync(id));
@@ -925,7 +948,7 @@ public class CreditorPacksController : ControllerBase
             b.AccountantUserId = UserId; b.AccountantName = UserName; b.AccountantApprovedAt = DateTime.UtcNow; b.AccountantComment = dto.Comment;
             await _sign.SignAsync(new SignatureRequest { EntityType = "PaymentBatch", EntityId = b.Id, Context = "AccountantApproval", SignerUserId = UserId, SignerName = UserName, SignerRole = CreditorWorkflow.RoleAccountant, Action = "Approve", Comment = dto.Comment, Method = "Click", IpAddress = Ip(), UserAgent = Ua(), Payload = Snapshot(b) });
             b.Events.Add(Ev("AccountantApproved", from, b.Status, dto.Comment));
-            await NotifyAsync(new[] { c?.DirectorUserId, c?.DelegateDirectorUserId }, "Payment pack ready for sign-off", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · approved by {UserName}", b.Id);
+            await NotifyAsync((await ApproversForAsync(b.CompanyCode)).Directors.Select(d => (int?)d.UserId), "Payment pack ready for sign-off", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · approved by {UserName}", b.Id);
         }
         else
         {
@@ -1227,10 +1250,11 @@ public class CreditorPacksController : ControllerBase
         string Name(string code) => companies.FirstOrDefault(c => c.Code == code)?.Name ?? code;
         decimal Appr(PaymentBatch b) => b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount);
 
+        var approversAll = await ApproversAsync();
         var awaiting = all.Where(b => b.Status == CreditorWorkflow.AwaitingDirector).OrderBy(b => b.SubmittedAt).Select(b =>
         {
-            var c = companies.FirstOrDefault(x => x.Code == b.CompanyCode);
-            var forMe = IsSystemAdmin || c == null || (c.DirectorUserId == null && c.DelegateDirectorUserId == null) || c.DirectorUserId == UserId || c.DelegateDirectorUserId == UserId;
+            approversAll.TryGetValue(b.CompanyCode, out var ap);
+            var forMe = IsSystemAdmin || ap == null || ap.Directors.Count == 0 || ap.IsDirector(UserId);
             return new
             {
                 b.Id, b.BatchNumber, b.CompanyCode, companyName = Name(b.CompanyCode), b.PaymentType, paymentTypeTitle = CreditorChecksService.Label(b.PaymentType),
@@ -1348,6 +1372,7 @@ public class CreditorPacksController : ControllerBase
         var isDir = await IsDirectorForAsync(c);
         var isBank = await HasAsync(CreditorWorkflow.RoleBank);
         var editable = CreditorWorkflow.PreparerEditable.Contains(b.Status);
+        var ap = await ApproversForAsync(b.CompanyCode);
 
         object? checks = null;
         if (b.ChecksJson != null) { try { checks = JsonSerializer.Deserialize<JsonElement>(b.ChecksJson); } catch { } }
@@ -1362,7 +1387,12 @@ public class CreditorPacksController : ControllerBase
             b.AccountantUserId, b.AccountantName, b.AccountantApprovedAt, b.AccountantComment,
             b.DirectorUserId, b.DirectorName, b.DirectorSignedAt, b.DirectorComment,
             b.LockedAt, b.LockHash, b.BankExportedAt, b.PaidAt, b.ClosedAt, b.ReturnReason, b.ScheduledPayDate,
-            responsible = new { accountant = c?.AccountantUserId, backup = c?.BackupApproverUserId, director = c?.DirectorUserId, delegateDirector = c?.DelegateDirectorUserId },
+            responsible = new
+            {
+                accountant = ap.Accountants.FirstOrDefault()?.UserId, backup = ap.Accountants.Skip(1).FirstOrDefault()?.UserId,
+                director = ap.Directors.FirstOrDefault()?.UserId, delegateDirector = ap.Directors.Skip(1).FirstOrDefault()?.UserId,
+                accountants = ap.Accountants.Select(x => new { userId = x.UserId, x.Name, x.Role }), directors = ap.Directors.Select(x => new { userId = x.UserId, x.Name, x.Role })
+            },
             items = b.Items.OrderBy(i => i.SortOrder).Select(i => new
             {
                 i.Id, i.SupplierName, i.SupplierVatNumber, i.InvoiceNumbers, i.Description, i.Amount, i.BankName, i.AccountNumber, i.BranchCode, i.AccountHolder, i.PaymentReference,
