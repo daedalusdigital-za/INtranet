@@ -122,7 +122,7 @@ namespace ProjectTracker.API.Models.Cortex
     public class CortexChange
     {
         public long Id { get; set; }
-        [Required, MaxLength(4)] public string Target { get; set; } = "node"; // node | edge
+        [Required, MaxLength(20)] public string Target { get; set; } = "node"; // node | edge | graph | flow
         [Required, MaxLength(250)] public string TargetKey { get; set; } = string.Empty;
         /// <summary>created, updated, deactivated, reactivated, accepted, rejected, curated.</summary>
         [Required, MaxLength(12)] public string Kind { get; set; } = string.Empty;
