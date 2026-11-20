@@ -225,7 +225,8 @@ public static class CreditorDocRules
         {
             new Rule(CreditorDocTypes.CreditorsRecon, true),
             new Rule(CreditorDocTypes.SupplierStatement, true),
-            new Rule(CreditorDocTypes.TaxInvoice, true), new Rule(CreditorDocTypes.SupplierRecon, true), Sage,
+            // The pack-level creditors recon already covers the utility accounts, so the tax invoice is uploaded on its own — no per-invoice supplier recon.
+            new Rule(CreditorDocTypes.TaxInvoice, true), Sage,
         },
         [CreditorPaymentTypes.StaffPayment] = new[]
         {
