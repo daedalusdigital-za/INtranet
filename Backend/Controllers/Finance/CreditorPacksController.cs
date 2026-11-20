@@ -456,31 +456,43 @@ public class CreditorPacksController : ControllerBase
             if (result.TryGetValue(g.Key, out var h)) result[g.Key] = h with { Invoices = g.Count(), SupplierAccount = acc, LastUsed = latest.CreatedAt > h.LastUsed ? latest.CreatedAt : h.LastUsed, Source = "packs+books" };
             else result[g.Key] = new SupplierHit(latest.SupplierName, null, null, null, null, null, null, acc, 0, g.Count(), latest.CreatedAt, "books");
         }
-        // Vendors on the company's latest creditors aging (Sage A/P) — the suppliers most likely to be paid.
-        if (!string.IsNullOrWhiteSpace(company))
+        // Vendors on the creditors aging (Sage A/P) — the suppliers most likely to be paid. The paying company's latest
+        // snapshot first; other companies' vendors are offered too (a supplier may be new to this company but known to the group).
+        var toks = s.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var first = toks.FirstOrDefault() ?? "";
+        bool TokMatch(string name, string code) => toks.All(t => name.Contains(t, StringComparison.OrdinalIgnoreCase) || code.Contains(t, StringComparison.OrdinalIgnoreCase));
+        var latestSnaps = await _db.ApAgingSnapshots.AsNoTracking()
+            .GroupBy(x => x.CompanyCode).Select(g => g.OrderByDescending(x => x.AsOfDate).ThenByDescending(x => x.Id).Select(x => new { x.Id, x.CompanyCode, x.AsOfDate }).First())
+            .ToListAsync();
+        if (latestSnaps.Count > 0)
         {
-            var snapId = await _db.ApAgingSnapshots.AsNoTracking().Where(x => x.CompanyCode == company).OrderByDescending(x => x.AsOfDate).ThenByDescending(x => x.Id).Select(x => (int?)x.Id).FirstOrDefaultAsync();
-            if (snapId != null)
+            var snapIds = latestSnaps.Select(x => x.Id).ToList();
+            var snapCo = latestSnaps.ToDictionary(x => x.Id, x => x.CompanyCode);
+            var vendorsRaw = await _db.ApAgingVendors.AsNoTracking()
+                .Where(v => snapIds.Contains(v.SnapshotId) && (first == "" || v.VendorName.ToLower().Contains(first) || v.VendorCode.ToLower().Contains(first)))
+                .Select(v => new { v.SnapshotId, v.VendorCode, v.VendorName, v.Total, v.Overdue, v.Snapshot!.AsOfDate }).ToListAsync();
+            var vendors = vendorsRaw.Where(v => toks.Length <= 1 || TokMatch(v.VendorName, v.VendorCode))
+                .Select(v => new { v.VendorCode, v.VendorName, v.Total, v.Overdue, v.AsOfDate, Company = snapCo[v.SnapshotId], Own = string.Equals(snapCo[v.SnapshotId], company, StringComparison.OrdinalIgnoreCase) })
+                // One row per vendor name: the paying company's entry wins, then the biggest balance
+                .GroupBy(v => Key(v.VendorName)).Select(g => g.OrderByDescending(v => v.Own).ThenByDescending(v => v.Total).First())
+                .OrderByDescending(v => v.Own).ThenByDescending(v => v.Total != 0).ThenByDescending(v => v.Total)
+                .Take(string.IsNullOrWhiteSpace(company) ? 300 : 300).ToList();
+            foreach (var v in vendors)
             {
-                var vendors = await _db.ApAgingVendors.AsNoTracking()
-                    .Where(v => v.SnapshotId == snapId && (s == "" || v.VendorName.ToLower().Contains(s) || v.VendorCode.ToLower().Contains(s)))
-                    .OrderByDescending(v => v.Total != 0).ThenByDescending(v => v.Total).Take(300)
-                    .Select(v => new { v.VendorCode, v.VendorName, v.Total, v.Overdue, v.Snapshot!.AsOfDate }).ToListAsync();
-                foreach (var v in vendors)
-                {
-                    var k = Key(v.VendorName);
-                    if (result.TryGetValue(k, out var h)) result[k] = h with { VendorCode = v.VendorCode, AgingBalance = v.Total, AgingOverdue = v.Overdue, Source = h.Source + "+aging" };
-                    else result[k] = new SupplierHit(v.VendorName, null, null, null, null, null, null, null, 0, 0, v.AsOfDate, "aging", v.VendorCode, v.Total, v.Overdue);
-                }
+                var k = Key(v.VendorName);
+                if (result.TryGetValue(k, out var h)) result[k] = h with { VendorCode = v.VendorCode, AgingBalance = v.Total, AgingOverdue = v.Overdue, Source = h.Source + "+aging", AgingCompany = v.Company };
+                else result[k] = new SupplierHit(v.VendorName, null, null, null, null, null, null, null, 0, 0, v.AsOfDate, "aging", v.VendorCode, v.Total, v.Overdue, v.Company);
             }
         }
+        bool Own(SupplierHit h) => company != null && string.Equals(h.AgingCompany, company, StringComparison.OrdinalIgnoreCase);
         var list = result.Values
-            .OrderByDescending(h => s != "" && h.Name.ToLower().StartsWith(s)).ThenByDescending(h => h.Payments + h.Invoices > 0 || h.AgingBalance != 0).ThenByDescending(h => h.AgingBalance ?? 0).ThenByDescending(h => h.Payments + h.Invoices).ThenByDescending(h => h.LastUsed)
+            .Where(h => toks.Length <= 1 || TokMatch(h.Name, h.VendorCode ?? "") || h.Name.ToLower().Contains(s))
+            .OrderByDescending(h => s != "" && h.Name.ToLower().StartsWith(s)).ThenByDescending(Own).ThenByDescending(h => h.Payments + h.Invoices > 0 || h.AgingBalance != 0).ThenByDescending(h => h.AgingBalance ?? 0).ThenByDescending(h => h.Payments + h.Invoices).ThenByDescending(h => h.LastUsed)
             .Take(take).ToList();
         return Ok(list);
     }
     public record SupplierHit(string Name, string? VatNumber, string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string? PaymentReference, string? SupplierAccount, int Payments, int Invoices, DateTime LastUsed, string Source,
-        string? VendorCode = null, decimal? AgingBalance = null, decimal? AgingOverdue = null);
+        string? VendorCode = null, decimal? AgingBalance = null, decimal? AgingOverdue = null, string? AgingCompany = null);
 
     /// <summary>
     /// Read a supplier invoice before it is attached: who is being paid, the total, the VAT, the invoice number and date.

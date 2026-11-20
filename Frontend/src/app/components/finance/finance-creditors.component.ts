@@ -354,13 +354,19 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               <h5>2 · Who and how much</h5>
               <div class="row">
                 <label class="grow sup">Who is being paid?
-                  <input [(ngModel)]="itemDraft.supplierName" (ngModelChange)="searchSuppliers($event)" (focus)="searchSuppliers(itemDraft.supplierName)" (blur)="hideSuppliersSoon()" placeholder="Start typing — or click to pick from the company's creditors aging" required autocomplete="off">
-                  @if (supplierHits().length && showSuppliers()) {
+                  <input [(ngModel)]="itemDraft.supplierName" (ngModelChange)="searchSuppliers($event)" (focus)="searchSuppliers(itemDraft.supplierName)" (blur)="hideSuppliersSoon()" placeholder="Start typing a vendor from the aging, Books or a past payment — or type a new name" required autocomplete="off">
+                  @if (showSuppliers() && (supplierHits().length || (supSearched() && itemDraft.supplierName?.trim()))) {
                     <ul class="ac">
                       @for (s of supplierHits(); track s.name) {
                         <li (mousedown)="$event.preventDefault(); pickSupplier(s)">
                           <strong>{{ s.name }}</strong>
-                          <small>@if (s.vendorCode) { <span class="vc">{{ s.vendorCode }}</span> · } @if (s.agingBalance != null) { <span class="agb" [class.neg]="s.agingBalance < 0">owes R {{ s.agingBalance | number:'1.0-0' }}</span>@if (s.agingOverdue) { <em> ({{ s.agingOverdue | number:'1.0-0' }} overdue)</em> } · } @if (s.vatNumber) { VAT {{ s.vatNumber }} · } @if (s.bankName) { {{ s.bankName }} ···{{ (s.accountNumber || '').slice(-4) }} · } {{ s.payments }} payment{{ s.payments === 1 ? '' : 's' }}, {{ s.invoices }} invoice{{ s.invoices === 1 ? '' : 's' }}</small>
+                          <small>@if (s.vendorCode) { <span class="vc">{{ s.vendorCode }}</span> } @if (s.agingCompany) { <span class="vc co" [class.other]="s.agingCompany !== b.companyCode" [matTooltip]="s.agingCompany === b.companyCode ? 'On the creditors aging of this company' : 'On the creditors aging of ' + s.agingCompany">{{ s.agingCompany }} aging</span> } @if (s.vendorCode || s.agingCompany) { · } @if (s.agingBalance != null) { <span class="agb" [class.neg]="s.agingBalance < 0">owes R {{ s.agingBalance | number:'1.0-0' }}</span>@if (s.agingOverdue) { <em> ({{ s.agingOverdue | number:'1.0-0' }} overdue)</em> } · } @if (s.vatNumber) { VAT {{ s.vatNumber }} · } @if (s.bankName) { {{ s.bankName }} ···{{ (s.accountNumber || '').slice(-4) }} · } {{ s.payments }} payment{{ s.payments === 1 ? '' : 's' }}, {{ s.invoices }} invoice{{ s.invoices === 1 ? '' : 's' }}</small>
+                        </li>
+                      }
+                      @if (itemDraft.supplierName?.trim() && !supExact()) {
+                        <li class="ac-new" (mousedown)="$event.preventDefault(); showSuppliers.set(false)">
+                          <mat-icon>add_business</mat-icon>
+                          <span><strong>Use “{{ itemDraft.supplierName.trim() }}” as a new supplier</strong><small>{{ supplierHits().length ? 'Not the one you mean? Keep what you typed.' : 'Not on any creditors aging, in Books or in a past pack — bank details will need to come from the bank letter.' }}</small></span>
                         </li>
                       }
                     </ul>
@@ -655,6 +661,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .cr-title { display: flex; align-items: center; gap: 4px; margin-bottom: var(--space-3); h2 { margin: 0; font-size: var(--text-xl); } .help { color: var(--color-text-3); &:hover { color: var(--color-primary); } }
       &.sm { margin-bottom: var(--space-1); h3 { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-lg); mat-icon { color: var(--color-primary); } } button { margin-left: auto; } } }
     .cr-hist { &.on { background: var(--color-primary); color: #fff; border-color: var(--color-primary); } }
+    .ac .vc.co { background: var(--color-primary-soft); color: var(--color-primary); &.other { background: var(--color-surface-2); color: var(--color-text-3); } }
+    .ac .ac-new { display: flex; align-items: center; gap: 10px; border-top: 1px dashed var(--color-line-strong); background: var(--color-surface-2); mat-icon { color: var(--color-primary); } span { display: flex; flex-direction: column; } }
     .cr-history { .lead { margin: 0 0 var(--space-3); color: var(--color-text-2); font-size: var(--text-sm); } }
 
     .cr-alerts { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-md); mat-icon { color: var(--color-warn); } .txt { flex: 1; font-size: var(--text-sm); } }
@@ -1216,12 +1224,16 @@ export class FinanceCreditorsComponent implements OnInit {
 
   // ── supplier directory + invoice auto-fill ──
   searchSuppliers(q: string): void {
-    clearTimeout(this.supTimer); this.showSuppliers.set(true);
+    clearTimeout(this.supTimer); this.showSuppliers.set(true); this.supSearched.set(false);
     const co = this.batch()?.companyCode;
     // With no text yet, offer the company's aging vendors (biggest balances first) so the usual suppliers are one click away.
-    if (!q || q.trim().length < 2) { if (co && !q?.trim()) this.api.suppliers('', 12, co).subscribe({ next: h => this.supplierHits.set(h.filter(x => x.agingBalance)), error: () => this.supplierHits.set([]) }); else this.supplierHits.set([]); return; }
-    this.supTimer = setTimeout(() => this.api.suppliers(q.trim(), 12, co).subscribe({ next: h => this.supplierHits.set(h), error: () => this.supplierHits.set([]) }), 220);
+    if (!q || !q.trim()) { if (co) this.api.suppliers('', 15, co).subscribe({ next: h => { this.supplierHits.set(h.filter(x => x.agingBalance)); this.supSearched.set(true); }, error: () => this.supplierHits.set([]) }); else this.supplierHits.set([]); return; }
+    this.supTimer = setTimeout(() => this.api.suppliers(q.trim(), 15, co).subscribe({ next: h => { this.supplierHits.set(h); this.supSearched.set(true); }, error: () => this.supplierHits.set([]) }), 180);
   }
+  /** True once the last search returned, so "no matches" can be shown without flashing while typing. */
+  supSearched = signal(false);
+  /** Exact (case-insensitive) match already in the list — then no "add as new" row is needed. */
+  supExact(): boolean { const n = (this.itemDraft.supplierName || '').trim().toLowerCase(); return !!n && this.supplierHits().some(h => h.name.trim().toLowerCase() === n); }
   hideSuppliersSoon(): void { clearTimeout(this.hideTimer); this.hideTimer = setTimeout(() => this.showSuppliers.set(false), 150); }
   pickSupplier(s: SupplierHit): void {
     const d = this.itemDraft; d.supplierName = s.name;
