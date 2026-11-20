@@ -265,7 +265,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       <div class="sig-block">
         <div class="sig-head"><mat-icon>verified_user</mat-icon> <b>Digital signature</b> <small>{{ caption }}</small></div>
         <div class="sig-modes">
-          <button type="button" class="sig-mode" [class.on]="sigMode() === 'saved'" [disabled]="!meta()!.me.hasSignature" (click)="sigMode.set('saved')" [matTooltip]="meta()!.me.hasSignature ? '' : 'No saved signature on your profile yet — ask an admin to upload one under Settings › Users'">
+          <button type="button" class="sig-mode" [class.on]="sigMode() === 'saved'" [disabled]="!meta()!.me.hasSignature" (click)="sigMode.set('saved')" [matTooltip]="meta()!.me.hasSignature ? '' : 'No saved signature yet — add one under your profile menu › My signature'">
             <mat-icon>{{ meta()!.me.hasSignature ? 'how_to_reg' : 'person_off' }}</mat-icon> Use my saved signature
           </button>
           <button type="button" class="sig-mode" [class.on]="sigMode() === 'draw'" (click)="sigMode.set('draw')"><mat-icon>gesture</mat-icon> Draw it now</button>

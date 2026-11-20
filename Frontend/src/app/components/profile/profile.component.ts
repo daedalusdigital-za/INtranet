@@ -26,6 +26,11 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { ToastService } from '../../ui/toast.service';
+import { HttpClient } from '@angular/common/http';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { environment } from '../../../environments/environment';
+import { SecureSrcDirective } from '../../directives/secure-src.directive';
+import { SignatureDialogComponent } from '../shared/signature-dialog/signature-dialog.component';
 
 @Component({
   selector: 'app-profile',
@@ -50,6 +55,8 @@ import { ToastService } from '../../ui/toast.service';
     MatNativeDateModule,
     MatSelectModule,
     MatTooltipModule,
+    MatDialogModule,
+    SecureSrcDirective,
     PageHeaderComponent,
     NavbarComponent,
     SkeletonRowsComponent
@@ -184,6 +191,23 @@ import { ToastService } from '../../ui/toast.service';
               </div>
             </mat-card>
 
+            <!-- Signature Card -->
+            <mat-card class="actions-card sig-card">
+              <h3>My signature</h3>
+              <mat-divider></mat-divider>
+              <p class="sig-help">Your hand signature is stamped on payment packs, approval sheets and other documents you sign on the intranet.</p>
+              <div class="sig-row">
+                <div class="sig-preview" [class.empty]="!hasSignature">
+                  <img *ngIf="hasSignature" [appSecureSrc]="mySignatureUrl" alt="My signature">
+                  <span *ngIf="!hasSignature" class="not-set">No signature saved yet</span>
+                </div>
+                <button mat-stroked-button color="primary" class="action-button" (click)="openSignature()">
+                  <mat-icon>draw</mat-icon>
+                  {{ hasSignature ? 'View or change signature' : 'Draw or upload signature' }}
+                </button>
+              </div>
+            </mat-card>
+
             <!-- Actions Card -->
             <mat-card class="actions-card">
               <h3>Account Actions</h3>
@@ -283,6 +307,12 @@ import { ToastService } from '../../ui/toast.service';
       border-radius: var(--radius-lg);
       padding: var(--space-5);
     }
+
+    .sig-help { color: var(--color-ink-muted, #64748b); font-size: 13px; margin: 12px 0; }
+    .sig-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .sig-preview { flex: 1 1 240px; min-height: 90px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--color-line, #e2e8f0); border-radius: 8px; background: #fff; padding: 8px; }
+    .sig-preview.empty { border-style: dashed; }
+    .sig-preview img { max-height: 90px; max-width: 100%; object-fit: contain; }
 
     .profile-photo-section {
       display: flex;
@@ -522,8 +552,23 @@ export class ProfileComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private apiService: ApiService,
     private router: Router,
-    private toast: ToastService
+    private toast: ToastService,
+    private http: HttpClient,
+    private dialog: MatDialog
   ) {}
+
+  // ── Saved signature ──
+  hasSignature = false;
+  private sigStamp = 0;
+  get mySignatureUrl(): string { return `${environment.apiUrl}/users/me/signature?v=${this.sigStamp}`; }
+  loadSignatureStatus(): void {
+    this.http.get<{ hasSignature: boolean }>(`${environment.apiUrl}/users/me/signature/status`).subscribe({ next: s => { this.hasSignature = !!s?.hasSignature; this.sigStamp = Date.now(); }, error: () => {} });
+  }
+  openSignature(): void {
+    const u = this.user!;
+    this.dialog.open(SignatureDialogComponent, { width: '640px', maxWidth: '95vw', data: { userId: u.userId, name: `${u.name} ${u.surname}`.trim(), hasSignature: this.hasSignature } })
+      .afterClosed().subscribe(r => { if (r) { this.hasSignature = r.hasSignature; this.sigStamp = Date.now(); } });
+  }
 
   ngOnInit(): void {
     this.user = this.authService.currentUserValue;
@@ -532,6 +577,7 @@ export class ProfileComponent implements OnInit, OnDestroy {
       return;
     }
     
+    this.loadSignatureStatus();
     this.loadCallHistory();
     this.loadExtension();
     this.loadDepartments();

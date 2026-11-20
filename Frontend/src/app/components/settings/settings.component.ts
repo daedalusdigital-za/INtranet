@@ -38,6 +38,7 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { environment } from '../../../environments/environment';
 import { SecureSrcDirective } from '../../directives/secure-src.directive';
+import { SignatureDialogComponent } from '../shared/signature-dialog/signature-dialog.component';
 import { PodUploaderComponent } from './pod-uploader.component';
 import { CreditorAdminComponent } from '../finance/creditor-admin.component';
 import { DocumentTemplatesComponent } from '../admin/document-templates/document-templates.component';
@@ -460,10 +461,11 @@ import * as XLSX from 'xlsx';
                     <td mat-cell *matCellDef="let user">
                       <div class="sig-cell">
                         @if (user.hasSignature) {
-                          <img class="sig-thumb" [appSecureSrc]="signatureUrl(user)" alt="Signature" matTooltip="Click to replace" (click)="sigInput.click()">
+                          <img class="sig-thumb" [appSecureSrc]="signatureUrl(user)" alt="Signature" matTooltip="Click to view, redraw or replace" (click)="openSignature(user)">
                           <button mat-icon-button class="sig-x" matTooltip="Remove signature" aria-label="Remove signature" (click)="removeSignature(user)"><mat-icon>close</mat-icon></button>
                         } @else {
-                          <button mat-stroked-button class="sig-add" (click)="sigInput.click()" [disabled]="sigBusy === user.userId"><mat-icon>draw</mat-icon> {{ sigBusy === user.userId ? 'Uploading…' : 'Upload' }}</button>
+                          <button mat-stroked-button class="sig-add" matTooltip="Draw a signature on screen for this user" (click)="openSignature(user)"><mat-icon>gesture</mat-icon> Sign</button>
+                          <button mat-stroked-button class="sig-add" matTooltip="Upload a PNG/JPEG of the signature" (click)="sigInput.click()" [disabled]="sigBusy === user.userId"><mat-icon>upload</mat-icon> {{ sigBusy === user.userId ? 'Uploading…' : 'Upload' }}</button>
                         }
                         <input #sigInput type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="uploadSignature(user, $event)">
                       </div>
@@ -3919,6 +3921,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
   sigBusy: number | null = null;
   private sigStamp: Record<number, number> = {};
   signatureUrl(u: any): string { return `${environment.apiUrl}/users/${u.userId}/signature?v=${this.sigStamp[u.userId] || 0}`; }
+  /** Draw / view / replace a user's signature in a dialog (for when there's no image to upload). */
+  openSignature(u: any): void {
+    this.dialog.open(SignatureDialogComponent, { width: '640px', maxWidth: '95vw', data: { userId: u.userId, name: `${u.name} ${u.surname}`.trim(), hasSignature: !!u.hasSignature, onBehalf: true } })
+      .afterClosed().subscribe(r => { if (r) { u.hasSignature = r.hasSignature; this.sigStamp[u.userId] = Date.now(); } });
+  }
   uploadSignature(u: any, e: Event): void {
     const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
     if (f.size > 2 * 1024 * 1024) { this.toast.warn('Signature image must be 2 MB or smaller.'); return; }

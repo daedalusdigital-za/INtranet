@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener, ElementRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { RouterModule, Router, ActivatedRoute, IsActiveMatchOptions } from '@angular/router';
 import { environment } from '../../../../environments/environment';
@@ -19,6 +20,7 @@ import { PaperlessService } from '../../../services/paperless.service';
 import { ChatBubbleComponent } from '../../chat-bubble/chat-bubble.component';
 import { UserSearchPopupComponent } from '../../user-search-popup/user-search-popup.component';
 import { TodoDialogComponent } from '../../todo-dialog/todo-dialog.component';
+import { SignatureDialogComponent } from '../signature-dialog/signature-dialog.component';
 import { RequestDialogComponent } from '../request-dialog/request-dialog.component';
 import { AssetRegisterDialogComponent } from '../../asset-register/asset-register-dialog.component';
 import { AnnouncementDialogComponent } from '../announcement-dialog/announcement-dialog.component';
@@ -348,6 +350,10 @@ interface NavGroup {
             <span>Admin settings</span>
           </button>
         }
+        <button mat-menu-item class="pm-menu-item" (click)="openMySignature()">
+          <mat-icon>draw</mat-icon>
+          <span>My signature</span>
+        </button>
         <button mat-menu-item class="pm-menu-item" [matMenuTriggerFor]="appearanceMenu">
           <mat-icon>{{ appearance.dark() ? 'dark_mode' : 'light_mode' }}</mat-icon>
           <span>Appearance</span>
@@ -1299,6 +1305,14 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   goToProfile(): void {
     this.router.navigate(['/profile']);
+  }
+
+  private readonly sigHttp = inject(HttpClient);
+  /** View / draw / upload the signed-in user's saved hand signature. */
+  openMySignature(): void {
+    const u = this.currentUser; if (!u) return;
+    const open = (hasSignature: boolean) => this.dialog.open(SignatureDialogComponent, { width: '640px', maxWidth: '95vw', data: { userId: this.currentUserId, name: `${u.name} ${u.surname}`.trim(), hasSignature } });
+    this.sigHttp.get<{ hasSignature: boolean }>(`${environment.apiUrl}/users/me/signature/status`).subscribe({ next: s => open(!!s?.hasSignature), error: () => open(false) });
   }
 
   openTodoDialog(): void {
