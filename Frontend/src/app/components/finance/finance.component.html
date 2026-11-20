@@ -232,18 +232,39 @@
       </ul>
     </section>
 
-    <!-- Supplier invoices snapshot -->
+    <!-- Approvals snapshot -->
     <section class="ov-card">
       <header class="ov-card-head">
-        <h2><mat-icon>description</mat-icon> Supplier invoices</h2>
-        <button mat-button (click)="goTab('invoices')">All invoices <mat-icon>arrow_forward</mat-icon></button>
+        <h2><mat-icon>approval</mat-icon> Approvals</h2>
+        <button mat-button (click)="goTab('approvals')">Open approvals <mat-icon>arrow_forward</mat-icon></button>
       </header>
-      <div class="mini-stats">
-        <button class="mini" (click)="selectedStatus=''; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.total }}</span><span class="l">Total</span></button>
-        <button class="mini warn" (click)="selectedStatus=''; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.unpaid }}</span><span class="l">Unpaid · {{ ov.invoices.unpaidAmount | currency:'ZAR':'R':'1.0-0' }}</span></button>
-        <button class="mini hot" (click)="openRequestedPayments()"><span class="n">{{ ov.invoices.paymentRequested }}</span><span class="l">Payment requested</span></button>
-        <button class="mini bad" (click)="selectedStatus='Overdue'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.overdue }}</span><span class="l">Overdue</span></button>
-        <button class="mini ok" (click)="selectedStatus='Paid'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.paid }}</span><span class="l">Paid</span></button>
+      <div class="ov-approvals">
+        <div class="ov-appr-group">
+          <div class="ov-appr-title"><mat-icon>payments</mat-icon> Requested payments</div>
+          <div class="mini-stats">
+            <button class="mini hot" (click)="goTab('approvals', 'payments')"><span class="n">{{ ov.invoices.paymentRequested }}</span><span class="l">Awaiting · {{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</span></button>
+            @if (packMeta?.me?.accountant || packMeta?.me?.isAdmin) {
+              <button class="mini warn" (click)="goTab('approvals', 'packs')"><span class="n">{{ packsForMe.length }}</span><span class="l">Packs for you · {{ packsForMeTotal | currency:'ZAR':'R':'1.0-0' }}</span></button>
+            }
+            <button class="mini ok" (click)="selectedStatus='Paid'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.paid }}</span><span class="l">Paid</span></button>
+          </div>
+        </div>
+        <div class="ov-appr-group">
+          <div class="ov-appr-title"><mat-icon>request_quote</mat-icon> Quotation requests</div>
+          <div class="mini-stats">
+            <button class="mini hot" (click)="setQuoteFilter('Pending'); goTab('approvals', 'quotes')"><span class="n">{{ quoteCounts.pending }}</span><span class="l">Pending</span></button>
+            <button class="mini ok" (click)="setQuoteFilter('Approved'); goTab('approvals', 'quotes')"><span class="n">{{ quoteCounts.approved }}</span><span class="l">Approved</span></button>
+            <button class="mini bad" (click)="setQuoteFilter('Declined'); goTab('approvals', 'quotes')"><span class="n">{{ quoteCounts.declined }}</span><span class="l">Declined</span></button>
+          </div>
+        </div>
+        <div class="ov-appr-group">
+          <div class="ov-appr-title"><mat-icon>receipt_long</mat-icon> Requisitions</div>
+          <div class="mini-stats">
+            <button class="mini hot" (click)="setRequisitionFilter('Requested'); goTab('approvals', 'requisitions')"><span class="n">{{ requisitionCounts.requested }}</span><span class="l">Requested</span></button>
+            <button class="mini ok" (click)="setRequisitionFilter('Paid'); goTab('approvals', 'requisitions')"><span class="n">{{ requisitionCounts.paid }}</span><span class="l">Paid</span></button>
+            <button class="mini bad" (click)="setRequisitionFilter('Rejected'); goTab('approvals', 'requisitions')"><span class="n">{{ requisitionCounts.rejected }}</span><span class="l">Rejected</span></button>
+          </div>
+        </div>
       </div>
     </section>
   </div>

@@ -1258,6 +1258,9 @@
   mat-icon { font-size:36px; width:36px; height:36px; opacity:.5; } }
 
 .mini-stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap:10px; }
+.ov-approvals { display:flex; flex-direction:column; gap:14px; }
+.ov-appr-group { .mini-stats { grid-template-columns: repeat(3, 1fr); } }
+.ov-appr-title { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--color-text-2,#475569); margin-bottom:6px; text-transform:uppercase; letter-spacing:.03em; mat-icon { font-size:16px; width:16px; height:16px; color:var(--color-primary,#4f46e5); } }
 .mini { padding:10px 12px; border-radius: var(--radius-md); background: var(--color-surface-2); display:flex; flex-direction:column; gap:2px; border-left:3px solid var(--color-line);
   b { font-size: var(--text-xl); font-weight:800; line-height:1.1; } span { font-size: var(--text-xs); color: var(--color-text-3); }
   &.warn { border-color: var(--color-warn); b{color:var(--color-warn)} }
