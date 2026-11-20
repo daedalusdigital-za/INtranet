@@ -60,7 +60,7 @@ export interface BatchDetail {
   items: BatchItem[]; batchDocuments: BatchDoc[]; requiredBatchDocs: RequiredDoc[]; readyToSubmit: boolean;
   events: { id: number; at: string; userName?: string; action: string; fromStatus?: string; toStatus?: string; comment?: string }[];
   signatures: { id: number; context: string; signerName: string; signerRole?: string; action: string; comment?: string; method: string; signedAtUtc: string; payloadHash?: string; hasImage: boolean }[];
-  can: { edit: boolean; submit: boolean; reopen: boolean; accountant: boolean; direct: boolean; sign: boolean; bankFile: boolean; markLoaded: boolean; markPaid: boolean; close: boolean; uploadAfterLock: boolean; rerunChecks: boolean };
+  can: { edit: boolean; delete: boolean; submit: boolean; reopen: boolean; accountant: boolean; direct: boolean; sign: boolean; bankFile: boolean; markLoaded: boolean; markPaid: boolean; close: boolean; uploadAfterLock: boolean; rerunChecks: boolean };
 }
 export interface ApproverOption { userId: number; name: string; role: string; email?: string | null; }
 export interface SignaturePayload { signatureImageBase64?: string; useSavedSignature: boolean; }
@@ -174,7 +174,7 @@ export class CreditorPacksService {
   deleteCashLine(id: number) { return this.http.delete<Cashflow>(`${this.base}/cashflow/lines/${id}`); }
 
   // ── History (paid / closed) ──
-  history(f: { from?: string; to?: string; company?: string; q?: string } = {}) {
+  history(f: { from?: string; to?: string; company?: string; q?: string; supplier?: string } = {}) {
     let p = new HttpParams();
     Object.entries(f).forEach(([k, v]) => { if (v) p = p.set(k, v); });
     return this.http.get<PaymentHistory>(`${this.base}/history`, { params: p });

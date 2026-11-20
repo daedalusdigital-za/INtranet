@@ -351,9 +351,10 @@ public class CreditorPacksController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var b = await Load(id); if (b == null) return NotFound();
-        if (b.Status != CreditorWorkflow.Draft) return Conflict(new { message = "Only draft batches can be deleted." });
+        if (!CreditorWorkflow.Deletable.Contains(b.Status)) return Conflict(new { message = "Signed, paid or closed packs are kept for the audit trail and can't be deleted." });
         if (!await CanPrepareAsync(b)) return Forbid();
         foreach (var d in b.Documents.Where(d => d.StoragePath != null)) TryDelete(Abs(d.StoragePath!));
+        _log.LogInformation("Payment pack {Batch} ({Status}, R{Amount}) deleted by {User}", b.BatchNumber, b.Status, b.TotalAmount, UserName);
         _db.PaymentBatches.Remove(b);
         await _db.SaveChangesAsync();
         return NoContent();
@@ -1317,7 +1318,7 @@ public class CreditorPacksController : ControllerBase
     /// Filters: from/to (paid date), company, q (batch number / supplier / reference).
     /// </summary>
     [HttpGet("history")]
-    public async Task<IActionResult> History([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? company, [FromQuery] string? q, [FromQuery] int take = 300)
+    public async Task<IActionResult> History([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? company, [FromQuery] string? q, [FromQuery] string? supplier, [FromQuery] int take = 300)
     {
         var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.Name);
         var scope = await ScopeAsync();
@@ -1329,10 +1330,15 @@ public class CreditorPacksController : ControllerBase
         if (from.HasValue) query = query.Where(b => (b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt) >= from.Value.Date);
         if (to.HasValue) { var t = to.Value.Date.AddDays(1); query = query.Where(b => (b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt) < t); }
         if (!string.IsNullOrWhiteSpace(company)) query = query.Where(b => b.CompanyCode == company);
+        if (!string.IsNullOrWhiteSpace(supplier)) { var sn = supplier.Trim().ToLower(); query = query.Where(b => b.Items.Any(i => i.SupplierName.ToLower().Contains(sn))); }
         if (!string.IsNullOrWhiteSpace(q))
         {
             var s = q.Trim().ToLower();
-            query = query.Where(b => b.BatchNumber.ToLower().Contains(s) || b.Items.Any(i => i.SupplierName.ToLower().Contains(s) || (i.PaymentReference != null && i.PaymentReference.ToLower().Contains(s)) || (i.InvoiceNumbers != null && i.InvoiceNumbers.ToLower().Contains(s))));
+            // "12 345.67" / "R12,345.67" also matches on amount (pack total or a single payment)
+            var amt = decimal.TryParse(s.Replace("r", "").Replace(" ", "").Replace(",", ""), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var a) ? a : (decimal?)null;
+            query = query.Where(b => b.BatchNumber.ToLower().Contains(s) || (b.Notes != null && b.Notes.ToLower().Contains(s)) || (b.PreparedByName != null && b.PreparedByName.ToLower().Contains(s))
+                || b.Items.Any(i => i.SupplierName.ToLower().Contains(s) || (i.PaymentReference != null && i.PaymentReference.ToLower().Contains(s)) || (i.InvoiceNumbers != null && i.InvoiceNumbers.ToLower().Contains(s)) || (i.Description != null && i.Description.ToLower().Contains(s)))
+                || (amt != null && (b.TotalAmount == amt || b.Items.Any(i => i.Amount == amt))));
         }
         var batches = await query.OrderByDescending(b => b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt).Take(Math.Clamp(take, 1, 2000)).ToListAsync();
 
@@ -1542,6 +1548,7 @@ public class CreditorPacksController : ControllerBase
             can = new
             {
                 edit = editable && canPrepare,
+                delete = canPrepare && CreditorWorkflow.Deletable.Contains(b.Status),
                 submit = editable && canPrepare && allFilled,
                 reopen = canPrepare && b.Status is CreditorWorkflow.ChecksFailed or CreditorWorkflow.QueriedByAccountant or CreditorWorkflow.QueriedByDirector or CreditorWorkflow.Rejected,
                 accountant = b.Status == CreditorWorkflow.AwaitingAccountant && isAcc && (b.PreparedByUserId != UserId || IsSystemAdmin),

@@ -31,14 +31,18 @@ import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
         @for (c of data?.companies || []; track c.code) { <option [value]="c.code">{{ c.name }}</option> }
       </select>
     </label>
-    <label class="grow">Search <input type="search" [(ngModel)]="q" placeholder="Batch, supplier, reference, invoice…" (keyup.enter)="load()" (search)="load()"></label>
+    <label class="grow">Search <input type="search" [(ngModel)]="q" placeholder="Batch, supplier, invoice, reference, amount…" (keyup.enter)="load()" (search)="load()"></label>
     <div class="quick">
       <button mat-stroked-button (click)="preset(30)">30 days</button>
       <button mat-stroked-button (click)="preset(90)">90 days</button>
       <button mat-stroked-button (click)="presetYear()">This year</button>
+      <button mat-stroked-button (click)="presetAll()">All time</button>
     </div>
     <button mat-flat-button color="primary" (click)="exportXlsx()" [disabled]="!data?.batches?.length"><mat-icon>download</mat-icon>Export</button>
   </div>
+  @if (supplier) {
+    <div class="ph-supplier"><mat-icon>storefront</mat-icon> Showing packs that paid <b>{{ supplier }}</b> <button mat-button (click)="clearSupplier()"><mat-icon>close</mat-icon> Show all suppliers</button></div>
+  }
 
   @if (loading) { <div class="ph-loading"><mat-spinner diameter="28"></mat-spinner>Loading history…</div> }
   @else if (data) {
@@ -105,7 +109,8 @@ import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 .ph-filters label { display:flex; flex-direction:column; gap:4px; font-size:12px; color: var(--text-muted,#64748b); }
 .ph-filters label.grow { flex:1; min-width:220px; }
 .ph-filters input, .ph-filters select { height:38px; padding:0 10px; border:1px solid var(--border,#e5e7eb); border-radius:8px; background: var(--surface,#fff); color: inherit; font: inherit; }
-.quick { display:flex; gap:6px; }
+.quick { display:flex; gap:6px; flex-wrap:wrap; }
+.ph-supplier { display:flex; align-items:center; gap:8px; padding:8px 12px; margin-bottom:12px; border-radius:10px; background:#eef2ff; color:#3730a3; font-size:13px; mat-icon { font-size:18px; width:18px; height:18px; } button { margin-left:auto; } }
 .ph-loading, .ph-empty { display:flex; align-items:center; gap:10px; padding:28px; justify-content:center; color: var(--text-muted,#64748b); }
 .ph-kpis { display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
 .ph-kpis > div { padding:10px 16px; border-radius:10px; border:1px solid var(--border,#e5e7eb); background: var(--surface,#fff); min-width:140px; }
@@ -141,15 +146,19 @@ export class PaymentHistoryComponent implements OnInit {
   private toast = inject(ToastService);
   private router = inject(Router);
 
-  /** Default range in days when first opened. */
+  /** Default range in days when first opened. 0 = all time. */
   @Input() defaultDays = 90;
+  /** Pre-filter to one supplier (e.g. coming from the aging). */
+  @Input() supplier = '';
+  /** Pre-fill the search box. */
+  @Input() initialQuery = '';
 
   from = ''; to = ''; company = ''; q = '';
   data: PaymentHistory | null = null;
   loading = false;
   open = new Set<number>();
 
-  ngOnInit(): void { this.preset(this.defaultDays); }
+  ngOnInit(): void { this.q = this.initialQuery || ''; if (this.supplier || this.defaultDays <= 0) this.presetAll(); else this.preset(this.defaultDays); }
 
   preset(days: number): void {
     const t = new Date(); const f = new Date(); f.setDate(f.getDate() - days);
@@ -157,10 +166,12 @@ export class PaymentHistoryComponent implements OnInit {
     this.load();
   }
   presetYear(): void { const t = new Date(); this.from = `${t.getFullYear()}-01-01`; this.to = t.toISOString().slice(0, 10); this.load(); }
+  presetAll(): void { this.from = ''; this.to = ''; this.load(); }
+  clearSupplier(): void { this.supplier = ''; this.load(); }
 
   load(): void {
     this.loading = true;
-    this.api.history({ from: this.from, to: this.to, company: this.company, q: this.q }).subscribe({
+    this.api.history({ from: this.from, to: this.to, company: this.company, q: this.q, supplier: this.supplier }).subscribe({
       next: d => { this.data = d; this.loading = false; },
       error: e => { this.loading = false; this.toast.error(e?.error?.message || 'Could not load payment history'); }
     });

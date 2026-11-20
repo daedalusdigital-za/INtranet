@@ -29,6 +29,9 @@ public static class CreditorWorkflow
     /// <summary>Statuses where the preparer may still edit items and documents.</summary>
     public static readonly HashSet<string> PreparerEditable = new() { Draft, ChecksFailed, QueriedByAccountant, QueriedByDirector };
 
+    /// <summary>A clerk may delete a pack that was never signed: anything before the director's signature, plus rejected ones.</summary>
+    public static readonly HashSet<string> Deletable = new() { Draft, ChecksFailed, AwaitingAccountant, QueriedByAccountant, AwaitingDirector, QueriedByDirector, Rejected };
+
     /// <summary>Statuses from which the batch is locked (director signed).</summary>
     public static readonly HashSet<string> Locked = new() { Approved, LoadedOnBank, Paid, Closed };
 

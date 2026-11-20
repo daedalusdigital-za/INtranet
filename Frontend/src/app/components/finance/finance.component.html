@@ -366,7 +366,7 @@
         <h2>Creditors Age Analysis</h2>
         <p>Who each company owes and how old it is — the Sage aged payables per paying company, uploaded as dated snapshots. Pick a company, see every vendor's Current / 1–30 / 31–60 / 61–90 / Over 90, what is already in a payment pack, and start a payment straight from the row. These vendors are also offered first when adding payments to a pack.</p>
       </div>
-      @if (isTab('creditors-aging')) { <app-finance-creditors-aging (pay)="payFromAging($event)" (openBatch)="openPack($event)"></app-finance-creditors-aging> }
+      @if (isTab('creditors-aging')) { <app-finance-creditors-aging (pay)="payFromAging($event)" (paidHistory)="historyFromAging($event)" (openBatch)="openPack($event)"></app-finance-creditors-aging> }
     </div>
   </mat-tab>
 

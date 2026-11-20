@@ -375,6 +375,17 @@ export class FinanceComponent implements OnInit {
     setTimeout(() => tryStart(0), 100);
   }
 
+  /** From the creditors aging: open Payment packs on the paid history, filtered to that vendor. */
+  historyFromAging(e: { company: string; vendor: { name: string } }): void {
+    this.goTab('creditors');
+    const tryShow = (n: number) => {
+      const c = this.creditorsRef;
+      if (c && c.meta()) { c.showPaidHistory(e.vendor.name); return; }
+      if (n < 40) setTimeout(() => tryShow(n + 1), 150);
+    };
+    setTimeout(() => tryShow(0), 100);
+  }
+
   /** Alert strip hints: 'aging' | 'aging:nopod' | 'credit-notes:unsigned' | 'credit-notes:returns' | 'customers' */
   onAlertGo(hint: string): void {
     const [tab, view] = hint.split(':');

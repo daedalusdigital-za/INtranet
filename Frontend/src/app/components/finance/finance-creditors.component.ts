@@ -11,6 +11,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
 import { CompanyBatchesDialogComponent } from './company-batches-dialog.component';
+import { PaymentHistoryComponent } from './payment-history.component';
 import { ExplainerDialogComponent } from './explainer-dialog.component';
 import { SchedulePreviewDialogComponent } from './schedule-preview-dialog.component';
 import { SecureSrcDirective } from '../../directives/secure-src.directive';
@@ -32,7 +33,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 @Component({
   selector: 'app-finance-creditors',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule, SecureSrcDirective],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule, SecureSrcDirective, PaymentHistoryComponent],
   template: `
   @if (!meta()) {
     <div class="cr-state"><mat-spinner diameter="36"></mat-spinner><p>Opening creditors…</p></div>
@@ -73,6 +74,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <button [class.on]="statusFilter() === 'prepay'" (click)="statusFilter.set('prepay')">Open prepayments <b>{{ openPrepay() }}</b></button>
         <button [class.on]="statusFilter() === 'Closed'" (click)="statusFilter.set('Closed')">Closed <b>{{ count('Closed') }}</b></button>
       </div>
+      <button mat-stroked-button class="cr-hist" [class.on]="historyOpen()" (click)="toggleHistory()" matTooltip="Every pack that has been paid — search by supplier, invoice, reference or amount"><mat-icon>history</mat-icon> Paid history</button>
       <span class="cr-spacer"></span>
       <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
         <option value="">All payment types</option>
@@ -120,6 +122,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       </div>
     }
 
+    @if (historyOpen()) {
+      <div class="cr-card cr-history">
+        <div class="cr-title sm"><h3><mat-icon>history</mat-icon> Paid payment packs</h3><button mat-button (click)="toggleHistory()"><mat-icon>close</mat-icon> Back to open packs</button></div>
+        <p class="lead">Everything that has gone through the bank. Search by batch number, supplier, invoice number, payment reference, note or amount; expand a pack to see each payment and its proof of payment.</p>
+        <app-payment-history [defaultDays]="historySupplier() ? 0 : 365" [supplier]="historySupplier()" [initialQuery]="historyQuery()"></app-payment-history>
+      </div>
+    } @else {
     @if (loading()) { <div class="cr-state"><mat-spinner diameter="32"></mat-spinner></div> }
     @else if (!groups().length) {
       <div class="cr-state"><mat-icon>inbox</mat-icon><h3>Nothing here</h3><p>No batches match these filters.</p></div>
@@ -141,6 +150,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       @if (meta()!.me.isAdmin && missingLogos().length) {
         <p class="cr-logo-note"><mat-icon>image_not_supported</mat-icon> Logos still to be added for <strong>{{ missingLogos().join(', ') }}</strong> — initials are shown until the artwork is uploaded to <code>/logos</code>.</p>
       }
+    }
     }
   }
 
@@ -196,7 +206,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           @if (b.can.markPaid) { <button mat-flat-button color="primary" (click)="setStatus('Paid')"><mat-icon>price_check</mat-icon> Mark as paid</button> }
           @if (b.can.close) { <button mat-flat-button color="primary" (click)="setStatus('Closed')" [disabled]="missingPop(b) > 0 || openPrepayCount(b) > 0"><mat-icon>inventory</mat-icon> Close batch</button> }
           @if (b.can.rerunChecks && b.items.length && b.status !== 'Closed') { <button mat-button (click)="rerun()" [disabled]="busy()"><mat-icon>rule</mat-icon> Re-run checks</button> }
-          @if (b.can.edit && b.status === 'Draft') { <button mat-button color="warn" (click)="deleteBatch()"><mat-icon>delete</mat-icon> Delete draft</button> }
+          @if (b.can.delete) { <button mat-button color="warn" (click)="deleteBatch()" [matTooltip]="b.status === 'Draft' ? 'Remove this draft' : 'Remove this pack — it has not been signed or paid'"><mat-icon>delete</mat-icon> {{ b.status === 'Draft' ? 'Delete draft' : 'Delete pack' }}</button> }
         </div>
       </div>
     }
@@ -642,7 +652,10 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .cr-spacer { flex: 1; }
     .muted { color: var(--color-text-3); } .nowrap { white-space: nowrap; } .ref { font-family: var(--font-mono); font-weight: 600; }
 
-    .cr-title { display: flex; align-items: center; gap: 4px; margin-bottom: var(--space-3); h2 { margin: 0; font-size: var(--text-xl); } .help { color: var(--color-text-3); &:hover { color: var(--color-primary); } } }
+    .cr-title { display: flex; align-items: center; gap: 4px; margin-bottom: var(--space-3); h2 { margin: 0; font-size: var(--text-xl); } .help { color: var(--color-text-3); &:hover { color: var(--color-primary); } }
+      &.sm { margin-bottom: var(--space-1); h3 { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-lg); mat-icon { color: var(--color-primary); } } button { margin-left: auto; } } }
+    .cr-hist { &.on { background: var(--color-primary); color: #fff; border-color: var(--color-primary); } }
+    .cr-history { .lead { margin: 0 0 var(--space-3); color: var(--color-text-2); font-size: var(--text-sm); } }
 
     .cr-alerts { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-md); mat-icon { color: var(--color-warn); } .txt { flex: 1; font-size: var(--text-sm); } }
     .cr-alert-list { display: grid; gap: 4px; margin-bottom: var(--space-3); }
@@ -864,6 +877,13 @@ export class FinanceCreditorsComponent implements OnInit {
   statusFilter = signal('');
   typeFilter = signal('');
   newOpen = signal(false);
+  /** Paid-history panel on the board (replaces the company grid while open). */
+  historyOpen = signal(false);
+  historySupplier = signal('');
+  historyQuery = signal('');
+  toggleHistory(): void { if (this.historyOpen()) { this.historyOpen.set(false); this.historySupplier.set(''); this.historyQuery.set(''); } else this.historyOpen.set(true); }
+  /** From the aging: show every paid pack for one supplier. */
+  showPaidHistory(supplierName: string): void { this.view.set('board'); this.batch.set(null); this.historySupplier.set(supplierName); this.historyQuery.set(''); this.historyOpen.set(true); }
   signOpen = signal(false);
   /** "Send to" picker: 'submit' (preparer → accountants) or 'approve' (accountant → directors). */
   sendOpen = signal<'submit' | 'approve' | null>(null);
@@ -1119,7 +1139,13 @@ export class FinanceCreditorsComponent implements OnInit {
       error: e => this.fail(e, "Couldn't create the batch.")
     });
   }
-  deleteBatch(): void { const b = this.batch()!; if (!confirm(`Delete draft ${b.batchNumber}? This can't be undone.`)) return; this.api.delete(b.id).subscribe({ next: () => { this.toast.done('Draft deleted'); this.back(); }, error: e => this.fail(e, "Couldn't delete.") }); }
+  deleteBatch(): void {
+    const b = this.batch()!;
+    const what = b.status === 'Draft' ? `draft ${b.batchNumber}` : `${b.batchNumber} (${b.statusTitle}, ${b.items.length} payment${b.items.length === 1 ? '' : 's'}, R ${b.totalAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2 })})`;
+    if (!confirm(`Delete ${what}? Its documents are removed too. This can't be undone.`)) return;
+    this.busy.set(true);
+    this.api.delete(b.id).subscribe({ next: () => { this.busy.set(false); this.toast.done(`${b.batchNumber} deleted`); this.back(); }, error: e => this.fail(e, "Couldn't delete.") });
+  }
   openSend(mode: 'submit' | 'approve'): void {
     const b = this.batch()!; this.sendOpen.set(mode); this.sendOptions.set(null); this.sendPick = new Set(); this.sendNote = ''; this.signOpen.set(false); this.resetSig();
     this.api.batchApprovers(b.id).subscribe({

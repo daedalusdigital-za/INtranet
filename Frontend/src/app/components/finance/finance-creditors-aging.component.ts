@@ -170,7 +170,7 @@ type DocSortKey = 'vendorName' | 'docNumber' | 'docDate' | 'dueDate' | 'daysOver
                   <td class="num" [class.zero]="!v.overdue">{{ v.overdue | number:'1.2-2' }}</td>
                   <td class="num total" [class.credit]="v.total < 0">{{ v.total | number:'1.2-2' }}</td>
                   <td class="num">@if (v.inPacks) { <span class="badge ok" [matTooltip]="packTip(v)">R {{ v.inPacks | number:'1.0-0' }}</span> } @else { <span class="muted">—</span> }</td>
-                  <td class="chev"><button mat-icon-button (click)="pay.emit({ company: company()!, vendor: v }); $event.stopPropagation()" matTooltip="Start a payment to this vendor"><mat-icon>payments</mat-icon></button><mat-icon>{{ expanded() === v.code ? 'expand_less' : 'expand_more' }}</mat-icon></td>
+                  <td class="chev"><button mat-icon-button (click)="paidHistory.emit({ company: company()!, vendor: v }); $event.stopPropagation()" matTooltip="Paid history — every pack that has paid this vendor"><mat-icon>history</mat-icon></button><button mat-icon-button (click)="pay.emit({ company: company()!, vendor: v }); $event.stopPropagation()" matTooltip="Start a payment to this vendor"><mat-icon>payments</mat-icon></button><mat-icon>{{ expanded() === v.code ? 'expand_less' : 'expand_more' }}</mat-icon></td>
                 </tr>
                 @if (expanded() === v.code) {
                   <tr class="detail"><td colspan="10">
@@ -258,7 +258,7 @@ type DocSortKey = 'vendorName' | 'docNumber' | 'docDate' | 'dueDate' | 'daysOver
       tr.vend { cursor: pointer; &:hover td { background: var(--color-surface-2); } &.open td { background: var(--color-primary-soft); border-bottom-color: transparent; } &.risk td:first-child { box-shadow: inset 3px 0 0 var(--color-danger); } }
       tr.detail > td { padding: 0 var(--space-3) var(--space-3); background: var(--color-primary-soft); }
       tfoot tr.grand td { background: var(--color-surface-2); font-weight: 700; border-top: 2px solid var(--color-line-strong); }
-      .chev { width: 72px; white-space: nowrap; mat-icon { color: var(--color-text-3); vertical-align: middle; } } }
+      .chev { width: 112px; white-space: nowrap; mat-icon { color: var(--color-text-3); vertical-align: middle; } } }
     .ag-name { display: flex; flex-direction: column; small { color: var(--color-text-3); font-size: var(--text-xs); font-family: var(--font-mono); } }
     .ag-detail { display: grid; gap: 10px; padding: var(--space-3); background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md);
       .pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -290,6 +290,8 @@ export class FinanceCreditorsAgingComponent implements OnInit {
   get isAdmin(): boolean { return this.auth.isAdmin; }
   /** Start a payment for this vendor in a new pack for the company. */
   @Output() pay = new EventEmitter<{ company: string; vendor: ApAgingVendor }>();
+  /** Show the paid-pack history for this vendor on the Payment packs tab. */
+  @Output() paidHistory = new EventEmitter<{ company: string; vendor: ApAgingVendor }>();
   @Output() openBatch = new EventEmitter<number>();
 
   index = signal<ApAgingIndex | null>(null);
