@@ -28,15 +28,17 @@ public class CreditorPacksController : ControllerBase
     private readonly CreditorChecksService _checks;
     private readonly ISignatureService _sign;
     private readonly INotificationBroadcaster _notify;
+    private readonly IEmailService _email;
+    private readonly IConfiguration _cfg;
     private readonly ILogger<CreditorPacksController> _log;
     private readonly string _root;
     private const long MaxFileBytes = 20L * 1024 * 1024;
 
     public CreditorPacksController(ApplicationDbContext db, CreditorChecksService checks, ISignatureService sign,
-        INotificationBroadcaster notify, IConfiguration cfg, ILogger<CreditorPacksController> log,
+        INotificationBroadcaster notify, IEmailService email, IConfiguration cfg, ILogger<CreditorPacksController> log,
         Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
     {
-        _db = db; _checks = checks; _sign = sign; _notify = notify; _log = log; _cache = cache;
+        _db = db; _checks = checks; _sign = sign; _notify = notify; _email = email; _cfg = cfg; _log = log; _cache = cache;
         _root = cfg.GetValue<string>("DocumentsPath") ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
     }
 
@@ -94,6 +96,23 @@ public class CreditorPacksController : ControllerBase
         if (c == null) return true;
         var a = await ApproversForAsync(c.Code);
         return a.Directors.Count == 0 || a.IsDirector(UserId);
+    }
+
+    /// <summary>Company accountant AND (if the preparer picked specific people) one of them.</summary>
+    private async Task<bool> IsAccountantForAsync(PaymentBatch b, CreditorCompany? c)
+    {
+        if (IsSystemAdmin) return true;
+        if (!await IsAccountantForAsync(c)) return false;
+        var req = b.RequestedApproverIdList;
+        return req.Count == 0 || req.Contains(UserId);
+    }
+
+    private async Task<bool> IsDirectorForAsync(PaymentBatch b, CreditorCompany? c)
+    {
+        if (IsSystemAdmin) return true;
+        if (!await IsDirectorForAsync(c)) return false;
+        var req = b.RequestedDirectorIdList;
+        return req.Count == 0 || req.Contains(UserId);
     }
 
     private async Task<bool> CanPrepareAsync(PaymentBatch b) =>
@@ -880,13 +899,45 @@ public class CreditorPacksController : ControllerBase
 
     // ───────────────────────── workflow ─────────────────────────
 
-    /// <summary>Preparer submits: checks run; FAIL → back to preparer, otherwise → company accountant.</summary>
+    public record SubmitDto(int[]? ApproverUserIds);
+
+    /// <summary>Who may be asked to approve / sign this batch (the company's approvers, excluding the caller). Used by the submit and approve pickers.</summary>
+    [HttpGet("batches/{id:int}/approvers")]
+    public async Task<IActionResult> BatchApprovers(int id)
+    {
+        var b = await _db.PaymentBatches.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id); if (b == null) return NotFound();
+        if (!await InScopeAsync(b.CompanyCode)) return Forbid();
+        var (accs, accsFallback) = await CandidateApproversAsync(b.CompanyCode, CreditorWorkflow.RoleAccountant);
+        var (dirs, dirsFallback) = await CandidateApproversAsync(b.CompanyCode, CreditorWorkflow.RoleDirector);
+        object P(IEnumerable<Approver> l) => l.Where(a => a.UserId != UserId).Select(a => new { userId = a.UserId, a.Name, a.Role, a.Email }).ToList();
+        return Ok(new { accountants = P(accs), accountantsFallback = accsFallback, directors = P(dirs), directorsFallback = dirsFallback });
+    }
+
+    /// <summary>Company approvers for a role; if the company has nobody assigned, falls back to everyone with the role (so the pack never gets stuck).</summary>
+    private async Task<(List<Approver> People, bool Fallback)> CandidateApproversAsync(string companyCode, string role)
+    {
+        var a = await ApproversForAsync(companyCode);
+        var list = role == CreditorWorkflow.RoleAccountant ? a.Accountants : a.Directors;
+        if (list.Count > 0) return (list.ToList(), false);
+        var all = await ApproversAsync();
+        var any = all.Values.SelectMany(x => role == CreditorWorkflow.RoleAccountant ? x.Accountants : x.Directors).GroupBy(x => x.UserId).Select(g => g.First()).OrderBy(x => x.Name).ToList();
+        return (any, true);
+    }
+
+    /// <summary>Preparer submits: checks run; FAIL → back to preparer, otherwise → the chosen company accountant(s).</summary>
     [HttpPost("batches/{id:int}/submit")]
-    public async Task<IActionResult> Submit(int id)
+    public async Task<IActionResult> Submit(int id, [FromBody] SubmitDto? dto = null)
     {
         var b = await Load(id); if (b == null) return NotFound();
         if (!CreditorWorkflow.PreparerEditable.Contains(b.Status)) return Conflict(new { message = "This batch has already been submitted." });
         if (!await CanPrepareAsync(b)) return Forbid();
+
+        // Who to send it to: must be one of the company's accountants (or any accountant if the company has none), never the preparer.
+        var (candidates, _) = await CandidateApproversAsync(b.CompanyCode, CreditorWorkflow.RoleAccountant);
+        var wanted = (dto?.ApproverUserIds ?? Array.Empty<int>()).Distinct().Where(i => i != UserId).ToList();
+        var chosen = wanted.Count == 0 ? candidates.Where(a => a.UserId != UserId).ToList() : candidates.Where(a => wanted.Contains(a.UserId)).ToList();
+        if (wanted.Count > 0 && chosen.Count != wanted.Count) return BadRequest(new { message = "One of the people you picked isn't an accountant for this company." });
+        if (chosen.Count == 0 && candidates.Count > 0) return BadRequest(new { message = "Pick at least one accountant to send the pack to." });
 
         var res = await RunChecksAsync(b);
         var from = b.Status;
@@ -901,10 +952,14 @@ public class CreditorPacksController : ControllerBase
         {
             b.Status = CreditorWorkflow.AwaitingAccountant;
             b.ReturnReason = null;
+            b.RequestedApproverIds = wanted.Count == 0 ? null : string.Join(",", chosen.Select(a => a.UserId));
+            b.RequestedApproverNames = chosen.Count == 0 ? null : string.Join(", ", chosen.Select(a => a.Name));
+            b.RequestedDirectorIds = null; b.RequestedDirectorNames = null;
             foreach (var it in b.Items.Where(i => i.DecisionStatus == "Queried")) { it.DecisionStatus = "Pending"; it.DecisionComment = null; }
-            b.Events.Add(Ev("Submitted", from, b.Status, res.Status == "REVIEW" ? $"{res.Review} item(s) for the accountant to review" : "All checks passed"));
-            var accs = (await ApproversForAsync(b.CompanyCode)).Accountants.Select(a => (int?)a.UserId).Where(id => id != UserId);
-            await NotifyAsync(accs, "Payment pack awaiting your approval", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · {CreditorChecksService.Label(b.PaymentType)}", b.Id);
+            var note = res.Status == "REVIEW" ? $"{res.Review} item(s) for the accountant to review" : "All checks passed";
+            b.Events.Add(Ev("Submitted", from, b.Status, note + (chosen.Count > 0 ? $" · sent to {b.RequestedApproverNames}" : "")));
+            await NotifyAsync(chosen.Select(a => (int?)a.UserId), "Payment pack awaiting your approval", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · {CreditorChecksService.Label(b.PaymentType)} · prepared by {UserName}", b.Id);
+            await EmailApproversAsync(chosen, b, "check and approve", "Accountant approval");
         }
         await _db.SaveChangesAsync();
         return Ok(await DetailAsync(id));
@@ -926,16 +981,16 @@ public class CreditorPacksController : ControllerBase
         return res;
     }
 
-    public record DecisionDto(string Decision, string? Comment);
+    public record DecisionDto(string Decision, string? Comment, int[]? DirectorUserIds = null);
 
-    /// <summary>Company accountant: approve (→ director) or query (→ preparer). Mandatory before the director can sign.</summary>
+    /// <summary>Company accountant: approve (→ chosen director(s)) or query (→ preparer). Mandatory before the director can sign.</summary>
     [HttpPost("batches/{id:int}/accountant")]
     public async Task<IActionResult> Accountant(int id, [FromBody] DecisionDto dto)
     {
         var b = await Load(id); if (b == null) return NotFound();
         if (b.Status != CreditorWorkflow.AwaitingAccountant) return Conflict(new { message = "The batch is not awaiting the accountant." });
         var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
-        if (!await IsAccountantForAsync(c)) return Forbid();
+        if (!await IsAccountantForAsync(b, c)) return Forbid();
         if (b.PreparedByUserId == UserId && !IsSystemAdmin) return Conflict(new { message = "The preparer cannot approve their own batch." });
 
         var approve = dto.Decision.Equals("approve", StringComparison.OrdinalIgnoreCase);
@@ -944,11 +999,19 @@ public class CreditorPacksController : ControllerBase
         var from = b.Status;
         if (approve)
         {
+            var (candidates, _) = await CandidateApproversAsync(b.CompanyCode, CreditorWorkflow.RoleDirector);
+            var wanted = (dto.DirectorUserIds ?? Array.Empty<int>()).Distinct().Where(i => i != UserId).ToList();
+            var chosen = wanted.Count == 0 ? candidates.Where(a => a.UserId != UserId).ToList() : candidates.Where(a => wanted.Contains(a.UserId)).ToList();
+            if (wanted.Count > 0 && chosen.Count != wanted.Count) return BadRequest(new { message = "One of the people you picked isn't a director for this company." });
+
             b.Status = CreditorWorkflow.AwaitingDirector;
             b.AccountantUserId = UserId; b.AccountantName = UserName; b.AccountantApprovedAt = DateTime.UtcNow; b.AccountantComment = dto.Comment;
+            b.RequestedDirectorIds = wanted.Count == 0 ? null : string.Join(",", chosen.Select(a => a.UserId));
+            b.RequestedDirectorNames = chosen.Count == 0 ? null : string.Join(", ", chosen.Select(a => a.Name));
             await _sign.SignAsync(new SignatureRequest { EntityType = "PaymentBatch", EntityId = b.Id, Context = "AccountantApproval", SignerUserId = UserId, SignerName = UserName, SignerRole = CreditorWorkflow.RoleAccountant, Action = "Approve", Comment = dto.Comment, Method = "Click", IpAddress = Ip(), UserAgent = Ua(), Payload = Snapshot(b) });
-            b.Events.Add(Ev("AccountantApproved", from, b.Status, dto.Comment));
-            await NotifyAsync((await ApproversForAsync(b.CompanyCode)).Directors.Select(d => (int?)d.UserId), "Payment pack ready for sign-off", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · approved by {UserName}", b.Id);
+            b.Events.Add(Ev("AccountantApproved", from, b.Status, (dto.Comment ?? "") + (chosen.Count > 0 ? $" · sent to {b.RequestedDirectorNames}" : "")));
+            await NotifyAsync(chosen.Select(d => (int?)d.UserId), "Payment pack ready for your signature", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · prepared by {b.PreparedByName}, approved by {UserName}", b.Id);
+            await EmailApproversAsync(chosen, b, "check and sign", "Director sign-off", approvedBy: UserName);
         }
         else
         {
@@ -969,7 +1032,7 @@ public class CreditorPacksController : ControllerBase
         var b = await Load(id); if (b == null) return NotFound();
         if (b.Status != CreditorWorkflow.AwaitingDirector) return Conflict(new { message = "The batch is not with the director." });
         var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
-        if (!await IsDirectorForAsync(c)) return Forbid();
+        if (!await IsDirectorForAsync(b, c)) return Forbid();
         var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
         var d = dto.Decision switch { "Approved" => "Approved", "Queried" => "Queried", "Rejected" => "Rejected", "Pending" => "Pending", _ => null };
         if (d == null) return BadRequest(new { message = "Decision must be Approved, Queried or Rejected." });
@@ -993,7 +1056,7 @@ public class CreditorPacksController : ControllerBase
         if (b.Status != CreditorWorkflow.AwaitingDirector) return Conflict(new { message = "The batch is not awaiting the director." });
         if (b.AccountantApprovedAt == null) return Conflict(new { message = "The company accountant has not approved this pack yet." });
         var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
-        if (!await IsDirectorForAsync(c)) return Forbid();
+        if (!await IsDirectorForAsync(b, c)) return Forbid();
         if (b.Items.Any(i => i.DecisionStatus == "Pending")) return Conflict(new { message = "Approve, query or reject every payment before signing." });
         var profile = await _db.Users.AsNoTracking().Where(u => u.UserId == UserId).Select(u => new { u.Name, u.Surname }).FirstOrDefaultAsync();
         var expected = ($"{profile?.Name} {profile?.Surname}").Trim();
@@ -1254,7 +1317,8 @@ public class CreditorPacksController : ControllerBase
         var awaiting = all.Where(b => b.Status == CreditorWorkflow.AwaitingDirector).OrderBy(b => b.SubmittedAt).Select(b =>
         {
             approversAll.TryGetValue(b.CompanyCode, out var ap);
-            var forMe = IsSystemAdmin || ap == null || ap.Directors.Count == 0 || ap.IsDirector(UserId);
+            var req = b.RequestedDirectorIdList;
+            var forMe = IsSystemAdmin || ((ap == null || ap.Directors.Count == 0 || ap.IsDirector(UserId)) && (req.Count == 0 || req.Contains(UserId)));
             return new
             {
                 b.Id, b.BatchNumber, b.CompanyCode, companyName = Name(b.CompanyCode), b.PaymentType, paymentTypeTitle = CreditorChecksService.Label(b.PaymentType),
@@ -1368,8 +1432,8 @@ public class CreditorPacksController : ControllerBase
         var allFilled = batchReq.All(r => r.filled) && itemReq.Values.All(l => l.All(r => r.filled)) && b.Items.Count > 0;
 
         var canPrepare = await CanPrepareAsync(b);
-        var isAcc = await IsAccountantForAsync(c);
-        var isDir = await IsDirectorForAsync(c);
+        var isAcc = await IsAccountantForAsync(b, c);
+        var isDir = await IsDirectorForAsync(b, c);
         var isBank = await HasAsync(CreditorWorkflow.RoleBank);
         var editable = CreditorWorkflow.PreparerEditable.Contains(b.Status);
         var ap = await ApproversForAsync(b.CompanyCode);
@@ -1387,6 +1451,7 @@ public class CreditorPacksController : ControllerBase
             b.AccountantUserId, b.AccountantName, b.AccountantApprovedAt, b.AccountantComment,
             b.DirectorUserId, b.DirectorName, b.DirectorSignedAt, b.DirectorComment,
             b.LockedAt, b.LockHash, b.BankExportedAt, b.PaidAt, b.ClosedAt, b.ReturnReason, b.ScheduledPayDate,
+            requestedApproverIds = b.RequestedApproverIdList, b.RequestedApproverNames, requestedDirectorIds = b.RequestedDirectorIdList, b.RequestedDirectorNames,
             responsible = new
             {
                 accountant = ap.Accountants.FirstOrDefault()?.UserId, backup = ap.Accountants.Skip(1).FirstOrDefault()?.UserId,
@@ -1459,6 +1524,50 @@ public class CreditorPacksController : ControllerBase
         if (ids.Count == 0) return;
         try { await _notify.NotifyUsersAsync(ids, new NotificationPayload { Type = "info", Title = title, Body = body, Url = $"/finance?tab=creditors&batch={batchId}" }); }
         catch (Exception e) { _log.LogWarning(e, "Creditors notification failed"); }
+    }
+
+    private string IntranetUrl()
+    {
+        var u = _cfg["Intranet:PublicUrl"] ?? _cfg["App:PublicUrl"];
+        if (string.IsNullOrWhiteSpace(u)) u = Request.Headers.Origin.ToString();
+        if (string.IsNullOrWhiteSpace(u)) u = $"{Request.Scheme}://{Request.Host}";
+        return u.TrimEnd('/');
+    }
+
+    /// <summary>
+    /// Emails each approver: "payment pack {no} created by {preparer} — you are requested to check and sign on the intranet".
+    /// Failures are logged, never block the workflow.
+    /// </summary>
+    private async Task EmailApproversAsync(IEnumerable<Approver> people, PaymentBatch b, string ask, string step, string? approvedBy = null)
+    {
+        var list = people.Where(p => !string.IsNullOrWhiteSpace(p.Email)).ToList();
+        if (list.Count == 0) return;
+        var link = $"{IntranetUrl()}/finance?tab=creditors&batch={b.Id}";
+        var company = await _db.CreditorCompanies.AsNoTracking().Where(x => x.Code == b.CompanyCode).Select(x => x.Name).FirstOrDefaultAsync() ?? b.CompanyCode;
+        var subject = $"[Intranet] Payment pack {b.BatchNumber} — {company} · R{b.TotalAmount:N2} — please {ask}";
+        static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
+        foreach (var p in list)
+        {
+            var html = $@"
+<div style='font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937'>
+  <div style='background:#4f46e5;color:#fff;padding:18px 24px;border-radius:12px 12px 0 0'><h2 style='margin:0;font-size:18px'>Payment pack awaiting you</h2><div style='opacity:.85;font-size:13px'>{H(step)}</div></div>
+  <div style='border:1px solid #e5e7eb;border-top:0;padding:22px 24px;border-radius:0 0 12px 12px'>
+    <p style='margin:0 0 12px'>Hi {H(p.Name.Split(' ')[0])},</p>
+    <p style='margin:0 0 14px'>Payment pack <b>{H(b.BatchNumber)}</b> was created by <b>{H(b.PreparedByName)}</b>{(approvedBy != null ? $" and approved by <b>{H(approvedBy)}</b>" : "")}. You are requested to <b>{H(ask)}</b> it on the intranet.</p>
+    <table style='border-collapse:collapse;font-size:14px;margin:0 0 18px'>
+      <tr><td style='padding:4px 14px 4px 0;color:#6b7280'>Paying company</td><td><b>{H(company)}</b> ({H(b.CompanyCode)})</td></tr>
+      <tr><td style='padding:4px 14px 4px 0;color:#6b7280'>Type</td><td>{H(CreditorChecksService.Label(b.PaymentType))}</td></tr>
+      <tr><td style='padding:4px 14px 4px 0;color:#6b7280'>Payments</td><td>{b.Items.Count} · <b>R {b.TotalAmount:N2}</b></td></tr>
+      <tr><td style='padding:4px 14px 4px 0;color:#6b7280'>Dated</td><td>{b.BatchDate:dd MMM yyyy}</td></tr>
+      {(string.IsNullOrWhiteSpace(b.Notes) ? "" : $"<tr><td style='padding:4px 14px 4px 0;color:#6b7280'>Note</td><td>{H(b.Notes)}</td></tr>")}
+    </table>
+    <a href='{link}' style='display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600'>Open the pack on the intranet</a>
+    <p style='margin:18px 0 0;font-size:12px;color:#6b7280'>Sent automatically by the intranet. If the button doesn't work, copy this link: {link}</p>
+  </div>
+</div>";
+            try { if (!await _email.SendEmailAsync(p.Email!, subject, html)) _log.LogWarning("Creditors email to {Email} failed: {Err}", p.Email, _email.LastError); }
+            catch (Exception e) { _log.LogWarning(e, "Creditors email to {Email} failed", p.Email); }
+        }
     }
 
     private string Abs(string rel) => Path.Combine(_root, rel.Replace('/', Path.DirectorySeparatorChar));

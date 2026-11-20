@@ -55,12 +55,15 @@ export interface BatchDetail {
   accountantUserId?: number; accountantName?: string; accountantApprovedAt?: string; accountantComment?: string;
   directorUserId?: number; directorName?: string; directorSignedAt?: string; directorComment?: string;
   lockedAt?: string; lockHash?: string; bankExportedAt?: string; paidAt?: string; closedAt?: string; returnReason?: string;
-  responsible: { accountant?: number; backup?: number; director?: number; delegateDirector?: number };
+  responsible: { accountant?: number; backup?: number; director?: number; delegateDirector?: number; accountants?: { userId: number; name: string; role: string }[]; directors?: { userId: number; name: string; role: string }[] };
+  requestedApproverIds?: number[]; requestedApproverNames?: string | null; requestedDirectorIds?: number[]; requestedDirectorNames?: string | null;
   items: BatchItem[]; batchDocuments: BatchDoc[]; requiredBatchDocs: RequiredDoc[]; readyToSubmit: boolean;
   events: { id: number; at: string; userName?: string; action: string; fromStatus?: string; toStatus?: string; comment?: string }[];
   signatures: { id: number; context: string; signerName: string; signerRole?: string; action: string; comment?: string; method: string; signedAtUtc: string; payloadHash?: string; hasImage: boolean }[];
   can: { edit: boolean; submit: boolean; reopen: boolean; accountant: boolean; direct: boolean; sign: boolean; bankFile: boolean; markLoaded: boolean; markPaid: boolean; close: boolean; uploadAfterLock: boolean; rerunChecks: boolean };
 }
+export interface ApproverOption { userId: number; name: string; role: string; email?: string | null; }
+export interface BatchApprovers { accountants: ApproverOption[]; accountantsFallback: boolean; directors: ApproverOption[]; directorsFallback: boolean; }
 export interface ItemInput {
   supplierName: string; supplierVatNumber?: string; invoiceNumbers?: string; description?: string; amount: number;
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
@@ -138,9 +141,11 @@ export class CreditorPacksService {
   generatedSchedule(id: number) { return this.http.get<GeneratedSchedule>(`${this.base}/batches/${id}/schedule`); }
   generatedScheduleXlsx(id: number) { return this.http.get(`${this.base}/batches/${id}/schedule?format=xlsx`, { responseType: 'blob' }); }
 
-  submit(id: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, {}); }
+  submit(id: number, approverUserIds?: number[]) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, { approverUserIds: approverUserIds ?? null }); }
+  /** Who the pack can be sent to at this step (company approvers, excluding me). `*Fallback` = company has nobody assigned, so everyone with the role is offered. */
+  batchApprovers(id: number) { return this.http.get<BatchApprovers>(`${this.base}/batches/${id}/approvers`); }
   rerunChecks(id: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/checks`, {}); }
-  accountant(id: number, decision: 'approve' | 'query', comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/accountant`, { decision, comment }); }
+  accountant(id: number, decision: 'approve' | 'query', comment?: string, directorUserIds?: number[]) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/accountant`, { decision, comment, directorUserIds: directorUserIds ?? null }); }
   decide(id: number, itemId: number, decision: string, comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/decision`, { decision, comment }); }
   sign(id: number, typedName: string, comment?: string, signatureImageBase64?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/sign`, { typedName, comment, signatureImageBase64 }); }
   bankFile(id: number) { return this.http.get(`${this.base}/batches/${id}/bank-file`, { responseType: 'blob' }); }

@@ -47,6 +47,16 @@ public class PaymentBatch
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? SubmittedAt { get; set; }
 
+    // Who the pack was sent to (chosen at submit / approve from the company's approvers). CSV of user ids; empty = all of them.
+    [MaxLength(200)] public string? RequestedApproverIds { get; set; }
+    [MaxLength(600)] public string? RequestedApproverNames { get; set; }
+    [MaxLength(200)] public string? RequestedDirectorIds { get; set; }
+    [MaxLength(600)] public string? RequestedDirectorNames { get; set; }
+
+    [NotMapped] public IReadOnlyList<int> RequestedApproverIdList => ParseIds(RequestedApproverIds);
+    [NotMapped] public IReadOnlyList<int> RequestedDirectorIdList => ParseIds(RequestedDirectorIds);
+    public static IReadOnlyList<int> ParseIds(string? csv) => string.IsNullOrWhiteSpace(csv) ? Array.Empty<int>() : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(s => int.TryParse(s, out var i) ? i : 0).Where(i => i > 0).ToList();
+
     // Automatic checks (CreditorChecks.Result as JSON)
     public DateTime? ChecksRunAt { get; set; }
     /// <summary>PASS | FAIL | REVIEW</summary>

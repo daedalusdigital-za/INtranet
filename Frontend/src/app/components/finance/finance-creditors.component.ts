@@ -15,7 +15,7 @@ import { ExplainerDialogComponent } from './explainer-dialog.component';
 import { SchedulePreviewDialogComponent } from './schedule-preview-dialog.component';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule } from '../../services/creditor-packs.service';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers } from '../../services/creditor-packs.service';
 
 type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
@@ -152,6 +152,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           @if (b.lockedAt) { <mat-icon class="lock" matTooltip="Signed and locked — nothing can be changed">lock</mat-icon> }
         </h2>
         <p><strong>{{ b.companyName }}</strong> is paying · {{ b.paymentTypeTitle }} · dated {{ b.batchDate | date:'dd MMM yyyy' }} · prepared by {{ b.preparedByName }}@if (b.notes) { · “{{ b.notes }}” }</p>
+        @if (b.status === 'AwaitingAccountant' && b.requestedApproverNames) { <p class="sent-to"><mat-icon>forward_to_inbox</mat-icon> Sent to <strong>{{ b.requestedApproverNames }}</strong> for approval</p> }
+        @if (b.status === 'AwaitingDirector' && b.requestedDirectorNames) { <p class="sent-to"><mat-icon>forward_to_inbox</mat-icon> Sent to <strong>{{ b.requestedDirectorNames }}</strong> to sign</p> }
       </div>
       <div class="sum">
         @if (b.approvedAmount && b.approvedAmount !== b.totalAmount) {
@@ -176,9 +178,9 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <div class="txt"><h3>{{ ns.title }}</h3><p>{{ ns.body }}</p></div>
         <div class="btns">
           @if (b.can.reopen) { <button mat-flat-button color="primary" (click)="setStatus('Draft')"><mat-icon>edit</mat-icon> Reopen & fix</button> }
-          @if (b.can.edit) { <button mat-flat-button color="primary" [disabled]="!b.can.submit || busy()" (click)="submit()"><mat-icon>send</mat-icon> Submit to accountant</button> }
+          @if (b.can.edit) { <button mat-flat-button color="primary" [disabled]="!b.can.submit || busy()" (click)="openSend('submit')"><mat-icon>send</mat-icon> Submit to accountant</button> }
           @if (b.can.accountant) {
-            <button mat-flat-button color="primary" (click)="accountant('approve')" [disabled]="busy()"><mat-icon>task_alt</mat-icon> Approve</button>
+            <button mat-flat-button color="primary" (click)="openSend('approve')" [disabled]="busy()"><mat-icon>task_alt</mat-icon> Approve &amp; send to director</button>
             <button mat-stroked-button (click)="accountant('query')" [disabled]="busy()"><mat-icon>reply</mat-icon> Send back</button>
           }
           @if (b.can.direct) {
@@ -192,6 +194,39 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           @if (b.can.rerunChecks && b.items.length && b.status !== 'Closed') { <button mat-button (click)="rerun()" [disabled]="busy()"><mat-icon>rule</mat-icon> Re-run checks</button> }
           @if (b.can.edit && b.status === 'Draft') { <button mat-button color="warn" (click)="deleteBatch()"><mat-icon>delete</mat-icon> Delete draft</button> }
         </div>
+      </div>
+    }
+
+    @if (sendOpen(); as mode) {
+      <div class="cr-card cr-sign cr-send">
+        <h3><mat-icon>{{ mode === 'submit' ? 'send' : 'task_alt' }}</mat-icon> {{ mode === 'submit' ? 'Send this pack for approval' : 'Approve and send for signature' }}</h3>
+        <p class="muted">
+          @if (mode === 'submit') { The pack has been prepared and checked. Choose which accountant(s) must check and approve it — each one gets an intranet notification and an email. }
+          @else { Choose which director(s) must sign this pack — each one gets an intranet notification and an email. }
+        </p>
+        @if (!sendOptions()) { <div class="cr-state"><mat-spinner diameter="24"></mat-spinner></div> }
+        @else {
+          @let opts = mode === 'submit' ? sendOptions()!.accountants : sendOptions()!.directors;
+          @let fallback = mode === 'submit' ? sendOptions()!.accountantsFallback : sendOptions()!.directorsFallback;
+          @if (fallback) { <p class="hint warn"><mat-icon>warning</mat-icon> <span>No {{ mode === 'submit' ? 'accountant' : 'director' }} is assigned to {{ b.companyName }} under Settings › Users, so everyone with that role is offered.</span></p> }
+          @if (!opts.length) { <p class="hint warn"><mat-icon>person_off</mat-icon> <span>Nobody is available to {{ mode === 'submit' ? 'approve' : 'sign' }} this pack. Ask an admin to give someone the {{ mode === 'submit' ? 'Accountant' : 'Director' }} role and this company.</span></p> }
+          <div class="send-list">
+            @for (p of opts; track p.userId) {
+              <label class="send-row" [class.on]="sendPick.has(p.userId)">
+                <input type="checkbox" [checked]="sendPick.has(p.userId)" (change)="togglePick(p.userId)">
+                <span class="av">{{ initials(p.name) }}</span>
+                <span class="who"><b>{{ p.name }}</b><small>{{ p.role }}@if (p.email) { · {{ p.email }} }</small></span>
+              </label>
+            }
+          </div>
+          @if (mode === 'approve') { <label>Note for the director (optional) <input type="text" [(ngModel)]="sendNote" placeholder="e.g. All recons agree, two new suppliers verified"></label> }
+          <div class="actions">
+            <button mat-button (click)="sendOpen.set(null)">Cancel</button>
+            <button mat-flat-button color="primary" [disabled]="busy() || (opts.length > 0 && sendPick.size === 0)" (click)="mode === 'submit' ? submit() : accountant('approve')">
+              <mat-icon>{{ mode === 'submit' ? 'send' : 'draw' }}</mat-icon> {{ mode === 'submit' ? 'Send to ' : 'Approve — send to ' }}{{ sendPick.size === 1 ? '1 person' : sendPick.size + ' people' }}
+            </button>
+          </div>
+        }
       </div>
     }
 
@@ -681,6 +716,16 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       .facts { list-style: none; margin: 0 0 var(--space-3); padding: 0; li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--text-sm); padding: 4px 0; mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); flex: 0 0 auto; } .warn { color: var(--color-warn); } .bad { color: var(--color-danger); } } }
       label { margin-bottom: var(--space-2); } .sigpad { border: 1px dashed var(--color-line-strong); border-radius: var(--radius-sm); background: #fff; touch-action: none; max-width: 100%; } }
 
+    .cr-send { .muted { color: var(--color-text-2); font-size: var(--text-sm); margin: 0 0 var(--space-3); }
+      .send-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin: 0 0 var(--space-3); }
+      .send-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); cursor: pointer; background: var(--color-surface); margin: 0;
+        &.on { border-color: var(--color-primary); background: var(--color-primary-soft, #eef2ff); }
+        input { width: 16px; height: 16px; margin: 0; flex: 0 0 auto; }
+        .av { width: 30px; height: 30px; border-radius: 50%; background: var(--color-primary); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+        .who { display: flex; flex-direction: column; min-width: 0; b { font-size: var(--text-sm); } small { color: var(--color-text-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } }
+      .hint.warn { color: var(--color-warn); mat-icon { color: inherit; } } }
+    .sent-to { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-primary); mat-icon { font-size: 18px; width: 18px; height: 18px; } }
+
     .cr-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--space-4); @media (max-width: 1100px) { grid-template-columns: 1fr; } }
 
     .cr-check { list-style: none; margin: 0; padding: 0;
@@ -790,6 +835,11 @@ export class FinanceCreditorsComponent implements OnInit {
   typeFilter = signal('');
   newOpen = signal(false);
   signOpen = signal(false);
+  /** "Send to" picker: 'submit' (preparer → accountants) or 'approve' (accountant → directors). */
+  sendOpen = signal<'submit' | 'approve' | null>(null);
+  sendOptions = signal<BatchApprovers | null>(null);
+  sendPick = new Set<number>();
+  sendNote = '';
   itemForm = signal<'new' | number | null>(null);
   openItem = signal(0);
   // invoice auto-fill / supplier directory
@@ -1027,11 +1077,29 @@ export class FinanceCreditorsComponent implements OnInit {
     });
   }
   deleteBatch(): void { const b = this.batch()!; if (!confirm(`Delete draft ${b.batchNumber}? This can't be undone.`)) return; this.api.delete(b.id).subscribe({ next: () => { this.toast.done('Draft deleted'); this.back(); }, error: e => this.fail(e, "Couldn't delete.") }); }
-  submit(): void { const b = this.batch()!; this.busy.set(true); this.api.submit(b.id).subscribe({ next: r => this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems — see the red items' : 'Sent to the accountant'), error: e => this.fail(e, "Couldn't submit.") }); }
+  openSend(mode: 'submit' | 'approve'): void {
+    const b = this.batch()!; this.sendOpen.set(mode); this.sendOptions.set(null); this.sendPick = new Set(); this.sendNote = ''; this.signOpen.set(false);
+    this.api.batchApprovers(b.id).subscribe({
+      next: o => { this.sendOptions.set(o); for (const p of (mode === 'submit' ? o.accountants : o.directors)) this.sendPick.add(p.userId); },
+      error: e => { this.sendOpen.set(null); this.fail(e, "Couldn't load the approvers."); }
+    });
+  }
+  togglePick(id: number): void { if (this.sendPick.has(id)) this.sendPick.delete(id); else this.sendPick.add(id); }
+  initials(n: string): string { return n.split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase(); }
+  submit(): void {
+    const b = this.batch()!; const ids = [...this.sendPick]; this.busy.set(true);
+    this.api.submit(b.id, ids.length ? ids : undefined).subscribe({ next: r => { this.sendOpen.set(null); this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems — see the red items' : `Sent to ${r.requestedApproverNames || 'the accountant'} — they've been notified and emailed`); }, error: e => this.fail(e, "Couldn't submit.") });
+  }
   rerun(): void { const b = this.batch()!; this.busy.set(true); this.api.rerunChecks(b.id).subscribe({ next: r => this.apply(r, `Checks: ${r.checksStatus}`), error: e => this.fail(e, "Couldn't run the checks.") }); }
   accountant(d: 'approve' | 'query'): void {
-    const b = this.batch()!; const c = prompt(d === 'approve' ? 'Add a note for the director (optional):' : 'What needs to be fixed before you can approve?'); if (c === null) return; if (d === 'query' && !c.trim()) return;
-    this.busy.set(true); this.api.accountant(b.id, d, c || undefined).subscribe({ next: r => this.apply(r, d === 'approve' ? 'Approved — now with the director' : 'Sent back to the preparer'), error: e => this.fail(e, "Couldn't record your decision.") });
+    const b = this.batch()!;
+    if (d === 'approve') {
+      const ids = [...this.sendPick]; this.busy.set(true);
+      this.api.accountant(b.id, d, this.sendNote || undefined, ids.length ? ids : undefined).subscribe({ next: r => { this.sendOpen.set(null); this.apply(r, `Approved — sent to ${r.requestedDirectorNames || 'the director'} to sign; they've been notified and emailed`); }, error: e => this.fail(e, "Couldn't record your decision.") });
+      return;
+    }
+    const c = prompt('What needs to be fixed before you can approve?'); if (c === null || !c.trim()) return;
+    this.busy.set(true); this.api.accountant(b.id, d, c).subscribe({ next: r => this.apply(r, 'Sent back to the preparer'), error: e => this.fail(e, "Couldn't record your decision.") });
   }
   decide(it: BatchItem, d: string): void {
     const b = this.batch()!; let c: string | null = null;
