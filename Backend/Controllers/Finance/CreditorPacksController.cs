@@ -372,7 +372,7 @@ public class CreditorPacksController : ControllerBase
         if (!CreditorWorkflow.PreparerEditable.Contains(b.Status)) return Conflict(new { message = "This batch can no longer be edited." });
         if (!await CanPrepareAsync(b)) return Forbid();
         var it = new PaymentBatchItem { BatchId = id, SortOrder = b.Items.Count + 1, PrepaymentOpen = b.PaymentType == CreditorPaymentTypes.Prepayment };
-        Apply(it, dto);
+        Apply(it, dto, b.PaymentType);
         b.Items.Add(it);
         Recalc(b);
         b.Events.Add(Ev("ItemAdded", null, null, $"{dto.SupplierName} R{dto.Amount:N2}"));
@@ -387,7 +387,7 @@ public class CreditorPacksController : ControllerBase
         var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
         if (!CreditorWorkflow.PreparerEditable.Contains(b.Status)) return Conflict(new { message = "This batch can no longer be edited." });
         if (!await CanPrepareAsync(b)) return Forbid();
-        Apply(it, dto);
+        Apply(it, dto, b.PaymentType);
         if (b.Status is CreditorWorkflow.QueriedByDirector && it.DecisionStatus == "Queried") { it.DecisionStatus = "Pending"; it.DecisionComment = null; }
         Recalc(b);
         await _db.SaveChangesAsync();
@@ -410,11 +410,19 @@ public class CreditorPacksController : ControllerBase
         return Ok(await DetailAsync(id));
     }
 
-    private static void Apply(PaymentBatchItem it, ItemDto d)
+    private static void Apply(PaymentBatchItem it, ItemDto d, string paymentType)
     {
         it.SupplierName = d.SupplierName.Trim(); it.SupplierVatNumber = d.SupplierVatNumber?.Replace(" ", ""); it.InvoiceNumbers = d.InvoiceNumbers?.Trim();
-        it.Description = d.Description; it.Amount = d.Amount; it.BankName = d.BankName; it.AccountNumber = d.AccountNumber?.Replace(" ", "");
-        it.BranchCode = d.BranchCode; it.AccountHolder = d.AccountHolder; it.PaymentReference = d.PaymentReference; it.StockReturned = d.StockReturned;
+        it.Description = d.Description; it.Amount = d.Amount; it.PaymentReference = d.PaymentReference; it.StockReturned = d.StockReturned;
+        if (paymentType == CreditorPaymentTypes.Prepayment)
+        {
+            // Prepayments are paid off the quote; Treasury loads the beneficiary manually from the bank letter, so nothing is captured here.
+            it.BankName = null; it.AccountNumber = null; it.BranchCode = null; it.AccountHolder = null;
+        }
+        else
+        {
+            it.BankName = d.BankName; it.AccountNumber = d.AccountNumber?.Replace(" ", ""); it.BranchCode = d.BranchCode; it.AccountHolder = d.AccountHolder;
+        }
     }
 
     // ───────────────────────── supplier directory & invoice intake ─────────────────────────

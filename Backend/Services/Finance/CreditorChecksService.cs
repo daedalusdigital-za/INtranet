@@ -364,6 +364,7 @@ public class CreditorChecksService
             }
             else Add("C2", "Bank letter date not found", "REVIEW", $"Could not read a date off the bank letter for {it.SupplierName} — confirm it is less than 3 months old.", it, CreditorDocTypes.BankLetter);
 
+            if (batch.PaymentType == CreditorPaymentTypes.Prepayment) continue; // bank details are not captured on prepayments — Treasury loads them from the letter
             var acc = Digits(it.AccountNumber ?? "");
             if (acc == null) Add("C3", "Account number missing on schedule", "FAIL", $"No bank account number captured for {it.SupplierName}.", it);
             else if (letter.ExtractedAccountNumber == null && !(letter.ExtractedText ?? "").Replace(" ", "").Contains(acc))
@@ -462,7 +463,7 @@ public class CreditorChecksService
             var key = it.SupplierName.Trim().ToUpperInvariant();
             var prev = history.FirstOrDefault(h => h.SupplierName.Trim().ToUpperInvariant() == key);
             if (prev == null) { Add("C11", "First payment to this beneficiary", "REVIEW", $"{it.SupplierName} has not been paid through the system before — verify the bank letter by phone (AVS).", it); continue; }
-            if (Digits(prev.AccountNumber ?? "") != Digits(it.AccountNumber ?? ""))
+            if (batch.PaymentType != CreditorPaymentTypes.Prepayment && Digits(prev.AccountNumber ?? "") != Digits(it.AccountNumber ?? ""))
                 Add("C11", "Bank account changed", "FAIL", $"{it.SupplierName} was last paid into {Mask(Digits(prev.AccountNumber ?? ""))} (batch {prev.BatchNumber}); this schedule uses {Mask(Digits(it.AccountNumber ?? ""))}. Confirm with the supplier before approving.", it);
 
             // C12 — same amount to the same supplier within 7 days

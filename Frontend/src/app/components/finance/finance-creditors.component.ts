@@ -295,12 +295,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <div class="cr-itemform">
               <h4>{{ itemForm() === 'new' ? 'New payment' : 'Edit payment' }}</h4>
 
-              <h5>1 · Invoice and recon</h5>
+              <h5>1 · {{ isPrepayment() ? 'Quote' : 'Invoice and recon' }}</h5>
               <div class="inv-src">
                 @if (!pendingInvoiceFile && !pendingLink) {
-                  <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> Upload invoice</button>
-                  <button mat-stroked-button (click)="openPicker()"><mat-icon>link</mat-icon> Link from Books</button>
-                  <small class="muted">We read the PDF and fill in who is being paid, the amount, invoice number, description and any bank details printed on it. Or link an invoice already captured in Books.</small>
+                  <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> {{ isPrepayment() ? 'Upload quote' : 'Upload invoice' }}</button>
+                  @if (!isPrepayment()) { <button mat-stroked-button (click)="openPicker()"><mat-icon>link</mat-icon> Link from Books</button> }
+                  @if (isPrepayment()) { <small class="muted">A prepayment starts from the supplier's quote — we read the PDF and fill in who is being paid, the amount, quote number and description. The tax invoice comes later, once the goods are delivered.</small> }
+                  @else { <small class="muted">We read the PDF and fill in who is being paid, the amount, invoice number, description and any bank details printed on it. Or link an invoice already captured in Books.</small> }
                   @if (reading()) { <mat-spinner diameter="18"></mat-spinner> }
                 } @else if (pendingInvoiceFile) {
                   <span class="chip ok"><mat-icon>picture_as_pdf</mat-icon> {{ pendingInvoiceFile.name }} @if (readInfo()) { · {{ readInfo() }} }</span>
@@ -377,10 +378,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 
               <h5>3 · What is it for</h5>
               <div class="row">
-                <label class="grow">Invoice / reference numbers being paid <input [(ngModel)]="itemDraft.invoiceNumbers" placeholder="INV123, INV124"></label>
+                <label class="grow">{{ isPrepayment() ? 'Quote / PO numbers' : 'Invoice / reference numbers being paid' }} <input [(ngModel)]="itemDraft.invoiceNumbers" [placeholder]="isPrepayment() ? 'Q1234, PO5678' : 'INV123, INV124'"></label>
                 <label class="grow">Description <input [(ngModel)]="itemDraft.description" placeholder="e.g. March stock, repairs to bakkie…"></label>
               </div>
 
+              @if (isPrepayment()) {
+                <p class="hint"><mat-icon>account_balance</mat-icon> <span>Bank details are not captured on prepayments — Treasury loads the beneficiary manually from the bank letter when the payment is made.</span></p>
+              } @else {
               <h5>4 · Bank details (as on the bank letter)</h5>
               <div class="row">
                 <label>Bank <input [(ngModel)]="itemDraft.bankName"></label>
@@ -389,6 +393,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 <label class="grow">Account holder <input [(ngModel)]="itemDraft.accountHolder"></label>
                 <label>Reference on their statement <input [(ngModel)]="itemDraft.paymentReference"></label>
               </div>
+              }
               @if (b.paymentType === 'CreditNote') {
                 <mat-checkbox [(ngModel)]="itemDraft.stockReturned">Stock physically came back (warehouse GRV + collection slip will be required)</mat-checkbox>
               }
@@ -1024,6 +1029,9 @@ export class FinanceCreditorsComponent implements OnInit {
   docTypesFor(itemId: number | null) { return (this.meta()?.docTypes ?? []).filter(d => itemId ? d.scope === 'item' || d.key === 'Other' : d.scope === 'batch' || d.key === 'Other'); }
   badge(s: string) { return ['Approved', 'Paid', 'Closed', 'LoadedOnBank'].includes(s) ? 'ok' : s.startsWith('Awaiting') ? 'warn' : this.sentBack.includes(s) || s === 'Rejected' ? 'bad' : s === 'Draft' ? '' : 'info'; }
   rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned && !r.withRecon).map(r => this.docTitle(r.docType)); const withRecon = rules.filter(r => r.withRecon).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (withRecon.length ? ` · with every recon: ${withRecon.join(', ')}` : '') + (opt.length ? ` · optional: ${opt.join(', ')}` : ''); }
+  isPrepayment(): boolean { return this.batch()?.paymentType === 'Prepayment'; }
+  /** Doc type the "first upload" in the add-payment form is stored as: the quote for prepayments, the tax invoice otherwise. */
+  primaryDocType(): string { return this.isPrepayment() ? 'Quote' : 'TaxInvoice'; }
   reconSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); }
   needsRecon(): boolean { return this.reconSlot() && !!(this.pendingInvoiceFile || this.pendingLink); }
   sageSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SageAgedPayables' && r.withRecon); }
@@ -1197,6 +1205,7 @@ export class FinanceCreditorsComponent implements OnInit {
   cancelItem(): void { this.itemForm.set(null); this.clearInvoice(); }
   saveItem(): void {
     const b = this.batch()!; const f = this.itemForm(); this.busy.set(true);
+    if (this.isPrepayment()) { const d = this.itemDraft; d.bankName = ''; d.accountNumber = ''; d.branchCode = ''; d.accountHolder = ''; }
     const file = this.pendingInvoiceFile, link = this.pendingLink, recon = this.pendingReconFile, sage = this.pendingSageFile;
     const req = f === 'new' ? this.api.addItem(b.id, this.itemDraft) : this.api.updateItem(b.id, f as number, this.itemDraft);
     req.subscribe({
@@ -1214,7 +1223,7 @@ export class FinanceCreditorsComponent implements OnInit {
           this.busy.set(true);
           this.api.upload(b.id, recon, 'SupplierRecon', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachSage(afterMsg + ' + recon'); }, error: e => this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.') });
         };
-        if (file) { this.busy.set(true); this.api.upload(b.id, file, 'TaxInvoice', itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and invoice attached'); }, error: e => this.fail(e, 'Payment saved but the invoice could not be attached.') }); }
+        if (file) { this.busy.set(true); this.api.upload(b.id, file, this.primaryDocType(), itemId).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon(this.isPrepayment() ? 'Payment added and quote attached' : 'Payment added and invoice attached'); }, error: e => this.fail(e, this.isPrepayment() ? 'Payment saved but the quote could not be attached.' : 'Payment saved but the invoice could not be attached.') }); }
         else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and linked to the Books invoice'); }, error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
       },
       error: e => this.fail(e, "Couldn't save the payment.")
@@ -1238,6 +1247,7 @@ export class FinanceCreditorsComponent implements OnInit {
   pickSupplier(s: SupplierHit): void {
     const d = this.itemDraft; d.supplierName = s.name;
     if (s.vatNumber) d.supplierVatNumber = s.vatNumber;
+    if (this.isPrepayment()) { this.showSuppliers.set(false); this.supplierHits.set([]); return; }
     if (s.bankName && !d.bankName) d.bankName = s.bankName;
     if (s.accountNumber && !d.accountNumber) d.accountNumber = s.accountNumber;
     if (s.branchCode && !d.branchCode) d.branchCode = s.branchCode;
@@ -1256,15 +1266,17 @@ export class FinanceCreditorsComponent implements OnInit {
         if (r.supplierName && !d.supplierName) { d.supplierName = r.supplierName; filled.push('supplier'); }
         if (r.amount && !d.amount) { d.amount = r.amount; filled.push('amount'); }
         if (r.vatNumber && !d.supplierVatNumber) d.supplierVatNumber = r.vatNumber;
-        if (r.invoiceNumber && !d.invoiceNumbers) { d.invoiceNumbers = r.invoiceNumber; filled.push('invoice no.'); }
+        if (r.invoiceNumber && !d.invoiceNumbers) { d.invoiceNumbers = r.invoiceNumber; filled.push(this.isPrepayment() ? 'quote no.' : 'invoice no.'); }
         if (r.description && !d.description) { d.description = r.description; filled.push('description'); }
         else if (!d.description && r.orderNumber) { d.description = `Order ${r.orderNumber}`; filled.push('order no.'); }
         if (r.customerAccount && !d.paymentReference) { d.paymentReference = r.customerAccount; filled.push('reference'); }
-        // Bank details: prefer what we paid last time (verified), else what is printed on the invoice
-        if (r.supplier?.bankName && !d.bankName) { const s = r.supplier; d.bankName = s.bankName!; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference ||= s.paymentReference ?? ''; filled.push('bank details from last payment'); }
+        // Bank details: prefer what we paid last time (verified), else what is printed on the invoice. Never on prepayments — Treasury captures those.
+        if (this.isPrepayment()) { /* no bank capture */ }
+        else if (r.supplier?.bankName && !d.bankName) { const s = r.supplier; d.bankName = s.bankName!; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference ||= s.paymentReference ?? ''; filled.push('bank details from last payment'); }
         else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details printed on the invoice — verify against the bank letter'); }
         this.readInfo.set(!r.readable ? 'could not read the text — fill in by hand' : filled.length ? 'filled: ' + filled.join(', ') : 'read, nothing recognised');
-        if (r.suggestedType && r.suggestedType !== 'TaxInvoice' && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a tax invoice — it will still be attached as the invoice.`);
+        const want = this.primaryDocType();
+        if (r.suggestedType && r.suggestedType !== want && r.suggestedType !== 'Other') this.toast.warn(`This looks like a ${this.docTitle(r.suggestedType)}, not a ${this.isPrepayment() ? 'quote' : 'tax invoice'} — it will still be attached as the ${this.isPrepayment() ? 'quote' : 'invoice'}.`);
       },
       error: e => { this.reading.set(false); this.readInfo.set('could not read'); this.toast.error(e?.error?.message || "Couldn't read the PDF — it will still be attached."); }
     });
