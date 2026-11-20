@@ -182,10 +182,7 @@ public class ServerOcrService
             if (isPdf)
             {
                 if (!_pdftoppmAvailable) throw new InvalidOperationException("pdftoppm (poppler-utils) is required to OCR PDFs but is not installed.");
-                var outPrefix = Path.Combine(workDir, "page");
-                // Grayscale: a third of the bytes of RGB, and tesseract / ZXing work on luminance anyway.
-                await RunProcessAsync("pdftoppm", $"-png -gray -r 300 -l {maxPages} \"{filePath}\" \"{outPrefix}\"", 180_000);
-                images = Directory.GetFiles(workDir, "page*.png").OrderBy(p => p).Take(maxPages).ToList();
+                images = await RenderPdfAsync(filePath, workDir, 300, maxPages);
             }
             else images = new List<string> { filePath };
 
@@ -193,19 +190,46 @@ public class ServerOcrService
             // single thread via OMP_THREAD_LIMIT so they don't fight over the CPU). Order is restored afterwards.
             var results = new PackPage[images.Count];
             using var gate = new SemaphoreSlim(Parallelism);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             await Task.WhenAll(images.Select(async (img, idx) =>
             {
                 await gate.WaitAsync();
                 try { results[idx] = await ProcessPackPageAsync(img, idx + 1, workDir, keepImagesIn); }
                 finally { gate.Release(); }
             }));
+            _logger.LogInformation("Pack OCR: {Pages} page(s) in {Ms} ms ({File})", images.Count, sw.ElapsedMilliseconds, Path.GetFileName(filePath));
             return results.ToList();
         }
         finally { try { Directory.Delete(workDir, true); } catch { } }
     }
 
     /// <summary>How many tesseract processes to run at once.</summary>
-    private static readonly int Parallelism = Math.Clamp(Environment.ProcessorCount, 2, 8);
+    private static readonly int Parallelism = Math.Clamp(Environment.ProcessorCount, 2, 12);
+
+    /// <summary>
+    /// Render a PDF to grayscale PNGs. pdftoppm is single-threaded (~1.3 s per A4 page at 300 DPI), so the page range
+    /// is split into chunks that render concurrently. Returns the page images in order.
+    /// </summary>
+    private async Task<List<string>> RenderPdfAsync(string filePath, string workDir, int dpi, int maxPages)
+    {
+        var outPrefix = Path.Combine(workDir, "page");
+        var pageCount = 0;
+        try { var info = await RunProcessAsync("pdfinfo", $"\"{filePath}\"", 20_000); var m = Regex.Match(info, @"Pages:\s+(\d+)"); if (m.Success) pageCount = int.Parse(m.Groups[1].Value); } catch { }
+        var last = pageCount > 0 ? Math.Min(pageCount, maxPages) : maxPages;
+        var workers = Math.Clamp(Math.Min(last, Parallelism), 1, 8);
+        if (last <= 1 || workers == 1)
+        {
+            await RunProcessAsync("pdftoppm", $"-png -gray -r {dpi} -l {last} \"{filePath}\" \"{outPrefix}\"", 180_000);
+        }
+        else
+        {
+            var per = (int)Math.Ceiling(last / (double)workers);
+            var ranges = Enumerable.Range(0, workers).Select(i => (from: i * per + 1, to: Math.Min(last, (i + 1) * per))).Where(r => r.from <= r.to);
+            // All workers write page-NN.png with the same zero padding because -f/-l are given on the same document.
+            await Task.WhenAll(ranges.Select(r => RunProcessAsync("pdftoppm", $"-png -gray -r {dpi} -f {r.from} -l {r.to} \"{filePath}\" \"{outPrefix}\"", 180_000)));
+        }
+        return Directory.GetFiles(workDir, "page*.png").OrderBy(p => p, StringComparer.Ordinal).Take(maxPages).ToList();
+    }
 
     /// <summary>
     /// Text-only OCR for documents where layout, barcodes and word boxes don't matter (creditors packs: invoices,
@@ -225,9 +249,7 @@ public class ServerOcrService
             if (isPdf)
             {
                 if (!_pdftoppmAvailable) throw new InvalidOperationException("pdftoppm (poppler-utils) is required to OCR PDFs but is not installed.");
-                var outPrefix = Path.Combine(workDir, "page");
-                await RunProcessAsync("pdftoppm", $"-png -gray -r 200 -l {maxPages} \"{filePath}\" \"{outPrefix}\"", 120_000);
-                images = Directory.GetFiles(workDir, "page*.png").OrderBy(p => p).Take(maxPages).ToList();
+                images = await RenderPdfAsync(filePath, workDir, 200, maxPages);
             }
             else images = new List<string> { filePath };
 
@@ -254,63 +276,66 @@ public class ServerOcrService
     private async Task<PackPage> ProcessPackPageAsync(string img, int pageNo, string workDir, string? keepImagesIn)
     {
                 var page = new PackPage();
-                // 1. Rotation: OSD gives the angle; rotate the bitmap upright so cropping (header band),
-                //    barcode decoding and word positions all refer to a straight page.
-                page.Rotation = await DetectRotationAsync(img);
                 var upright = img;
-                string? deskewed = null;
-                try
-                {
-                    using var im = await Image.LoadAsync(img);
-                    if (page.Rotation != 0)
-                    {
-                        im.Mutate(x => x.Rotate(page.Rotation switch { 90 => RotateMode.Rotate90, 180 => RotateMode.Rotate180, 270 => RotateMode.Rotate270, _ => RotateMode.None }));
-                        upright = Path.Combine(workDir, Path.GetFileNameWithoutExtension(img) + "_up.png");
-                        await im.SaveAsPngAsync(upright);
-                    }
-                    page.Width = im.Width; page.Height = im.Height;
-                    // 2. Deskew: small residual tilt from the feeder (±4°) blurs table rows for OCR. Only when the
-                    //    projection profile is clearly sharper at the new angle; the read is verified below.
-                    page.Skew = EstimateSkew(im);
-                    if (Math.Abs(page.Skew) >= 0.3)
-                    {
-                        im.Mutate(x => x.Rotate((float)-page.Skew).BackgroundColor(Color.White));
-                        deskewed = Path.Combine(workDir, Path.GetFileNameWithoutExtension(img) + "_dsk.png");
-                        await im.SaveAsPngAsync(deskewed);
-                    }
-                }
-                catch { upright = img; deskewed = null; }
+                try { using var im0 = await Image.LoadAsync(img); page.Width = im0.Width; page.Height = im0.Height; } catch { }
 
-                // 3. Main read with word boxes + confidence.
-                var (t, words, conf) = await RunTesseractTsvAsync(upright, psm: 1);
-                if (deskewed != null)
-                {
-                    // Keep the deskewed read only when it is genuinely better; otherwise the tilt estimate was noise.
-                    var (t1, w1, c1) = await RunTesseractTsvAsync(deskewed, psm: 1);
-                    if (WordScore(t1) > WordScore(t) * 1.08 || (WordScore(t1) >= WordScore(t) && c1 > conf + 0.03)) { t = t1; words = w1; conf = c1; upright = deskewed; }
-                    else page.Skew = 0;
-                }
-                if (upright != img && page.Rotation != 0)
-                {
-                    // Safety net: if the rotated read is worse than the original (OSD got it wrong), keep the original.
-                    var (t0, w0, c0) = await RunTesseractTsvAsync(img, psm: 1);
-                    if (WordScore(t0) > WordScore(t) * 1.2) { t = t0; words = w0; conf = c0; upright = img; page.Rotation = 0; page.Skew = 0; }
-                }
-                // 4. Faint / light-grey pages (a faded order confirmation, a pale stamp): boost contrast and retry.
+                // 1. Read the page as scanned, and the header band at the same time (independent processes).
+                //    PSM 1 already includes orientation detection, so a clean upright page needs nothing else.
+                var mainTask = RunTesseractTsvAsync(upright, psm: 1);
+                var bandTask = ReadInvertedHeaderBandAsync(upright, workDir);
+                var (t, words, conf) = await mainTask;
+
+                // 2. Only when the read is poor do we spend more passes: explicit rotation, deskew, contrast.
                 if (WordScore(t) < 40 || conf < 0.55)
                 {
-                    var enh = await EnhanceAsync(upright, workDir);
-                    if (enh != null)
+                    page.Rotation = await DetectRotationAsync(img);
+                    string? deskewed = null;
+                    try
                     {
-                        var (t1, w1, c1) = await RunTesseractTsvAsync(enh, psm: 1);
-                        if (WordScore(t1) > WordScore(t) * 1.15 || (WordScore(t1) >= WordScore(t) && c1 > conf + 0.05))
-                        { t = t1; words = w1; conf = c1; page.Enhanced = true; }
+                        using var im = await Image.LoadAsync(img);
+                        if (page.Rotation != 0)
+                        {
+                            im.Mutate(x => x.Rotate(page.Rotation switch { 90 => RotateMode.Rotate90, 180 => RotateMode.Rotate180, 270 => RotateMode.Rotate270, _ => RotateMode.None }));
+                            upright = Path.Combine(workDir, Path.GetFileNameWithoutExtension(img) + "_up.png");
+                            await im.SaveAsPngAsync(upright);
+                            page.Width = im.Width; page.Height = im.Height;
+                        }
+                        page.Skew = EstimateSkew(im);
+                        if (Math.Abs(page.Skew) >= 0.3)
+                        {
+                            im.Mutate(x => x.Rotate((float)-page.Skew).BackgroundColor(Color.White));
+                            deskewed = Path.Combine(workDir, Path.GetFileNameWithoutExtension(img) + "_dsk.png");
+                            await im.SaveAsPngAsync(deskewed);
+                        }
                     }
+                    catch { deskewed = null; }
+
+                    // Rotated / deskewed / contrast-enhanced candidates are read side by side; keep the best.
+                    var rotated = upright; upright = img; // until a candidate proves better, the original read stands
+                    var cands = new List<(string path, string tag)>();
+                    if (rotated != img) cands.Add((rotated, "rot"));
+                    if (deskewed != null) cands.Add((deskewed, "dsk"));
+                    var enh = await EnhanceAsync(rotated, workDir);
+                    if (enh != null) cands.Add((enh, "enh"));
+                    if (cands.Count > 0)
+                    {
+                        var reads = await Task.WhenAll(cands.Select(async c => (c.tag, r: await RunTesseractTsvAsync(c.path, psm: 1), c.path)));
+                        foreach (var (tag, r, path) in reads)
+                        {
+                            var (t1, w1, c1) = r;
+                            var better = tag == "enh" ? (WordScore(t1) > WordScore(t) * 1.15 || (WordScore(t1) >= WordScore(t) && c1 > conf + 0.05))
+                                                      : (WordScore(t1) > WordScore(t) * 1.08 || (WordScore(t1) >= WordScore(t) && c1 > conf + 0.03));
+                            if (better) { t = t1; words = w1; conf = c1; if (tag == "enh") { page.Enhanced = true; upright = rotated; } else upright = path; }
+                        }
+                    }
+                    if (upright == img) page.Rotation = 0;
+                    if (upright != deskewed) page.Skew = 0;
+                    if (t.Trim().Length < 60) t += "\n" + await RunTesseractAsync(upright, psm: 11);
                 }
-                if (t.Trim().Length < 60) t += "\n" + await RunTesseractAsync(upright, psm: 11);
-                // 5. Sage letterheads print the document title and its number (IN… / ORD…) in white on a dark
-                //    header band, which tesseract drops. Re-read the top of the page on its own.
-                var band = await ReadInvertedHeaderBandAsync(upright, workDir);
+
+                // 3. Sage letterheads print the document title and its number (IN… / ORD…) in white on a dark
+                //    header band, which tesseract drops. The top of the page was re-read on its own above.
+                var band = await bandTask;
                 if (!string.IsNullOrWhiteSpace(band)) t += "\n[HEADER] " + band;
                 page.Text = t;
                 page.Words = words;
@@ -511,12 +536,13 @@ public class ServerOcrService
             var baseName = Path.GetFileNameWithoutExtension(imagePath);
             var plainPath = Path.Combine(workDir, baseName + "_hdr.png");
             await image.SaveAsPngAsync(plainPath);
-            var plain = await RunTesseractAsync(plainPath, psm: 6);
-
             image.Mutate(x => x.Invert().Contrast(1.5f));
             var invPath = Path.Combine(workDir, baseName + "_hdr_inv.png");
             await image.SaveAsPngAsync(invPath);
-            var inverted = await RunTesseractAsync(invPath, psm: 6);
+            // Both strips are small; read them at the same time.
+            var plainTask = RunTesseractAsync(plainPath, psm: 6);
+            var invTask = RunTesseractAsync(invPath, psm: 6);
+            var plain = await plainTask; var inverted = await invTask;
 
             return (plain.Trim() + "\n" + inverted.Trim()).Trim();
         }
