@@ -65,6 +65,7 @@ namespace ProjectTracker.API.Controllers
                 CreatedAt = u.CreatedAt,
                 Permissions = u.Permissions,
                 HasProfilePicture = u.ProfilePictureData != null,
+                HasSignature = u.SignatureImageData != null,
                 CompanyIds = allCompanyAssignments
                     .Where(soc => soc.StaffMemberId == u.UserId)
                     .Select(soc => soc.OperatingCompanyId)
@@ -133,6 +134,7 @@ namespace ProjectTracker.API.Controllers
                 UpdatedAt = user.UpdatedAt,
                 ProfilePictureUrl = user.ProfilePictureUrl,
                 HasProfilePicture = user.ProfilePictureData != null,
+                HasSignature = user.SignatureImageData != null,
                 CompanyIds = companyIds,
                 LinkedEmpId = user.LinkedEmpId,
                 LinkedEmployeeName = user.LinkedEmployee != null ? $"{user.LinkedEmployee.Name} {user.LinkedEmployee.LastName}" : null,
@@ -996,6 +998,7 @@ namespace ProjectTracker.API.Controllers
         public DateTime CreatedAt { get; set; }
         public string? Permissions { get; set; }
         public bool HasProfilePicture { get; set; }
+        public bool HasSignature { get; set; }
         public List<int>? CompanyIds { get; set; }
         public string? LinkedEmpId { get; set; }
         public string? LinkedEmployeeName { get; set; }
@@ -1022,6 +1025,7 @@ namespace ProjectTracker.API.Controllers
         public DateTime? UpdatedAt { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public bool HasProfilePicture { get; set; }
+        public bool HasSignature { get; set; }
         public List<int>? CompanyIds { get; set; }
         public string? LinkedEmpId { get; set; }
         public string? LinkedEmployeeName { get; set; }

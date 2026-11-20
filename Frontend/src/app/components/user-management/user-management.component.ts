@@ -26,6 +26,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
 import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 import { ToastService } from '../../ui/toast.service';
 import { ConfirmService } from '../../ui/confirm.service';
+import { SecureSrcDirective } from '../../directives/secure-src.directive';
 
 interface User {
   userId: number;
@@ -41,6 +42,7 @@ interface User {
   createdAt: Date;
   permissions?: string;
   hasProfilePicture: boolean;
+  hasSignature?: boolean;
   companyIds?: number[];
   linkedEmpId?: string;
   linkedEmployeeName?: string;
@@ -101,7 +103,8 @@ interface Permission {
     NavbarComponent,
     SkeletonRowsComponent,
     EmptyStateComponent,
-    StatusChipComponent
+    StatusChipComponent,
+    SecureSrcDirective
   ],
   template: `
     <app-navbar></app-navbar>
@@ -242,6 +245,7 @@ interface Permission {
                   <th>Role</th>
                   <th>Department</th>
                   <th>Companies</th>
+                  <th matTooltip="Saved hand signature, stamped on documents the person signs (payment packs etc.)">Signature</th>
                   <th>Status</th>
                   <th>Last Login</th>
                   <th>Actions</th>
@@ -280,6 +284,17 @@ interface Permission {
                       </div>
                     </td>
                     <td>
+                      <div class="sig-cell">
+                        @if (user.hasSignature) {
+                          <img class="sig-thumb" [appSecureSrc]="signatureUrl(user)" alt="Signature" matTooltip="Click to replace" (click)="sigInput.click()">
+                          <button mat-icon-button class="sig-x" matTooltip="Remove signature" aria-label="Remove signature" (click)="removeSignature(user)"><mat-icon>close</mat-icon></button>
+                        } @else {
+                          <button mat-stroked-button class="sig-add" (click)="sigInput.click()" [disabled]="sigBusy === user.userId"><mat-icon>draw</mat-icon> {{ sigBusy === user.userId ? 'Uploading…' : 'Upload' }}</button>
+                        }
+                        <input #sigInput type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="uploadSignature(user, $event)">
+                      </div>
+                    </td>
+                    <td>
                       <app-status-chip [status]="user.isActive ? 'Active' : 'Inactive'" [tone]="user.isActive ? 'ok' : 'danger'"></app-status-chip>
                     </td>
                     <td>{{ formatDate(user.lastLoginAt) }}</td>
@@ -303,7 +318,7 @@ interface Permission {
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="8">
+                    <td colspan="9">
                       @if (users.length) {
                         <app-empty-state icon="filter_alt_off" title="No users match these filters"
                           message="Try another search, or clear the filters to see every user.">
@@ -326,6 +341,10 @@ interface Permission {
     </div>
   `,
   styles: [`
+    .sig-cell { display: flex; align-items: center; gap: 4px; }
+    .sig-thumb { height: 34px; max-width: 120px; object-fit: contain; background: #fff; border: 1px solid var(--color-line, #e5e7eb); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
+    .sig-x { width: 28px; height: 28px; line-height: 28px; mat-icon { font-size: 16px; width: 16px; height: 16px; } }
+    .sig-add { height: 30px; line-height: 30px; font-size: 12px; padding: 0 10px; mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 2px; } }
     :host {
       display: block;
       min-height: 100vh;
@@ -679,6 +698,29 @@ export class UserManagementComponent implements OnInit {
     return (u.companyIds || []).map(id => this.companies.find(c => c.operatingCompanyId === id)?.code || '').filter(Boolean).sort();
   }
   companyName(code: string): string { return this.companies.find(c => c.code === code)?.name || code; }
+
+  // ── Saved signatures (stamped on payment packs and other signed documents) ──
+  sigBusy: number | null = null;
+  private sigStamp: Record<number, number> = {};
+  signatureUrl(u: User): string { return `${environment.apiUrl}/users/${u.userId}/signature?v=${this.sigStamp[u.userId] || 0}`; }
+  uploadSignature(u: User, e: Event): void {
+    const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { this.toast.warn('Signature image must be 2 MB or smaller.'); return; }
+    const fd = new FormData(); fd.append('file', f);
+    this.sigBusy = u.userId;
+    const token = localStorage.getItem('token');
+    this.http.put(`${environment.apiUrl}/users/${u.userId}/signature`, fd, { headers: new HttpHeaders({ Authorization: token ? `Bearer ${token}` : '' }) }).subscribe({
+      next: () => { this.sigBusy = null; u.hasSignature = true; this.sigStamp[u.userId] = Date.now(); this.toast.done(`Signature saved for ${u.name} ${u.surname}`); },
+      error: err => { this.sigBusy = null; this.toast.error(err?.error?.message || "Couldn't upload the signature."); }
+    });
+  }
+  async removeSignature(u: User): Promise<void> {
+    if (!await this.confirm.ask({ title: 'Remove signature?', message: `${u.name} ${u.surname} will have to draw a signature each time they sign until a new one is uploaded.`, confirmText: 'Remove', danger: true })) return;
+    this.http.delete(`${environment.apiUrl}/users/${u.userId}/signature`, { headers: this.getHeaders() }).subscribe({
+      next: () => { u.hasSignature = false; this.toast.done('Signature removed'); },
+      error: err => this.toast.error(err?.error?.message || "Couldn't remove the signature.")
+    });
+  }
 
   constructor(
     private http: HttpClient,

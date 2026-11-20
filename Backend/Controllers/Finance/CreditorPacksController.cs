@@ -30,15 +30,16 @@ public class CreditorPacksController : ControllerBase
     private readonly INotificationBroadcaster _notify;
     private readonly IEmailService _email;
     private readonly IConfiguration _cfg;
+    private readonly CreditorPackPdfService _packPdf;
     private readonly ILogger<CreditorPacksController> _log;
     private readonly string _root;
     private const long MaxFileBytes = 20L * 1024 * 1024;
 
     public CreditorPacksController(ApplicationDbContext db, CreditorChecksService checks, ISignatureService sign,
-        INotificationBroadcaster notify, IEmailService email, IConfiguration cfg, ILogger<CreditorPacksController> log,
+        INotificationBroadcaster notify, IEmailService email, IConfiguration cfg, CreditorPackPdfService packPdf, ILogger<CreditorPacksController> log,
         Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
     {
-        _db = db; _checks = checks; _sign = sign; _notify = notify; _email = email; _cfg = cfg; _log = log; _cache = cache;
+        _db = db; _checks = checks; _sign = sign; _notify = notify; _email = email; _cfg = cfg; _packPdf = packPdf; _log = log; _cache = cache;
         _root = cfg.GetValue<string>("DocumentsPath") ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
     }
 
@@ -143,6 +144,7 @@ public class CreditorPacksController : ControllerBase
                 director = IsSystemAdmin || perms.Contains(CreditorWorkflow.RoleDirector),
                 bank = IsSystemAdmin || perms.Contains(CreditorWorkflow.RoleBank),
                 readOnly = perms.Contains(CreditorWorkflow.RoleReadOnly),
+                hasSignature = await _db.Users.AsNoTracking().Where(u => u.UserId == UserId).Select(u => u.SignatureImageData != null).FirstOrDefaultAsync(),
             }
         });
     }
@@ -899,7 +901,24 @@ public class CreditorPacksController : ControllerBase
 
     // ───────────────────────── workflow ─────────────────────────
 
-    public record SubmitDto(int[]? ApproverUserIds);
+    public record SubmitDto(int[]? ApproverUserIds, string? SignatureImageBase64 = null, bool UseSavedSignature = true);
+
+    /// <summary>
+    /// Resolve the signature image for the signed-in user: a freshly drawn one wins, otherwise the saved signature on their profile.
+    /// Returns (bytes, mime, method) or null when the person has no signature at all.
+    /// </summary>
+    private async Task<(byte[] Bytes, string Mime, string Method)?> ResolveSignatureAsync(string? drawnBase64, bool useSaved)
+    {
+        if (!string.IsNullOrWhiteSpace(drawnBase64))
+        {
+            try { var bytes = Convert.FromBase64String(drawnBase64.Split(',').Last()); if (bytes.Length > 0) return (bytes, "image/png", "Drawn"); } catch { }
+        }
+        if (!useSaved) return null;
+        var u = await _db.Users.AsNoTracking().Where(x => x.UserId == UserId).Select(x => new { x.SignatureImageData, x.SignatureImageMimeType }).FirstOrDefaultAsync();
+        if (u?.SignatureImageData == null) return null;
+        return (u.SignatureImageData, u.SignatureImageMimeType ?? "image/png", "Saved");
+    }
+    private static object NoSignature() => new { message = "A digital signature is required. Draw one now or ask an admin to upload your saved signature under Settings › Users.", code = "SIGNATURE_REQUIRED" };
 
     /// <summary>Who may be asked to approve / sign this batch (the company's approvers, excluding the caller). Used by the submit and approve pickers.</summary>
     [HttpGet("batches/{id:int}/approvers")]
@@ -940,6 +959,13 @@ public class CreditorPacksController : ControllerBase
         if (chosen.Count == 0 && candidates.Count > 0) return BadRequest(new { message = "Pick at least one accountant to send the pack to." });
 
         var res = await RunChecksAsync(b);
+        if (res.Status != "FAIL")
+        {
+            // The preparer signs the pack before it leaves them.
+            var sig = await ResolveSignatureAsync(dto?.SignatureImageBase64, dto?.UseSavedSignature ?? true);
+            if (sig == null) return BadRequest(NoSignature());
+            await _sign.SignAsync(new SignatureRequest { EntityType = "PaymentBatch", EntityId = b.Id, Context = "PreparerSubmission", SignerUserId = UserId, SignerName = UserName, SignerRole = CreditorWorkflow.RoleClerk, Action = "Submit", Comment = "Prepared and checked", Method = sig.Value.Method, IpAddress = Ip(), UserAgent = Ua(), Payload = Snapshot(b), SignatureImage = sig.Value.Bytes, SignatureImageMimeType = sig.Value.Mime });
+        }
         var from = b.Status;
         b.SubmittedAt = DateTime.UtcNow;
         if (res.Status == "FAIL")
@@ -981,7 +1007,7 @@ public class CreditorPacksController : ControllerBase
         return res;
     }
 
-    public record DecisionDto(string Decision, string? Comment, int[]? DirectorUserIds = null);
+    public record DecisionDto(string Decision, string? Comment, int[]? DirectorUserIds = null, string? SignatureImageBase64 = null, bool UseSavedSignature = true);
 
     /// <summary>Company accountant: approve (→ chosen director(s)) or query (→ preparer). Mandatory before the director can sign.</summary>
     [HttpPost("batches/{id:int}/accountant")]
@@ -1003,12 +1029,14 @@ public class CreditorPacksController : ControllerBase
             var wanted = (dto.DirectorUserIds ?? Array.Empty<int>()).Distinct().Where(i => i != UserId).ToList();
             var chosen = wanted.Count == 0 ? candidates.Where(a => a.UserId != UserId).ToList() : candidates.Where(a => wanted.Contains(a.UserId)).ToList();
             if (wanted.Count > 0 && chosen.Count != wanted.Count) return BadRequest(new { message = "One of the people you picked isn't a director for this company." });
+            var sig = await ResolveSignatureAsync(dto.SignatureImageBase64, dto.UseSavedSignature);
+            if (sig == null) return BadRequest(NoSignature());
 
             b.Status = CreditorWorkflow.AwaitingDirector;
             b.AccountantUserId = UserId; b.AccountantName = UserName; b.AccountantApprovedAt = DateTime.UtcNow; b.AccountantComment = dto.Comment;
             b.RequestedDirectorIds = wanted.Count == 0 ? null : string.Join(",", chosen.Select(a => a.UserId));
             b.RequestedDirectorNames = chosen.Count == 0 ? null : string.Join(", ", chosen.Select(a => a.Name));
-            await _sign.SignAsync(new SignatureRequest { EntityType = "PaymentBatch", EntityId = b.Id, Context = "AccountantApproval", SignerUserId = UserId, SignerName = UserName, SignerRole = CreditorWorkflow.RoleAccountant, Action = "Approve", Comment = dto.Comment, Method = "Click", IpAddress = Ip(), UserAgent = Ua(), Payload = Snapshot(b) });
+            await _sign.SignAsync(new SignatureRequest { EntityType = "PaymentBatch", EntityId = b.Id, Context = "AccountantApproval", SignerUserId = UserId, SignerName = UserName, SignerRole = CreditorWorkflow.RoleAccountant, Action = "Approve", Comment = dto.Comment, Method = sig.Value.Method, IpAddress = Ip(), UserAgent = Ua(), Payload = Snapshot(b), SignatureImage = sig.Value.Bytes, SignatureImageMimeType = sig.Value.Mime });
             b.Events.Add(Ev("AccountantApproved", from, b.Status, (dto.Comment ?? "") + (chosen.Count > 0 ? $" · sent to {b.RequestedDirectorNames}" : "")));
             await NotifyAsync(chosen.Select(d => (int?)d.UserId), "Payment pack ready for your signature", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · prepared by {b.PreparedByName}, approved by {UserName}", b.Id);
             await EmailApproversAsync(chosen, b, "check and sign", "Director sign-off", approvedBy: UserName);
@@ -1043,7 +1071,7 @@ public class CreditorPacksController : ControllerBase
         return Ok(await DetailAsync(id));
     }
 
-    public record SignDto(string TypedName, string? Comment, string? SignatureImageBase64);
+    public record SignDto(string TypedName, string? Comment, string? SignatureImageBase64, bool UseSavedSignature = true);
 
     /// <summary>
     /// Director signs the batch. Disabled until the accountant has approved and every payment has a decision.
@@ -1064,6 +1092,8 @@ public class CreditorPacksController : ControllerBase
         var typed = (dto.TypedName ?? "").Trim();
         if (!string.Equals(typed, expected, StringComparison.OrdinalIgnoreCase) && !string.Equals(typed, UserName.Trim(), StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { message = $"Type your full name exactly as it appears on your profile ({expected}) to sign." });
+        var dsig = await ResolveSignatureAsync(dto.SignatureImageBase64, dto.UseSavedSignature);
+        if (dsig == null) return BadRequest(NoSignature());
 
         var from = b.Status;
         if (b.Items.Any(i => i.DecisionStatus == "Queried"))
@@ -1093,17 +1123,53 @@ public class CreditorPacksController : ControllerBase
         }
         b.DirectorUserId = UserId; b.DirectorName = UserName; b.DirectorSignedAt = DateTime.UtcNow; b.DirectorComment = dto.Comment;
 
-        byte[]? img = null;
-        if (!string.IsNullOrWhiteSpace(dto.SignatureImageBase64)) { try { img = Convert.FromBase64String(dto.SignatureImageBase64.Split(',').Last()); } catch { } }
         await _sign.SignAsync(new SignatureRequest
         {
             EntityType = "PaymentBatch", EntityId = b.Id, Context = "DirectorSignOff", SignerUserId = UserId, SignerName = UserName, SignerRole = CreditorWorkflow.RoleDirector,
             Action = b.Status == CreditorWorkflow.Approved ? "Approve" : b.Status == CreditorWorkflow.Rejected ? "Reject" : "Return",
-            Comment = dto.Comment, Method = img != null ? "Drawn" : "Typed", IpAddress = Ip(), UserAgent = Ua(), Payload = Snapshot(b), SignatureImage = img, SignatureImageMimeType = img != null ? "image/png" : null
+            Comment = dto.Comment, Method = dsig.Value.Method, IpAddress = Ip(), UserAgent = Ua(), Payload = Snapshot(b), SignatureImage = dsig.Value.Bytes, SignatureImageMimeType = dsig.Value.Mime
         });
         b.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return Ok(await DetailAsync(id));
+    }
+
+    /// <summary>Image of one signature captured on this batch.</summary>
+    [HttpGet("batches/{id:int}/signatures/{sigId:int}/image")]
+    public async Task<IActionResult> SignatureImage(int id, int sigId)
+    {
+        var b = await _db.PaymentBatches.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id); if (b == null) return NotFound();
+        if (!await InScopeAsync(b.CompanyCode)) return Forbid();
+        var s = await _db.ElectronicSignatures.AsNoTracking().FirstOrDefaultAsync(x => x.Id == sigId && x.EntityType == "PaymentBatch" && x.EntityId == id);
+        if (s?.SignatureImage == null) return NotFound();
+        return File(s.SignatureImage, s.SignatureImageMimeType ?? "image/png");
+    }
+
+    /// <summary>
+    /// Signed approval sheet (PDF): payment schedule + the digital signatures of the preparer, accountant and director
+    /// with names, dates and tamper hashes. Available at any stage; shows which signatures are still outstanding.
+    /// </summary>
+    [HttpGet("batches/{id:int}/approval-sheet.pdf")]
+    public async Task<IActionResult> ApprovalSheet(int id)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (!await InScopeAsync(b.CompanyCode)) return Forbid();
+        var pdf = await _packPdf.ApprovalSheetAsync(b);
+        return File(pdf, "application/pdf", $"Approval-sheet-{b.BatchNumber}.pdf");
+    }
+
+    /// <summary>
+    /// Whole signed pack as one PDF: approval sheet first, then every uploaded PDF document, each stamped on its final page
+    /// with the signature block. Only once the director has signed.
+    /// </summary>
+    [HttpGet("batches/{id:int}/signed-pack.pdf")]
+    public async Task<IActionResult> SignedPack(int id)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (!await InScopeAsync(b.CompanyCode)) return Forbid();
+        if (!CreditorWorkflow.Locked.Contains(b.Status)) return Conflict(new { message = "The signed pack is available once the director has signed." });
+        var pdf = await _packPdf.SignedPackAsync(b, rel => Abs(rel));
+        return File(pdf, "application/pdf", $"Signed-pack-{b.BatchNumber}.pdf");
     }
 
     /// <summary>Bank file (CSV) for approved payments only. Marks the batch exported.</summary>

@@ -78,6 +78,7 @@ namespace ProjectTracker.API.DTOs.Users
         public DateTime? Birthday { get; set; }
         public string? Permissions { get; set; }
         public bool HasProfilePicture { get; set; }
+        public bool HasSignature { get; set; }
         public List<int> CompanyIds { get; set; } = new();
         public string? LinkedEmpId { get; set; }
         public string? LinkedEmployeeName { get; set; }

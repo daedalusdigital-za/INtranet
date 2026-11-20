@@ -743,11 +743,17 @@ export class FinanceComponent implements OnInit {
   }
 
   approvePack(b: BatchRow): void {
-    const note = window.prompt(`Approve ${b.batchNumber} (${this.packCompanyName(b.companyCode)} · R ${Math.round(b.totalAmount).toLocaleString('en-ZA')}) and send it to the director?\n\nOptional note:`, '');
+    if (!this.packMeta?.me.hasSignature) {
+      // No saved signature: the pack page has the draw-a-signature step.
+      this.toast.warn('Open the pack to sign it — you have no saved signature on your profile yet.');
+      this.goTab('creditors'); this.router.navigate([], { queryParams: { tab: 'creditors', batch: b.id }, queryParamsHandling: 'merge' });
+      return;
+    }
+    const note = window.prompt(`Approve ${b.batchNumber} (${this.packCompanyName(b.companyCode)} · R ${Math.round(b.totalAmount).toLocaleString('en-ZA')}) with your saved signature and send it to the director?\n\nOptional note:`, '');
     if (note === null) return;
     this.packBusyId = b.id;
-    this.packs.accountant(b.id, 'approve', note || undefined).subscribe({
-      next: () => { this.packBusyId = null; this.toast.done(`${b.batchNumber} approved — with the director for signature`); this.loadPacksAwaiting(); },
+    this.packs.accountant(b.id, 'approve', note || undefined, undefined, { useSavedSignature: true }).subscribe({
+      next: () => { this.packBusyId = null; this.toast.done(`${b.batchNumber} signed and approved — with the director for signature`); this.loadPacksAwaiting(); },
       error: e => { this.packBusyId = null; this.toast.error(e?.error?.message || "Couldn't approve this pack."); }
     });
   }

@@ -13,6 +13,8 @@ import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
 import { CompanyBatchesDialogComponent } from './company-batches-dialog.component';
 import { ExplainerDialogComponent } from './explainer-dialog.component';
 import { SchedulePreviewDialogComponent } from './schedule-preview-dialog.component';
+import { SecureSrcDirective } from '../../directives/secure-src.directive';
+import { environment } from '../../../environments/environment';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers } from '../../services/creditor-packs.service';
@@ -30,7 +32,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 @Component({
   selector: 'app-finance-creditors',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatCheckboxModule, SecureSrcDirective],
   template: `
   @if (!meta()) {
     <div class="cr-state"><mat-spinner diameter="36"></mat-spinner><p>Opening creditors…</p></div>
@@ -185,9 +187,11 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           }
           @if (b.can.direct) {
             @if (pendingCount(b) > 0) { <button mat-stroked-button (click)="decideAll('Approved')" [disabled]="busy()"><mat-icon>done_all</mat-icon> Approve all {{ pendingCount(b) }} pending</button> }
-            <button mat-flat-button color="primary" [disabled]="!b.can.sign || busy()" (click)="signOpen.set(true)"><mat-icon>draw</mat-icon> Sign batch</button>
+            <button mat-flat-button color="primary" [disabled]="!b.can.sign || busy()" (click)="openSign()"><mat-icon>draw</mat-icon> Sign batch</button>
           }
           @if (b.can.bankFile) { <button mat-stroked-button (click)="bankFile()"><mat-icon>download</mat-icon> Download bank file</button> }
+          @if (b.lockedAt) { <button mat-stroked-button (click)="downloadSignedPack()" matTooltip="Approval sheet + every PDF in the pack, each stamped with the three signatures"><mat-icon>workspace_premium</mat-icon> Signed pack (PDF)</button> }
+          @else if (b.status !== 'Draft') { <button mat-button (click)="downloadApprovalSheet()" matTooltip="Schedule + signatures captured so far"><mat-icon>picture_as_pdf</mat-icon> Approval sheet</button> }
           @if (b.can.markLoaded) { <button mat-flat-button color="primary" (click)="setStatus('LoadedOnBank')"><mat-icon>account_balance</mat-icon> Loaded on bank</button> }
           @if (b.can.markPaid) { <button mat-flat-button color="primary" (click)="setStatus('Paid')"><mat-icon>price_check</mat-icon> Mark as paid</button> }
           @if (b.can.close) { <button mat-flat-button color="primary" (click)="setStatus('Closed')" [disabled]="missingPop(b) > 0 || openPrepayCount(b) > 0"><mat-icon>inventory</mat-icon> Close batch</button> }
@@ -220,10 +224,11 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             }
           </div>
           @if (mode === 'approve') { <label>Note for the director (optional) <input type="text" [(ngModel)]="sendNote" placeholder="e.g. All recons agree, two new suppliers verified"></label> }
+          <ng-container *ngTemplateOutlet="sigBlock; context: { $implicit: mode === 'submit' ? 'Sign as the preparer — confirms the pack was prepared and checked' : 'Sign as the accountant — your signature goes on the pack' }"></ng-container>
           <div class="actions">
             <button mat-button (click)="sendOpen.set(null)">Cancel</button>
-            <button mat-flat-button color="primary" [disabled]="busy() || (opts.length > 0 && sendPick.size === 0)" (click)="mode === 'submit' ? submit() : accountant('approve')">
-              <mat-icon>{{ mode === 'submit' ? 'send' : 'draw' }}</mat-icon> {{ mode === 'submit' ? 'Send to ' : 'Approve — send to ' }}{{ sendPick.size === 1 ? '1 person' : sendPick.size + ' people' }}
+            <button mat-flat-button color="primary" [disabled]="busy() || (opts.length > 0 && sendPick.size === 0) || !canSign()" (click)="mode === 'submit' ? submit() : accountant('approve')">
+              <mat-icon>draw</mat-icon> {{ mode === 'submit' ? 'Sign & send to ' : 'Sign, approve & send to ' }}{{ sendPick.size === 1 ? '1 person' : sendPick.size + ' people' }}
             </button>
           </div>
         }
@@ -239,14 +244,32 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           <li><mat-icon>lock</mat-icon><span>After signing, the pack and its documents are locked and the bank file becomes available.</span></li>
         </ul>
         <label>Type your full name to sign <input type="text" [(ngModel)]="signName" placeholder="Your full name as on your profile"></label>
-        <label>Draw your signature (optional)
-          <canvas #sigpad width="520" height="140" class="sigpad" (pointerdown)="padDown($event)" (pointermove)="padMove($event)" (pointerup)="padUp()" (pointerleave)="padUp()"></canvas>
-          <button mat-button type="button" (click)="padClear()">Clear</button>
-        </label>
+        <ng-container *ngTemplateOutlet="sigBlock; context: { $implicit: 'Sign as the director — locks the pack and releases it to the pay-run' }"></ng-container>
         <label>Comment (optional) <input type="text" [(ngModel)]="signComment"></label>
-        <div class="actions"><button mat-button (click)="signOpen.set(false)">Cancel</button><button mat-flat-button color="primary" [disabled]="!signName || busy()" (click)="sign()">Sign & lock</button></div>
+        <div class="actions"><button mat-button (click)="signOpen.set(false)">Cancel</button><button mat-flat-button color="primary" [disabled]="!signName || busy() || !canSign()" (click)="sign()">Sign & lock</button></div>
       </div>
     }
+
+    <!-- Shared digital-signature block: saved signature from the profile, or draw one now -->
+    <ng-template #sigBlock let-caption>
+      <div class="sig-block">
+        <div class="sig-head"><mat-icon>verified_user</mat-icon> <b>Digital signature</b> <small>{{ caption }}</small></div>
+        <div class="sig-modes">
+          <button type="button" class="sig-mode" [class.on]="sigMode() === 'saved'" [disabled]="!meta()!.me.hasSignature" (click)="sigMode.set('saved')" [matTooltip]="meta()!.me.hasSignature ? '' : 'No saved signature on your profile yet — ask an admin to upload one under Settings › Users'">
+            <mat-icon>{{ meta()!.me.hasSignature ? 'how_to_reg' : 'person_off' }}</mat-icon> Use my saved signature
+          </button>
+          <button type="button" class="sig-mode" [class.on]="sigMode() === 'draw'" (click)="sigMode.set('draw')"><mat-icon>gesture</mat-icon> Draw it now</button>
+        </div>
+        @if (sigMode() === 'saved') {
+          <div class="sig-saved"><img [appSecureSrc]="mySignatureUrl" alt="Your saved signature"><small>Applied to the approval sheet and every PDF in this pack with your name, date, time and a tamper-evident hash.</small></div>
+        } @else {
+          <div class="sig-draw">
+            <canvas #sigpad width="520" height="140" class="sigpad" (pointerdown)="padDown($event)" (pointermove)="padMove($event)" (pointerup)="padUp()" (pointerleave)="padUp()"></canvas>
+            <div class="sig-draw-foot"><small>{{ drewSig() ? 'Signature captured.' : 'Draw your signature with the mouse or finger.' }}</small><button mat-button type="button" (click)="padClear()">Clear</button></div>
+          </div>
+        }
+      </div>
+    </ng-template>
 
     <div class="cr-grid">
       <div class="cr-main">
@@ -725,6 +748,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         .who { display: flex; flex-direction: column; min-width: 0; b { font-size: var(--text-sm); } small { color: var(--color-text-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } }
       .hint.warn { color: var(--color-warn); mat-icon { color: inherit; } } }
     .sent-to { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-primary); mat-icon { font-size: 18px; width: 18px; height: 18px; } }
+    .sig-block { border: 1px solid var(--color-line); border-radius: var(--radius-sm); padding: 10px 12px; margin: 0 0 var(--space-3); background: var(--color-canvas, #f8fafc);
+      .sig-head { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); margin-bottom: 8px; mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--color-primary); } small { color: var(--color-text-3); } }
+      .sig-modes { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+      .sig-mode { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--color-line-strong); border-radius: 999px; background: var(--color-surface); font: inherit; font-size: 12.5px; cursor: pointer; color: var(--color-text-2);
+        mat-icon { font-size: 16px; width: 16px; height: 16px; } &.on { border-color: var(--color-primary); background: var(--color-primary-soft, #eef2ff); color: var(--color-primary); font-weight: 600; } &:disabled { opacity: .55; cursor: not-allowed; } }
+      .sig-saved { display: flex; align-items: center; gap: 14px; img { height: 64px; max-width: 260px; object-fit: contain; background: #fff; border: 1px solid var(--color-line); border-radius: 6px; padding: 4px 10px; } small { color: var(--color-text-2); line-height: 1.4; } }
+      .sig-draw-foot { display: flex; align-items: center; justify-content: space-between; small { color: var(--color-text-3); } } }
 
     .cr-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--space-4); @media (max-width: 1100px) { grid-template-columns: 1fr; } }
 
@@ -840,6 +870,19 @@ export class FinanceCreditorsComponent implements OnInit {
   sendOptions = signal<BatchApprovers | null>(null);
   sendPick = new Set<number>();
   sendNote = '';
+  /** Digital signature source for the current step. Defaults to the saved one when the profile has it. */
+  sigMode = signal<'saved' | 'draw'>('draw');
+  drewSig = signal(false);
+  get mySignatureUrl(): string { return `${environment.apiUrl}/users/me/signature`; }
+  canSign(): boolean { return this.sigMode() === 'saved' ? !!this.meta()?.me.hasSignature : this.drewSig(); }
+  private resetSig(): void { this.sigMode.set(this.meta()?.me.hasSignature ? 'saved' : 'draw'); this.drewSig.set(false); this.drew = false; }
+  private sigPayload(): { signatureImageBase64?: string; useSavedSignature: boolean } {
+    if (this.sigMode() === 'draw' && this.drew && this.sigpad) return { signatureImageBase64: this.sigpad.nativeElement.toDataURL('image/png'), useSavedSignature: false };
+    return { useSavedSignature: true };
+  }
+  downloadApprovalSheet(): void { const b = this.batch()!; this.api.approvalSheet(b.id).subscribe({ next: blob => this.saveBlob(blob, `Approval-sheet-${b.batchNumber}.pdf`), error: e => this.fail(e, "Couldn't build the approval sheet.") }); }
+  downloadSignedPack(): void { const b = this.batch()!; this.busy.set(true); this.api.signedPack(b.id).subscribe({ next: blob => { this.busy.set(false); this.saveBlob(blob, `Signed-pack-${b.batchNumber}.pdf`); }, error: e => this.fail(e, "Couldn't build the signed pack.") }); }
+  private saveBlob(blob: Blob, name: string): void { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
   itemForm = signal<'new' | number | null>(null);
   openItem = signal(0);
   // invoice auto-fill / supplier directory
@@ -1078,24 +1121,25 @@ export class FinanceCreditorsComponent implements OnInit {
   }
   deleteBatch(): void { const b = this.batch()!; if (!confirm(`Delete draft ${b.batchNumber}? This can't be undone.`)) return; this.api.delete(b.id).subscribe({ next: () => { this.toast.done('Draft deleted'); this.back(); }, error: e => this.fail(e, "Couldn't delete.") }); }
   openSend(mode: 'submit' | 'approve'): void {
-    const b = this.batch()!; this.sendOpen.set(mode); this.sendOptions.set(null); this.sendPick = new Set(); this.sendNote = ''; this.signOpen.set(false);
+    const b = this.batch()!; this.sendOpen.set(mode); this.sendOptions.set(null); this.sendPick = new Set(); this.sendNote = ''; this.signOpen.set(false); this.resetSig();
     this.api.batchApprovers(b.id).subscribe({
       next: o => { this.sendOptions.set(o); for (const p of (mode === 'submit' ? o.accountants : o.directors)) this.sendPick.add(p.userId); },
       error: e => { this.sendOpen.set(null); this.fail(e, "Couldn't load the approvers."); }
     });
   }
   togglePick(id: number): void { if (this.sendPick.has(id)) this.sendPick.delete(id); else this.sendPick.add(id); }
+  openSign(): void { this.sendOpen.set(null); this.resetSig(); this.signOpen.set(true); }
   initials(n: string): string { return n.split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase(); }
   submit(): void {
     const b = this.batch()!; const ids = [...this.sendPick]; this.busy.set(true);
-    this.api.submit(b.id, ids.length ? ids : undefined).subscribe({ next: r => { this.sendOpen.set(null); this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems — see the red items' : `Sent to ${r.requestedApproverNames || 'the accountant'} — they've been notified and emailed`); }, error: e => this.fail(e, "Couldn't submit.") });
+    this.api.submit(b.id, ids.length ? ids : undefined, this.sigPayload()).subscribe({ next: r => { this.sendOpen.set(null); this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems — see the red items' : `Signed and sent to ${r.requestedApproverNames || 'the accountant'} — they've been notified and emailed`); }, error: e => this.fail(e, "Couldn't submit.") });
   }
   rerun(): void { const b = this.batch()!; this.busy.set(true); this.api.rerunChecks(b.id).subscribe({ next: r => this.apply(r, `Checks: ${r.checksStatus}`), error: e => this.fail(e, "Couldn't run the checks.") }); }
   accountant(d: 'approve' | 'query'): void {
     const b = this.batch()!;
     if (d === 'approve') {
       const ids = [...this.sendPick]; this.busy.set(true);
-      this.api.accountant(b.id, d, this.sendNote || undefined, ids.length ? ids : undefined).subscribe({ next: r => { this.sendOpen.set(null); this.apply(r, `Approved — sent to ${r.requestedDirectorNames || 'the director'} to sign; they've been notified and emailed`); }, error: e => this.fail(e, "Couldn't record your decision.") });
+      this.api.accountant(b.id, d, this.sendNote || undefined, ids.length ? ids : undefined, this.sigPayload()).subscribe({ next: r => { this.sendOpen.set(null); this.apply(r, `Signed and approved — sent to ${r.requestedDirectorNames || 'the director'} to sign; they've been notified and emailed`); }, error: e => this.fail(e, "Couldn't record your decision.") });
       return;
     }
     const c = prompt('What needs to be fixed before you can approve?'); if (c === null || !c.trim()) return;
@@ -1108,8 +1152,8 @@ export class FinanceCreditorsComponent implements OnInit {
   }
   decideAll(d: string): void { const b = this.batch()!; const pend = b.items.filter(i => i.decisionStatus === 'Pending'); if (!pend.length) return; this.busy.set(true); let n = 0; for (const it of pend) this.api.decide(b.id, it.id, d).subscribe({ next: r => { if (++n === pend.length) this.apply(r, `${n} payment(s) approved — now sign`); }, error: e => this.fail(e, "Couldn't approve all.") }); }
   sign(): void {
-    const b = this.batch()!; const img = this.drew && this.sigpad ? this.sigpad.nativeElement.toDataURL('image/png') : undefined;
-    this.busy.set(true); this.api.sign(b.id, this.signName, this.signComment || undefined, img).subscribe({ next: r => { this.signOpen.set(false); this.apply(r, r.status === 'Approved' ? 'Signed and locked' : r.status === 'Rejected' ? 'Batch rejected' : 'Queries sent back to the preparer'); }, error: e => this.fail(e, "Couldn't sign.") });
+    const b = this.batch()!; const p = this.sigPayload();
+    this.busy.set(true); this.api.sign(b.id, this.signName, this.signComment || undefined, p.signatureImageBase64, p.useSavedSignature).subscribe({ next: r => { this.signOpen.set(false); this.apply(r, r.status === 'Approved' ? 'Signed and locked' : r.status === 'Rejected' ? 'Batch rejected' : 'Queries sent back to the preparer'); }, error: e => this.fail(e, "Couldn't sign.") });
   }
   setStatus(s: 'LoadedOnBank' | 'Paid' | 'Closed' | 'Draft'): void { const b = this.batch()!; this.busy.set(true); this.api.setStatus(b.id, s).subscribe({ next: r => this.apply(r, this.statusTitle(r.status)), error: e => this.fail(e, "Couldn't change the status.") }); }
   bankFile(): void { const b = this.batch()!; this.api.bankFile(b.id).subscribe({ next: blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.batchNumber}-bank.csv`; a.click(); URL.revokeObjectURL(a.href); this.open(b.id); }, error: e => this.fail(e, "Couldn't export.") }); }
@@ -1264,7 +1308,7 @@ export class FinanceCreditorsComponent implements OnInit {
   private ctx(): CanvasRenderingContext2D | null { const c = this.sigpad?.nativeElement; if (!c) return null; const x = c.getContext('2d'); if (x) { x.lineWidth = 2; x.lineCap = 'round'; x.strokeStyle = '#111'; } return x; }
   private pos(e: PointerEvent) { const c = this.sigpad!.nativeElement; const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height }; }
   padDown(e: PointerEvent) { const x = this.ctx(); if (!x) return; this.drawing = true; const p = this.pos(e); x.beginPath(); x.moveTo(p.x, p.y); }
-  padMove(e: PointerEvent) { if (!this.drawing) return; const x = this.ctx(); if (!x) return; const p = this.pos(e); x.lineTo(p.x, p.y); x.stroke(); this.drew = true; }
+  padMove(e: PointerEvent) { if (!this.drawing) return; const x = this.ctx(); if (!x) return; const p = this.pos(e); x.lineTo(p.x, p.y); x.stroke(); if (!this.drew) { this.drew = true; this.drewSig.set(true); } }
   padUp() { this.drawing = false; }
-  padClear() { const c = this.sigpad?.nativeElement; c?.getContext('2d')?.clearRect(0, 0, c.width, c.height); this.drew = false; }
+  padClear() { const c = this.sigpad?.nativeElement; c?.getContext('2d')?.clearRect(0, 0, c.width, c.height); this.drew = false; this.drewSig.set(false); }
 }

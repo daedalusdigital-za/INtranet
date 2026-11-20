@@ -25,7 +25,7 @@ export interface CreditorMeta {
   rules: Record<string, DocRule[]>;
   statuses: { key: string; title: string }[];
   roles: { key: string; title: string; description: string }[];
-  me: { userId: number; isAdmin: boolean; clerk: boolean; accountant: boolean; director: boolean; bank: boolean; readOnly: boolean };
+  me: { userId: number; isAdmin: boolean; clerk: boolean; accountant: boolean; director: boolean; bank: boolean; readOnly: boolean; hasSignature?: boolean };
 }
 export interface BatchRow {
   id: number; batchNumber: string; companyCode: string; paymentType: string; batchDate: string; status: string; statusTitle: string;
@@ -63,6 +63,7 @@ export interface BatchDetail {
   can: { edit: boolean; submit: boolean; reopen: boolean; accountant: boolean; direct: boolean; sign: boolean; bankFile: boolean; markLoaded: boolean; markPaid: boolean; close: boolean; uploadAfterLock: boolean; rerunChecks: boolean };
 }
 export interface ApproverOption { userId: number; name: string; role: string; email?: string | null; }
+export interface SignaturePayload { signatureImageBase64?: string; useSavedSignature: boolean; }
 export interface BatchApprovers { accountants: ApproverOption[]; accountantsFallback: boolean; directors: ApproverOption[]; directorsFallback: boolean; }
 export interface ItemInput {
   supplierName: string; supplierVatNumber?: string; invoiceNumbers?: string; description?: string; amount: number;
@@ -141,13 +142,18 @@ export class CreditorPacksService {
   generatedSchedule(id: number) { return this.http.get<GeneratedSchedule>(`${this.base}/batches/${id}/schedule`); }
   generatedScheduleXlsx(id: number) { return this.http.get(`${this.base}/batches/${id}/schedule?format=xlsx`, { responseType: 'blob' }); }
 
-  submit(id: number, approverUserIds?: number[]) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, { approverUserIds: approverUserIds ?? null }); }
+  submit(id: number, approverUserIds?: number[], sig?: SignaturePayload) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, { approverUserIds: approverUserIds ?? null, ...(sig ?? {}) }); }
+  /** Signed approval sheet (schedule + signatures captured so far). */
+  approvalSheet(id: number) { return this.http.get(`${this.base}/batches/${id}/approval-sheet.pdf`, { responseType: 'blob' }); }
+  /** Whole pack as one PDF with every document stamped — once the director has signed. */
+  signedPack(id: number) { return this.http.get(`${this.base}/batches/${id}/signed-pack.pdf`, { responseType: 'blob' }); }
+  signatureImageUrl(id: number, sigId: number) { return `${this.base}/batches/${id}/signatures/${sigId}/image`; }
   /** Who the pack can be sent to at this step (company approvers, excluding me). `*Fallback` = company has nobody assigned, so everyone with the role is offered. */
   batchApprovers(id: number) { return this.http.get<BatchApprovers>(`${this.base}/batches/${id}/approvers`); }
   rerunChecks(id: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/checks`, {}); }
-  accountant(id: number, decision: 'approve' | 'query', comment?: string, directorUserIds?: number[]) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/accountant`, { decision, comment, directorUserIds: directorUserIds ?? null }); }
+  accountant(id: number, decision: 'approve' | 'query', comment?: string, directorUserIds?: number[], sig?: SignaturePayload) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/accountant`, { decision, comment, directorUserIds: directorUserIds ?? null, ...(sig ?? {}) }); }
   decide(id: number, itemId: number, decision: string, comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/decision`, { decision, comment }); }
-  sign(id: number, typedName: string, comment?: string, signatureImageBase64?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/sign`, { typedName, comment, signatureImageBase64 }); }
+  sign(id: number, typedName: string, comment?: string, signatureImageBase64?: string, useSavedSignature = true) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/sign`, { typedName, comment, signatureImageBase64, useSavedSignature }); }
   bankFile(id: number) { return this.http.get(`${this.base}/batches/${id}/bank-file`, { responseType: 'blob' }); }
   setStatus(id: number, decision: 'LoadedOnBank' | 'Paid' | 'Closed' | 'Draft', comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/status`, { decision, comment }); }
 

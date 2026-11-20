@@ -43,6 +43,11 @@ namespace ProjectTracker.API.Models
         [MaxLength(50)]
         public string? ProfilePictureMimeType { get; set; } // image/jpeg, image/png, etc.
 
+        /// <summary>Saved hand signature (PNG/JPEG) used when this person signs documents on the intranet (payment packs etc.).</summary>
+        public byte[]? SignatureImageData { get; set; }
+        [MaxLength(50)] public string? SignatureImageMimeType { get; set; }
+        public DateTime? SignatureUpdatedAt { get; set; }
+
         public int? DepartmentId { get; set; }
 
         [ForeignKey("DepartmentId")]
