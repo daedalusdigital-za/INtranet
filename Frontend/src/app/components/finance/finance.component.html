@@ -232,39 +232,106 @@
       </ul>
     </section>
 
-    <!-- Approvals snapshot -->
-    <section class="ov-card">
+    <!-- Approvals snapshot: mini versions of the Approvals panels (same look, minimise/expand, top items only) -->
+    <section class="ov-card ov-approvals">
       <header class="ov-card-head">
-        <h2><mat-icon>approval</mat-icon> Approvals</h2>
+        <h2><mat-icon>approval</mat-icon> Approvals @if (approvalsBadge) { <span class="ov-badge">{{ approvalsBadge }}</span> }</h2>
         <button mat-button (click)="goTab('approvals')">Open approvals <mat-icon>arrow_forward</mat-icon></button>
       </header>
-      <div class="ov-approvals">
-        <div class="ov-appr-group">
-          <div class="ov-appr-title"><mat-icon>payments</mat-icon> Requested payments</div>
-          <div class="mini-stats">
-            <button class="mini hot" (click)="goTab('approvals', 'payments')"><span class="n">{{ ov.invoices.paymentRequested }}</span><span class="l">Awaiting · {{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</span></button>
-            @if (packMeta?.me?.accountant || packMeta?.me?.isAdmin) {
-              <button class="mini warn" (click)="goTab('approvals', 'packs')"><span class="n">{{ packsForMe.length }}</span><span class="l">Packs for you · {{ packsForMeTotal | currency:'ZAR':'R':'1.0-0' }}</span></button>
-            }
-            <button class="mini ok" (click)="selectedStatus='Paid'; goTab('invoices'); applyFilters()"><span class="n">{{ ov.invoices.paid }}</span><span class="l">Paid</span></button>
+
+      <!-- Requested payments -->
+      <div class="stationery-panel mini" [class.collapsed]="ovCollapsed.payments">
+        <div class="sp-header">
+          <div class="sp-title"><mat-icon>request_quote</mat-icon><h3>Requested Payments</h3></div>
+          <div class="sp-filters">
+            <span class="sp-filter sp-pending active">Waiting ({{ ov.invoices.paymentRequested }})</span>
+            @if (ov.invoices.paymentRequestedAmount) { <span class="sp-filter">{{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</span> }
+            @if (packMeta?.me?.accountant || packMeta?.me?.isAdmin) { <span class="sp-filter" [class.active]="packsForMe.length > 0" [class.sp-pending]="packsForMe.length > 0" matTooltip="Payment packs waiting for your approval">Packs ({{ packsForMe.length }})</span> }
           </div>
+          <button mat-icon-button class="sp-collapse" [matTooltip]="ovCollapsed.payments ? 'Expand' : 'Minimise'" [attr.aria-label]="ovCollapsed.payments ? 'Expand' : 'Minimise'" (click)="toggleOv('payments')"><mat-icon>{{ ovCollapsed.payments ? 'expand_more' : 'expand_less' }}</mat-icon></button>
         </div>
-        <div class="ov-appr-group">
-          <div class="ov-appr-title"><mat-icon>request_quote</mat-icon> Quotation requests</div>
-          <div class="mini-stats">
-            <button class="mini hot" (click)="setQuoteFilter('Pending'); goTab('approvals', 'quotes')"><span class="n">{{ quoteCounts.pending }}</span><span class="l">Pending</span></button>
-            <button class="mini ok" (click)="setQuoteFilter('Approved'); goTab('approvals', 'quotes')"><span class="n">{{ quoteCounts.approved }}</span><span class="l">Approved</span></button>
-            <button class="mini bad" (click)="setQuoteFilter('Declined'); goTab('approvals', 'quotes')"><span class="n">{{ quoteCounts.declined }}</span><span class="l">Declined</span></button>
+        @if (!ovCollapsed.payments) {
+          @if (!ov.invoices.paymentRequested && !packsForMe.length) {
+            <div class="sp-empty"><mat-icon>task_alt</mat-icon><p>Nothing waiting</p></div>
+          } @else {
+            <div class="sp-list">
+              @if (ov.invoices.paymentRequested) {
+                <button class="sp-item sp-pending mini-row" (click)="goTab('approvals', 'payments')">
+                  <div class="sp-avatar"><mat-icon>description</mat-icon></div>
+                  <div class="sp-info"><div class="sp-name">{{ ov.invoices.paymentRequested }} supplier invoice{{ ov.invoices.paymentRequested === 1 ? '' : 's' }}</div><div class="sp-items-text">awaiting a payment decision · {{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }}</div></div>
+                  <mat-icon class="mini-go">chevron_right</mat-icon>
+                </button>
+              }
+              @for (b of packsForMe.slice(0, 3); track b.id) {
+                <button class="sp-item sp-pending mini-row" (click)="openPack(b.id)">
+                  <div class="sp-avatar">{{ b.companyCode }}</div>
+                  <div class="sp-info"><div class="sp-name">{{ b.batchNumber }} <span class="sp-dept">{{ packCompanyName(b.companyCode) }}</span></div><div class="sp-items-text">{{ b.items }} payment{{ b.items === 1 ? '' : 's' }} · {{ b.totalAmount | currency:'ZAR':'R':'1.0-0' }} · by {{ b.preparedByName || '—' }}</div></div>
+                  <mat-icon class="mini-go">chevron_right</mat-icon>
+                </button>
+              }
+              @if (packsForMe.length > 3) { <button class="mini-more" (click)="goTab('approvals', 'packs')">+{{ packsForMe.length - 3 }} more pack{{ packsForMe.length - 3 === 1 ? '' : 's' }}</button> }
+            </div>
+          }
+        }
+      </div>
+
+      <!-- Quotation requests -->
+      <div class="stationery-panel mini" [class.collapsed]="ovCollapsed.quotes">
+        <div class="sp-header">
+          <div class="sp-title"><mat-icon>shopping_cart</mat-icon><h3>Quotation Requests</h3></div>
+          <div class="sp-filters">
+            <span class="sp-filter sp-pending active">Pending ({{ quoteCounts.pending }})</span>
+            <span class="sp-filter sp-approved">Approved ({{ quoteCounts.approved }})</span>
+            <span class="sp-filter sp-declined">Declined ({{ quoteCounts.declined }})</span>
           </div>
+          <button mat-icon-button class="sp-collapse" [matTooltip]="ovCollapsed.quotes ? 'Expand' : 'Minimise'" [attr.aria-label]="ovCollapsed.quotes ? 'Expand' : 'Minimise'" (click)="toggleOv('quotes')"><mat-icon>{{ ovCollapsed.quotes ? 'expand_more' : 'expand_less' }}</mat-icon></button>
         </div>
-        <div class="ov-appr-group">
-          <div class="ov-appr-title"><mat-icon>receipt_long</mat-icon> Requisitions</div>
-          <div class="mini-stats">
-            <button class="mini hot" (click)="setRequisitionFilter('Requested'); goTab('approvals', 'requisitions')"><span class="n">{{ requisitionCounts.requested }}</span><span class="l">Requested</span></button>
-            <button class="mini ok" (click)="setRequisitionFilter('Paid'); goTab('approvals', 'requisitions')"><span class="n">{{ requisitionCounts.paid }}</span><span class="l">Paid</span></button>
-            <button class="mini bad" (click)="setRequisitionFilter('Rejected'); goTab('approvals', 'requisitions')"><span class="n">{{ requisitionCounts.rejected }}</span><span class="l">Rejected</span></button>
+        @if (!ovCollapsed.quotes) {
+          @if (quotesLoading && !quoteRequests.length) { <div class="sp-loading"><mat-spinner diameter="24"></mat-spinner></div> }
+          @else if (!ovPendingQuotes.length) { <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No pending quotation requests</p></div> }
+          @else {
+            <div class="sp-list">
+              @for (q of ovPendingQuotes.slice(0, 3); track q.id) {
+                <button class="sp-item sp-pending mini-row" (click)="setQuoteFilter('Pending'); goTab('approvals', 'quotes')">
+                  <div class="sp-avatar">{{ spInitials(q.requestedBy) }}</div>
+                  <div class="sp-info"><div class="sp-name">{{ q.subject }} <span class="sp-dept">{{ q.requestedBy }}</span></div><div class="sp-items-text">{{ q.department || q.company || '' }}@if (q.estimatedAmount) { · ~{{ q.estimatedAmount | currency:'ZAR':'R':'1.0-0' }} } · {{ q.submittedAt | date:'d MMM' }}</div></div>
+                  <span class="sp-priority" [class]="'sp-priority prio-' + (q.priority || 'normal').toLowerCase()">{{ q.priority }}</span>
+                  <mat-icon class="mini-go">chevron_right</mat-icon>
+                </button>
+              }
+              @if (ovPendingQuotes.length > 3) { <button class="mini-more" (click)="setQuoteFilter('Pending'); goTab('approvals', 'quotes')">+{{ ovPendingQuotes.length - 3 }} more</button> }
+            </div>
+          }
+        }
+      </div>
+
+      <!-- Requisitions -->
+      <div class="stationery-panel mini" [class.collapsed]="ovCollapsed.requisitions">
+        <div class="sp-header">
+          <div class="sp-title"><mat-icon>receipt_long</mat-icon><h3>Requisitions</h3></div>
+          <div class="sp-filters">
+            <span class="sp-filter sp-pending active">Requested ({{ requisitionCounts.requested }})</span>
+            <span class="sp-filter sp-approved">Paid ({{ requisitionCounts.paid }})</span>
+            <span class="sp-filter sp-declined">Rejected ({{ requisitionCounts.rejected }})</span>
           </div>
+          <button mat-icon-button class="sp-collapse" [matTooltip]="ovCollapsed.requisitions ? 'Expand' : 'Minimise'" [attr.aria-label]="ovCollapsed.requisitions ? 'Expand' : 'Minimise'" (click)="toggleOv('requisitions')"><mat-icon>{{ ovCollapsed.requisitions ? 'expand_more' : 'expand_less' }}</mat-icon></button>
         </div>
+        @if (!ovCollapsed.requisitions) {
+          @if (requisitionsLoading && !requisitions.length) { <div class="sp-loading"><mat-spinner diameter="24"></mat-spinner></div> }
+          @else if (!ovRequestedReqs.length) { <div class="sp-empty"><mat-icon>inbox</mat-icon><p>No requisitions waiting</p></div> }
+          @else {
+            <div class="sp-list">
+              @for (r of ovRequestedReqs.slice(0, 3); track r.id) {
+                <button class="sp-item sp-requested mini-row" (click)="setRequisitionFilter('Requested'); goTab('approvals', 'requisitions')">
+                  <div class="sp-avatar">{{ spInitials(r.paidTo) }}</div>
+                  <div class="sp-info"><div class="sp-name">{{ r.paidTo || 'Unknown' }} <span class="sp-dept">{{ r.department || 'Logistics' }}</span></div><div class="sp-items-text">{{ r.rfNumber ? 'RF ' + r.rfNumber : 'No RF' }} · {{ r.total | currency:'ZAR':'R':'1.0-0' }} · {{ r.date | date:'d MMM' }}</div></div>
+                  <mat-icon class="mini-go">chevron_right</mat-icon>
+                </button>
+              }
+              @if (ovRequestedReqs.length > 3) { <button class="mini-more" (click)="setRequisitionFilter('Requested'); goTab('approvals', 'requisitions')">+{{ ovRequestedReqs.length - 3 }} more</button> }
+            </div>
+          }
+        }
       </div>
     </section>
   </div>

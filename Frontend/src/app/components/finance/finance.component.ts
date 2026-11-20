@@ -205,6 +205,20 @@ export class FinanceComponent implements OnInit {
   }
   barPct(part: number, whole: number): number { return whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0; }
 
+  // ── Overview mini approval panels (own minimise state, remembered per browser) ──
+  ovCollapsed: Record<'payments' | 'quotes' | 'requisitions', boolean> = this.loadOvCollapsed();
+  toggleOv(p: 'payments' | 'quotes' | 'requisitions'): void {
+    this.ovCollapsed[p] = !this.ovCollapsed[p];
+    try { localStorage.setItem('finance.overview.collapsed.v1', JSON.stringify(this.ovCollapsed)); } catch { /* ignore */ }
+  }
+  private loadOvCollapsed(): Record<'payments' | 'quotes' | 'requisitions', boolean> {
+    const d = { payments: false, quotes: false, requisitions: false };
+    try { return { ...d, ...JSON.parse(localStorage.getItem('finance.overview.collapsed.v1') || '{}') }; } catch { return d; }
+  }
+  /** Pending quotes regardless of the Approvals tab's current filter. */
+  get ovPendingQuotes(): any[] { return this.quoteRequests.filter(q => (q.status || '') === 'Pending'); }
+  get ovRequestedReqs(): any[] { return this.requisitions.filter(r => (r.financeStatus || '') === 'Requested'); }
+
   get approvalsBadge(): number {
     return (this.ov?.invoices.paymentRequested ?? 0) + (this.requisitionCounts.requested || 0) + (this.quoteCounts.pending || 0) + this.packsForMe.length;
   }
@@ -302,6 +316,10 @@ export class FinanceComponent implements OnInit {
     this.loadQuoteCounts();
     this.loadRequisitionCounts();
     this.loadPacksAwaiting();
+    // The overview's mini approval panels show the top pending items, so load the lists up front.
+    this.approvalsLoaded = true;
+    this.loadRequisitions();
+    this.loadQuoteRequests();
 
     // Deep link: /finance?side=creditors&tab=approvals (&section=quotes|requisitions|packs). A tab alone implies its side.
     this.route.queryParamMap.subscribe(q => {
