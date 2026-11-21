@@ -52,7 +52,7 @@ and is published to the internet through a **Cloudflare named tunnel** — no fi
 - **Least-privilege DB login** — the connector connects as `mcp_readonly`, which has `SELECT`
   on a set of purpose-built `dbo.vw_mcp_*` views **only** (no base-table access). Verified:
   it is denied `SELECT` on base tables such as `dbo.Users`. See
-  [Database/CreateMcpReadonlyViews.sql](../Database/CreateMcpReadonlyViews.sql).
+  [Database/views/CreateMcpReadonlyViews.sql](../Database/views/CreateMcpReadonlyViews.sql).
 - **OAuth 2.1 + password gate** — Claude must complete an OAuth flow; a human enters a shared
   **access password** on the consent screen before a bearer token is issued (8-hour tokens).
 - **No open ports** — traffic reaches the server only via the Cloudflare Tunnel; the origin is

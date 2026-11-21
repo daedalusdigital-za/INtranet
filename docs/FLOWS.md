@@ -38,4 +38,4 @@ Tasks/approvals can be assigned to a **person, a department pool, a role, role-w
 * Expression/template engine: `FlowExpressions.cs`
 * API: `Backend/Controllers/FlowsController.cs`
 * UI: `Frontend/src/app/components/flows/*` (shell, start dialog, task dialog, run dialog, designer)
-* Smoke tests: `tools/flows-smoke.ps1`, `tools/flows-ai-smoke.ps1`
+* Smoke tests: `tools/smoke/flows-smoke.ps1`, `tools/smoke/flows-ai-smoke.ps1`

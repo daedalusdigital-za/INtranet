@@ -81,7 +81,7 @@ To add or change tools, edit [src/tools.ts](src/tools.ts) and rebuild.
   back to `FuelTransactions` (litres/spend) when TFN card data is empty for the period.
 - **v1.2** (17 Sep 2026) — Security hardening: connector now connects as a least-privilege
   `mcp_readonly` login with `SELECT` on `dbo.vw_mcp_*` views only (no base-table access).
-  All tools repointed to the views. See `Database/CreateMcpReadonlyViews.sql`.
+  All tools repointed to the views. See `Database/views/CreateMcpReadonlyViews.sql`.
 - **v1.1** (17 Sep 2026) — Added Phase 1 tools: `driver_licence_expiry`, `list_maintenance`,
   `outstanding_pods`, `list_tripsheets`, `get_tripsheet`. Added `/health/db` probe.
 - **v1.0** — Initial 8 read-only tools + OAuth 2.1 + Cloudflare named tunnel.
@@ -112,7 +112,7 @@ Edit `.env` (or set these in the root `.env` used by docker-compose):
   for a non-Claude MCP client. To use it with docker-compose, add
   `- ALLOWED_REDIRECT_URIS=${MCP_ALLOWED_REDIRECT_URIS:-}` to the `mcp-logistics` environment.
 - `DB_USER` — the least-privilege `mcp_readonly` login (compose default) created by
-  `Database/CreateMcpReadonlyViews.sql`; never `sa`.
+  `Database/views/CreateMcpReadonlyViews.sql`; never `sa`.
 
 (The compose file reads `MCP_ACCESS_PASSWORD`, `MCP_PUBLIC_URL`, `MCP_TUNNEL_TOKEN`.)
 

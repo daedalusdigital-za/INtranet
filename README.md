@@ -236,7 +236,7 @@ ProjectTracker/
 
 ## 🚀 Deployment (Docker Compose)
 
-Production runs entirely via Docker Compose (see [DOCKER.md](DOCKER.md); for the public client portal see [AZURE_HOSTING.md](AZURE_HOSTING.md)). The end-user manual is [docs/Intranet-User-Guide.md](docs/Intranet-User-Guide.md):
+Production runs entirely via Docker Compose (see [docs/DOCKER.md](docs/DOCKER.md); for the public client portal see [docs/AZURE_HOSTING.md](docs/AZURE_HOSTING.md)). The end-user manual is [docs/Intranet-User-Guide.md](docs/Intranet-User-Guide.md):
 
 ```powershell
 # Build frontend

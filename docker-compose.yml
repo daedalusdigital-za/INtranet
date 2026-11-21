@@ -82,7 +82,7 @@ services:
       - LocalLlm__BaseUrl=http://host.docker.internal:8090
       - LocalLlm__Model=gemma-4-26B-A4B-it-Q4_K_M
       - LocalLlm__Enabled=true
-      # Must match LLM_API_KEY used by start-llm-server.ps1 (empty = no auth header sent).
+      # Must match LLM_API_KEY used by tools/llm/start-llm-server.ps1 (empty = no auth header sent).
       - LocalLlm__ApiKey=${LOCAL_LLM_API_KEY:-}
       - EmailEnabled=true
       - AzureSync__Enabled=false

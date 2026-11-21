@@ -19,7 +19,7 @@ is useless on intranet endpoints · edge key check + 404 for anything outside `/
 
 ---
 
-## 0. What exists (provisioned 8 Nov 2026 by `tools/provision-portal-azure.ps1`)
+## 0. What exists (provisioned 8 Nov 2026 by `tools/portal/provision-portal-azure.ps1`)
 
 Subscription **PromedSubscription** · resource group **rg-rocket-portal**
 
@@ -33,7 +33,7 @@ Subscription **PromedSubscription** · resource group **rg-rocket-portal**
 
 \* West Europe refused new SWA customers on this subscription; SWA content is served from a global CDN so the region only holds metadata.
 
-GitHub repo vars/secrets were set by `tools/set_portal_github_secrets.py` (`PORTAL_API_BASE`, `PORTAL_EDGE_APP_NAME`,
+GitHub repo vars/secrets were set by `tools/portal/set_portal_github_secrets.py` (`PORTAL_API_BASE`, `PORTAL_EDGE_APP_NAME`,
 `AZURE_STATIC_WEB_APPS_API_TOKEN_PORTAL`, `AZURE_WEBAPP_PUBLISH_PROFILE_PORTAL_EDGE`). `PORTAL_GOOGLE_MAPS_KEY` is **not** set yet.
 Generated values live in `tools/portal-azure-output.local.txt` (gitignored). Re-running the provisioning script is safe (idempotent).
 

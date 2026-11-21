@@ -1,6 +1,6 @@
 // ============================================================
 // Dark-mode safety net.
-// Component styles were migrated to tokens (tools/tokenize-colors.mjs), but native
+// Component styles were migrated to tokens (tools/dev/tokenize-colors.mjs), but native
 // elements, inline styles, third-party widgets and a few left-over light tints still
 // assume a white page. Everything here applies ONLY under data-theme="dark" and
 // uses the dark token values, so light mode is untouched.
