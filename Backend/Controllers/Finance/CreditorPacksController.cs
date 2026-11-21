@@ -116,8 +116,18 @@ public class CreditorPacksController : ControllerBase
         return req.Count == 0 || req.Contains(UserId);
     }
 
+    /// <summary>Preparer of the pack, or a finance admin. Any clerk assigned to the company may also pick up a colleague's pack.</summary>
     private async Task<bool> CanPrepareAsync(PaymentBatch b) =>
-        IsSystemAdmin || (await HasAsync(CreditorWorkflow.RoleClerk) && (b.PreparedByUserId == UserId || await HasAsync(CreditorWorkflow.RoleAdmin) || true));
+        IsSystemAdmin || (await HasAsync(CreditorWorkflow.RoleClerk) && (b.PreparedByUserId == UserId || await HasAsync(CreditorWorkflow.RoleAdmin) || await InScopeAsync(b.CompanyCode)));
+
+    /// <summary>Segregation of duties: the person signing as director may not be the preparer or the approving accountant of the same pack.</summary>
+    private string? DirectorConflict(PaymentBatch b)
+    {
+        if (IsSystemAdmin) return null; // same bypass the accountant step gives system admins
+        if (b.PreparedByUserId == UserId) return "You prepared this pack, so you cannot sign it as director. Another director must sign.";
+        if (b.AccountantUserId == UserId) return "You approved this pack as accountant, so you cannot also sign it as director. Another director must sign.";
+        return null;
+    }
 
     // ───────────────────────── meta & companies ─────────────────────────
 
@@ -289,6 +299,64 @@ public class CreditorPacksController : ControllerBase
             approvedItems = b.Items.Count(i => i.DecisionStatus == "Approved"), queriedItems = b.Items.Count(i => i.DecisionStatus == "Queried"), rejectedItems = b.Items.Count(i => i.DecisionStatus == "Rejected")
         }).ToListAsync();
         return Ok(rows);
+    }
+
+    /// <summary>
+    /// Packs waiting on the signed-in user: accountant approvals and director signatures they are entitled to give.
+    /// Drives the "Waiting for you" strip on the board and the e-mail / notification deep links.
+    /// </summary>
+    [HttpGet("inbox")]
+    public async Task<IActionResult> Inbox()
+    {
+        var scope = await ScopeAsync();
+        var isAcc = await HasAsync(CreditorWorkflow.RoleAccountant);
+        var isDir = await HasAsync(CreditorWorkflow.RoleDirector);
+        if (!isAcc && !isDir) return Ok(Array.Empty<object>());
+        var statuses = new List<string>();
+        if (isAcc) statuses.Add(CreditorWorkflow.AwaitingAccountant);
+        if (isDir) statuses.Add(CreditorWorkflow.AwaitingDirector);
+        var codes = scope.CreditorCodes.ToList();
+        var q = _db.PaymentBatches.AsNoTracking().Where(b => statuses.Contains(b.Status));
+        if (!scope.All) q = q.Where(b => codes.Contains(b.CompanyCode));
+        var rows = await q.OrderBy(b => b.SubmittedAt ?? b.CreatedAt).Select(b => new
+        {
+            b.Id, b.BatchNumber, b.CompanyCode, b.PaymentType, b.BatchDate, b.Status, b.TotalAmount, b.Notes,
+            items = b.Items.Count, pendingItems = b.Items.Count(i => i.DecisionStatus == "Pending"),
+            b.PreparedByUserId, b.PreparedByName, b.SubmittedAt, b.AccountantUserId, b.AccountantName, b.AccountantApprovedAt, b.AccountantComment,
+            b.RequestedApproverIds, b.RequestedDirectorIds, b.UpdatedAt
+        }).ToListAsync();
+        var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(x => x.Code, x => x);
+        var list = new List<object>();
+        foreach (var r in rows)
+        {
+            companies.TryGetValue(r.CompanyCode, out var c);
+            string role; string? blocked = null;
+            if (r.Status == CreditorWorkflow.AwaitingAccountant)
+            {
+                if (!isAcc) continue;
+                var req = PaymentBatch.ParseIds(r.RequestedApproverIds);
+                if (!IsSystemAdmin && (!await IsAccountantForAsync(c) || (req.Count > 0 && !req.Contains(UserId)))) continue;
+                if (r.PreparedByUserId == UserId) blocked = "You prepared this pack — another accountant must approve it.";
+                role = "accountant";
+            }
+            else
+            {
+                if (!isDir) continue;
+                var req = PaymentBatch.ParseIds(r.RequestedDirectorIds);
+                if (!IsSystemAdmin && (!await IsDirectorForAsync(c) || (req.Count > 0 && !req.Contains(UserId)))) continue;
+                if (r.PreparedByUserId == UserId) blocked = "You prepared this pack — another director must sign it.";
+                else if (r.AccountantUserId == UserId) blocked = "You approved this pack as accountant — another director must sign it.";
+                role = "director";
+            }
+            var waitingSince = r.Status == CreditorWorkflow.AwaitingDirector ? (r.AccountantApprovedAt ?? r.SubmittedAt) : r.SubmittedAt;
+            list.Add(new
+            {
+                r.Id, r.BatchNumber, r.CompanyCode, companyName = c?.Name ?? r.CompanyCode, r.PaymentType, paymentTypeTitle = CreditorPaymentTypes.All.Where(p => p.Key == r.PaymentType).Select(p => p.Title).FirstOrDefault() ?? r.PaymentType,
+                r.BatchDate, r.Status, statusTitle = CreditorWorkflow.Title(r.Status), r.TotalAmount, r.Notes, r.items, r.pendingItems,
+                r.PreparedByName, r.AccountantName, r.AccountantComment, waitingSince, role, blocked
+            });
+        }
+        return Ok(list);
     }
 
     [HttpGet("summary")]
@@ -1089,6 +1157,7 @@ public class CreditorPacksController : ControllerBase
         if (b.Status != CreditorWorkflow.AwaitingDirector) return Conflict(new { message = "The batch is not with the director." });
         var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
         if (!await IsDirectorForAsync(b, c)) return Forbid();
+        if (DirectorConflict(b) is { } conflict) return StatusCode(403, new { message = conflict });
         var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
         var d = dto.Decision switch { "Approved" => "Approved", "Queried" => "Queried", "Rejected" => "Rejected", "Pending" => "Pending", _ => null };
         if (d == null) return BadRequest(new { message = "Decision must be Approved, Queried or Rejected." });
@@ -1113,6 +1182,7 @@ public class CreditorPacksController : ControllerBase
         if (b.AccountantApprovedAt == null) return Conflict(new { message = "The company accountant has not approved this pack yet." });
         var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
         if (!await IsDirectorForAsync(b, c)) return Forbid();
+        if (DirectorConflict(b) is { } conflict) return StatusCode(403, new { message = conflict });
         if (b.Items.Any(i => i.DecisionStatus == "Pending")) return Conflict(new { message = "Approve, query or reject every payment before signing." });
         var profile = await _db.Users.AsNoTracking().Where(u => u.UserId == UserId).Select(u => new { u.Name, u.Surname }).FirstOrDefaultAsync();
         var expected = ($"{profile?.Name} {profile?.Surname}").Trim();
@@ -1198,6 +1268,20 @@ public class CreditorPacksController : ControllerBase
         if (!CreditorWorkflow.Locked.Contains(b.Status)) return Conflict(new { message = "The signed pack is available once the director has signed." });
         var pdf = await _packPdf.SignedPackAsync(b, rel => Abs(rel));
         return File(pdf, "application/pdf", $"Signed-pack-{b.BatchNumber}.pdf");
+    }
+
+    /// <summary>
+    /// Reading copy for approvers: approval sheet (with outstanding signatures marked) followed by every PDF in the pack, unstamped.
+    /// Lets the accountant / director read the whole pack in one scroll before deciding. Not for drafts.
+    /// </summary>
+    [HttpGet("batches/{id:int}/review-pack.pdf")]
+    public async Task<IActionResult> ReviewPack(int id)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (!await InScopeAsync(b.CompanyCode)) return Forbid();
+        if (b.Status == CreditorWorkflow.Draft) return Conflict(new { message = "The pack has not been submitted yet." });
+        var pdf = await _packPdf.SignedPackAsync(b, rel => Abs(rel), stamp: CreditorWorkflow.Locked.Contains(b.Status));
+        return File(pdf, "application/pdf", $"Pack-{b.BatchNumber}.pdf");
     }
 
     /// <summary>Bank file (CSV) for approved payments only. Marks the batch exported.</summary>
@@ -1580,8 +1664,9 @@ public class CreditorPacksController : ControllerBase
                 submit = editable && canPrepare && allFilled,
                 reopen = canPrepare && b.Status is CreditorWorkflow.ChecksFailed or CreditorWorkflow.QueriedByAccountant or CreditorWorkflow.QueriedByDirector or CreditorWorkflow.Rejected,
                 accountant = b.Status == CreditorWorkflow.AwaitingAccountant && isAcc && (b.PreparedByUserId != UserId || IsSystemAdmin),
-                direct = b.Status == CreditorWorkflow.AwaitingDirector && isDir,
-                sign = b.Status == CreditorWorkflow.AwaitingDirector && isDir && b.AccountantApprovedAt != null && b.Items.All(i => i.DecisionStatus != "Pending"),
+                direct = b.Status == CreditorWorkflow.AwaitingDirector && isDir && DirectorConflict(b) == null,
+                sign = b.Status == CreditorWorkflow.AwaitingDirector && isDir && DirectorConflict(b) == null && b.AccountantApprovedAt != null && b.Items.All(i => i.DecisionStatus != "Pending"),
+                directorConflict = b.Status == CreditorWorkflow.AwaitingDirector && isDir ? DirectorConflict(b) : null,
                 bankFile = CreditorWorkflow.Locked.Contains(b.Status) && isBank,
                 markLoaded = b.Status == CreditorWorkflow.Approved && isBank,
                 markPaid = b.Status is CreditorWorkflow.Approved or CreditorWorkflow.LoadedOnBank && isBank,

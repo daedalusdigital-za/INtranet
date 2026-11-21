@@ -61,7 +61,12 @@ export interface BatchDetail {
   items: BatchItem[]; batchDocuments: BatchDoc[]; requiredBatchDocs: RequiredDoc[]; readyToSubmit: boolean;
   events: { id: number; at: string; userName?: string; action: string; fromStatus?: string; toStatus?: string; comment?: string }[];
   signatures: { id: number; context: string; signerName: string; signerRole?: string; action: string; comment?: string; method: string; signedAtUtc: string; payloadHash?: string; hasImage: boolean }[];
-  can: { edit: boolean; delete: boolean; submit: boolean; reopen: boolean; accountant: boolean; direct: boolean; sign: boolean; bankFile: boolean; markLoaded: boolean; markPaid: boolean; close: boolean; uploadAfterLock: boolean; rerunChecks: boolean };
+  can: { edit: boolean; delete: boolean; submit: boolean; reopen: boolean; accountant: boolean; direct: boolean; sign: boolean; bankFile: boolean; markLoaded: boolean; markPaid: boolean; close: boolean; uploadAfterLock: boolean; rerunChecks: boolean; directorConflict?: string | null };
+}
+export interface InboxRow {
+  id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; batchDate: string; status: string; statusTitle: string;
+  totalAmount: number; notes?: string | null; items: number; pendingItems: number; preparedByName?: string; accountantName?: string | null; accountantComment?: string | null;
+  waitingSince?: string | null; role: 'accountant' | 'director'; blocked?: string | null;
 }
 export interface ApproverOption { userId: number; name: string; role: string; email?: string | null; }
 export interface SignaturePayload { signatureImageBase64?: string; useSavedSignature: boolean; }
@@ -97,6 +102,7 @@ export class CreditorPacksService {
     return this.http.get<BatchRow[]>(`${this.base}/batches`, { params: p });
   }
   summary() { return this.http.get<{ byStatus: { status: string; count: number; amount: number }[]; openPrepayments: number }>(`${this.base}/summary`); }
+  inbox() { return this.http.get<InboxRow[]>(`${this.base}/inbox`); }
   alerts() { return this.http.get<CreditorAlert[]>(`${this.base}/alerts`); }
   get(id: number) { return this.http.get<BatchDetail>(`${this.base}/batches/${id}`); }
   create(dto: { companyCode: string; paymentType: string; batchDate?: string; notes?: string }) { return this.http.post<BatchDetail>(`${this.base}/batches`, dto); }
@@ -161,6 +167,7 @@ export class CreditorPacksService {
   approvalSheet(id: number) { return this.http.get(`${this.base}/batches/${id}/approval-sheet.pdf`, { responseType: 'blob' }); }
   /** Whole pack as one PDF with every document stamped — once the director has signed. */
   signedPack(id: number) { return this.http.get(`${this.base}/batches/${id}/signed-pack.pdf`, { responseType: 'blob' }); }
+  reviewPackUrl(id: number) { return `${this.base}/batches/${id}/review-pack.pdf`; }
   signatureImageUrl(id: number, sigId: number) { return `${this.base}/batches/${id}/signatures/${sigId}/image`; }
   /** Who the pack can be sent to at this step (company approvers, excluding me). `*Fallback` = company has nobody assigned, so everyone with the role is offered. */
   batchApprovers(id: number) { return this.http.get<BatchApprovers>(`${this.base}/batches/${id}/approvers`); }

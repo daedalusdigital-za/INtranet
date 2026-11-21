@@ -19,7 +19,7 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 import { environment } from '../../../environments/environment';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers } from '../../services/creditor-packs.service';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow } from '../../services/creditor-packs.service';
 
 type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
@@ -47,6 +47,31 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       <h2>Payment packs</h2>
       <button mat-icon-button class="help" (click)="explain()" matTooltip="How a payment pack moves" aria-label="How a payment pack moves"><mat-icon>help_outline</mat-icon></button>
     </div>
+
+    @if (inbox().length) {
+      <section class="cr-inbox" aria-label="Packs waiting for you">
+        <header>
+          <mat-icon>draw</mat-icon>
+          <div class="txt"><h3>{{ inbox().length }} pack{{ inbox().length === 1 ? '' : 's' }} waiting for you</h3><p>{{ inboxDirector().length ? inboxDirector().length + ' to sign as director' : '' }}{{ inboxDirector().length && inboxAccountant().length ? ' · ' : '' }}{{ inboxAccountant().length ? inboxAccountant().length + ' to approve as accountant' : '' }} · R {{ inboxTotal() | number:'1.2-2' }} in total</p></div>
+        </header>
+        <div class="cr-inbox-list">
+          @for (r of inbox(); track r.id) {
+            <button type="button" class="cr-inbox-row" [class.blocked]="r.blocked" (click)="open(r.id)">
+              <ng-container *ngTemplateOutlet="coMark; context: { $implicit: r.companyCode }"></ng-container>
+              <span class="who">
+                <b>{{ r.batchNumber }} <span [class]="'badge ' + badge(r.status)">{{ r.role === 'director' ? 'Sign' : 'Approve' }}</span></b>
+                <small>{{ r.companyName }} · {{ r.paymentTypeTitle }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.role === 'director' && r.pendingItems) { · <em>{{ r.pendingItems }} still to decide</em> }</small>
+                <small>Prepared by {{ r.preparedByName }}@if (r.accountantName) { · approved by {{ r.accountantName }} }@if (r.waitingSince) { · waiting {{ ago(r.waitingSince) }} }</small>
+                @if (r.blocked) { <small class="bad"><mat-icon>block</mat-icon> {{ r.blocked }}</small> }
+                @else if (r.accountantComment) { <small class="note">“{{ r.accountantComment }}”</small> }
+              </span>
+              <span class="amt">R {{ r.totalAmount | number:'1.2-2' }}</span>
+              <mat-icon class="go">chevron_right</mat-icon>
+            </button>
+          }
+        </div>
+      </section>
+    }
 
     @if (alerts().length) {
       <div class="cr-alerts">
@@ -197,8 +222,9 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <button mat-stroked-button (click)="accountant('query')" [disabled]="busy()"><mat-icon>reply</mat-icon> Send back</button>
           }
           @if (b.can.direct) {
+            <button mat-stroked-button (click)="previewPack()" matTooltip="Read the whole pack — schedule, recons, invoices — before deciding"><mat-icon>menu_book</mat-icon> Review the pack</button>
             @if (pendingCount(b) > 0) { <button mat-stroked-button (click)="decideAll('Approved')" [disabled]="busy()"><mat-icon>done_all</mat-icon> Approve all {{ pendingCount(b) }} pending</button> }
-            <button mat-flat-button color="primary" [disabled]="!b.can.sign || busy()" (click)="openSign()"><mat-icon>draw</mat-icon> Sign batch</button>
+            <button mat-flat-button color="primary" [disabled]="!b.can.sign || busy()" (click)="openSign()" [matTooltip]="pendingCount(b) > 0 ? 'Decide on every payment first' : ''"><mat-icon>draw</mat-icon> Sign batch</button>
           }
           @if (b.can.bankFile) { <button mat-stroked-button (click)="bankFile()"><mat-icon>download</mat-icon> Download bank file</button> }
           @if (b.lockedAt) { <button mat-stroked-button (click)="downloadSignedPack()" matTooltip="Approval sheet + every PDF in the pack, each stamped with the three signatures"><mat-icon>workspace_premium</mat-icon> Signed pack (PDF)</button> }
@@ -695,6 +721,14 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .ac .ac-new { display: flex; align-items: center; gap: 10px; border-top: 1px dashed var(--color-line-strong); background: var(--color-surface-2); mat-icon { color: var(--color-primary); } span { display: flex; flex-direction: column; } }
     .cr-history { .lead { margin: 0 0 var(--space-3); color: var(--color-text-2); font-size: var(--text-sm); } }
 
+    .cr-inbox { margin-bottom: var(--space-3); border: 2px solid var(--color-primary); border-radius: var(--radius-md); background: var(--color-surface); overflow: hidden;
+      header { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); background: var(--color-primary-soft, rgba(79,70,229,.08)); > mat-icon { color: var(--color-primary); font-size: 28px; width: 28px; height: 28px; } h3 { margin: 0; font-size: var(--text-lg); } p { margin: 2px 0 0; color: var(--color-text-muted); font-size: var(--text-sm); } }
+      .cr-inbox-list { display: flex; flex-direction: column; }
+      .cr-inbox-row { display: flex; align-items: center; gap: var(--space-3); width: 100%; text-align: left; padding: var(--space-3); background: none; border: 0; border-top: 1px solid var(--color-line); cursor: pointer; font: inherit; color: inherit; min-height: 64px;
+        &:hover { background: var(--color-surface-2, #f7f7fb); } &.blocked { opacity: .75; }
+        .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; b { display: flex; align-items: center; gap: var(--space-2); } small { color: var(--color-text-muted); font-size: var(--text-sm); em { color: var(--color-warn); font-style: normal; font-weight: 600; } } .bad { color: var(--color-danger); display: flex; align-items: center; gap: 4px; mat-icon { font-size: 16px; width: 16px; height: 16px; } } .note { font-style: italic; } }
+        .amt { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: var(--text-lg); } .go { color: var(--color-text-muted); } }
+      @media (max-width: 640px) { .cr-inbox-row { flex-wrap: wrap; .amt { width: 100%; order: 3; } .go { display: none; } } } }
     .cr-alerts { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-md); mat-icon { color: var(--color-warn); } .txt { flex: 1; font-size: var(--text-sm); } }
     .cr-alert-list { display: grid; gap: 4px; margin-bottom: var(--space-3); }
     .cr-alert { display: grid; grid-template-columns: 170px 1fr; gap: 2px 12px; text-align: left; font: inherit; padding: 8px 12px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); .b { font-weight: 600; } .d { grid-column: 2; color: var(--color-text-2); font-size: var(--text-xs); } &.fail { border-color: var(--color-danger); } &:hover { border-color: var(--color-primary); } }
@@ -880,6 +914,10 @@ export class FinanceCreditorsComponent implements OnInit {
   rows = signal<BatchRow[]>([]);
   alerts = signal<CreditorAlert[]>([]);
   showAlerts = signal(false);
+  inbox = signal<InboxRow[]>([]);
+  inboxDirector = computed(() => this.inbox().filter(r => r.role === 'director'));
+  inboxAccountant = computed(() => this.inbox().filter(r => r.role === 'accountant'));
+  inboxTotal = computed(() => this.inbox().reduce((s, r) => s + (r.totalAmount || 0), 0));
   showPassed = signal(false);
   explain(): void {
     ExplainerDialogComponent.open(this.dialog, {
@@ -1029,6 +1067,17 @@ export class FinanceCreditorsComponent implements OnInit {
     this.loading.set(true);
     this.api.list().subscribe({ next: r => { this.rows.set(r); this.loading.set(false); this.openPrepay.set(r.filter(x => x.openPrepayments > 0).length); }, error: () => { this.loading.set(false); this.toast.error("Couldn't load batches."); } });
     this.api.alerts().subscribe({ next: a => this.alerts.set(a), error: () => {} });
+    this.api.inbox().subscribe({ next: i => this.inbox.set(i), error: () => {} });
+  }
+
+  /** Whole pack (approval sheet + every PDF) in the preview dialog — what the accountant / director reads before deciding. */
+  previewPack(): void {
+    const b = this.batch()!;
+    PackPreviewDialogComponent.open(this.dialog, { url: this.api.reviewPackUrl(b.id), title: `${b.batchNumber} — full pack`, subtitle: `${b.companyName} · ${b.paymentTypeTitle} · ${b.items.length} payment${b.items.length === 1 ? '' : 's'} · R ${b.totalAmount.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`, fileName: `Pack-${b.batchNumber}.pdf` });
+  }
+  ago(iso: string): string {
+    const ms = Date.now() - new Date(iso).getTime(); const h = Math.floor(ms / 3.6e6);
+    if (h < 1) return 'under an hour'; if (h < 24) return `${h} hour${h === 1 ? '' : 's'}`; const d = Math.floor(h / 24); return `${d} day${d === 1 ? '' : 's'}`;
   }
 
   // ── lookups & text ──
@@ -1113,8 +1162,10 @@ export class FinanceCreditorsComponent implements OnInit {
       case 'AwaitingAccountant': return b.can.accountant
         ? { icon: 'fact_check', tone: 'warn', title: 'Your approval is needed', body: `Check the schedule against the recon and the supporting documents. Approve to send it to ${dir}, or send it back with a note.` }
         : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${acc} to approve`, body: 'Nothing for you to do here right now.' };
-      case 'AwaitingDirector': return b.can.direct
-        ? { icon: 'draw', tone: 'warn', title: this.pendingCount(b) > 0 ? `Decide on ${this.pendingCount(b)} payment${this.pendingCount(b) === 1 ? '' : 's'}, then sign` : 'All decided — sign the batch', body: `${b.accountantName} has approved. Approve, query or reject each payment below. Queried payments send the pack back; the rest are paid once you sign.` }
+      case 'AwaitingDirector':
+        if (b.can.directorConflict) return { icon: 'block', tone: 'warn', title: 'Another director must sign this one', body: b.can.directorConflict };
+        return b.can.direct
+        ? { icon: 'draw', tone: 'warn', title: this.pendingCount(b) > 0 ? `Decide on ${this.pendingCount(b)} payment${this.pendingCount(b) === 1 ? '' : 's'}, then sign` : 'All decided — sign the batch', body: `${b.accountantName} has approved. Open “Review the pack” to read every document, then approve, query or reject each payment below. Queried payments send the pack back; the rest are paid once you sign.` }
         : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${dir} to sign`, body: `Approved by ${b.accountantName}. Nothing for you to do until the director signs.` };
       case 'Approved': return { icon: 'account_balance', tone: 'ok', title: 'Signed and locked — ready for the bank', body: `${b.directorName} signed. The bank user downloads the bank file (approved payments only), loads it, and marks it loaded.` };
       case 'LoadedOnBank': return { icon: 'price_check', tone: 'ok', title: 'Loaded on the bank', body: 'Once the payments have been released, mark the batch as paid.' };

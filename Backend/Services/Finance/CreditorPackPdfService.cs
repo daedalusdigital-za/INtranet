@@ -57,8 +57,9 @@ public class CreditorPackPdfService
         return ms.ToArray();
     }
 
-    /// <summary>Approval sheet + each uploaded PDF document (stamped). Non-PDF uploads are listed on the sheet but not merged.</summary>
-    public async Task<byte[]> SignedPackAsync(PaymentBatch b, Func<string, string> abs)
+    /// <summary>Approval sheet + each uploaded PDF document (stamped). Non-PDF uploads are listed on the sheet but not merged.
+    /// <paramref name="stamp"/>=false gives the unstamped reading copy approvers use before signing.</summary>
+    public async Task<byte[]> SignedPackAsync(PaymentBatch b, Func<string, string> abs, bool stamp = true)
     {
         var slots = await SlotsAsync(b);
         var sheet = await ApprovalSheetAsync(b);
@@ -76,7 +77,7 @@ public class CreditorPackPdfService
                 if (!File.Exists(path)) continue;
                 try
                 {
-                    var stamped = Stamp(File.ReadAllBytes(path), b, slots, d);
+                    var stamped = stamp ? Stamp(File.ReadAllBytes(path), b, slots, d) : File.ReadAllBytes(path);
                     using var src = new PdfDocument(new PdfReader(new MemoryStream(stamped)));
                     merger.Merge(src, 1, src.GetNumberOfPages());
                 }
