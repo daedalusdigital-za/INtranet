@@ -58,17 +58,19 @@ import { AuthStore } from '../core/auth';
             <div class="ir">
               <div class="il">
                 <div class="sup">{{ it.supplierName }} @if (it.isUrgent) { <span class="pill bad">Urgent</span> }</div>
-                @if (it.invoiceNumbers) { <div class="muted sm">Inv {{ it.invoiceNumbers }}</div> }
+                @if (it.invoiceNumbers) { <div class="muted sm">{{ isRequisitionBased(b) ? 'Ref' : 'Inv' }} {{ it.invoiceNumbers }}</div> }
                 @if (it.description) { <div class="sm">{{ it.description }}</div> }
                 <div class="muted sm">{{ it.bankName }} · {{ it.accountNumber }}@if (it.paymentReference) { · ref {{ it.paymentReference }} }</div>
               </div>
               <div class="iamt">{{ it.amount | currency:'ZAR':'R ':'1.2-2' }}</div>
             </div>
-            @if (it.documents.length) {
+            @if (files(it).length) {
+              <button type="button" class="btn ghost block sm prev" (click)="openPdf(api.itemReviewUrl(b.id, it.id))" [disabled]="pdfBusy()">{{ pdfBusy() ? 'Opening…' : '📄 Preview all — approval sheet + ' + files(it).length + (files(it).length === 1 ? ' document' : ' documents') }}</button>
               <div class="docs">
-                @for (d of it.documents; track d.id) { <button type="button" class="doc" (click)="openPdf(api.fileUrl(b.id, d.id))">📎 {{ d.docTypeTitle || d.docType }}</button> }
+                @for (d of files(it); track d.id) { <button type="button" class="doc" (click)="openPdf(api.fileUrl(b.id, d.id))">📎 {{ d.title || d.docTypeTitle || d.docType }}</button> }
               </div>
             }
+            @for (d of notApplicable(it); track d.id) { <div class="muted sm">✓ {{ d.title || d.docType }} — {{ d.naReason || 'not applicable' }}</div> }
             @if (missing(it).length) { <div class="muted sm">Missing: {{ missing(it).join(', ') }}</div> }
             @if (b.can.direct) {
               <div class="dec">
@@ -143,7 +145,7 @@ import { AuthStore } from '../core/auth';
     .items { display: grid; gap: 10px; } .item { padding: 14px 16px; border-left: 5px solid var(--line); }
     .item.sel-ok { border-left-color: var(--ok); } .item.sel-warn { border-left-color: var(--warn); } .item.sel-bad { border-left-color: var(--bad); }
     .ir { display: flex; justify-content: space-between; gap: 12px; } .sup { font-weight: 700; } .iamt { font-weight: 700; white-space: nowrap; }
-    .docs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .doc { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+    .prev { margin-top: 10px; } .docs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .doc { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
     .dec { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
     .askbox { margin-top: 10px; } .btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .step { margin-top: 14px; } .step h2 { margin: 0 0 6px; font-size: 18px; } .step p { margin: 0 0 12px; }
@@ -169,6 +171,10 @@ export class PackPage implements OnInit {
   pending = computed(() => this.b()?.items.filter(i => i.decisionStatus === 'Pending').length ?? 0);
   approvedAmount = computed(() => this.b()?.items.filter(i => i.decisionStatus === 'Approved').reduce((s, i) => s + i.amount, 0) ?? 0);
   count(s: string) { return this.b()?.items.filter(i => i.decisionStatus === s).length ?? 0; }
+  /** Real files on a payment (N/A placeholders have no file to open). */
+  files(it: Item) { return it.documents.filter(d => !d.isNotApplicable); }
+  notApplicable(it: Item) { return it.documents.filter(d => d.isNotApplicable); }
+  isRequisitionBased(b: { paymentType?: string }) { return b.paymentType === 'StaffPayment' || b.paymentType === 'RequisitionForm'; }
   missing(it: Item) { return it.required.filter(r => !r.filled).map(r => r.title); }
   tone(s: string) { return s === 'AwaitingDirector' || s === 'AwaitingAccountant' ? 'warn' : s === 'Approved' || s === 'Paid' || s === 'Closed' ? 'ok' : s.startsWith('Queried') || s === 'Rejected' || s === 'ChecksFailed' ? 'bad' : 'neutral'; }
   sigReady() { return this.sigMode() === 'saved' ? this.hasSig() : this.drew(); }

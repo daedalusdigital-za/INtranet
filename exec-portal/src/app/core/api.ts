@@ -7,14 +7,14 @@ export interface InboxRow {
   batchDate: string; status: string; statusTitle: string; totalAmount: number; notes?: string; items: number; pendingItems: number;
   preparedByName: string; accountantName?: string; accountantComment?: string; waitingSince?: string; role: 'accountant' | 'director'; blocked?: string;
 }
-export interface Doc { id: number; docType: string; docTypeTitle?: string; fileName: string; contentType?: string; size?: number; version?: number; }
+export interface Doc { id: number; docType: string; title?: string; docTypeTitle?: string; isNotApplicable?: boolean; naReason?: string; originalFileName?: string; fileName: string; contentType?: string; size?: number; version?: number; }
 export interface Item {
   id: number; supplierName: string; invoiceNumbers?: string; description?: string; amount: number; bankName?: string; accountNumber?: string; accountHolder?: string; paymentReference?: string;
-  isUrgent?: boolean; paymentModeTitle?: string; decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string;
+  isUrgent?: boolean; paymentModeTitle?: string; payoutMethod?: 'EFT' | 'EWallet' | null; decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string;
   required: { key: string; title: string; filled: boolean }[]; documents: Doc[];
 }
 export interface Batch {
-  id: number; batchNumber: string; companyCode: string; companyName: string; paymentTypeTitle: string; batchDate: string; status: string; statusTitle: string; notes?: string;
+  id: number; batchNumber: string; companyCode: string; companyName: string; paymentType?: string; paymentTypeTitle: string; batchDate: string; status: string; statusTitle: string; notes?: string;
   totalAmount: number; approvedAmount: number; preparedByName: string; submittedAt?: string; checksStatus?: string;
   accountantName?: string; accountantApprovedAt?: string; accountantComment?: string; directorName?: string; directorSignedAt?: string; lockedAt?: string; returnReason?: string;
   requestedDirectorNames?: string; items: Item[]; batchDocuments: Doc[];
@@ -41,6 +41,8 @@ export class Api {
 
   blob(url: string) { return this.http.get(url, { responseType: 'blob' }); }
   reviewPdfUrl(id: number) { return `${this.cr}/batches/${id}/review-pack.pdf`; }
+  /** One payment: approval sheet + every PDF attached to it. */
+  itemReviewUrl(id: number, itemId: number) { return `${this.cr}/batches/${id}/items/${itemId}/review.pdf`; }
   fileUrl(id: number, docId: number) { return `${this.cr}/batches/${id}/documents/${docId}/file`; }
   signatureUrl() { return `${this.base}/api/users/me/signature`; }
 }

@@ -53,6 +53,8 @@ namespace ProjectTracker.API.Services.Finance
             if (seg.Length == 2) return get;
             if (seg.Length == 3 && seg[2] is "review-pack.pdf" or "approval-sheet.pdf" or "signed-pack.pdf" or "schedule.pdf") return get;
             if (seg.Length == 5 && seg[2] == "documents" && int.TryParse(seg[3], out _) && seg[4] == "file") return get;
+            // /batches/{id}/items/{itemId}/review.pdf — one payment: approval sheet + its documents
+            if (seg.Length == 5 && seg[2] == "items" && int.TryParse(seg[3], out _) && seg[4] == "review.pdf") return get;
             if (seg.Length == 5 && seg[2] == "items" && int.TryParse(seg[3], out _) && seg[4] == "decision") return post;
             if (seg.Length == 3 && seg[2] == "sign") return post;
             if (seg.Length == 3 && seg[2] == "accountant") return post;
