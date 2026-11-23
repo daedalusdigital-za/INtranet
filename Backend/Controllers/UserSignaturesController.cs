@@ -13,7 +13,7 @@ namespace ProjectTracker.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/users")]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = "Bearer," + ProjectTracker.API.Services.Finance.ExecAuth.Scheme)]
     public class UserSignaturesController : ControllerBase
     {
         private readonly ApplicationDbContext _db;

@@ -103,7 +103,10 @@ namespace ProjectTracker.API.Extensions
                         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(PortalAuth.SigningKey(config))),
                         ClockSkew = TimeSpan.FromMinutes(1)
                     };
-                });
+                })
+                // Executive approvals portal: intranet identity, exec audience, accepted only on the
+                // creditors approval allow-list (ExecAuth.Allows).
+                .AddJwtBearer(ProjectTracker.API.Services.Finance.ExecAuth.Scheme, options => ProjectTracker.API.Services.Finance.ExecAuth.Configure(options, config));
 
             // SECURITY: deny-by-default. Any endpoint (controller, hub, health check) without
             // its own [Authorize]/[AllowAnonymous] requires a signed-in user, so a forgotten
@@ -334,6 +337,7 @@ namespace ProjectTracker.API.Extensions
             services.AddScoped<TripSheetImportService>();
 
             services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<ProjectTracker.API.Services.Finance.IExecTokenService, ProjectTracker.API.Services.Finance.ExecTokenService>();
             services.AddScoped<EmailSearchService>();
 
             // Persistent sales mailbox monitor (single login per mailbox + IMAP IDLE) —

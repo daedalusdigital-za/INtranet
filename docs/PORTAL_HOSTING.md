@@ -102,3 +102,31 @@ must change it on first sign-in. Overberg = customer **435 AFB OVERBERG BREDASDO
 - Edge key: change `PORTAL_EDGE_KEY` in `.env` and the App Service setting, restart both.
 - Kill the public surface instantly: stop the App Service (or stop HCM on SAGE-SVR). The LAN is unaffected.
 - Portal tokens: 12 h lifetime (`Portal:TokenHours`); changing `JWT_SECRET_KEY` signs everyone out.
+
+---
+
+## 6. Executive approvals portal (added 22 Nov 2026)
+
+Directors, accountants and the treasurer approve / sign creditor payment packs from a phone or home PC.
+Same edge, same tunnel, a second Static Web App:
+
+```
+ exec-portal/  →  SWA swa-rocket-exec   https://white-dune-07275ec1e.3.azurestaticapps.net   (Free)
+      └─▶ app-rocket-portal-edge  routes /api/exec/auth/*, /api/finance/creditors/*, GET /api/users/me/signature
+                 └─▶ on-prem API — Security/PortalEdge.cs + Services/Finance/ExecAuth.Allows narrow this to:
+                     POST exec/auth/login|verify · GET creditors/meta|inbox · GET batches/{id} (+review-pack.pdf, approval-sheet.pdf,
+                     documents/{d}/file) · POST batches/{id}/items/{i}/decision · POST batches/{id}/sign · POST batches/{id}/accountant
+```
+
+Sign-in: intranet e-mail + password **and** a 6-digit code e-mailed to that address (`Exec:RequireCode`, default on).
+Only users whose effective finance permissions include `cred.accountant`, `cred.director` or `cred.bank` get a token.
+The token has audience `<JwtSettings:Audience>-exec`, lives 4 h (`Exec:TokenHours`), and is rejected on every path outside
+the allow-list above — so even a stolen exec token cannot edit packs, download bank files or reach any other module.
+All the normal creditors rules still apply (accountant before director, every payment decided, typed full name, signature
+image, segregation of duties, hash + lock).
+
+Settings: `.env` → `EXEC_ORIGIN` (CORS), `EXEC_PUBLIC_URL` (adds an "Approve off-site" button to approver e-mails), `EXEC_REQUIRE_CODE`.
+Deploy: push touching `exec-portal/**` runs `.github/workflows/exec-portal-swa.yml` (var `EXEC_API_BASE`, secret
+`AZURE_STATIC_WEB_APPS_API_TOKEN_EXEC`, set by `tools/portal/set_exec_github_secrets.py`). Manual: build with the API base
+patched into `src/environments/environment.ts`, then `StaticSitesClient upload --app dist/exec-portal/browser --apiToken …`.
+Revoke: stop the App Service / HCM (kills both portals) or remove the user's finance permissions.

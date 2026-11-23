@@ -18,7 +18,7 @@ namespace ProjectTracker.API.Controllers.Finance;
 /// Creditors payment packs: prepare → automatic checks → company accountant → director e-signature
 /// → bank load → paid → closed. See <see cref="CreditorWorkflow"/> for statuses and roles.
 /// </summary>
-[Authorize]
+[Authorize(AuthenticationSchemes = "Bearer," + ExecAuth.Scheme)]
 [ApiController]
 [Route("api/finance/creditors")]
 [RequireModule("finance", AlsoAllowRoles = "Finance,Manager,Admin")]
@@ -1731,6 +1731,7 @@ public class CreditorPacksController : ControllerBase
         var list = people.Where(p => !string.IsNullOrWhiteSpace(p.Email)).ToList();
         if (list.Count == 0) return;
         var link = $"{IntranetUrl()}/finance?tab=creditors&batch={b.Id}";
+        var execLink = ExecAuth.PublicUrl(_cfg) is { } pub ? $"{pub}/pack/{b.Id}" : null;
         var company = await _db.CreditorCompanies.AsNoTracking().Where(x => x.Code == b.CompanyCode).Select(x => x.Name).FirstOrDefaultAsync() ?? b.CompanyCode;
         var subject = $"[Intranet] Payment pack {b.BatchNumber} — {company} · R{b.TotalAmount:N2} — please {ask}";
         static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
@@ -1750,7 +1751,8 @@ public class CreditorPacksController : ControllerBase
       {(string.IsNullOrWhiteSpace(b.Notes) ? "" : $"<tr><td style='padding:4px 14px 4px 0;color:#6b7280'>Note</td><td>{H(b.Notes)}</td></tr>")}
     </table>
     <a href='{link}' style='display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600'>Open the pack on the intranet</a>
-    <p style='margin:18px 0 0;font-size:12px;color:#6b7280'>Sent automatically by the intranet. If the button doesn't work, copy this link: {link}</p>
+    {(execLink != null ? $"<a href='{execLink}' style='display:inline-block;margin-left:8px;background:#fff;color:#4f46e5;border:1px solid #4f46e5;text-decoration:none;padding:9px 18px;border-radius:8px;font-weight:600'>Approve off-site (phone / home)</a>" : "")}
+    <p style='margin:18px 0 0;font-size:12px;color:#6b7280'>Sent automatically by the intranet. If the buttons don't work, copy this link: {link}{(execLink != null ? $" — or, away from the office: {execLink}" : "")}</p>
   </div>
 </div>";
             try { if (!await _email.SendEmailAsync(p.Email!, subject, html)) _log.LogWarning("Creditors email to {Email} failed: {Err}", p.Email, _email.LastError); }

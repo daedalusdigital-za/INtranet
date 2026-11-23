@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.RateLimiting;
 using Yarp.ReverseProxy.Transforms;
 
 // ---------------------------------------------------------------------------------------------
-// Rocket Freight client portal – public edge (Azure App Service).
+// Rocket Freight client portal + executive approvals portal – public edge (Azure App Service).
 //
-//   browser (Static Web App)  →  https://<this app>/api/portal/…  →  Hybrid Connection  →  on-prem API :5143
+//   client portal  (Static Web App)  →  https://<this app>/api/portal/…             →  Hybrid Connection  →  on-prem API :5143
+//   exec portal    (Static Web App)  →  https://<this app>/api/exec/auth/… + /api/finance/creditors/…  (allow-listed on-prem)
+//   exec-portal (Static Web App) →  https://<this app>/api/exec/… and the creditors approval allow-list (same tunnel)
 //
 // App settings (Azure → Configuration → Application settings):
 //   PORTAL_EDGE_KEY        shared secret; must equal PORTAL_EDGE_KEY in the on-prem .env
@@ -70,6 +72,29 @@ var routes = new[]
         ClusterId = "intranet",
         RateLimiterPolicy = "portal",
         Match = new Yarp.ReverseProxy.Configuration.RouteMatch { Path = "/api/portal/{**rest}" }
+    },
+    // Executive approvals portal. The on-prem API additionally enforces ExecAuth.Allows() on every
+    // public request, so widening these patterns cannot expose anything beyond the approval surface.
+    new Yarp.ReverseProxy.Configuration.RouteConfig
+    {
+        RouteId = "exec-auth",
+        ClusterId = "intranet",
+        RateLimiterPolicy = "portal-auth",
+        Match = new Yarp.ReverseProxy.Configuration.RouteMatch { Path = "/api/exec/auth/{action}", Methods = new[] { "POST", "OPTIONS" } }
+    },
+    new Yarp.ReverseProxy.Configuration.RouteConfig
+    {
+        RouteId = "exec-creditors",
+        ClusterId = "intranet",
+        RateLimiterPolicy = "portal",
+        Match = new Yarp.ReverseProxy.Configuration.RouteMatch { Path = "/api/finance/creditors/{**rest}" }
+    },
+    new Yarp.ReverseProxy.Configuration.RouteConfig
+    {
+        RouteId = "exec-signature",
+        ClusterId = "intranet",
+        RateLimiterPolicy = "portal",
+        Match = new Yarp.ReverseProxy.Configuration.RouteMatch { Path = "/api/users/me/signature", Methods = new[] { "GET", "OPTIONS" } }
     }
 };
 var clusters = new[]

@@ -59,8 +59,9 @@ namespace ProjectTracker.API.Security
                 return;
             }
 
-            // Public request. Only the portal surface exists from here.
-            if (!ctx.Request.Path.StartsWithSegments(PortalPath) && !ctx.Request.Path.StartsWithSegments(HealthPath))
+            // Public request. Only the portal + executive-approvals surfaces exist from here.
+            if (!ctx.Request.Path.StartsWithSegments(PortalPath) && !ctx.Request.Path.StartsWithSegments(HealthPath)
+                && !Services.Finance.ExecAuth.Allows(ctx.Request.Path, ctx.Request.Method))
             {
                 ctx.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;

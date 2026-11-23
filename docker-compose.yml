@@ -60,6 +60,10 @@ services:
       - Portal__EdgeKey=${PORTAL_EDGE_KEY:-}
       - Portal__PublicUrl=${PORTAL_PUBLIC_URL:-https://portal.rocketfreight.co.za}
       - Portal__PublicApiBase=${PORTAL_PUBLIC_API_BASE:-}
+      # Executive approvals portal (exec-portal/, same Azure edge). Only the creditors approval allow-list is reachable; see Services/Finance/ExecAuth.cs.
+      - Cors__AllowedOrigins__10=${EXEC_ORIGIN:-}
+      - Exec__PublicUrl=${EXEC_PUBLIC_URL:-}
+      - Exec__RequireCode=${EXEC_REQUIRE_CODE:-true}
       - DocumentsPath=/app/documents
       - QuotesPath=/app/quotes
       - DownloadsPath=/app/downloads
