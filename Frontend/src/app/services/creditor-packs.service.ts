@@ -165,7 +165,7 @@ export class CreditorPacksService {
   submit(id: number, approverUserIds?: number[], sig?: SignaturePayload) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, { approverUserIds: approverUserIds ?? null, ...(sig ?? {}) }); }
   /** Signed approval sheet (schedule + signatures captured so far). */
   approvalSheet(id: number) { return this.http.get(`${this.base}/batches/${id}/approval-sheet.pdf`, { responseType: 'blob' }); }
-  schedule(id: number) { return this.http.get(`${this.base}/batches/${id}/schedule.pdf`, { responseType: 'blob' }); }
+  schedulePdf(id: number) { return this.http.get(`${this.base}/batches/${id}/schedule.pdf`, { responseType: 'blob' }); }
   /** Whole pack as one PDF with every document stamped — once the director has signed. */
   signedPack(id: number) { return this.http.get(`${this.base}/batches/${id}/signed-pack.pdf`, { responseType: 'blob' }); }
   reviewPackUrl(id: number) { return `${this.base}/batches/${id}/review-pack.pdf`; }

@@ -985,7 +985,7 @@ export class FinanceCreditorsComponent implements OnInit {
   downloadApprovalSheet(): void { const b = this.batch()!; this.api.approvalSheet(b.id).subscribe({ next: blob => this.saveBlob(blob, `Approval-sheet-${b.batchNumber}.pdf`), error: e => this.fail(e, "Couldn't build the approval sheet.") }); }
   printSchedule(): void {
     const b = this.batch()!; this.busy.set(true);
-    this.api.schedule(b.id).subscribe({
+    this.api.schedulePdf(b.id).subscribe({
       next: blob => { this.busy.set(false); const url = URL.createObjectURL(blob); const w = window.open(url, '_blank'); if (!w) this.saveBlob(blob, `Payment-schedule-${b.batchNumber}.pdf`); else setTimeout(() => URL.revokeObjectURL(url), 60_000); },
       error: e => this.fail(e, "Couldn't build the payment schedule.")
     });
