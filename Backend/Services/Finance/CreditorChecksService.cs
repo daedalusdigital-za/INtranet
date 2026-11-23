@@ -411,20 +411,15 @@ public class CreditorChecksService
                 Add("C5", "VAT number differs from invoice", "REVIEW", $"Schedule VAT {vat} but the invoice shows {inv.ExtractedVatNumber} for {it.SupplierName}.", it, CreditorDocTypes.TaxInvoice);
         }
 
-        // C6 — invoice total vs schedule amount; C7 — PO number appears on invoice / GRV
+        // C6 — invoice number vs schedule; C7 — PO number appears on invoice / GRV.
+        // Deliberately NO arithmetic on invoice/quote totals: supplier layouts vary too much for OCR'd amounts to be
+        // trusted, and false "total differs" failures were blocking packs. The accountant and director read the documents.
         foreach (var it in items)
         {
             var inv = docs.FirstOrDefault(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.TaxInvoice && d.StoragePath != null);
             var po = docs.FirstOrDefault(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.PurchaseOrder && d.StoragePath != null);
             var grv = docs.FirstOrDefault(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.Grv && d.StoragePath != null);
 
-            if (inv?.ExtractedAmount is { } amt && SplitInvoices(it.InvoiceNumbers).Count() <= 1)
-            {
-                var diff = Math.Abs(amt - it.Amount);
-                if (diff > 1m)
-                    Add("C6", "Invoice total differs from schedule", diff > it.Amount * 0.1m ? "FAIL" : "REVIEW",
-                        $"Schedule pays R{it.Amount:N2} but the invoice total reads R{amt:N2} for {it.SupplierName}.", it, CreditorDocTypes.TaxInvoice);
-            }
             if (inv != null && inv.ExtractedInvoiceNumber != null && !string.IsNullOrWhiteSpace(it.InvoiceNumbers)
                 && !SplitInvoices(it.InvoiceNumbers).Any(n => Norm(n) == Norm(inv.ExtractedInvoiceNumber) || Norm(inv.ExtractedInvoiceNumber).EndsWith(Norm(n))))
                 Add("C6", "Invoice number differs from schedule", "REVIEW", $"Schedule lists {it.InvoiceNumbers} but the invoice reads {inv.ExtractedInvoiceNumber} for {it.SupplierName}.", it, CreditorDocTypes.TaxInvoice);

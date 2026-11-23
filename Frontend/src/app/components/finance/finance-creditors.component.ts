@@ -227,6 +227,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <button mat-flat-button color="primary" [disabled]="!b.can.sign || busy()" (click)="openSign()" [matTooltip]="pendingCount(b) > 0 ? 'Decide on every payment first' : ''"><mat-icon>draw</mat-icon> Sign batch</button>
           }
           @if (b.can.bankFile) { <button mat-stroked-button (click)="bankFile()"><mat-icon>download</mat-icon> Download bank file</button> }
+          @if (b.items.length) { <button mat-stroked-button (click)="printSchedule()" [disabled]="busy()" matTooltip="Printable A4 landscape list of every payment with bank details, amounts and signature lines"><mat-icon>print</mat-icon> Print schedule</button> }
           @if (b.lockedAt) { <button mat-stroked-button (click)="downloadSignedPack()" matTooltip="Approval sheet + every PDF in the pack, each stamped with the three signatures"><mat-icon>workspace_premium</mat-icon> Signed pack (PDF)</button> }
           @else if (b.status !== 'Draft') { <button mat-button (click)="downloadApprovalSheet()" matTooltip="Schedule + signatures captured so far"><mat-icon>picture_as_pdf</mat-icon> Approval sheet</button> }
           @if (b.can.markLoaded) { <button mat-flat-button color="primary" (click)="setStatus('LoadedOnBank')"><mat-icon>account_balance</mat-icon> Loaded on bank</button> }
@@ -256,7 +257,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               <label class="send-row" [class.on]="sendPick.has(p.userId)">
                 <input type="checkbox" [checked]="sendPick.has(p.userId)" (change)="togglePick(p.userId)">
                 <span class="av">{{ initials(p.name) }}</span>
-                <span class="who"><b>{{ p.name }}</b><small>{{ p.role }}@if (p.email) { · {{ p.email }} }</small></span>
+                <span class="who"><b>{{ p.name }}</b><small>{{ p.role }}@if (p.email) { <span class="em">{{ p.email }}</span> }</small></span>
               </label>
             }
           </div>
@@ -825,12 +826,12 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       label { margin-bottom: var(--space-2); } .sigpad { border: 1px dashed var(--color-line-strong); border-radius: var(--radius-sm); background: #fff; touch-action: none; max-width: 100%; } }
 
     .cr-send { .muted { color: var(--color-text-2); font-size: var(--text-sm); margin: 0 0 var(--space-3); }
-      .send-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin: 0 0 var(--space-3); }
-      .send-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); cursor: pointer; background: var(--color-surface); margin: 0;
+      .send-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; margin: 0 0 var(--space-3); }
+      .send-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); cursor: pointer; background: var(--color-surface); margin: 0; min-width: 0; overflow: hidden;
         &.on { border-color: var(--color-primary); background: var(--color-primary-soft, #eef2ff); }
         input { width: 16px; height: 16px; margin: 0; flex: 0 0 auto; }
         .av { width: 30px; height: 30px; border-radius: 50%; background: var(--color-primary); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
-        .who { display: flex; flex-direction: column; min-width: 0; b { font-size: var(--text-sm); } small { color: var(--color-text-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } }
+        .who { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; overflow: hidden; b { font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } small { color: var(--color-text-3); font-size: 11.5px; line-height: 1.3; overflow-wrap: anywhere; word-break: break-all; } small .em { display: block; } } }
       .hint.warn { color: var(--color-warn); mat-icon { color: inherit; } } }
     .sent-to { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: var(--text-sm); color: var(--color-primary); mat-icon { font-size: 18px; width: 18px; height: 18px; } }
     .up-strip { position: fixed; right: 20px; bottom: 20px; z-index: 1200; width: min(380px, calc(100vw - 40px)); background: var(--color-surface, #fff); border: 1px solid var(--color-line); border-radius: var(--radius-md, 10px); box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 10px 14px 12px; display: grid; gap: 6px;
@@ -982,6 +983,13 @@ export class FinanceCreditorsComponent implements OnInit {
     return { useSavedSignature: true };
   }
   downloadApprovalSheet(): void { const b = this.batch()!; this.api.approvalSheet(b.id).subscribe({ next: blob => this.saveBlob(blob, `Approval-sheet-${b.batchNumber}.pdf`), error: e => this.fail(e, "Couldn't build the approval sheet.") }); }
+  printSchedule(): void {
+    const b = this.batch()!; this.busy.set(true);
+    this.api.schedule(b.id).subscribe({
+      next: blob => { this.busy.set(false); const url = URL.createObjectURL(blob); const w = window.open(url, '_blank'); if (!w) this.saveBlob(blob, `Payment-schedule-${b.batchNumber}.pdf`); else setTimeout(() => URL.revokeObjectURL(url), 60_000); },
+      error: e => this.fail(e, "Couldn't build the payment schedule.")
+    });
+  }
   downloadSignedPack(): void { const b = this.batch()!; this.busy.set(true); this.api.signedPack(b.id).subscribe({ next: blob => { this.busy.set(false); this.saveBlob(blob, `Signed-pack-${b.batchNumber}.pdf`); }, error: e => this.fail(e, "Couldn't build the signed pack.") }); }
   private saveBlob(blob: Blob, name: string): void { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
   itemForm = signal<'new' | number | null>(null);

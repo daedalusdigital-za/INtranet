@@ -42,6 +42,23 @@ public class CreditorPackPdfService
         };
     }
 
+    /// <summary>Printable payment schedule (landscape): one line per payment with full bank details, decision and
+    /// hand-signature lines. Usable at any stage — a draft prints as a working list, a signed pack as the record.</summary>
+    public async Task<byte[]> ScheduleAsync(PaymentBatch b)
+    {
+        var slots = await SlotsAsync(b);
+        var company = await _db.CreditorCompanies.AsNoTracking().Where(c => c.Code == b.CompanyCode).Select(c => c.Name).FirstOrDefaultAsync() ?? b.CompanyCode;
+        var html = ScheduleHtml(b, company, slots);
+        using var ms = new MemoryStream();
+        using (var writer = new PdfWriter(ms))
+        using (var pdf = new PdfDocument(writer))
+        {
+            pdf.SetDefaultPageSize(PageSize.A4.Rotate());
+            HtmlConverter.ConvertToPdf(html, pdf, new ConverterProperties());
+        }
+        return ms.ToArray();
+    }
+
     public async Task<byte[]> ApprovalSheetAsync(PaymentBatch b)
     {
         var slots = await SlotsAsync(b);
@@ -143,6 +160,46 @@ public class CreditorPackPdfService
 
     private static string Trunc(string s, int n) => s.Length <= n ? s : s[..(n - 1)] + "…";
     private static string E(string? v) => WebUtility.HtmlEncode(v ?? "");
+
+    private static string ScheduleHtml(PaymentBatch b, string company, List<Slot> slots)
+    {
+        var typeTitle = CreditorPaymentTypes.All.FirstOrDefault(p => p.Key == b.PaymentType).Title ?? b.PaymentType;
+        var items = b.Items.OrderBy(i => i.SortOrder).ThenBy(i => i.Id).ToList();
+        var toPay = items.Where(i => i.DecisionStatus != "Rejected").Sum(i => i.Amount);
+        var prepay = b.PaymentType == CreditorPaymentTypes.Prepayment;
+        var decided = items.Any(i => i.DecisionStatus != "Pending");
+        string Row(PaymentBatchItem i, int n) => $@"<tr class='{(i.DecisionStatus == "Rejected" ? "rej" : "")}'>
+<td class='c'>{n}</td><td><b>{E(i.SupplierName)}</b>{(i.IsUrgent ? " <span class='urg'>URGENT</span>" : "")}{(i.PaymentMode == CreditorPaymentModes.PayAndClear ? "<br/><em>pay &amp; clear</em>" : "")}{(string.IsNullOrWhiteSpace(i.Description) ? "" : "<br/><small>" + E(i.Description) + "</small>")}</td>
+<td>{E(i.InvoiceNumbers)}</td><td>{E(i.BankName)}</td><td>{E(i.AccountHolder)}</td><td class='mono'>{(prepay && string.IsNullOrEmpty(i.AccountNumber) ? "<em>Treasury</em>" : E(i.AccountNumber))}</td><td class='mono'>{E(i.BranchCode)}</td><td>{E(i.PaymentReference)}</td>
+<td class='r mono'>{i.Amount:N2}</td>{(decided ? $"<td>{E(i.DecisionStatus)}{(string.IsNullOrWhiteSpace(i.DecisionComment) ? "" : "<br/><small>" + E(i.DecisionComment) + "</small>")}</td>" : "<td class='tick'>&#9744;</td>")}</tr>";
+
+        string SignLine(Slot s) => s.Sig != null
+            ? $"<div class='sl'><div class='t'>{E(s.Title)}</div><div class='v'>{(s.Sig.SignatureImage != null ? $"<img src='data:{E(s.Sig.SignatureImageMimeType ?? "image/png")};base64,{Convert.ToBase64String(s.Sig.SignatureImage)}'/>" : "")}</div><div class='n'>{E(s.Sig.SignerName)} · {s.Sig.SignedAtUtc.ToLocalTime():dd MMM yyyy HH:mm}</div></div>"
+            : $"<div class='sl'><div class='t'>{E(s.Title)}</div><div class='v line'></div><div class='n'>Name: ____________________ &nbsp; Date: ___________</div></div>";
+
+        return $@"<!doctype html><html><head><meta charset='utf-8'/><style>
+@page{{size:A4 landscape;margin:12mm}}
+body{{font-family:Helvetica,Arial,sans-serif;font-size:9.5px;color:#111827;margin:0;padding:10px 14px}}
+.hd{{display:table;width:100%;margin-bottom:8px}} .hd>div{{display:table-cell;vertical-align:top}} .hd .r{{text-align:right}}
+h1{{font-size:16px;margin:0;color:#4f46e5}} .sub{{color:#6b7280;margin:2px 0 0}} .big{{font-size:15px;font-weight:bold}}
+.meta{{color:#374151;margin:4px 0 0}} .meta b{{color:#111827}}
+table{{width:100%;border-collapse:collapse;margin:6px 0 10px}} th{{text-align:left;background:#eef2ff;color:#3730a3;padding:5px 5px;font-size:8.5px;border-bottom:1px solid #c7d2fe;white-space:nowrap}} td{{padding:4px 5px;border-bottom:1px solid #e5e7eb;vertical-align:top}}
+td.r,th.r{{text-align:right}} td.c{{text-align:center;color:#6b7280}} .mono{{font-family:'Courier New',monospace;font-size:9px;white-space:nowrap}} .tick{{font-size:13px;text-align:center}}
+tr.rej td{{color:#9ca3af;text-decoration:line-through}} tr.tot td{{font-weight:bold;border-top:2px solid #4f46e5;border-bottom:0;font-size:10.5px}}
+.urg{{color:#b91c1c;font-weight:bold;font-size:8px}} small{{color:#6b7280}} em{{color:#6b7280}}
+.sigs{{display:table;width:100%;border-spacing:10px 0;margin:8px -10px 0}} .sl{{display:table-cell;width:33%;vertical-align:bottom}} .sl .t{{font-size:8px;text-transform:uppercase;letter-spacing:.04em;color:#4f46e5;font-weight:bold}}
+.sl .v{{height:44px;margin:4px 0 2px;display:flex;align-items:flex-end}} .sl .v.line{{border-bottom:1px solid #111827}} .sl .v img{{max-height:42px;max-width:100%}} .sl .n{{font-size:8.5px;color:#374151}}
+.foot{{margin-top:10px;color:#9ca3af;font-size:7.5px;border-top:1px solid #e5e7eb;padding-top:4px}}
+</style></head><body>
+<div class='hd'><div><h1>Payment schedule</h1><p class='sub'>{E(company)} ({E(b.CompanyCode)}) · {E(typeTitle)} · {E(b.BatchNumber)}</p>
+<p class='meta'>Payment date <b>{b.BatchDate:dd MMM yyyy}</b> · Prepared by <b>{E(b.PreparedByName)}</b> · Status <b>{E(CreditorWorkflow.Title(b.Status))}</b>{(b.ScheduledPayDate != null ? " · Scheduled pay day <b>" + b.ScheduledPayDate.Value.ToString("dd MMM yyyy") + "</b>" : "")}{(string.IsNullOrWhiteSpace(b.Notes) ? "" : " · “" + E(b.Notes) + "”")}</p></div>
+<div class='r'><div class='sub'>{items.Count} payment{(items.Count == 1 ? "" : "s")}</div><div class='big'>R {toPay:N2}</div>{(toPay != b.TotalAmount ? $"<div class='sub'>of R {b.TotalAmount:N2} requested</div>" : "")}</div></div>
+<table><thead><tr><th>#</th><th>Supplier</th><th>Invoice(s)</th><th>Bank</th><th>Account holder</th><th>Account no.</th><th>Branch</th><th>Reference</th><th class='r'>Amount (R)</th><th>{(decided ? "Decision" : "Paid")}</th></tr></thead>
+<tbody>{string.Concat(items.Select((i, n) => Row(i, n + 1)))}<tr class='tot'><td colspan='8'>Total to pay</td><td class='r mono'>{toPay:N2}</td><td></td></tr></tbody></table>
+<div class='sigs'>{string.Concat(slots.Select(SignLine))}</div>
+<div class='foot'>Printed from the intranet on {DateTime.Now:dd MMM yyyy HH:mm}{(b.LockedAt != null ? $" · pack signed and locked {b.LockedAt.Value.ToLocalTime():dd MMM yyyy HH:mm} · lock hash {E(b.LockHash)}" : " · working copy — the pack is not yet fully signed")}.</div>
+</body></html>";
+    }
 
     private static string ApprovalSheetHtml(PaymentBatch b, string company, List<Slot> slots)
     {

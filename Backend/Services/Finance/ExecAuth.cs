@@ -51,7 +51,7 @@ namespace ProjectTracker.API.Services.Finance
             var seg = rest.Split('/', StringSplitOptions.RemoveEmptyEntries);
             if (seg.Length < 2 || seg[0] != "batches" || !int.TryParse(seg[1], out _)) return false;
             if (seg.Length == 2) return get;
-            if (seg.Length == 3 && seg[2] is "review-pack.pdf" or "approval-sheet.pdf" or "signed-pack.pdf") return get;
+            if (seg.Length == 3 && seg[2] is "review-pack.pdf" or "approval-sheet.pdf" or "signed-pack.pdf" or "schedule.pdf") return get;
             if (seg.Length == 5 && seg[2] == "documents" && int.TryParse(seg[3], out _) && seg[4] == "file") return get;
             if (seg.Length == 5 && seg[2] == "items" && int.TryParse(seg[3], out _) && seg[4] == "decision") return post;
             if (seg.Length == 3 && seg[2] == "sign") return post;

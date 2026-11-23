@@ -1256,6 +1256,16 @@ public class CreditorPacksController : ControllerBase
         return File(pdf, "application/pdf", $"Approval-sheet-{b.BatchNumber}.pdf");
     }
 
+    /// <summary>Printable payment schedule (A4 landscape): every payment with full bank details, amounts, decisions and signature lines.</summary>
+    [HttpGet("batches/{id:int}/schedule.pdf")]
+    public async Task<IActionResult> Schedule(int id)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (!await InScopeAsync(b.CompanyCode)) return Forbid();
+        var pdf = await _packPdf.ScheduleAsync(b);
+        return File(pdf, "application/pdf", $"Payment-schedule-{b.BatchNumber}.pdf");
+    }
+
     /// <summary>
     /// Whole signed pack as one PDF: approval sheet first, then every uploaded PDF document, each stamped on its final page
     /// with the signature block. Only once the director has signed.

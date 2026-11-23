@@ -37,10 +37,10 @@ interface SheetResponse {
       <section class="rp__facts">
         <h4><mat-icon>auto_awesome</mat-icon> What the system read off this recon</h4>
         <div class="facts">
-          <div class="fact" [class.ok]="r.extracted.matchesSchedule === true" [class.bad]="r.extracted.matchesSchedule === false">
+          <div class="fact">
             <span class="k">Amount on recon</span>
             <span class="v">{{ r.extracted.amount != null ? ('R ' + (r.extracted.amount | number:'1.2-2')) : '—' }}</span>
-            @if (r.extracted.scheduleAmount != null) { <small>schedule pays R {{ r.extracted.scheduleAmount | number:'1.2-2' }}@if (r.extracted.matchesSchedule === true) { · matches } @else if (r.extracted.matchesSchedule === false) { · differs }</small> }
+            @if (r.extracted.scheduleAmount != null) { <small>schedule pays R {{ r.extracted.scheduleAmount | number:'1.2-2' }} · for information only, layouts vary</small> }
           </div>
           <div class="fact">
             <span class="k">Invoice numbers found</span>
