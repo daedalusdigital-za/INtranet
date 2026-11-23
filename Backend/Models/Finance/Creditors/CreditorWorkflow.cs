@@ -111,12 +111,17 @@ public static class CreditorPaymentTypes
     public const string Intercompany = "Intercompany";
     public const string Utility = "Utility";
     public const string StaffPayment = "StaffPayment";
+    /// <summary>Paid off a requisition form (bank statement usually scanned in with it) — no invoice. Works like a staff payment.</summary>
+    public const string RequisitionForm = "RequisitionForm";
+
+    /// <summary>Payment types paid off a requisition (no invoice): requisition + bank statement, EFT or eWallet, lenient checks.</summary>
+    public static bool IsRequisitionBased(string? paymentType) => paymentType is StaffPayment or RequisitionForm;
     public const string CreditNote = "CreditNote";
 
     public static readonly (string Key, string Title)[] All =
     {
         (DailyCreditor, "Daily creditor"), (MonthlyCreditor, "Monthly creditor"), (Prepayment, "Prepayment"),
-        (Intercompany, "Intercompany"), (Utility, "Utility"), (StaffPayment, "Staff payment"), (CreditNote, "Credit note"),
+        (Intercompany, "Intercompany"), (Utility, "Utility"), (StaffPayment, "Staff payment"), (RequisitionForm, "Requisition form"), (CreditNote, "Credit note"),
     };
 }
 
@@ -138,6 +143,8 @@ public static class CreditorDocTypes
     public const string WrittenInstruction = "WrittenInstruction";
     /// <summary>Internal request / requisition form — optional supporting paper on prepayments.</summary>
     public const string Requisition = "Requisition";
+    /// <summary>Staff payments: the staff member's own bank statement — confirms the account the money goes to.</summary>
+    public const string BankStatement = "BankStatement";
     public const string CreditNoteForm = "CreditNoteForm";
     public const string CustomerReason = "CustomerReason";
     public const string CustomerCollectionSlip = "CustomerCollectionSlip";
@@ -157,7 +164,8 @@ public static class CreditorDocTypes
         (PurchaseOrder, "Purchase order", "item"),
         (Grv, "GRV / delivery note / POD", "item"),
         (ProofOfWork, "Proof of work (photos, reg, sign-off)", "item"),
-        (Requisition, "Request form", "item"),
+        (Requisition, "Requisition / request form", "item"),
+        (BankStatement, "Bank statement (staff member)", "item"),
         (BankLetter, "Bank letter < 3 months + AVS", "item"),
         (SageAgedPayables, "Sage aged payables (PDF)", "item"),
         (WrittenInstruction, "Written instruction + invoices settled", "item"),
@@ -228,9 +236,19 @@ public static class CreditorDocRules
             // The pack-level creditors recon already covers the utility accounts, so the tax invoice is uploaded on its own — no per-invoice supplier recon.
             new Rule(CreditorDocTypes.TaxInvoice, true), Sage,
         },
+        // Staff payment: no invoice. The requisition (uploaded, or filled in on the intranet and generated as a PDF) carries it;
+        // the staff member's bank statement backs up EFT bank details. Deliberately lenient: the statement is only recommended
+        // (a missing one is a REVIEW note, never a block) and is not expected at all for eWallet payouts.
         [CreditorPaymentTypes.StaffPayment] = new[]
         {
-            new Rule(CreditorDocTypes.BankLetter, false),
+            new Rule(CreditorDocTypes.Requisition, true),
+            new Rule(CreditorDocTypes.BankStatement, false),
+        },
+        // Requisition form: same as a staff payment — the requisition (with the bank statement scanned in, or separately) carries it.
+        [CreditorPaymentTypes.RequisitionForm] = new[]
+        {
+            new Rule(CreditorDocTypes.Requisition, true),
+            new Rule(CreditorDocTypes.BankStatement, false),
         },
         [CreditorPaymentTypes.CreditNote] = new[]
         {
@@ -266,12 +284,13 @@ public static class CreditorDocRules
     /// Optional-but-wanted documents for a payment: shown as slots and raise a warning when missing, never block.
     /// Excludes anything that is currently required for the item.
     /// </summary>
-    public static IEnumerable<string> RecommendedForItem(string paymentType, bool stockReturned, bool closingPrepayment, bool hasRecon = false)
+    public static IEnumerable<string> RecommendedForItem(string paymentType, bool stockReturned, bool closingPrepayment, bool hasRecon = false, string? payoutMethod = null)
     {
         var req = RequiredForItem(paymentType, stockReturned, closingPrepayment, hasRecon).ToHashSet();
         foreach (var r in For(paymentType))
         {
             if (CreditorDocTypes.IsBatchLevel(r.DocType) || r.Required || req.Contains(r.DocType)) continue;
+            if (r.DocType == CreditorDocTypes.BankStatement && payoutMethod == StaffPayoutMethods.EWallet) continue; // no bank account on an eWallet payout
             if (r.AfterDelivery || r.IfReturned) continue; // become required later / conditionally — not "recommended now"
             yield return r.DocType;
         }

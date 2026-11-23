@@ -59,6 +59,59 @@ public class CreditorPackPdfService
         return ms.ToArray();
     }
 
+    public sealed record RequisitionForm(string Company, string BatchNumber, string EmployeeName, string? EmployeeNumber, string? Department,
+        string Reason, decimal Amount, string RequestedBy, string? AuthorisedBy, DateTime Date, string? Notes,
+        string PayoutMethod, string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string CapturedBy, bool Staff = true);
+
+    /// <summary>Staff payment requisition filled in on the intranet (A4 portrait). Returns the PDF and the plain text the checks read.</summary>
+    public (byte[] Pdf, string Text) Requisition(RequisitionForm f)
+    {
+        static string E(string? s) => WebUtility.HtmlEncode(s ?? "");
+        var ewallet = f.PayoutMethod == "eWallet";
+        var payout = ewallet
+            ? $"eWallet · {E(f.AccountNumber)}"
+            : string.IsNullOrWhiteSpace(f.AccountNumber) ? "EFT · bank details to follow (from the bank statement)"
+            : $"EFT · {E(f.BankName)} · Acc {E(f.AccountNumber)}{(string.IsNullOrWhiteSpace(f.BranchCode) ? "" : " · Branch " + E(f.BranchCode))}{(string.IsNullOrWhiteSpace(f.AccountHolder) ? "" : " · " + E(f.AccountHolder))}";
+        string Row(string k, string v) => $"<tr><th>{k}</th><td>{v}</td></tr>";
+        var html = $@"<html><head><meta charset='utf-8'><style>
+body{{font-family:Helvetica,Arial,sans-serif;font-size:11pt;color:#111;margin:28px}}
+h1{{font-size:18pt;margin:0 0 2px}} .sub{{color:#555;font-size:9.5pt;margin-bottom:18px}}
+table{{width:100%;border-collapse:collapse;margin-bottom:18px}} th,td{{border:1px solid #bbb;padding:7px 9px;text-align:left;vertical-align:top}}
+th{{width:32%;background:#f3f4f6;font-weight:bold}} .amt{{font-size:14pt;font-weight:bold}}
+.sig{{width:100%;margin-top:36px}} .sig td{{border:none;padding:0 12px 0 0;width:33%}} .line{{border-top:1px solid #333;padding-top:4px;font-size:9pt;color:#444;margin-top:44px}}
+.foot{{margin-top:28px;font-size:8.5pt;color:#777}}
+</style></head><body>
+<h1>{(f.Staff ? "Staff payment requisition" : "Payment requisition")}</h1>
+<div class='sub'>{E(f.Company)} · Payment pack {E(f.BatchNumber)} · Date {f.Date:dd MMM yyyy}</div>
+<table>
+{Row(f.Staff ? "Paid to (staff member)" : "Paid to", E(f.EmployeeName))}
+{Row(f.Staff ? "Employee no. / ID" : "ID / reference no.", E(f.EmployeeNumber))}
+{Row("Department", E(f.Department))}
+{Row("Reason for payment", E(f.Reason).Replace("\n", "<br>"))}
+{Row("Amount", $"<span class='amt'>R {f.Amount:N2}</span>")}
+{Row("Pay by", payout)}
+{Row("Requested by", E(f.RequestedBy))}
+{Row("Authorised by (manager)", E(f.AuthorisedBy))}
+{(string.IsNullOrWhiteSpace(f.Notes) ? "" : Row("Notes", E(f.Notes).Replace("\n", "<br>")))}
+</table>
+<table class='sig'><tr>
+<td><div class='line'>Requested by — signature &amp; date</div></td>
+<td><div class='line'>Authorised by — signature &amp; date</div></td>
+<td><div class='line'>Received by staff member</div></td>
+</tr></table>
+<div class='foot'>Requisition captured on the intranet by {E(f.CapturedBy)} on {DateTime.UtcNow.AddHours(2):dd MMM yyyy HH:mm:ss} (SAST). Approval of this payment is recorded electronically on the payment pack.</div>
+</body></html>";
+        using var ms = new MemoryStream();
+        using (var writer = new PdfWriter(ms))
+        using (var pdf = new PdfDocument(writer))
+        {
+            pdf.SetDefaultPageSize(PageSize.A4);
+            HtmlConverter.ConvertToPdf(html, pdf, new ConverterProperties());
+        }
+        var text = $"{(f.Staff ? "STAFF PAYMENT REQUISITION" : "PAYMENT REQUISITION")}\n{f.Company}\nPaid to: {f.EmployeeName}\nEmployee no: {f.EmployeeNumber}\nDepartment: {f.Department}\nReason: {f.Reason}\nAmount: R {f.Amount:0.00}\nPay by: {f.PayoutMethod} {f.BankName} {f.AccountNumber} {f.BranchCode}\nRequested by: {f.RequestedBy}\nAuthorised by: {f.AuthorisedBy}\nDate: {f.Date:yyyy-MM-dd}\n{f.Notes}";
+        return (ms.ToArray(), text);
+    }
+
     public async Task<byte[]> ApprovalSheetAsync(PaymentBatch b)
     {
         var slots = await SlotsAsync(b);
@@ -76,7 +129,8 @@ public class CreditorPackPdfService
 
     /// <summary>Approval sheet + each uploaded PDF document (stamped). Non-PDF uploads are listed on the sheet but not merged.
     /// <paramref name="stamp"/>=false gives the unstamped reading copy approvers use before signing.</summary>
-    public async Task<byte[]> SignedPackAsync(PaymentBatch b, Func<string, string> abs, bool stamp = true)
+    /// <summary>Approval sheet followed by the pack's PDFs (stamped when <paramref name="stamp"/>). <paramref name="itemId"/> limits it to one payment's documents.</summary>
+    public async Task<byte[]> SignedPackAsync(PaymentBatch b, Func<string, string> abs, bool stamp = true, int? itemId = null)
     {
         var slots = await SlotsAsync(b);
         var sheet = await ApprovalSheetAsync(b);
@@ -86,7 +140,8 @@ public class CreditorPackPdfService
         {
             var merger = new PdfMerger(dest);
             using (var src = new PdfDocument(new PdfReader(new MemoryStream(sheet)))) merger.Merge(src, 1, src.GetNumberOfPages());
-            var docs = b.Documents.Where(d => d.StoragePath != null && !d.IsNotApplicable && (d.ContentType ?? "").Contains("pdf", StringComparison.OrdinalIgnoreCase))
+            var docs = b.Documents.Where(d => d.StoragePath != null && !d.IsNotApplicable && (d.ContentType ?? "").Contains("pdf", StringComparison.OrdinalIgnoreCase)
+                                              && (itemId == null || d.ItemId == itemId))
                 .OrderBy(d => d.ItemId ?? 0).ThenBy(d => d.Id);
             foreach (var d in docs)
             {

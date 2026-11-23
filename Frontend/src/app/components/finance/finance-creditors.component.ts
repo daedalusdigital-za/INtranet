@@ -19,12 +19,13 @@ import { SecureSrcDirective } from '../../directives/secure-src.directive';
 import { environment } from '../../../environments/environment';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow } from '../../services/creditor-packs.service';
+import { Observable } from 'rxjs';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow, RequisitionFormInput } from '../../services/creditor-packs.service';
 
 type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
 
-const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoiceNumbers: '', description: '', amount: 0, bankName: '', accountNumber: '', branchCode: '', accountHolder: '', paymentReference: '', stockReturned: false, isUrgent: false, paymentMode: 'Normal' };
+const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoiceNumbers: '', description: '', amount: 0, bankName: '', accountNumber: '', branchCode: '', accountHolder: '', paymentReference: '', stockReturned: false, isUrgent: false, paymentMode: 'Normal', payoutMethod: 'EFT' };
 
 /**
  * Finance → Creditors. Payment packs per paying company. The screen is organised around
@@ -328,10 +329,102 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           <header>
             <h3><mat-icon>list_alt</mat-icon> Payments <span class="cnt">{{ b.items.length }}</span></h3>
             <small>{{ docsFilledItems(b) }} of {{ docsRequiredItems(b) }} required documents attached</small>
+            @if (b.items.length) { <button mat-icon-button (click)="previewPack()" matTooltip="Preview all — approval sheet + every document in the pack, in one scroll"><mat-icon>visibility</mat-icon></button> }
             @if (b.can.edit) { <button mat-flat-button color="primary" (click)="startItem()"><mat-icon>add</mat-icon> Add payment</button> }
           </header>
 
-          @if (itemForm()) {
+          @if (itemForm() && isStaff()) {
+            <div class="cr-itemform">
+              <h4>{{ itemForm() === 'new' ? 'New' : 'Edit' }} {{ isReqPay() ? 'requisition payment' : 'staff payment' }}</h4>
+
+              <h5>1 · Requisition form</h5>
+              <div class="sig-modes">
+                <button type="button" class="sig-mode" [class.on]="reqMode() === 'upload'" (click)="reqMode.set('upload')"><mat-icon>upload_file</mat-icon> Upload a filled-in requisition</button>
+                <button type="button" class="sig-mode" [class.on]="reqMode() === 'fill'" (click)="reqMode.set('fill'); pendingInvoiceFile = null; readInfo.set('')"><mat-icon>edit_document</mat-icon> Fill one in here</button>
+              </div>
+              @if (reqMode() === 'upload') {
+                <div class="inv-src">
+                  @if (!pendingInvoiceFile) {
+                    <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> Upload requisition form</button>
+                    <small class="muted">No invoice needed. We read the PDF and fill in {{ isReqPay() ? 'who is being paid' : 'the employee' }}, the amount and the reason{{ stmtIncluded() ? ', plus the bank details from the bank statement scanned in with it' : '' }}.</small>
+                    @if (reading()) { <mat-spinner diameter="18"></mat-spinner> }
+                  } @else {
+                    <span class="chip ok"><mat-icon>picture_as_pdf</mat-icon> {{ pendingInvoiceFile.name }} @if (readInfo()) { · {{ readInfo() }} }</span>
+                    @if (reading()) { <mat-spinner diameter="18"></mat-spinner> }
+                    <button mat-icon-button (click)="pendingInvoiceFile = null; readInfo.set('')" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                  }
+                  <input #invFileInput type="file" accept="application/pdf" hidden (change)="staffFileChosen($event, 'req')">
+                </div>
+                <mat-checkbox [checked]="!stmtIncluded()" (change)="stmtIncluded.set(!$event.checked)">Uploaded without the bank statement (upload it separately)</mat-checkbox>
+              } @else {
+                <div class="row">
+                  <label>Date <input type="date" [(ngModel)]="reqForm.date"></label>
+                  <label class="grow">Requested by <input [(ngModel)]="reqForm.requestedBy" placeholder="leave blank for yourself"></label>
+                  <label class="grow">Authorised by (manager) <input [(ngModel)]="reqForm.authorisedBy" placeholder="optional"></label>
+                </div>
+                <div class="row">
+                  <label class="grow">Notes <input [(ngModel)]="reqForm.notes" placeholder="optional"></label>
+                </div>
+              }
+
+              <h5>2 · Who and how much</h5>
+              <div class="row">
+                <label class="grow">{{ isReqPay() ? 'Paid to' : 'Employee name' }} <input [(ngModel)]="itemDraft.supplierName" [placeholder]="isReqPay() ? 'Name as on the requisition' : 'Full name as on the requisition'" required autocomplete="off"></label>
+                @if (reqMode() === 'fill') {
+                  <label>{{ isReqPay() ? 'ID / reference no.' : 'Employee ID / no.' }} <input [(ngModel)]="reqForm.employeeNumber" placeholder="optional"></label>
+                  <label>Department <input [(ngModel)]="reqForm.department" placeholder="optional"></label>
+                }
+                <label>Amount (R) <input type="number" step="0.01" [(ngModel)]="itemDraft.amount"></label>
+              </div>
+              <div class="row">
+                <label class="grow">Reason for the payment <input [(ngModel)]="itemDraft.description" placeholder="e.g. travel reimbursement, salary advance…"></label>
+                <label>Reference no. <input [(ngModel)]="itemDraft.invoiceNumbers" placeholder="optional"></label>
+              </div>
+
+              @if (reqMode() === 'fill' || !stmtIncluded()) {
+                <h5>3 · Bank statement</h5>
+                <div class="inv-src recon">
+                  @if (!pendingStatementFile) {
+                    <button mat-stroked-button (click)="stmtFileInput.click()"><mat-icon>account_balance</mat-icon> Upload bank statement</button>
+                    <small>{{ isEWallet() ? 'Not needed for an eWallet payment.' : 'PDF. We read the bank details off it — or add it under the payment later.' }}</small>
+                  } @else {
+                    <span class="chip ok"><mat-icon>account_balance</mat-icon> {{ pendingStatementFile.name }} @if (statementInfo()) { · {{ statementInfo() }} }</span>
+                    <button mat-icon-button (click)="pendingStatementFile = null; statementInfo.set('')" matTooltip="Remove"><mat-icon>close</mat-icon></button>
+                  }
+                  <input #stmtFileInput type="file" accept="application/pdf" hidden (change)="staffFileChosen($event, 'stmt')">
+                </div>
+              }
+
+              <h5>{{ staffStep('pay') }} · eWallet or EFT</h5>
+              <div class="sig-modes">
+                <button type="button" class="sig-mode" [class.on]="!isEWallet()" (click)="setPayout('EFT')"><mat-icon>account_balance</mat-icon> EFT to a bank account</button>
+                <button type="button" class="sig-mode" [class.on]="isEWallet()" (click)="setPayout('EWallet')"><mat-icon>smartphone</mat-icon> eWallet</button>
+              </div>
+              @if (isEWallet()) {
+                <div class="row">
+                  <label>eWallet cellphone number <input [(ngModel)]="itemDraft.accountNumber" inputmode="tel" placeholder="082 123 4567"></label>
+                  <label class="grow">Reference <input [(ngModel)]="itemDraft.paymentReference" placeholder="optional"></label>
+                </div>
+              } @else {
+                <div class="row">
+                  <label>Bank <input [(ngModel)]="itemDraft.bankName"></label>
+                  <label>Account number <input [(ngModel)]="itemDraft.accountNumber"></label>
+                  <label>Branch code <input [(ngModel)]="itemDraft.branchCode"></label>
+                  <label class="grow">Account holder <input [(ngModel)]="itemDraft.accountHolder"></label>
+                  <label>Reference on their statement <input [(ngModel)]="itemDraft.paymentReference"></label>
+                </div>
+                <p class="hint"><mat-icon>account_balance</mat-icon> <span>{{ hasReadBank() ? 'Read from the bank statement — check them and correct anything that is off.' : 'Filled in from the bank statement when we can read it, or type them in.' }}</span></p>
+              }
+
+              <h5>{{ staffStep('when') }} · How it should be paid</h5>
+              <div class="row mode">
+                <mat-checkbox [(ngModel)]="itemDraft.isUrgent" class="urgent"><mat-icon>priority_high</mat-icon> Urgent — must go out ahead of the normal run</mat-checkbox>
+              </div>
+              <div class="actions">
+                <button mat-button (click)="cancelItem()">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy() || reading()" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button>
+              </div>
+            </div>
+          } @else if (itemForm()) {
             <div class="cr-itemform">
               <h4>{{ itemForm() === 'new' ? 'New payment' : 'Edit payment' }}</h4>
 
@@ -477,7 +570,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 @if (it.prepaymentOpen && it.paidAt) { <span class="pre">awaiting invoice + GRV</span> }
                 @if (it.decisionStatus !== 'Pending') { <span [class]="'dec ' + it.decisionStatus.toLowerCase()">{{ it.decisionStatus }}</span> }
                 <span class="amt">R {{ it.amount | number:'1.2-2' }}</span>
-                @if (previewableDocs(it).length) { <button mat-icon-button (click)="$event.stopPropagation(); previewItem(it)" [matTooltip]="'Review ' + (previewableDocs(it).length === 1 ? 'the document' : previewableDocs(it).length + ' documents')"><mat-icon>visibility</mat-icon></button> }
+                @if (previewableDocs(it).length) { <button mat-icon-button (click)="$event.stopPropagation(); previewItem(it)" [matTooltip]="'Preview all — approval sheet + ' + (previewableDocs(it).length === 1 ? 'the document' : previewableDocs(it).length + ' documents') + ' for this payment'"><mat-icon>visibility</mat-icon></button> }
                 @if (b.can.edit) {
                   <button mat-icon-button (click)="$event.stopPropagation(); startItem(it)" matTooltip="Edit"><mat-icon>edit</mat-icon></button>
                   <button mat-icon-button (click)="$event.stopPropagation(); removeItem(it)" matTooltip="Remove"><mat-icon>delete</mat-icon></button>
@@ -859,7 +952,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
     .drop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: var(--space-2) var(--space-3); border: 2px dashed var(--color-line-strong); border-radius: var(--radius-md); color: var(--color-text-3); font-size: var(--text-sm); margin-top: var(--space-3); mat-icon { color: var(--color-primary); } }
 
     .cr-itemform { background: var(--color-surface-2); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3);
-      .inv-src { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; small { flex-basis: 100%; } }
+.inv-src { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; small { flex-basis: 100%; } }
       .inv-src.recon { padding: 8px 10px; border-radius: var(--radius-md); border: 1px dashed var(--color-line); small { display: inline-flex; align-items: center; gap: 4px; flex-basis: auto; color: var(--color-text-3); mat-icon { font-size: 16px; width: 16px; height: 16px; } } &.missing { border-color: var(--color-warn); background: var(--color-warn-soft, rgba(245,158,11,.08)); small { color: var(--color-warn); } } }
       .actions .warn-txt { display: inline-flex; align-items: center; gap: 4px; color: var(--color-warn); font-size: var(--text-xs); margin-right: auto; mat-icon { font-size: 16px; width: 16px; height: 16px; } }
       .row.mode { align-items: flex-end; select { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); font: inherit; background: var(--color-surface); } .urgent { padding-bottom: 4px; mat-icon { font-size: 16px; width: 16px; height: 16px; vertical-align: -3px; color: var(--color-danger); } } }
@@ -1007,6 +1100,17 @@ export class FinanceCreditorsComponent implements OnInit {
   pendingSageFile: File | null = null;
   reconInfo = signal('');
   pendingLink: BooksInvoiceHit | null = null;
+  // staff payments: requisition (upload or fill in) + bank statement + EFT / eWallet
+  reqMode = signal<'upload' | 'fill'>('upload');
+  /** Upload mode: the bank statement is scanned into the same PDF as the requisition (default). Unticked = separate statement upload. */
+  stmtIncluded = signal(true);
+  /** Bank details on the form came from a statement (separate, or inside the requisition PDF). */
+  hasReadBank = signal(false);
+  reqForm: { employeeNumber: string; department: string; authorisedBy: string; requestedBy: string; date: string; notes: string } = this.blankReqForm();
+  pendingStatementFile: File | null = null;
+  statementInfo = signal('');
+  /** Bank details set aside while the clerk flips to eWallet, restored if they flip back. */
+  private eftStash: { bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string } | null = null;
   pickAccept = 'application/pdf';
   private supTimer: any; private bookTimer: any; private hideTimer: any;
 
@@ -1117,10 +1221,64 @@ export class FinanceCreditorsComponent implements OnInit {
   badge(s: string) { return ['Approved', 'Paid', 'Closed', 'LoadedOnBank'].includes(s) ? 'ok' : s.startsWith('Awaiting') ? 'warn' : this.sentBack.includes(s) || s === 'Rejected' ? 'bad' : s === 'Draft' ? '' : 'info'; }
   rulesSummary(pt: string): string { const rules = this.meta()?.rules[pt] ?? []; const names = rules.filter(r => r.required && !r.afterDelivery && !r.ifReturned).map(r => this.docTitle(r.docType)); const opt = rules.filter(r => !r.required && !r.afterDelivery && !r.ifReturned && !r.withRecon).map(r => this.docTitle(r.docType)); const withRecon = rules.filter(r => r.withRecon).map(r => this.docTitle(r.docType)); return (names.length ? names.join(', ') : 'none beyond the batch schedule') + (withRecon.length ? ` · with every recon: ${withRecon.join(', ')}` : '') + (opt.length ? ` · optional: ${opt.join(', ')}` : ''); }
   isPrepayment(): boolean { return this.batch()?.paymentType === 'Prepayment'; }
-  /** Doc type the "first upload" in the add-payment form is stored as: the quote for prepayments, the tax invoice otherwise. */
-  primaryDocType(): string { return this.isPrepayment() ? 'Requisition' : 'TaxInvoice'; }
-  /** Human name of the step-1 document ("request form" / "invoice"). */
-  primaryName(): string { return this.isPrepayment() ? 'request form' : 'invoice'; }
+  /** Paid off a requisition (no invoice): staff payments and requisition-form payments share the same form and rules. */
+  isStaff(): boolean { const t = this.batch()?.paymentType; return t === 'StaffPayment' || t === 'RequisitionForm'; }
+  /** Requisition-form pack (payee need not be an employee) — only the wording differs from a staff payment. */
+  isReqPay(): boolean { return this.batch()?.paymentType === 'RequisitionForm'; }
+  /** Doc type the "first upload" in the add-payment form is stored as: the request form for prepayments, the requisition for staff payments, the tax invoice otherwise. */
+  primaryDocType(): string { return this.isPrepayment() || this.isStaff() ? 'Requisition' : 'TaxInvoice'; }
+  /** Human name of the step-1 document ("request form" / "requisition form" / "invoice"). */
+  primaryName(): string { return this.isPrepayment() ? 'request form' : this.isStaff() ? 'requisition form' : 'invoice'; }
+  /** Step numbers on the staff / requisition form: the bank statement step only shows when it is a separate file. */
+  staffStep(k: 'pay' | 'when'): number { const stmt = this.reqMode() === 'fill' || !this.stmtIncluded() ? 1 : 0; return (k === 'pay' ? 3 : 4) + stmt; }
+  isEWallet(): boolean { return this.itemDraft.payoutMethod === 'EWallet'; }
+  private blankReqForm() { return { employeeNumber: '', department: '', authorisedBy: '', requestedBy: '', date: new Date().toISOString().slice(0, 10), notes: '' }; }
+  setPayout(m: 'EFT' | 'EWallet'): void {
+    const d = this.itemDraft; if ((d.payoutMethod ?? 'EFT') === m) return;
+    if (m === 'EWallet') { this.eftStash = { bankName: d.bankName, accountNumber: d.accountNumber, branchCode: d.branchCode, accountHolder: d.accountHolder }; d.bankName = ''; d.accountNumber = ''; d.branchCode = ''; }
+    else { const s = this.eftStash; d.bankName = s?.bankName ?? ''; d.accountNumber = s?.accountNumber ?? ''; d.branchCode = s?.branchCode ?? ''; d.accountHolder = s?.accountHolder ?? d.accountHolder; this.eftStash = null; }
+    d.payoutMethod = m;
+  }
+  /** Staff form: a file picked for the requisition ('req') or the separate bank statement ('stmt'). */
+  staffFileChosen(e: Event, kind: 'req' | 'stmt'): void { const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (f) this.staffFile(f, kind); }
+  private staffFile(f: File, kind: 'req' | 'stmt'): void {
+    if (!/\.pdf$/i.test(f.name)) { this.toast.warn(kind === 'req' ? 'The requisition must be a PDF.' : 'The bank statement must be a PDF.'); return; }
+    if (kind === 'stmt') { this.pendingStatementFile = f; this.statementInfo.set('Reading…'); }
+    else { this.pendingInvoiceFile = f; this.reading.set(true); this.readInfo.set(''); }
+    this.api.readInvoice(f, this.track(kind === 'req' ? 'Reading the requisition' : 'Reading the bank statement', f)).subscribe({
+      next: r => {
+        this.untrack(); if (kind === 'req') this.reading.set(false);
+        const info = (s: string) => kind === 'req' ? this.readInfo.set(s) : this.statementInfo.set(s);
+        if (!r.readable) { info("Couldn't read the text (poor scan?) — it will still be attached; fill the details in below"); return; }
+        const d = this.itemDraft; const filled: string[] = [];
+        if (kind === 'req') {
+          // A requisition names the employee; the issuer line at the top is the company, so only take a labelled name.
+          if (r.employeeName && !d.supplierName) { d.supplierName = r.employeeName; filled.push('employee name'); }
+          if (r.employeeNumber && !this.reqForm.employeeNumber) this.reqForm.employeeNumber = r.employeeNumber;
+          if (r.department && !this.reqForm.department) this.reqForm.department = r.department;
+          if (r.amount && !d.amount) { d.amount = r.amount; filled.push('amount'); }
+          if (r.reason && !d.description) { d.description = r.reason; filled.push('reason'); }
+          else if (r.description && !d.description) { d.description = r.description; filled.push('reason'); }
+        }
+        // Bank details: from a separate statement, or from the requisition PDF when the statement is scanned in with it.
+        if (kind === 'stmt' || this.stmtIncluded()) {
+          if (d.payoutMethod !== 'EWallet') {
+            let any = false;
+            if (r.bankName) { d.bankName = r.bankName; any = true; }
+            if (r.accountNumber) { d.accountNumber = r.accountNumber; any = true; }
+            if (r.branchCode) { d.branchCode = r.branchCode; any = true; }
+            if (r.accountHolder) { d.accountHolder = r.accountHolder; any = true; }
+            if (any) { filled.push('bank details'); this.hasReadBank.set(true); }
+          } else if (r.bankName || r.accountNumber) {
+            this.eftStash = { bankName: r.bankName ?? '', accountNumber: r.accountNumber ?? '', branchCode: r.branchCode ?? '', accountHolder: r.accountHolder ?? d.supplierName };
+          }
+          if (!d.supplierName && r.accountHolder) { d.supplierName = r.accountHolder; filled.push('name'); }
+        }
+        info(filled.length ? 'Filled in: ' + filled.join(', ') + ' — check below' : 'Read — nothing recognised, fill the details in below');
+      },
+      error: () => { this.untrack(); if (kind === 'req') { this.reading.set(false); this.readInfo.set("Couldn't read it — it will still be attached"); } else this.statementInfo.set("Couldn't read it — it will still be attached"); }
+    });
+  }
   reconSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); }
   needsRecon(): boolean { return this.reconSlot() && !!(this.pendingInvoiceFile || this.pendingLink); }
   sageSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SageAgedPayables' && r.withRecon); }
@@ -1292,18 +1450,31 @@ export class FinanceCreditorsComponent implements OnInit {
   bankFile(): void { const b = this.batch()!; this.api.bankFile(b.id).subscribe({ next: blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.batchNumber}-bank.csv`; a.click(); URL.revokeObjectURL(a.href); this.open(b.id); }, error: e => this.fail(e, "Couldn't export.") }); }
 
   // ── items ──
-  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned, isUrgent: !!it.isUrgent, paymentMode: it.paymentMode === 'PayAndClear' ? 'PayAndClear' : 'Normal' } : { ...EMPTY_ITEM }; this.clearInvoice(); this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new'); }
+  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned, isUrgent: !!it.isUrgent, paymentMode: it.paymentMode === 'PayAndClear' ? 'PayAndClear' : 'Normal', payoutMethod: it.payoutMethod === 'EWallet' ? 'EWallet' : 'EFT' } : { ...EMPTY_ITEM }; this.clearInvoice(); this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new');
+    if (this.itemDraft.payoutMethod === 'EWallet') { this.itemDraft.bankName = ''; this.itemDraft.branchCode = ''; }
+    this.reqForm = this.blankReqForm(); this.eftStash = null;
+    // A new staff payment defaults to filling the requisition in; an existing one that already has a requisition defaults to upload (replace).
+    // Staff: uploading the filled-in requisition (with the bank statement scanned in) is the usual case.
+    this.reqMode.set('upload'); this.stmtIncluded.set(true); }
   cancelItem(): void { this.itemForm.set(null); this.clearInvoice(); }
   saveItem(): void {
     const b = this.batch()!; const f = this.itemForm(); this.busy.set(true);
     if (this.isPrepayment()) { const d = this.itemDraft; d.bankName = ''; d.accountNumber = ''; d.branchCode = ''; d.accountHolder = ''; }
+    if (this.isStaff()) { const d = this.itemDraft; d.payoutMethod = d.payoutMethod === 'EWallet' ? 'EWallet' : 'EFT'; d.paymentMode = 'Normal'; d.supplierVatNumber = ''; if (d.payoutMethod === 'EWallet') { d.bankName = ''; d.branchCode = ''; } }
+    else delete this.itemDraft.payoutMethod;
     const file = this.pendingInvoiceFile, link = this.pendingLink, recon = this.pendingReconFile, sage = this.pendingSageFile;
+    const staff = this.isStaff(), ewallet = this.itemDraft.payoutMethod === 'EWallet';
+    // Upload mode with the statement scanned into the requisition PDF: no separate statement file (even if one was picked before ticking back).
+    const stmtInReq = staff && this.reqMode() === 'upload' && this.stmtIncluded() && !!file;
+    const statement = staff && (this.reqMode() === 'fill' || !this.stmtIncluded()) ? this.pendingStatementFile : null;
+    const fillReq = staff && this.reqMode() === 'fill' && !file ? { ...this.reqForm, employeeName: this.itemDraft.supplierName, amount: this.itemDraft.amount, reason: this.itemDraft.description || this.itemDraft.invoiceNumbers || 'Staff payment' } : null;
     const req = f === 'new' ? this.api.addItem(b.id, this.itemDraft) : this.api.updateItem(b.id, f as number, this.itemDraft);
     req.subscribe({
       next: r => {
         const itemId = f === 'new' ? (r.items[r.items.length - 1]?.id ?? 0) : (f as number);
         this.itemForm.set(null); this.apply(r); this.openItem.set(itemId); this.clearInvoice();
         if (!itemId) return;
+        if (staff) { this.attachStaffDocs(b.id, itemId, file, fillReq, statement, stmtInReq && !ewallet, ewallet); return; }
         const total = (file ? 1 : 0) + (recon ? 1 : 0) + (sage ? 1 : 0); let n = 0;
         const attachSage = (afterMsg: string) => {
           if (!sage) { this.untrack(); this.toast.done(afterMsg); return; }
@@ -1320,6 +1491,27 @@ export class FinanceCreditorsComponent implements OnInit {
       },
       error: e => this.fail(e, "Couldn't save the payment.")
     });
+  }
+  /** Staff payment saved: attach the requisition (uploaded file, or generate it from the form), then the bank statement. Each step is optional. */
+  private attachStaffDocs(batchId: number, itemId: number, reqFile: File | null, fillReq: RequisitionFormInput | null, statement: File | null, stmtInReq: boolean, ewallet: boolean): void {
+    const total = (reqFile || fillReq ? 1 : 0) + (statement ? 1 : 0); let n = 0; const done: string[] = [];
+    const steps: { run: () => Observable<BatchDetail>; ok: string; fail: string }[] = [];
+    if (reqFile) steps.push({ run: () => this.api.upload(batchId, reqFile, 'Requisition', itemId, undefined, undefined, this.track('Attaching the requisition form', reqFile, ++n, total)), ok: 'requisition attached', fail: 'the requisition form could not be attached — upload it under the payment' });
+    else if (fillReq) steps.push({ run: () => this.api.fillRequisition(batchId, itemId, fillReq), ok: 'requisition form generated', fail: 'the requisition form could not be generated — try again from Edit, or upload one' });
+    // Statement scanned in with the requisition: record that on the statement slot so nobody asks for it again.
+    if (stmtInReq && reqFile) steps.push({ run: () => this.api.markNa(batchId, 'BankStatement', itemId, `Included in the requisition PDF (${reqFile.name})`), ok: 'bank statement included', fail: 'the bank statement could not be marked as included — upload it under the payment' });
+    if (statement) steps.push({ run: () => this.api.upload(batchId, statement, 'BankStatement', itemId, undefined, undefined, this.track('Attaching the bank statement', statement, ++n, total)), ok: 'bank statement attached', fail: 'the bank statement could not be attached — upload it under the payment' });
+    const next = (i: number) => {
+      if (i >= steps.length) {
+        this.untrack(); this.busy.set(false);
+        const later = statement || stmtInReq || ewallet ? '' : ' — upload the bank statement under it when you have it';
+        this.toast.done(`Payment saved${done.length ? ', ' + done.join(', ') : ''}${later}`);
+        return;
+      }
+      this.busy.set(true);
+      steps[i].run().subscribe({ next: x => { this.batch.set(x); done.push(steps[i].ok); next(i + 1); }, error: e => { this.untrack(); this.busy.set(false); this.toast.error(e?.error?.message || `Payment saved, but ${steps[i].fail}.`); next(i + 1); } });
+    };
+    next(0);
   }
   removeItem(it: BatchItem): void { const b = this.batch()!; if (!confirm(`Remove ${it.supplierName} and its documents from this batch?`)) return; this.busy.set(true); this.api.deleteItem(b.id, it.id).subscribe({ next: r => this.apply(r), error: e => this.fail(e, "Couldn't remove.") }); }
 
@@ -1339,7 +1531,7 @@ export class FinanceCreditorsComponent implements OnInit {
   pickSupplier(s: SupplierHit): void {
     const d = this.itemDraft; d.supplierName = s.name;
     if (s.vatNumber) d.supplierVatNumber = s.vatNumber;
-    if (this.isPrepayment()) { this.showSuppliers.set(false); this.supplierHits.set([]); return; }
+    if (this.isPrepayment() || (this.isStaff() && this.isEWallet())) { this.showSuppliers.set(false); this.supplierHits.set([]); return; }
     if (s.bankName && !d.bankName) d.bankName = s.bankName;
     if (s.accountNumber && !d.accountNumber) d.accountNumber = s.accountNumber;
     if (s.branchCode && !d.branchCode) d.branchCode = s.branchCode;
@@ -1363,7 +1555,7 @@ export class FinanceCreditorsComponent implements OnInit {
         else if (!d.description && r.orderNumber) { d.description = `Order ${r.orderNumber}`; filled.push('order no.'); }
         if (r.customerAccount && !d.paymentReference) { d.paymentReference = r.customerAccount; filled.push('reference'); }
         // Bank details: prefer what we paid last time (verified), else what is printed on the invoice. Never on prepayments — Treasury captures those.
-        if (this.isPrepayment()) { /* no bank capture */ }
+        if (this.isPrepayment() || (this.isStaff() && this.isEWallet())) { /* no bank capture: prepayments are loaded by Treasury; eWallet has no bank account */ }
         else if (r.supplier?.bankName && !d.bankName) { const s = r.supplier; d.bankName = s.bankName!; d.accountNumber = s.accountNumber ?? ''; d.branchCode = s.branchCode ?? ''; d.accountHolder = s.accountHolder ?? ''; d.paymentReference ||= s.paymentReference ?? ''; filled.push('bank details from last payment'); }
         else if ((r.bankName || r.accountNumber) && !d.bankName && !d.accountNumber) { d.bankName = r.bankName ?? ''; d.accountNumber = r.accountNumber ?? ''; d.branchCode = r.branchCode ?? ''; d.accountHolder = r.accountHolder ?? d.supplierName; filled.push('bank details printed on the invoice — verify against the bank letter'); }
         this.readInfo.set(!r.readable ? 'could not read the text — fill in by hand' : filled.length ? 'filled: ' + filled.join(', ') : 'read, nothing recognised');
@@ -1387,7 +1579,7 @@ export class FinanceCreditorsComponent implements OnInit {
     this.api.suppliers(h.supplierName, 1).subscribe({ next: s => { if (s[0]?.bankName && !d.bankName) this.pickSupplier(s[0]); } });
     if (!h.hasPdf) this.toast.warn('That Books invoice has no PDF — the link will be recorded but you may still need to upload the invoice.');
   }
-  clearInvoice(): void { this.pendingInvoiceFile = null; this.pendingReconFile = null; this.pendingSageFile = null; this.reconInfo.set(''); this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
+  clearInvoice(): void { this.hasReadBank.set(false); this.pendingStatementFile = null; this.statementInfo.set(''); this.pendingInvoiceFile = null; this.pendingReconFile = null; this.pendingSageFile = null; this.reconInfo.set(''); this.pendingLink = null; this.readInfo.set(''); this.picker.set(false); this.pickerHits.set([]); }
   /** Upload progress strip (bottom-right): pct <100 = bytes going up, 100 = server is reading the document. */
   progress = signal<{ label: string; file: string; pct: number; index: number; total: number } | null>(null);
   private track(label: string, file: File, index = 1, total = 1): (pct: number) => void {
@@ -1448,10 +1640,16 @@ export class FinanceCreditorsComponent implements OnInit {
   previewableDocs(it: BatchItem): BatchDoc[] { return it.documents.filter(d => !d.isNotApplicable); }
   /** Review a payment: open its first PDF (tax invoice first) in the preview dialog; the dialog's own buttons handle open/download. */
   previewItem(it: BatchItem): void {
-    const docs = this.previewableDocs(it); if (!docs.length) return;
-    const order = ['TaxInvoice', 'SupplierRecon', 'BankLetter', 'ProofOfPayment'];
-    const first = [...docs].sort((a, c) => (order.indexOf(a.docType) + 1 || 99) - (order.indexOf(c.docType) + 1 || 99))[0];
-    this.openItem.set(it.id); this.openDoc(first);
+    // One scroll: the approval sheet, then every PDF on this payment (spreadsheet recons keep their own preview).
+    const b = this.batch()!; const docs = this.previewableDocs(it); if (!docs.length) return;
+    const sheets = docs.filter(d => d.textMethod === 'sheet').length;
+    this.openItem.set(it.id);
+    PackPreviewDialogComponent.open(this.dialog, {
+      url: this.api.itemReviewUrl(b.id, it.id),
+      title: `${it.supplierName} — approval sheet + ${docs.length - sheets} document${docs.length - sheets === 1 ? '' : 's'}`,
+      subtitle: `${b.batchNumber} · R ${it.amount.toLocaleString('en-ZA', { minimumFractionDigits: 2 })}${sheets ? ` · ${sheets} Excel recon${sheets === 1 ? '' : 's'} open from their own preview below` : ''}`,
+      fileName: `${b.batchNumber}-${it.supplierName}.pdf`
+    });
   }
 
   // ── signature pad ──

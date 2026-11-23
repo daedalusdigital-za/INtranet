@@ -44,6 +44,8 @@ export interface BatchItem {
   id: number; supplierName: string; supplierVatNumber?: string; invoiceNumbers?: string; description?: string; amount: number;
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
   isUrgent: boolean; paymentMode: 'Normal' | 'PayAndClear'; paymentModeTitle?: string;
+  /** Staff payments only: EFT (bank details) or EWallet (cellphone number in accountNumber). */
+  payoutMethod?: 'EFT' | 'EWallet' | null;
   decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string; decidedAt?: string; prepaymentOpen: boolean; paidAt?: string; sortOrder: number;
   required: RequiredDoc[]; recommended: RequiredDoc[]; documents: BatchDoc[];
 }
@@ -75,10 +77,16 @@ export interface ItemInput {
   supplierName: string; supplierVatNumber?: string; invoiceNumbers?: string; description?: string; amount: number;
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
   isUrgent: boolean; paymentMode: 'Normal' | 'PayAndClear';
+  payoutMethod?: 'EFT' | 'EWallet';
+}
+/** Staff payment requisition filled in on the intranet (generated as a PDF on the server). */
+export interface RequisitionFormInput {
+  employeeName: string; employeeNumber?: string; department?: string; reason: string; amount: number;
+  requestedBy?: string; authorisedBy?: string; date?: string; notes?: string;
 }
 export interface CreditorAlert { batchId: number; batchNumber: string; companyCode: string; status: string; code: string; title: string; severity: string; detail?: string; supplier?: string; }
 export interface SupplierHit { name: string; vatNumber?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; supplierAccount?: string; payments: number; invoices: number; lastUsed?: string; source: string; vendorCode?: string | null; agingBalance?: number | null; agingOverdue?: number | null; agingCompany?: string | null; }
-export interface InvoiceRead { supplierName?: string; knownSupplier: boolean; supplier?: SupplierHit; amount?: number; vatAmount?: number; vatNumber?: string; invoiceNumber?: string; documentDate?: string; description?: string; orderNumber?: string; customerAccount?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; suggestedType?: string; pages: number; method?: string; scanned: boolean; readable: boolean; }
+export interface InvoiceRead { supplierName?: string; knownSupplier: boolean; supplier?: SupplierHit; amount?: number; vatAmount?: number; vatNumber?: string; invoiceNumber?: string; documentDate?: string; description?: string; orderNumber?: string; customerAccount?: string; bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; employeeName?: string; employeeNumber?: string; department?: string; reason?: string; suggestedType?: string; pages: number; method?: string; scanned: boolean; readable: boolean; }
 export interface BooksInvoiceHit { id: number; supplierName: string; supplierAccount?: string; invoiceNumber?: string; invoiceDate?: string; total: number; vatAmount?: number; companyName?: string; departmentName?: string; description?: string; status: string; paymentDate?: string; hasPdf: boolean; fileName?: string; alreadyLinked: boolean; }
 
 @Injectable({ providedIn: 'root' })
@@ -162,6 +170,9 @@ export class CreditorPacksService {
   generatedSchedule(id: number) { return this.http.get<GeneratedSchedule>(`${this.base}/batches/${id}/schedule`); }
   generatedScheduleXlsx(id: number) { return this.http.get(`${this.base}/batches/${id}/schedule?format=xlsx`, { responseType: 'blob' }); }
 
+  /** Staff payments: generate the requisition PDF from the form and attach it to the payment (replaces an earlier one). */
+  fillRequisition(id: number, itemId: number, form: RequisitionFormInput) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/requisition`, form); }
+
   submit(id: number, approverUserIds?: number[], sig?: SignaturePayload) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, { approverUserIds: approverUserIds ?? null, ...(sig ?? {}) }); }
   /** Signed approval sheet (schedule + signatures captured so far). */
   approvalSheet(id: number) { return this.http.get(`${this.base}/batches/${id}/approval-sheet.pdf`, { responseType: 'blob' }); }
@@ -169,6 +180,8 @@ export class CreditorPacksService {
   /** Whole pack as one PDF with every document stamped — once the director has signed. */
   signedPack(id: number) { return this.http.get(`${this.base}/batches/${id}/signed-pack.pdf`, { responseType: 'blob' }); }
   reviewPackUrl(id: number) { return `${this.base}/batches/${id}/review-pack.pdf`; }
+  /** One payment: approval sheet + every PDF attached to it. */
+  itemReviewUrl(id: number, itemId: number) { return `${this.base}/batches/${id}/items/${itemId}/review.pdf`; }
   signatureImageUrl(id: number, sigId: number) { return `${this.base}/batches/${id}/signatures/${sigId}/image`; }
   /** Who the pack can be sent to at this step (company approvers, excluding me). `*Fallback` = company has nobody assigned, so everyone with the role is offered. */
   batchApprovers(id: number) { return this.http.get<BatchApprovers>(`${this.base}/batches/${id}/approvers`); }

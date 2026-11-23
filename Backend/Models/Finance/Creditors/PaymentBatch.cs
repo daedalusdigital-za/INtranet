@@ -34,7 +34,7 @@ public class PaymentBatch
     /// <summary>CB-2026-0001</summary>
     [Required, MaxLength(20)] public string BatchNumber { get; set; } = "";
     [Required, MaxLength(10)] public string CompanyCode { get; set; } = "";
-    /// <summary>DailyCreditor | MonthlyCreditor | Prepayment | Intercompany | Utility | StaffPayment | CreditNote</summary>
+    /// <summary>DailyCreditor | MonthlyCreditor | Prepayment | Intercompany | Utility | StaffPayment | RequisitionForm | CreditNote</summary>
     [Required, MaxLength(20)] public string PaymentType { get; set; } = "DailyCreditor";
     public DateTime BatchDate { get; set; } = DateTime.UtcNow.Date;
     [Required, MaxLength(30)] public string Status { get; set; } = CreditorWorkflow.Draft;
@@ -106,6 +106,17 @@ public static class CreditorPaymentModes
     public static string Normalise(string? m) => m == PayAndClear ? PayAndClear : Normal;
 }
 
+/// <summary>How a staff payment is paid out.</summary>
+public static class StaffPayoutMethods
+{
+    public const string Eft = "EFT";
+    public const string EWallet = "EWallet";
+    /// <summary>BankName stored on eWallet payments.</summary>
+    public const string EWalletBankName = "eWallet";
+    public static string Normalise(string? m) => string.Equals(m, EWallet, StringComparison.OrdinalIgnoreCase) ? EWallet : Eft;
+    public static string Title(string? m) => m == EWallet ? "eWallet" : "EFT";
+}
+
 /// <summary>One payment (one beneficiary) inside a batch — a line on the payment schedule.</summary>
 public class PaymentBatchItem
 {
@@ -132,6 +143,13 @@ public class PaymentBatchItem
     public bool IsUrgent { get; set; }
     /// <summary>Normal (default) | PayAndClear — pay and clear the supplier account in the same run.</summary>
     [Required, MaxLength(20)] public string PaymentMode { get; set; } = CreditorPaymentModes.Normal;
+
+    /// <summary>
+    /// Staff payments only: EFT (bank details captured, usually read off the staff member's bank statement) or
+    /// EWallet (cellphone number). For eWallet the number is kept in <see cref="AccountNumber"/> and BankName is "eWallet",
+    /// so the schedule, bank file and PDFs show it without special-casing. Null for every other payment type.
+    /// </summary>
+    [MaxLength(10)] public string? PayoutMethod { get; set; }
 
     /// <summary>Pending | Approved | Queried | Rejected — the director's decision per payment.</summary>
     [Required, MaxLength(20)] public string DecisionStatus { get; set; } = "Pending";

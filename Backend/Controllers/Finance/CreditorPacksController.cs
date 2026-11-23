@@ -433,7 +433,7 @@ public class CreditorPacksController : ControllerBase
 
     public record ItemDto(string SupplierName, string? SupplierVatNumber, string? InvoiceNumbers, string? Description, decimal Amount,
         string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string? PaymentReference, bool StockReturned,
-        bool IsUrgent = false, string? PaymentMode = null);
+        bool IsUrgent = false, string? PaymentMode = null, string? PayoutMethod = null);
 
     [HttpPost("batches/{id:int}/items")]
     public async Task<IActionResult> AddItem(int id, [FromBody] ItemDto dto)
@@ -489,6 +489,21 @@ public class CreditorPacksController : ControllerBase
         {
             // Prepayments are paid off the quote; Treasury loads the beneficiary manually from the bank letter, so nothing is captured here.
             it.BankName = null; it.AccountNumber = null; it.BranchCode = null; it.AccountHolder = null;
+        }
+        else if (CreditorPaymentTypes.IsRequisitionBased(paymentType))
+        {
+            it.PayoutMethod = StaffPayoutMethods.Normalise(d.PayoutMethod);
+            if (it.PayoutMethod == StaffPayoutMethods.EWallet)
+            {
+                // eWallet: the cellphone number rides in AccountNumber so the schedule / bank file show it as-is.
+                it.BankName = StaffPayoutMethods.EWalletBankName; it.AccountNumber = d.AccountNumber?.Replace(" ", "");
+                it.BranchCode = null; it.AccountHolder = string.IsNullOrWhiteSpace(d.AccountHolder) ? it.SupplierName : d.AccountHolder;
+            }
+            else
+            {
+                it.BankName = d.BankName == StaffPayoutMethods.EWalletBankName ? null : d.BankName;
+                it.AccountNumber = d.AccountNumber?.Replace(" ", ""); it.BranchCode = d.BranchCode; it.AccountHolder = d.AccountHolder;
+            }
         }
         else
         {
@@ -609,6 +624,7 @@ public class CreditorPacksController : ControllerBase
                 amount = ex.Amount, vatAmount = ex.VatAmount, vatNumber = ex.VatNumber, invoiceNumber = ex.InvoiceNumber, documentDate = ex.DocumentDate,
                 description = ex.Description, orderNumber = ex.OrderNumber, customerAccount = ex.CustomerAccount,
                 bankName = ex.BankName, accountNumber = ex.AccountNumber, branchCode = ex.BranchCode, accountHolder = ex.AccountHolder,
+                employeeName = ex.EmployeeName, employeeNumber = ex.EmployeeNumber, department = ex.Department, reason = ex.Reason,
                 suggestedType = ex.SuggestedType, pages = ex.Pages, method = ex.Method, scanned = ex.Method == "ocr", readable = ex.Method != "none"
             });
         }
@@ -805,6 +821,55 @@ public class CreditorPacksController : ControllerBase
         await _db.SaveChangesAsync();
         return Ok(await DetailAsync(id));
     }
+
+    public record RequisitionFormDto(string EmployeeName, string? EmployeeNumber, string? Department, string Reason, decimal Amount,
+        string? RequestedBy, string? AuthorisedBy, DateTime? Date, string? Notes);
+
+    /// <summary>
+    /// Staff payments: fill in the requisition on the intranet instead of uploading a scanned one. The form is generated as a
+    /// PDF and stored as the payment's Requisition document (replacing an earlier generated/uploaded one while the pack is editable).
+    /// </summary>
+    [HttpPost("batches/{id:int}/items/{itemId:int}/requisition")]
+    public async Task<IActionResult> FillRequisition(int id, int itemId, [FromBody] RequisitionFormDto dto)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
+        if (!CreditorWorkflow.PreparerEditable.Contains(b.Status)) return Conflict(new { message = "This batch can no longer be edited." });
+        if (!await CanPrepareAsync(b)) return Forbid();
+        if (string.IsNullOrWhiteSpace(dto.EmployeeName)) return BadRequest(new { message = "Who is the requisition for?" });
+        if (string.IsNullOrWhiteSpace(dto.Reason)) return BadRequest(new { message = "Give the reason for the payment." });
+
+        var company = await _db.CreditorCompanies.AsNoTracking().Where(c => c.Code == b.CompanyCode).Select(c => c.Name).FirstOrDefaultAsync() ?? b.CompanyCode;
+        var form = new CreditorPackPdfService.RequisitionForm(
+            company, b.BatchNumber, dto.EmployeeName.Trim(), dto.EmployeeNumber?.Trim(), dto.Department?.Trim(), dto.Reason.Trim(), dto.Amount,
+            string.IsNullOrWhiteSpace(dto.RequestedBy) ? UserName : dto.RequestedBy.Trim(), dto.AuthorisedBy?.Trim(), (dto.Date ?? DateTime.UtcNow.AddHours(2)).Date,
+            dto.Notes?.Trim(), StaffPayoutMethods.Title(it.PayoutMethod), it.BankName, it.AccountNumber, it.BranchCode, it.AccountHolder, UserName, b.PaymentType == CreditorPaymentTypes.StaffPayment);
+        var (bytes, text) = _packPdf.Requisition(form);
+        var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+        // Replace whatever filled the slot before (an earlier version of this form, an upload, or an N/A) — the pack is still a draft.
+        foreach (var old in b.Documents.Where(d => d.ItemId == itemId && d.DocType == CreditorDocTypes.Requisition).ToList())
+        { if (old.StoragePath != null) TryDelete(Abs(old.StoragePath)); _db.PaymentBatchDocuments.Remove(old); b.Documents.Remove(old); }
+
+        var rel = $"Finance/Creditors/{b.CompanyCode}/{b.BatchNumber}/{Guid.NewGuid():N}.pdf";
+        var abs = Abs(rel);
+        Directory.CreateDirectory(Path.GetDirectoryName(abs)!);
+        await System.IO.File.WriteAllBytesAsync(abs, bytes);
+        var fileName = $"Requisition - {SafeName(dto.EmployeeName)}.pdf";
+        b.Documents.Add(new PaymentBatchDocument
+        {
+            BatchId = id, ItemId = itemId, DocType = CreditorDocTypes.Requisition, SuggestedDocType = CreditorDocTypes.Requisition,
+            FileName = Path.GetFileName(rel), OriginalFileName = fileName, ContentType = "application/pdf", Size = bytes.Length,
+            StoragePath = rel, Sha256 = sha, PageCount = 1, ExtractedText = text, TextMethod = "itext",
+            DocumentDate = form.Date, ExtractedAmount = dto.Amount, UploadedByUserId = UserId, UploadedByName = UserName
+        });
+        b.Events.Add(Ev("DocumentUploaded", null, null, $"Requisition filled in on the intranet · {it.SupplierName} R{dto.Amount:N2}"));
+        b.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return Ok(await DetailAsync(id));
+    }
+
+    private static string SafeName(string s) { var n = new string(s.Where(ch => !Path.GetInvalidFileNameChars().Contains(ch)).ToArray()).Trim(); return n.Length > 60 ? n[..60] : n; }
 
     public record DocUpdate(string? DocType, int? ItemId, DateTime? DocumentDate);
 
@@ -1289,9 +1354,19 @@ public class CreditorPacksController : ControllerBase
     {
         var b = await Load(id); if (b == null) return NotFound();
         if (!await InScopeAsync(b.CompanyCode)) return Forbid();
-        if (b.Status == CreditorWorkflow.Draft) return Conflict(new { message = "The pack has not been submitted yet." });
+        // Drafts too: the preparer can read the pack exactly as the approvers will (signatures simply show as outstanding).
         var pdf = await _packPdf.SignedPackAsync(b, rel => Abs(rel), stamp: CreditorWorkflow.Locked.Contains(b.Status));
         return File(pdf, "application/pdf", $"Pack-{b.BatchNumber}.pdf");
+    }
+
+    /// <summary>One payment, in one scroll: the approval sheet followed by every PDF attached to that payment.</summary>
+    [HttpGet("batches/{id:int}/items/{itemId:int}/review.pdf")]
+    public async Task<IActionResult> ReviewItem(int id, int itemId)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
+        var pdf = await _packPdf.SignedPackAsync(b, rel => Abs(rel), stamp: CreditorWorkflow.Locked.Contains(b.Status), itemId: itemId);
+        return File(pdf, "application/pdf", $"Pack-{b.BatchNumber}-{SafeName(it.SupplierName)}.pdf");
     }
 
     /// <summary>Bank file (CSV) for approved payments only. Marks the batch exported.</summary>
@@ -1623,7 +1698,7 @@ public class CreditorPacksController : ControllerBase
         var batchReq = CreditorDocRules.RequiredForBatch(b.PaymentType).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, null) }).ToList();
         bool HasRecon(int itemId) => b.Documents.Any(d => d.ItemId == itemId && d.DocType == CreditorDocTypes.SupplierRecon && d.StoragePath != null);
         var itemReq = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RequiredForItem(b.PaymentType, i.StockReturned, closing, HasRecon(i.Id)).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
-        var itemRec = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RecommendedForItem(b.PaymentType, i.StockReturned, closing, HasRecon(i.Id)).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
+        var itemRec = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RecommendedForItem(b.PaymentType, i.StockReturned, closing, HasRecon(i.Id), i.PayoutMethod).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
         var allFilled = batchReq.All(r => r.filled) && itemReq.Values.All(l => l.All(r => r.filled)) && b.Items.Count > 0;
 
         var canPrepare = await CanPrepareAsync(b);
@@ -1656,7 +1731,7 @@ public class CreditorPacksController : ControllerBase
             items = b.Items.OrderBy(i => i.SortOrder).Select(i => new
             {
                 i.Id, i.SupplierName, i.SupplierVatNumber, i.InvoiceNumbers, i.Description, i.Amount, i.BankName, i.AccountNumber, i.BranchCode, i.AccountHolder, i.PaymentReference,
-                i.StockReturned, i.IsUrgent, i.PaymentMode, paymentModeTitle = CreditorPaymentModes.Title(i.PaymentMode),
+                i.StockReturned, i.IsUrgent, i.PaymentMode, paymentModeTitle = CreditorPaymentModes.Title(i.PaymentMode), i.PayoutMethod,
                 i.DecisionStatus, i.DecisionComment, i.DecidedAt, i.PrepaymentOpen, i.PaidAt, i.SortOrder,
                 required = itemReq[i.Id],
                 recommended = itemRec[i.Id],

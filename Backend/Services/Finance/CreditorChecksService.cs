@@ -64,8 +64,30 @@ public class CreditorChecksService
     private static readonly Regex CustomerAccRx = new(@"(?:CUSTOMER|CLIENT|DEBTOR|YOUR)\s*(?:ACC(?:OUNT)?|A/C|REF(?:ERENCE)?|CODE|NO)\s*(?:NO|NUMBER|#)?\s*[:.\-]?\s*([A-Z0-9][A-Z0-9\-/]{2,20})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PoRefRx = new(@"(?:ORDER|P/?O)\s*(?:NO|NUMBER|#|REF)?\s*[:.\-]?\s*([A-Z0-9][A-Z0-9\-/]{3,20})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    // Staff requisitions: "Employee name: …", "Employee no: …", "Department: …", "Amount requested: R …", "Reason: …". Captures stay on one line.
+    private static readonly Regex EmployeeNameRx = new(@"(?:EMPLOYEE'?S?[ \t]*(?:FULL[ \t]*)?NAMES?|NAME[ \t]+OF[ \t]+(?:THE[ \t]+)?EMPLOYEE|STAFF[ \t]*(?:MEMBER[ \t]*)?NAMES?|NAME[ \t]*(?:&|AND)[ \t]*SURNAME|FULL[ \t]*NAMES?|PAYEE(?:[ \t]*NAME)?|PAY[ \t]+TO)[ \t]*[:.\-]?[ \t]*([A-Za-z][A-Za-z'\-]+(?:[ \t]+[A-Za-z][A-Za-z'\-]+){0,4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex EmployeeNoRx = new(@"(?:EMPLOYEE|STAFF|EMP)\.?[ \t]*(?:NO|NUMBER|NUM|#|CODE|ID)\.?[ \t]*[:.\-]?[ \t]*([A-Z0-9][A-Z0-9\-/]{1,15})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex DepartmentRx = new(@"\b(?:DEPARTMENT|DEPT)\.?[ \t]*[:.\-]?[ \t]*([A-Za-z][A-Za-z&/\-]*(?:[ \t]+[A-Za-z&/\-]+){0,3})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex RequestedAmountRx = new(@"(?:AMOUNT(?:[ \t]+(?:REQUESTED|REQUIRED|PAYABLE|TO[ \t]+BE[ \t]+PAID))?|SUM[ \t]+OF)[ \t]*(?:\(R\))?[ \t]*[:\-]?[ \t]*R?[ \t]*([\d \t,]{1,12}[.,]\d{2})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex ReasonRx = new(@"(?:REASON|PURPOSE|MOTIVATION)(?:[ \t]+FOR[ \t]+(?:THE[ \t]+)?(?:PAYMENT|REQUEST|REQUISITION))?[ \t]*[:\-][ \t]*([^\r\n]{4,140})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly HashSet<string> NotAName = new(StringComparer.OrdinalIgnoreCase) { "NO", "NUMBER", "ID", "CODE", "SIGNATURE", "DATE", "DEPARTMENT", "DEPT", "POSITION", "TITLE", "SURNAME", "AND", "OF" };
+
+    private static string? CleanName(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        var words = Regex.Replace(s, @"\s+", " ").Trim().Split(' ').TakeWhile(w => !NotAName.Contains(w.TrimEnd(':', '.'))).ToList();
+        if (words.Count == 0) return null;
+        var n = string.Join(' ', words);
+        return n.Length < 3 ? null : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(n.ToLowerInvariant());
+    }
+
     public sealed class Extracted
     {
+        /// <summary>Staff requisitions: who is being paid, their employee number and department, and the reason given.</summary>
+        public string? EmployeeName { get; set; }
+        public string? EmployeeNumber { get; set; }
+        public string? Department { get; set; }
+        public string? Reason { get; set; }
         public string Text { get; set; } = "";
         public string Method { get; set; } = "none";
         public int Pages { get; set; }
@@ -137,6 +159,11 @@ public class CreditorChecksService
         ex.CustomerAccount = CustomerAccRx.Match(t) is { Success: true } cm ? cm.Groups[1].Value.ToUpperInvariant() : null;
         ex.OrderNumber = PoRefRx.Match(t) is { Success: true } om ? om.Groups[1].Value.ToUpperInvariant() : null;
         ex.Description = GuessDescription(t);
+        ex.EmployeeName = CleanName(EmployeeNameRx.Match(t).Groups[1].Value);
+        ex.EmployeeNumber = EmployeeNoRx.Match(t) is { Success: true } en && !NotAName.Contains(en.Groups[1].Value) ? en.Groups[1].Value.ToUpperInvariant() : null;
+        ex.Department = DepartmentRx.Match(t) is { Success: true } dm ? CleanName(dm.Groups[1].Value) : null;
+        ex.Reason = ReasonRx.Match(t) is { Success: true } rm ? rm.Groups[1].Value.Trim() : null;
+        ex.Amount ??= ParseAmount(RequestedAmountRx.Match(t).Groups[1].Value.Replace("\t", " "));
         return ex;
     }
 
@@ -249,6 +276,8 @@ public class CreditorChecksService
         if (Has("CREDIT NOTE SUMMARY", "CREDIT NOTE REQUEST", "CREDIT NOTE")) return CreditorDocTypes.CreditNoteForm;
         if (Has("RETURN GRV", "GOODS RETURNED", "RETURNS NOTE")) return CreditorDocTypes.WarehouseReturnGrv;
         if (Has("COLLECTION SLIP", "COLLECTED BY")) return CreditorDocTypes.CustomerCollectionSlip;
+        if (Has("REQUISITION")) return CreditorDocTypes.Requisition;
+        if (Has("BANK STATEMENT", "TRANSACTION HISTORY", "CHEQUE ACCOUNT STATEMENT", "SAVINGS ACCOUNT STATEMENT")) return CreditorDocTypes.BankStatement;
         if (Has("STATEMENT OF ACCOUNT", "STATEMENT")) return CreditorDocTypes.SupplierStatement;
         if (Has("PURCHASE ORDER", "P/O NUMBER", "PO NUMBER", "ORDER NO")) return CreditorDocTypes.PurchaseOrder;
         if (Has("GOODS RECEIVED", "GRV", "DELIVERY NOTE", "PROOF OF DELIVERY", "RECEIVED IN GOOD ORDER")) return CreditorDocTypes.Grv;
@@ -321,11 +350,13 @@ public class CreditorChecksService
 
         // C1a — recommended documents (quote, PO, GRV, proof of work, bank letter…): not blocking, but the approvers should know
         foreach (var it in items)
-            foreach (var dt in CreditorDocRules.RecommendedForItem(batch.PaymentType, it.StockReturned, closingPrepayment, HasRecon(it)))
+            foreach (var dt in CreditorDocRules.RecommendedForItem(batch.PaymentType, it.StockReturned, closingPrepayment, HasRecon(it), it.PayoutMethod))
                 if (!docs.Any(d => d.DocType == dt && d.ItemId == it.Id && (d.IsNotApplicable || d.StoragePath != null)))
                     Add("C1a", "Supporting document not attached", "REVIEW",
                         dt == CreditorDocTypes.BankLetter
                             ? $"No bank letter for {it.SupplierName} — the bank details on the schedule have not been confirmed against a letter."
+                            : dt == CreditorDocTypes.BankStatement
+                            ? $"No bank statement for {it.SupplierName} yet — the EFT bank details have not been confirmed against a statement. Upload it when you have it."
                             : $"{Label(dt)} not attached for {it.SupplierName} — attach it if you have it, or mark N/A with a reason.", it, dt);
 
         // C1c — an invoice without its recon (prepayments before delivery excluded)
@@ -359,8 +390,9 @@ public class CreditorChecksService
             if (letter == null) continue;
             if (letter.DocumentDate is { } ld)
             {
+                // Relaxed for now: an old bank letter / statement is a warning for the approvers, not a block.
                 if (ld < DateTime.UtcNow.AddMonths(-3))
-                    Add("C2", "Bank letter older than 3 months", "FAIL", $"Bank letter for {it.SupplierName} is dated {ld:dd MMM yyyy}.", it, CreditorDocTypes.BankLetter);
+                    Add("C2", "Bank letter older than 3 months", "REVIEW", $"Bank letter for {it.SupplierName} is dated {ld:dd MMM yyyy} — older than 3 months. Check the bank details are still current.", it, CreditorDocTypes.BankLetter);
             }
             else Add("C2", "Bank letter date not found", "REVIEW", $"Could not read a date off the bank letter for {it.SupplierName} — confirm it is less than 3 months old.", it, CreditorDocTypes.BankLetter);
 
@@ -373,13 +405,37 @@ public class CreditorChecksService
                 Add("C3", "Bank account differs from letter", "FAIL", $"Schedule says {Mask(acc)} but the bank letter for {it.SupplierName} shows {Mask(letter.ExtractedAccountNumber)}.", it, CreditorDocTypes.BankLetter);
         }
 
+        // C3s — staff payments: payout details. Lenient on purpose — everything here is REVIEW, nothing blocks the pack.
+        var isStaff = CreditorPaymentTypes.IsRequisitionBased(batch.PaymentType); // staff payments and requisition-form payments
+        if (isStaff)
+            foreach (var it in items)
+            {
+                if (it.PayoutMethod == StaffPayoutMethods.EWallet)
+                {
+                    var cell = Regex.Replace(it.AccountNumber ?? "", @"\D", "");
+                    if (cell.Length == 0) Add("C3s", "eWallet number missing", "REVIEW", $"No cellphone number captured for the eWallet payment to {it.SupplierName}.", it);
+                    else if (cell.Length is < 10 or > 11) Add("C3s", "Check the eWallet number", "REVIEW", $"eWallet number '{it.AccountNumber}' for {it.SupplierName} doesn't look like a 10-digit cellphone number.", it);
+                    continue;
+                }
+                var acc = Digits(it.AccountNumber ?? "");
+                if (acc == null) { Add("C3s", "Bank details incomplete", "REVIEW", $"No bank account number captured for the EFT to {it.SupplierName}.", it); continue; }
+                // The statement is often scanned in with the requisition (one PDF) — then look for the account there.
+                var stmt = docs.FirstOrDefault(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.BankStatement && d.StoragePath != null)
+                        ?? docs.FirstOrDefault(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.Requisition && d.StoragePath != null
+                                                    && docs.Any(n => n.ItemId == it.Id && n.DocType == CreditorDocTypes.BankStatement && n.IsNotApplicable));
+                if (stmt != null && stmt.TextMethod != "none" && !Regex.Replace(stmt.ExtractedText ?? "", @"\D", "").Contains(acc))
+                    Add("C3s", "Account not found on bank statement", "REVIEW", $"Could not find account {Mask(acc)} on the bank statement for {it.SupplierName} — check it by eye.", it, CreditorDocTypes.BankStatement);
+            }
+
         // C4 — duplicate invoice numbers (inside the batch and against other batches of the same company)
+        // Staff payments carry requisition references rather than invoice numbers, so a repeat there is only a REVIEW note.
+        var dupSeverity = isStaff ? "REVIEW" : "FAIL";
         var invMap = new Dictionary<string, List<PaymentBatchItem>>(StringComparer.OrdinalIgnoreCase);
         foreach (var it in items)
             foreach (var inv in SplitInvoices(it.InvoiceNumbers))
             { if (!invMap.TryGetValue(inv, out var l)) invMap[inv] = l = new(); l.Add(it); }
         foreach (var (inv, list) in invMap.Where(k => k.Value.Count > 1))
-            Add("C4", "Duplicate invoice in batch", "FAIL", $"Invoice {inv} appears {list.Count} times ({string.Join(", ", list.Select(l => l.SupplierName).Distinct())}).", list[0]);
+            Add("C4", isStaff ? "Duplicate reference in batch" : "Duplicate invoice in batch", dupSeverity, $"{(isStaff ? "Reference" : "Invoice")} {inv} appears {list.Count} times ({string.Join(", ", list.Select(l => l.SupplierName).Distinct())}).", list[0]);
 
         if (invMap.Count > 0)
         {
@@ -391,11 +447,11 @@ public class CreditorChecksService
             foreach (var o in others)
                 foreach (var inv in SplitInvoices(o.InvoiceNumbers))
                     if (invMap.TryGetValue(inv, out var mine))
-                        Add("C4", "Invoice already paid or in another batch", "FAIL", $"Invoice {inv} ({o.SupplierName}) is on batch {o.BatchNumber} ({CreditorWorkflow.Title(o.Status)}).", mine[0]);
+                        Add("C4", isStaff ? "Reference already used on another batch" : "Invoice already paid or in another batch", dupSeverity, $"{(isStaff ? "Reference" : "Invoice")} {inv} ({o.SupplierName}) is on batch {o.BatchNumber} ({CreditorWorkflow.Title(o.Status)}).", mine[0]);
         }
 
         // C5 — VAT number format (SA: 10 digits starting with 4)
-        foreach (var it in items)
+        foreach (var it in items.Where(_ => !isStaff)) // staff are not VAT vendors
         {
             var vat = it.SupplierVatNumber?.Replace(" ", "");
             var inv = docs.FirstOrDefault(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.TaxInvoice && d.StoragePath != null);
@@ -457,9 +513,14 @@ public class CreditorChecksService
         {
             var key = it.SupplierName.Trim().ToUpperInvariant();
             var prev = history.FirstOrDefault(h => h.SupplierName.Trim().ToUpperInvariant() == key);
-            if (prev == null) { Add("C11", "First payment to this beneficiary", "REVIEW", $"{it.SupplierName} has not been paid through the system before — verify the bank letter by phone (AVS).", it); continue; }
-            if (batch.PaymentType != CreditorPaymentTypes.Prepayment && Digits(prev.AccountNumber ?? "") != Digits(it.AccountNumber ?? ""))
-                Add("C11", "Bank account changed", "FAIL", $"{it.SupplierName} was last paid into {Mask(Digits(prev.AccountNumber ?? ""))} (batch {prev.BatchNumber}); this schedule uses {Mask(Digits(it.AccountNumber ?? ""))}. Confirm with the supplier before approving.", it);
+            if (prev == null)
+            {
+                if (!isStaff) Add("C11", "First payment to this beneficiary", "REVIEW", $"{it.SupplierName} has not been paid through the system before — verify the bank letter by phone (AVS).", it);
+                continue;
+            }
+            // Staff: a changed account is worth a look but never blocks (people change banks / switch to eWallet); eWallet numbers aren't compared.
+            if (batch.PaymentType != CreditorPaymentTypes.Prepayment && it.PayoutMethod != StaffPayoutMethods.EWallet && Digits(prev.AccountNumber ?? "") != Digits(it.AccountNumber ?? ""))
+                Add("C11", "Bank account changed", isStaff ? "REVIEW" : "FAIL", $"{it.SupplierName} was last paid into {Mask(Digits(prev.AccountNumber ?? ""))} (batch {prev.BatchNumber}); this schedule uses {Mask(Digits(it.AccountNumber ?? ""))}. Confirm with the supplier before approving.", it);
 
             // C12 — same amount to the same supplier within 7 days
             var dup = history.FirstOrDefault(h => h.SupplierName.Trim().ToUpperInvariant() == key && h.Amount == it.Amount && h.DirectorSignedAt > DateTime.UtcNow.AddDays(-7));
@@ -489,7 +550,7 @@ public class CreditorChecksService
 
     public static string Label(string key)
     {
-        if (key == CreditorDocTypes.Requisition) return "Request form";
+        if (key == CreditorDocTypes.Requisition) return "Requisition / request form";
         var d = CreditorDocTypes.All.FirstOrDefault(x => x.Key == key);
         if (d.Key != null) return d.Title;
         var p = CreditorPaymentTypes.All.FirstOrDefault(x => x.Key == key);
