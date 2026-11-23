@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../environments/environment';
 
@@ -21,6 +21,26 @@ export interface Batch {
   events: { id: number; at: string; userName: string; action: string; comment?: string }[];
   can: { accountant: boolean; direct: boolean; sign: boolean; directorConflict?: string | null };
 }
+export interface Executive {
+  awaitingForMe: number; awaitingAmount: number; nextPayDay: string; paidThisMonth: number; awaitingPopAmount: number; signedLast30: number; signedLast30Amount: number;
+  awaiting: { id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; totalAmount: number; items: number; forMe: boolean; waitingDays: number }[];
+  pipeline: { status: string; title: string; count: number; amount: number }[];
+  schedule: { date: string; count: number; amount: number; paid: number; loaded: number }[];
+  paidByMonth: { label: string; total: number }[];
+  topSuppliers: { supplier: string; amount: number; payments: number }[];
+  perCompany: { code: string; name: string; awaitingDirector: number; awaitingDirectorCount: number; onSchedule: number; paidThisMonth: number; awaitingPop: number }[];
+}
+export interface PayLine { id: number; supplierName: string; amount: number; invoiceNumbers?: string; description?: string; bankName?: string; accountNumber?: string; paymentReference?: string; paidAt?: string; hasPop?: boolean; popDocId?: number | null; }
+export interface PayBatch {
+  id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; status: string; statusTitle: string; scheduledPayDate: string; overdue: boolean;
+  directorName?: string; directorSignedAt?: string; paidAt?: string; approvedAmount: number; approvedItems: number; popDone: number; popMissing: number; items: PayLine[];
+}
+export interface PaySchedule { nextPayDay: string; totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number }; batches: PayBatch[]; }
+export interface HistoryBatch {
+  id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; status: string; statusTitle: string; directorName?: string; paidAt?: string; closedAt?: string;
+  amount: number; items: number; popDone: number; popMissing: number; lines: PayLine[];
+}
+export interface History { count: number; total: number; popMissing: number; companies: { code: string; name: string }[]; batches: HistoryBatch[]; }
 export interface Meta { me: { isAdmin: boolean; clerk: boolean; accountant: boolean; director: boolean; bank: boolean; hasSignature: boolean } }
 
 @Injectable({ providedIn: 'root' })
@@ -39,7 +59,23 @@ export class Api {
   sign(id: number, body: { typedName: string; comment?: string; signatureImageBase64?: string; useSavedSignature: boolean }) { return this.http.post<Batch>(`${this.cr}/batches/${id}/sign`, body); }
   accountant(id: number, body: { decision: 'approve' | 'query'; comment?: string; directorUserIds?: number[]; signatureImageBase64?: string; useSavedSignature: boolean }) { return this.http.post<Batch>(`${this.cr}/batches/${id}/accountant`, body); }
 
+  // Read-only director views
+  executive() { return this.http.get<Executive>(`${this.cr}/executive`); }
+  schedule() { return this.http.get<PaySchedule>(`${this.cr}/schedule`); }
+  history(f: { from?: string; to?: string; company?: string; q?: string }) {
+    let params = new HttpParams().set('take', 300);
+    for (const [k, v] of Object.entries(f)) if (v) params = params.set(k, v);
+    return this.http.get<History>(`${this.cr}/history`, { params });
+  }
+
   blob(url: string) { return this.http.get(url, { responseType: 'blob' }); }
+  /** Fetch a PDF with the exec token and open it in a new tab (falls back to the same tab on phones that block pop-ups). */
+  openPdf(url: string, done?: (ok: boolean) => void) {
+    this.blob(url).subscribe({
+      next: bl => { const u = URL.createObjectURL(bl); const w = window.open(u, '_blank'); if (!w) location.href = u; done?.(true); },
+      error: () => { done?.(false); alert("Couldn't open the document."); }
+    });
+  }
   reviewPdfUrl(id: number) { return `${this.cr}/batches/${id}/review-pack.pdf`; }
   /** One payment: approval sheet + every PDF attached to it. */
   itemReviewUrl(id: number, itemId: number) { return `${this.cr}/batches/${id}/items/${itemId}/review.pdf`; }

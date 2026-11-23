@@ -47,6 +47,8 @@ namespace ProjectTracker.API.Services.Finance
             if (!p.StartsWith(cr, StringComparison.OrdinalIgnoreCase)) return false;
             var rest = p[cr.Length..];
             if (rest is "/meta" or "/inbox") return get;
+            // Read-only director views: overview (executive), pay-runs (schedule) and payment history. Changing a pay-run stays on the intranet.
+            if (rest is "/executive" or "/schedule" or "/history") return get;
             // /batches/{id}, /batches/{id}/review-pack.pdf, /batches/{id}/approval-sheet.pdf, /batches/{id}/documents/{docId}/file
             var seg = rest.Split('/', StringSplitOptions.RemoveEmptyEntries);
             if (seg.Length < 2 || seg[0] != "batches" || !int.TryParse(seg[1], out _)) return false;
