@@ -237,21 +237,21 @@ namespace ProjectTracker.API.Controllers.Logistics
                 .ThenBy(v => v.RegistrationNumber)
                 .ToList();
 
-                // Save updated locations to database (async, don't wait)
+                // Save updated locations to database. Awaited inside the request: the DbContext is
+                // request-scoped, so a fire-and-forget save raced its disposal (ObjectDisposedException)
+                // and ran concurrently with other queries on the same connection (MARS errors).
+                // A failed save is logged only — the live data is still returned.
                 if (vehiclesToUpdate.Any())
                 {
-                    _ = Task.Run(async () =>
+                    try
                     {
-                        try
-                        {
-                            await _context.SaveChangesAsync();
-                            _logger.LogInformation($"Saved {vehiclesToUpdate.Count} vehicle locations to database");
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Error saving vehicle locations");
-                        }
-                    });
+                        await _context.SaveChangesAsync(HttpContext.RequestAborted);
+                        _logger.LogInformation($"Saved {vehiclesToUpdate.Count} vehicle locations to database");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error saving vehicle locations");
+                    }
                 }
 
                 _logger.LogInformation($"Returning {result.Count} vehicles with live data. {result.Count(v => v.Speed > 0)} moving.");
