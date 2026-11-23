@@ -306,6 +306,10 @@ interface Permission {
                         <button aria-label="Reset Password" mat-icon-button matTooltip="Reset Password" (click)="openResetPasswordDialog(user)">
                           <mat-icon>lock_reset</mat-icon>
                         </button>
+                        <button aria-label="Email a reset link" mat-icon-button matTooltip="Email a reset link so they choose their own password"
+                                [disabled]="!user.isActive || sendingResetLinkFor === user.userId" (click)="sendResetLink(user)">
+                          <mat-icon>forward_to_inbox</mat-icon>
+                        </button>
                         <button [attr.aria-label]="user.isActive ? 'Deactivate' : 'Activate'" mat-icon-button [matTooltip]="user.isActive ? 'Deactivate' : 'Activate'" 
                                 (click)="toggleUserStatus(user)">
                           <mat-icon>{{ user.isActive ? 'block' : 'check_circle' }}</mat-icon>
@@ -970,6 +974,36 @@ export class UserManagementComponent implements OnInit {
           });
       }
     });
+  }
+
+  /** Row whose reset-link email is being sent (disables its button meanwhile). */
+  sendingResetLinkFor: number | null = null;
+
+  /** Emails the user a single-use link (24 h) to choose their own password. */
+  async sendResetLink(user: User): Promise<void> {
+    if (!user.email) {
+      this.toast.error(`${user.name} has no email address`);
+      return;
+    }
+    const ok = await this.confirm.ask({
+      title: `Email a reset link to ${user.name} ${user.surname}?`,
+      message: `We'll send ${user.email} a link to choose a new password. It works once and expires in 24 hours. Their current password keeps working until they use it.`,
+      confirmText: 'Send link'
+    });
+    if (!ok) return;
+    this.sendingResetLinkFor = user.userId;
+    this.http.post<{ message: string }>(`${environment.apiUrl}/users/${user.userId}/send-reset-link`, {}, { headers: this.getHeaders() })
+      .subscribe({
+        next: (res) => {
+          this.sendingResetLinkFor = null;
+          this.toast.done(res?.message || `Reset link sent to ${user.email}`);
+        },
+        error: (err) => {
+          this.sendingResetLinkFor = null;
+          // errorInterceptor rethrows { status, message } — the server's message is err.message
+          this.toast.error(err?.message || err?.error?.message || 'Failed to send the reset link');
+        }
+      });
   }
 
   toggleUserStatus(user: User): void {

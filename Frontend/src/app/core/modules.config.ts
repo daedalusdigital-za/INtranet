@@ -302,7 +302,13 @@ export function getModuleRoutes(): Routes {
     { 
       path: 'login', 
       title: 'Sign in',
-      loadComponent: () => import('../components/login/login.component').then(m => m.LoginComponent) 
+      loadComponent: () => import('../components/login/login.component').then(m => m.LoginComponent)
+    },
+    // Opened from the password-reset email an admin sends (Admin → Users → Email a reset link)
+    {
+      path: 'reset-password',
+      title: 'Choose a new password',
+      loadComponent: () => import('../components/reset-password/reset-password.component').then(m => m.ResetPasswordComponent)
     },
     // Public shipment tracking (QR code on the waybill) — no sign-in, no personal data shown
     {

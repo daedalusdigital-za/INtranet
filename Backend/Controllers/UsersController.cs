@@ -21,14 +21,18 @@ namespace ProjectTracker.API.Controllers
         private readonly ILogger<UsersController> _logger;
         private readonly IAuditLogService _auditLogService;
         private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
+        private readonly IEmailService _email;
+        private readonly IConfiguration _config;
 
         public UsersController(ApplicationDbContext context, ILogger<UsersController> logger, IAuditLogService auditLogService,
-            Microsoft.Extensions.Caching.Memory.IMemoryCache cache)
+            Microsoft.Extensions.Caching.Memory.IMemoryCache cache, IEmailService email, IConfiguration config)
         {
             _context = context;
             _logger = logger;
             _auditLogService = auditLogService;
             _cache = cache;
+            _email = email;
+            _config = config;
         }
 
         // GET: api/users
@@ -840,6 +844,9 @@ namespace ProjectTracker.API.Controllers
                 return Forbid();
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            // An admin-set password supersedes any reset link still waiting in the user's inbox.
+            user.PasswordResetTokenHash = null;
+            user.PasswordResetExpiresAt = null;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -852,6 +859,64 @@ namespace ProjectTracker.API.Controllers
                 $"Password reset for user: {user.Name} {user.Surname} ({user.Email})");
 
             return Ok(new { message = "Password reset successfully" });
+        }
+
+        // POST: api/users/{id}/send-reset-link
+        // Emails the user a single-use link (valid 24 hours) to choose their own password.
+        // Their current password keeps working until they use the link.
+        [HttpPost("{id}/send-reset-link")]
+        [Authorize(Roles = AppRoles.Admins)]
+        public async Task<IActionResult> SendResetLink(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound(new { message = "User not found" });
+            if (!CanManage(user)) return Forbid();
+            if (!user.IsActive) return BadRequest(new { message = "This user is deactivated. Activate them before sending a reset link." });
+            if (string.IsNullOrWhiteSpace(user.Email) || !user.Email.Contains('@'))
+                return BadRequest(new { message = "This user has no email address to send the link to." });
+
+            var (token, hash) = ProjectTracker.API.Security.PasswordResetTokens.Create();
+            var expires = DateTime.UtcNow.Add(ProjectTracker.API.Security.PasswordResetTokens.Lifetime);
+            user.PasswordResetTokenHash = hash;
+            user.PasswordResetExpiresAt = expires;
+            await _context.SaveChangesAsync();
+
+            var link = $"{IntranetUrl()}/reset-password?token={token}";
+            var name = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(user.Name) ? "there" : user.Name);
+            var html =
+                $"<p>Hi {name},</p>" +
+                "<p>An administrator has sent you a link to set a new password for the Promed Intranet.</p>" +
+                $"<p><a href=\"{link}\" style=\"display:inline-block;padding:10px 18px;background:#2167a8;color:#fff;text-decoration:none;border-radius:6px;font-weight:600\">Choose a new password</a></p>" +
+                $"<p>Or copy this link into your browser:<br><a href=\"{link}\">{link}</a></p>" +
+                "<p>The link works once and expires in 24 hours. Your current password keeps working until you use it.</p>" +
+                "<p>If you didn't expect this email, you can ignore it, and let IT support know.</p>";
+
+            if (!await _email.SendEmailAsync(user.Email, "Set your Promed Intranet password", html))
+            {
+                // Don't leave a live link behind that nobody received.
+                user.PasswordResetTokenHash = null;
+                user.PasswordResetExpiresAt = null;
+                await _context.SaveChangesAsync();
+                _logger.LogWarning("Password reset link email to {Email} failed: {Err}", user.Email, _email.LastError);
+                // 422, not 502: the frontend error interceptor replaces 5xx messages with a generic
+                // "service unavailable", and the admin needs to see why the email failed.
+                return UnprocessableEntity(new { message = $"The email could not be sent{(string.IsNullOrWhiteSpace(_email.LastError) ? "." : ": " + _email.LastError)}" });
+            }
+
+            _auditLogService.SetHttpContext(HttpContext);
+            await _auditLogService.LogAsync("Password Reset Link Sent", "security", "User", id,
+                $"Password reset link emailed to {user.Name} {user.Surname} ({user.Email})");
+
+            return Ok(new { message = $"Reset link sent to {user.Email}", email = user.Email, expiresAt = expires });
+        }
+
+        /// <summary>Base URL for links in emails: Intranet:PublicUrl if set, else the admin's own browser origin.</summary>
+        private string IntranetUrl()
+        {
+            var u = _config["Intranet:PublicUrl"] ?? _config["App:PublicUrl"];
+            if (string.IsNullOrWhiteSpace(u)) u = Request.Headers.Origin.ToString();
+            if (string.IsNullOrWhiteSpace(u)) u = $"{Request.Scheme}://{Request.Host}";
+            return u.TrimEnd('/');
         }
 
         // POST: api/users/{id}/toggle-active

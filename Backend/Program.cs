@@ -78,6 +78,19 @@ builder.Services.AddLogisticsServices();
 builder.Services.AddAiServices();
 builder.Services.AddFinanceAndEmailServices();
 
+// Local/test runs against a copy of the database: Hosting:SkipBackgroundServices=true drops this
+// app's own background jobs (mailbox monitor, TFN/Azure sync, flow scheduler, CarTrack pollers…)
+// so a second instance doesn't log into mailboxes, send emails or call external APIs.
+// Framework hosted services (the web server itself) are kept. Off by default.
+if (builder.Configuration.GetValue("Hosting:SkipBackgroundServices", false))
+{
+    var ownAssembly = typeof(Program).Assembly;
+    var ownJobs = builder.Services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) &&
+        (d.ImplementationType?.Assembly == ownAssembly || d.ImplementationFactory?.Method.DeclaringType?.Assembly == ownAssembly)).ToList();
+    foreach (var d in ownJobs) builder.Services.Remove(d);
+    Console.WriteLine($"Hosting:SkipBackgroundServices — {ownJobs.Count} background services disabled");
+}
+
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------

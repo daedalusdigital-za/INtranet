@@ -45,7 +45,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private checkChatbotVisibility(): void {
     const currentUser = localStorage.getItem('currentUser') || localStorage.getItem('user');
-    const isLoginPage = this.router.url === '/login' || this.router.url === '/';
+    const path = this.router.url.split('?')[0];
+    const isLoginPage = path === '/login' || path === '/' || path === '/reset-password';
     this.showPaperless = !!currentUser && !isLoginPage;
     // Welly (AI assistant) is a module like any other: only for people ticked for "AI Assistant" (admins always)
     this.showChatbot = this.showPaperless && this.auth.hasModulePermission('ai');

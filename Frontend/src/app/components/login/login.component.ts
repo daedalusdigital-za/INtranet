@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -79,7 +79,7 @@ import { AuthService } from '../../services/auth.service';
             {{ loading ? 'Signing in…' : 'Sign in' }}
           </button>
 
-          <p class="help"><b>Forgot your password or locked out?</b> Ask IT support to reset it, or log a ticket from a colleague's computer.</p>
+          <p class="help"><b>Forgot your password or locked out?</b> Ask IT support to email you a reset link, or log a ticket from a colleague's computer.</p>
         </form>
       </main>
     </div>
@@ -142,10 +142,12 @@ export class LoginComponent {
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    route: ActivatedRoute
   ) {
     this.loginForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
+      // ?email= is set when arriving from the reset-password page
+      email: [route.snapshot.queryParamMap.get('email') ?? '', [Validators.required, Validators.email]],
       password: ['', Validators.required]
     });
   }

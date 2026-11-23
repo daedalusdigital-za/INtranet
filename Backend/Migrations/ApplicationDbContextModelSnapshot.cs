@@ -9945,6 +9945,13 @@ namespace ProjectTracker.API.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<DateTime?>("PasswordResetExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PasswordResetTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("Permissions")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");

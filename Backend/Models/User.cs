@@ -67,6 +67,12 @@ namespace ProjectTracker.API.Models
 
         public DateTime? LastLoginAt { get; set; }
 
+        // Self-service password reset (link emailed by an admin). Only the SHA-256 hash of the
+        // token is stored; the link is single-use and a newer link replaces an older one.
+        [MaxLength(64)]
+        public string? PasswordResetTokenHash { get; set; }
+        public DateTime? PasswordResetExpiresAt { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
