@@ -106,38 +106,38 @@ import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
   `,
   styles: [`
 .ph-filters { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:14px; }
-.ph-filters label { display:flex; flex-direction:column; gap:4px; font-size:12px; color: var(--text-muted,#64748b); }
+.ph-filters label { display:flex; flex-direction:column; gap:4px; font-size:12px; color: var(--color-text-3); }
 .ph-filters label.grow { flex:1; min-width:220px; }
-.ph-filters input, .ph-filters select { height:38px; padding:0 10px; border:1px solid var(--border,#e5e7eb); border-radius:8px; background: var(--surface,#fff); color: inherit; font: inherit; }
+.ph-filters input, .ph-filters select { height:38px; padding:0 10px; border:1px solid var(--color-line); border-radius:8px; background: var(--surface); color: inherit; font: inherit; }
 .quick { display:flex; gap:6px; flex-wrap:wrap; }
-.ph-supplier { display:flex; align-items:center; gap:8px; padding:8px 12px; margin-bottom:12px; border-radius:10px; background:#eef2ff; color:#3730a3; font-size:13px; mat-icon { font-size:18px; width:18px; height:18px; } button { margin-left:auto; } }
-.ph-loading, .ph-empty { display:flex; align-items:center; gap:10px; padding:28px; justify-content:center; color: var(--text-muted,#64748b); }
+.ph-supplier { display:flex; align-items:center; gap:8px; padding:8px 12px; margin-bottom:12px; border-radius:10px; background:var(--color-primary-soft); color:var(--color-primary); font-size:13px; mat-icon { font-size:18px; width:18px; height:18px; } button { margin-left:auto; } }
+.ph-loading, .ph-empty { display:flex; align-items:center; gap:10px; padding:28px; justify-content:center; color: var(--color-text-3); }
 .ph-kpis { display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
-.ph-kpis > div { padding:10px 16px; border-radius:10px; border:1px solid var(--border,#e5e7eb); background: var(--surface,#fff); min-width:140px; }
-.ph-kpis .v { display:block; font-size:18px; font-weight:800; } .ph-kpis .l { font-size:12px; color: var(--text-muted,#64748b); }
-.ph-kpis .warn { border-color:#fcd34d; background:#fffbeb; }
-.hb { border:1px solid var(--border,#e5e7eb); border-radius:12px; margin-bottom:8px; background: var(--surface,#fff); }
+.ph-kpis > div { padding:10px 16px; border-radius:10px; border:1px solid var(--color-line); background: var(--surface); min-width:140px; }
+.ph-kpis .v { display:block; font-size:18px; font-weight:800; } .ph-kpis .l { font-size:12px; color: var(--color-text-3); }
+.ph-kpis .warn { border-color:color-mix(in srgb, var(--color-warn) 35%, transparent); background:var(--color-warn-soft); }
+.hb { border:1px solid var(--color-line); border-radius:12px; margin-bottom:8px; background: var(--surface); }
 .hb-row { display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; flex-wrap:wrap; }
-.hb-row:hover { background: var(--surface-2,#f8fafc); }
-.chev { color: var(--text-muted,#94a3b8); }
-.meta { font-size:12px; color: var(--text-muted,#64748b); }
+.hb-row:hover { background: var(--color-surface-2); }
+.chev { color: var(--color-text-3); }
+.meta { font-size:12px; color: var(--color-text-3); }
 .amt { margin-left:auto; font-weight:800; white-space:nowrap; }
-.chip { font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; border:1px solid var(--border,#e5e7eb); display:inline-flex; align-items:center; gap:3px; }
+.chip { font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; border:1px solid var(--color-line); display:inline-flex; align-items:center; gap:3px; }
 .chip mat-icon { font-size:13px; width:13px; height:13px; }
-.chip.co { background:#0f172a; color:#fff; border-color:#0f172a; }
-.chip.paid { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
-.chip.closed { background:#dcfce7; color:#166534; border-color:#86efac; }
-.chip.warn { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
-.chip.ok { background:#dcfce7; color:#166534; border-color:#86efac; }
+.chip.co { background:var(--color-text); color:var(--color-on-primary); border-color:var(--color-text); }
+.chip.paid { background:var(--color-primary-soft); color:var(--color-primary); border-color:color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.chip.closed { background:var(--color-ok-soft); color:var(--color-ok); border-color:color-mix(in srgb, var(--color-ok) 35%, transparent); }
+.chip.warn { background:var(--color-warn-soft); color:var(--color-warn); border-color:color-mix(in srgb, var(--color-warn) 35%, transparent); }
+.chip.ok { background:var(--color-ok-soft); color:var(--color-ok); border-color:color-mix(in srgb, var(--color-ok) 35%, transparent); }
 .hb-body { padding:0 14px 14px 40px; }
-.trail { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color: var(--text-muted,#64748b); margin:4px 0 12px; }
+.trail { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color: var(--color-text-3); margin:4px 0 12px; }
 .trail span { display:inline-flex; align-items:center; gap:4px; } .trail mat-icon { font-size:15px; width:15px; height:15px; }
 .lines { width:100%; border-collapse:collapse; font-size:13px; }
-.lines th, .lines td { padding:8px 10px; border-bottom:1px solid var(--border,#e5e7eb); text-align:left; vertical-align:top; }
-.lines th { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color: var(--text-muted,#64748b); }
+.lines th, .lines td { padding:8px 10px; border-bottom:1px solid var(--color-line); text-align:left; vertical-align:top; }
+.lines th { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color: var(--color-text-3); }
 .lines .num { text-align:right; white-space:nowrap; }
-.sub { font-size:11.5px; color: var(--text-muted,#64748b); }
-.missing { display:inline-flex; align-items:center; gap:4px; color:#b45309; font-weight:600; font-size:12px; } .missing mat-icon { font-size:16px; width:16px; height:16px; }
+.sub { font-size:11.5px; color: var(--color-text-3); }
+.missing { display:inline-flex; align-items:center; gap:4px; color:var(--color-warn); font-weight:600; font-size:12px; } .missing mat-icon { font-size:16px; width:16px; height:16px; }
   `]
 })
 export class PaymentHistoryComponent implements OnInit {

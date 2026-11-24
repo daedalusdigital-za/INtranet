@@ -485,10 +485,10 @@ interface Summary {
     .cn-companies { display:grid; grid-template-columns: repeat(auto-fit, minmax(250px,1fr)); gap:12px; margin-bottom: var(--space-4); }
     .cn-co { display:flex; align-items:center; gap:14px; text-align:left; font: inherit; color: inherit; cursor:pointer; background: var(--color-surface); border:2px solid var(--color-line); border-radius: 16px; padding:12px 16px; transition: border-color .15s, box-shadow .15s, opacity .15s, transform .15s;
       &:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-1px); }
-      &.active { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+      &.active { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent); }
       &.dim { opacity:.55; }
-      .cn-logo { width:56px; height:56px; border-radius:50%; object-fit:cover; flex:0 0 56px; background:#f3f4f6; box-shadow:0 1px 3px rgba(0,0,0,.12); }
-      .cn-logo.all-logo { display:inline-flex; align-items:center; justify-content:center; background: linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; mat-icon { font-size:30px; width:30px; height:30px; } }
+      .cn-logo { width:56px; height:56px; border-radius:50%; object-fit:cover; flex:0 0 56px; background:var(--color-surface-2); box-shadow:0 1px 3px rgba(0,0,0,.12); }
+      .cn-logo.all-logo { display:inline-flex; align-items:center; justify-content:center; background: var(--color-primary); color:var(--color-on-primary); mat-icon { font-size:30px; width:30px; height:30px; } }
       .cn-co-body { flex:1; min-width:0; }
       .cn-co-top { display:flex; justify-content:space-between; gap:8px; b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } span { font-weight:800; white-space:nowrap; } }
       .cn-co-bar { height:8px; border-radius:999px; background: var(--color-surface); overflow:hidden; margin:6px 0; i { display:block; height:100%; background: var(--color-danger); opacity:.75; } }
@@ -500,7 +500,7 @@ interface Summary {
         &:hover { background: var(--color-surface-2); } &.active { background: var(--color-primary-soft); color: var(--color-primary); } } }
 
     .cn-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom: var(--space-3); }
-    .warn-n { background: var(--color-warn) !important; color:#fff !important; }
+    .warn-n { background: var(--color-warn) !important; color:var(--color-on-primary) !important; }
     .st.link { text-decoration:none; }
     .cn-chips { display:flex; gap:4px; flex-wrap:wrap; }
     .chip { border:1px solid var(--color-line); background: var(--color-surface); border-radius:999px; padding:5px 12px; font: inherit; font-size: var(--text-sm); cursor:pointer; color: var(--color-text-2);

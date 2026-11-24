@@ -241,10 +241,10 @@ interface PodSummary {
       &:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
     }
     .fp-spacer { flex: 1; }
-    .fp-welly mat-icon { color: var(--color-cat-purple, #8b5cf6); }
-    .fp-welly-panel { margin-bottom: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-surface); border: 1px solid var(--color-line); border-left: 4px solid var(--color-cat-purple, #8b5cf6); border-radius: var(--radius-md);
-      .head { display: flex; align-items: center; gap: var(--space-3); mat-icon { color: var(--color-cat-purple, #8b5cf6); } .txt { flex: 1; display: flex; flex-direction: column; } small { color: var(--color-text-3); } }
-      .bar { height: 6px; margin-top: var(--space-2); border-radius: 999px; background: var(--color-surface-2); overflow: hidden; .fill { height: 100%; background: var(--color-cat-purple, #8b5cf6); transition: width .3s; } }
+    .fp-welly mat-icon { color: var(--color-cat-purple); }
+    .fp-welly-panel { margin-bottom: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-surface); border: 1px solid var(--color-line); border-left: 4px solid var(--color-cat-purple); border-radius: var(--radius-md);
+      .head { display: flex; align-items: center; gap: var(--space-3); mat-icon { color: var(--color-cat-purple); } .txt { flex: 1; display: flex; flex-direction: column; } small { color: var(--color-text-3); } }
+      .bar { height: 6px; margin-top: var(--space-2); border-radius: 999px; background: var(--color-surface-2); overflow: hidden; .fill { height: 100%; background: var(--color-cat-purple); transition: width .3s; } }
       .fp-welly-table { width: 100%; margin-top: var(--space-3); border-collapse: collapse;
         th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; color: var(--color-text-3); padding: 6px var(--space-2); border-bottom: 1px solid var(--color-line); }
         td { padding: 6px var(--space-2); border-bottom: 1px solid var(--color-line); font-size: var(--text-sm); vertical-align: top; small { display: block; color: var(--color-text-3); font-size: var(--text-xs); } }

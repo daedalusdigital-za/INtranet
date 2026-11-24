@@ -87,7 +87,7 @@ export interface RequisitionPreviewData { req: any; }
     .pv { display:flex; flex-direction:column; height: 100%; }
     .pv__head { display:flex; align-items:center; gap:10px; padding:10px 12px 10px 16px; border-bottom:1px solid var(--color-line); flex-wrap: wrap; background: var(--color-surface); }
     .pv__icon { color: var(--color-primary); }
-    .pv__title { flex:1; min-width:160px; display:flex; flex-direction:column; b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } small { color: var(--color-text-muted, var(--color-text-2)); font-size:.78rem; } }
+    .pv__title { flex:1; min-width:160px; display:flex; flex-direction:column; b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } small { color: var(--color-text-3, var(--color-text-2)); font-size:.78rem; } }
     .pv__main { flex:1; min-height:0; display:flex; }
     .pv__body { flex:1; min-width:0; position:relative; background:#525659; display:flex; justify-content:center; overflow:auto; padding:16px;
       iframe { width:210mm; max-width:100%; height:297mm; border:0; background:#fff; color-scheme: light; box-shadow:0 6px 24px rgba(0,0,0,.4); flex-shrink:0; } }
@@ -102,7 +102,7 @@ export interface RequisitionPreviewData { req: any; }
     .sg__pad { position:relative; border:2px dashed var(--color-line-strong); border-radius:10px; background:#fff; touch-action:none;
       &.has { border-style: solid; border-color:var(--color-primary); }
       canvas { display:block; width:100%; height:auto; border-radius:8px; cursor: crosshair; }
-      .sg__hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:.85rem; pointer-events:none; }
+      .sg__hint { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--color-text-3); font-size:.85rem; pointer-events:none; }
       .sg__clear { position:absolute; right:2px; top:2px; } }
     .sg__slots { display:flex; flex-direction:column; gap:4px; }
     .sg__slot { display:flex; align-items:center; gap:8px; padding:7px 10px; border:1px solid var(--color-line); border-radius:8px; background:transparent; cursor:pointer; font: inherit; font-size:.86rem; text-align:left; color: inherit;

@@ -81,7 +81,7 @@ interface SheetResponse {
     :host { display: block; }
     .rp { display: flex; flex-direction: column; height: 92vh; }
     .rp__head { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--color-line); }
-    .rp__icon { color: #15803d; }
+    .rp__icon { color: var(--color-ok); }
     .rp__title { flex: 1; min-width: 0; display: flex; flex-direction: column; b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } small { color: var(--color-text-3); font-size: .78rem; } }
     .rp__state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--color-text-3); &--err mat-icon { font-size: 40px; width: 40px; height: 40px; color: var(--color-danger); } p { margin: 0; } }
     .rp__facts { padding: 12px 16px; border-bottom: 1px solid var(--color-line); background: var(--color-surface-2);
