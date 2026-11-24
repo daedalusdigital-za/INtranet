@@ -61,7 +61,17 @@ export interface BatchItem {
   /** Compliance payments only. complianceTitle is "Licence" / "Other — {detail}". */
   complianceKind?: ComplianceKind | null; complianceDetail?: string | null; complianceTitle?: string | null;
   decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string; decidedAt?: string; prepaymentOpen: boolean; paidAt?: string; sortOrder: number;
+  /** Director's query on this payment and the preparer/accountant's answer. queriedFromBatchNumber: the pack it was split off. */
+  queryQuestion?: string | null; queryAskedByName?: string | null; queryAskedAt?: string | null;
+  queryResponse?: string | null; queryRespondedByName?: string | null; queryRespondedAt?: string | null; queriedFromBatchNumber?: string | null;
   required: RequiredDoc[]; recommended: RequiredDoc[]; documents: BatchDoc[];
+}
+/** One queried payment for the Queried payments tab. Open = waiting for an answer; WithDirector = answered and back for a decision. */
+export interface QueryRow {
+  itemId: number; batchId: number; batchNumber: string; companyCode: string; companyName: string;
+  supplierName: string; invoiceNumbers?: string; description?: string; amount: number;
+  question: string; askedBy?: string; askedAt?: string; answer?: string | null; answeredBy?: string | null; answeredAt?: string | null;
+  fromBatch?: string | null; state: 'Open' | 'Answered' | 'WithDirector';
 }
 export interface CheckFinding { code: string; title: string; severity: 'PASS' | 'REVIEW' | 'FAIL'; detail?: string; supplier?: string; itemId?: number; }
 export interface BatchDetail {
@@ -128,6 +138,8 @@ export class CreditorPacksService {
   summary() { return this.http.get<{ byStatus: { status: string; count: number; amount: number }[]; openPrepayments: number }>(`${this.base}/summary`); }
   inbox() { return this.http.get<InboxRow[]>(`${this.base}/inbox`); }
   alerts() { return this.http.get<CreditorAlert[]>(`${this.base}/alerts`); }
+  queries() { return this.http.get<QueryRow[]>(`${this.base}/queries`); }
+  answerQuery(id: number, itemId: number, answer: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/query-answer`, { answer }); }
   get(id: number) { return this.http.get<BatchDetail>(`${this.base}/batches/${id}`); }
   create(dto: { companyCode: string; paymentType: string; batchDate?: string; notes?: string }) { return this.http.post<BatchDetail>(`${this.base}/batches`, dto); }
   update(id: number, dto: { batchDate?: string; notes?: string; paymentType?: string }) { return this.http.put<BatchDetail>(`${this.base}/batches/${id}`, dto); }

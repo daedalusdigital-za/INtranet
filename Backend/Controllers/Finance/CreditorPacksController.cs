@@ -1250,9 +1250,131 @@ public class CreditorPacksController : ControllerBase
         if (d == null) return BadRequest(new { message = "Decision must be Approved, Queried or Rejected." });
         if (d != "Approved" && d != "Pending" && string.IsNullOrWhiteSpace(dto.Comment)) return BadRequest(new { message = "Give a reason when querying or rejecting a payment." });
         it.DecisionStatus = d; it.DecisionComment = dto.Comment; it.DecidedAt = DateTime.UtcNow;
+        if (d == "Queried")
+        {
+            it.QueryQuestion = dto.Comment!.Trim(); it.QueryAskedByName = UserName; it.QueryAskedAt = DateTime.UtcNow;
+            it.QueryResponse = null; it.QueryRespondedByName = null; it.QueryRespondedAt = null;
+        }
+        else if (it.QueryResponse == null) { it.QueryQuestion = null; it.QueryAskedByName = null; it.QueryAskedAt = null; } // changed their mind before anyone answered
         b.Events.Add(Ev("ItemDecision", null, null, $"{it.SupplierName} R{it.Amount:N2} → {d}" + (dto.Comment != null ? $": {dto.Comment}" : "")));
         await _db.SaveChangesAsync();
         return Ok(await DetailAsync(id));
+    }
+
+    /// <summary>
+    /// The director approved some payments and queried others: move the queried ones (with their documents) to a new pack of their
+    /// own so the approved ones can be locked and paid. The new pack keeps the accountant's approval and waits for answers.
+    /// </summary>
+    private async Task<PaymentBatch> SplitQueriedAsync(PaymentBatch b)
+    {
+        var prefix = $"CB-{b.CompanyCode.ToUpperInvariant()}-{DateTime.UtcNow.Year}-";
+        var last = await _db.PaymentBatches.Where(x => x.BatchNumber.StartsWith(prefix)).OrderByDescending(x => x.BatchNumber).Select(x => x.BatchNumber).FirstOrDefaultAsync();
+        var seq = last != null && int.TryParse(last[prefix.Length..], out var n) ? n + 1 : 1;
+        var queried = b.Items.Where(i => i.DecisionStatus == "Queried").ToList();
+        var reason = "Director queries: " + string.Join("; ", queried.Select(i => $"{i.SupplierName}: {i.QueryQuestion ?? i.DecisionComment}"));
+        var nb = new PaymentBatch
+        {
+            BatchNumber = $"{prefix}{seq:0000}", CompanyCode = b.CompanyCode, PaymentType = b.PaymentType, BatchDate = b.BatchDate,
+            Status = CreditorWorkflow.QueriedByDirector, Notes = Trunc($"Queried payments split from {b.BatchNumber}." + (string.IsNullOrWhiteSpace(b.Notes) ? "" : " " + b.Notes), 1000),
+            PreparedByUserId = b.PreparedByUserId, PreparedByName = b.PreparedByName, SubmittedAt = b.SubmittedAt,
+            RequestedApproverIds = b.RequestedApproverIds, RequestedApproverNames = b.RequestedApproverNames,
+            RequestedDirectorIds = b.RequestedDirectorIds, RequestedDirectorNames = b.RequestedDirectorNames,
+            AccountantUserId = b.AccountantUserId, AccountantName = b.AccountantName, AccountantApprovedAt = b.AccountantApprovedAt,
+            AccountantComment = b.AccountantComment, ChecksRunAt = b.ChecksRunAt, ChecksStatus = b.ChecksStatus,
+            ReturnReason = Trunc(reason, 1000), TotalAmount = queried.Sum(i => i.Amount)
+        };
+        nb.Events.Add(Ev("Created", null, CreditorWorkflow.QueriedByDirector, $"Split from {b.BatchNumber}: {queried.Count} payment(s) queried by {UserName}."));
+        _db.PaymentBatches.Add(nb);
+        await _db.SaveChangesAsync();
+
+        var ids = queried.Select(i => i.Id).ToHashSet();
+        var docs = b.Documents.Where(d => d.ItemId != null && ids.Contains(d.ItemId.Value)).ToList();
+        // Re-parent by changing the foreign keys (not Remove(), which would mark the rows as orphans to delete);
+        // DetectChanges then fixes up the loaded collections so b.Items / b.Documents no longer hold them.
+        foreach (var it in queried) { it.BatchId = nb.Id; it.QueriedFromBatchNumber = b.BatchNumber; }
+        foreach (var d in docs) d.BatchId = nb.Id;
+        _db.ChangeTracker.DetectChanges();
+        if (b.Items.Any(i => ids.Contains(i.Id))) throw new InvalidOperationException("Could not move the queried payments to their own pack.");
+        b.TotalAmount = b.Items.Sum(i => i.Amount);
+        b.Events.Add(Ev("QueriedSplit", null, null, Trunc($"{queried.Count} queried payment(s) moved to {nb.BatchNumber}: " + string.Join("; ", queried.Select(i => $"{i.SupplierName} R{i.Amount:N2}")), 1000)));
+        return nb;
+    }
+
+    private static string Trunc(string s, int max) => s.Length > max ? s[..max] : s;
+
+    public record QueryAnswerDto(string Answer);
+
+    /// <summary>
+    /// The preparer (or the company accountant) answers the director's query on one payment. Once every queried payment on the pack has
+    /// an answer, the pack goes straight back to the director — the accountant has already approved it.
+    /// </summary>
+    [HttpPost("batches/{id:int}/items/{itemId:int}/query-answer")]
+    public async Task<IActionResult> AnswerQuery(int id, int itemId, [FromBody] QueryAnswerDto dto)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (b.Status != CreditorWorkflow.QueriedByDirector) return Conflict(new { message = "This pack has no open director queries." });
+        var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
+        if (it.DecisionStatus != "Queried") return Conflict(new { message = "That payment isn't queried." });
+        if (string.IsNullOrWhiteSpace(dto.Answer)) return BadRequest(new { message = "Type your answer for the director." });
+        var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
+        if (!await CanPrepareAsync(b) && !await IsAccountantForAsync(b, c)) return Forbid();
+
+        it.QueryResponse = Trunc(dto.Answer.Trim(), 2000); it.QueryRespondedByName = UserName; it.QueryRespondedAt = DateTime.UtcNow;
+        b.Events.Add(Ev("QueryAnswered", null, null, Trunc($"{it.SupplierName}: {it.QueryResponse}", 1000)));
+
+        var stillOpen = b.Items.Any(i => i.DecisionStatus == "Queried" && i.QueryResponse == null);
+        if (!stillOpen && b.AccountantApprovedAt != null)
+        {
+            foreach (var q in b.Items.Where(i => i.DecisionStatus == "Queried")) { q.DecisionStatus = "Pending"; q.DecidedAt = null; }
+            var from = b.Status;
+            b.Status = CreditorWorkflow.AwaitingDirector; b.ReturnReason = null;
+            b.Events.Add(Ev("QueriesAnswered", from, b.Status, "Every query answered — back with the director."));
+            var directors = b.RequestedDirectorIdList.Select(x => (int?)x).Append(b.DirectorUserId).Distinct();
+            await NotifyAsync(directors, "Your payment queries were answered", $"{b.BatchNumber} · {b.CompanyCode}: the queried payments have answers and are back for your decision.", b.Id);
+        }
+        b.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return Ok(await DetailAsync(id));
+    }
+
+    /// <summary>
+    /// Every payment the director has queried that is still open: waiting for an answer, or answered and back with the director.
+    /// Feeds the Queried payments tab.
+    /// </summary>
+    [HttpGet("queries")]
+    public async Task<IActionResult> Queries()
+    {
+        var rows = await _db.PaymentBatchItems.AsNoTracking()
+            .Where(i => i.QueryQuestion != null
+                        && (i.Batch!.Status == CreditorWorkflow.QueriedByDirector || i.Batch.Status == CreditorWorkflow.AwaitingDirector))
+            .Select(i => new
+            {
+                i.Id, i.BatchId, i.Batch!.BatchNumber, i.Batch.CompanyCode, BatchStatus = i.Batch.Status,
+                i.SupplierName, i.InvoiceNumbers, i.Description, i.Amount, i.DecisionStatus,
+                i.QueryQuestion, i.QueryAskedByName, i.QueryAskedAt, i.QueryResponse, i.QueryRespondedByName, i.QueryRespondedAt, i.QueriedFromBatchNumber
+            })
+            .OrderByDescending(i => i.QueryAskedAt).Take(300).ToListAsync();
+        var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.Name);
+        var scope = new Dictionary<string, bool>();
+        var outRows = new List<object>();
+        foreach (var r in rows)
+        {
+            if (!scope.TryGetValue(r.CompanyCode, out var ok)) scope[r.CompanyCode] = ok = await InScopeAsync(r.CompanyCode);
+            if (!ok) continue;
+            var open = r.BatchStatus == CreditorWorkflow.QueriedByDirector && r.DecisionStatus == "Queried";
+            var withDirector = r.BatchStatus == CreditorWorkflow.AwaitingDirector && r.DecisionStatus == "Pending" && r.QueryResponse != null;
+            if (!open && !withDirector) continue;
+            outRows.Add(new
+            {
+                itemId = r.Id, batchId = r.BatchId, batchNumber = r.BatchNumber, companyCode = r.CompanyCode, companyName = companies.GetValueOrDefault(r.CompanyCode, r.CompanyCode),
+                supplierName = r.SupplierName, invoiceNumbers = r.InvoiceNumbers, description = r.Description, amount = r.Amount,
+                question = r.QueryQuestion, askedBy = r.QueryAskedByName, askedAt = r.QueryAskedAt,
+                answer = r.QueryResponse, answeredBy = r.QueryRespondedByName, answeredAt = r.QueryRespondedAt,
+                fromBatch = r.QueriedFromBatchNumber,
+                state = open ? (r.QueryResponse == null ? "Open" : "Answered") : "WithDirector"
+            });
+        }
+        return Ok(outRows);
     }
 
     public record SignDto(string TypedName, string? Comment, string? SignatureImageBase64, bool UseSavedSignature = true);
@@ -1281,6 +1403,10 @@ public class CreditorPacksController : ControllerBase
         if (dsig == null) return BadRequest(NoSignature());
 
         var from = b.Status;
+        PaymentBatch? split = null;
+        if (b.Items.Any(i => i.DecisionStatus == "Queried") && b.Items.Any(i => i.DecisionStatus == "Approved"))
+            split = await SplitQueriedAsync(b);
+
         if (b.Items.Any(i => i.DecisionStatus == "Queried"))
         {
             b.Status = CreditorWorkflow.QueriedByDirector;
@@ -1305,6 +1431,12 @@ public class CreditorPacksController : ControllerBase
             b.Events.Add(Ev("DirectorSigned", from, b.Status, $"{b.Items.Count(i => i.DecisionStatus == "Approved")} payment(s) approved, R{b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount):N2}. Batch locked. Booked on the {b.ScheduledPayDate:ddd d MMM} pay-run."));
             var bankUsers = await _db.Users.AsNoTracking().Where(u => u.IsActive && u.Permissions != null && u.Permissions.Contains(CreditorWorkflow.RoleBank)).Select(u => (int?)u.UserId).ToListAsync();
             await NotifyAsync(bankUsers.Append(b.PreparedByUserId), "Payment pack approved — on the payment schedule", $"{b.BatchNumber} · {b.CompanyCode} · R{b.Items.Where(i => i.DecisionStatus == "Approved").Sum(i => i.Amount):N2} · pay-run {b.ScheduledPayDate:ddd d MMM}", b.Id);
+        }
+        if (split != null)
+        {
+            split.DirectorUserId = UserId; split.DirectorName = UserName; split.DirectorSignedAt = DateTime.UtcNow;
+            await NotifyAsync(new[] { (int?)split.PreparedByUserId, split.AccountantUserId }, "Director queried payments",
+                $"{split.BatchNumber}: {split.ReturnReason} Answer them on the Queried payments tab.", split.Id);
         }
         b.DirectorUserId = UserId; b.DirectorName = UserName; b.DirectorSignedAt = DateTime.UtcNow; b.DirectorComment = dto.Comment;
 
@@ -1787,6 +1919,7 @@ public class CreditorPacksController : ControllerBase
                 i.StockReturned, i.IsUrgent, i.PaymentMode, paymentModeTitle = CreditorPaymentModes.Title(i.PaymentMode), i.PayoutMethod,
                 i.ComplianceKind, i.ComplianceDetail, i.ComplianceTitle,
                 i.DecisionStatus, i.DecisionComment, i.DecidedAt, i.PrepaymentOpen, i.PaidAt, i.SortOrder,
+                i.QueryQuestion, i.QueryAskedByName, i.QueryAskedAt, i.QueryResponse, i.QueryRespondedByName, i.QueryRespondedAt, i.QueriedFromBatchNumber,
                 required = itemReq[i.Id],
                 recommended = itemRec[i.Id],
                 documents = b.Documents.Where(d => d.ItemId == i.Id).OrderBy(d => d.DocType).ThenBy(d => d.Version).Select(DocDto)

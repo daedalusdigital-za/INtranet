@@ -20,7 +20,7 @@ import { environment } from '../../../environments/environment';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { Observable } from 'rxjs';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow, RequisitionFormInput, COMPLIANCE_KINDS, complianceKindsLabel } from '../../services/creditor-packs.service';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow, QueryRow, RequisitionFormInput, COMPLIANCE_KINDS, complianceKindsLabel } from '../../services/creditor-packs.service';
 
 type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
@@ -96,6 +96,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <button [class.on]="statusFilter() === ''" (click)="statusFilter.set('')">All <b>{{ rows().length }}</b></button>
         <button [class.on]="statusFilter() === 'open'" (click)="statusFilter.set('open')">In progress <b>{{ countOpen() }}</b></button>
         <button [class.on]="statusFilter() === 'back'" (click)="statusFilter.set('back')">Sent back <b>{{ count('ChecksFailed') + count('QueriedByAccountant') + count('QueriedByDirector') }}</b></button>
+        <button [class.on]="statusFilter() === 'queried'" [class.attn]="queriesOpen() > 0" (click)="statusFilter.set('queried')" matTooltip="Payments the director queried: answer them here and they go back to the director">Queried payments <b>{{ queries().length }}</b></button>
         <button [class.on]="statusFilter() === 'pay'" (click)="statusFilter.set('pay')">To pay <b>{{ count('Approved') + count('LoadedOnBank') }}</b></button>
         <button [class.on]="statusFilter() === 'Paid'" (click)="statusFilter.set('Paid')">Paid · needs POP <b>{{ count('Paid') }}</b></button>
         <button [class.on]="statusFilter() === 'prepay'" (click)="statusFilter.set('prepay')">Open prepayments <b>{{ openPrepay() }}</b></button>
@@ -155,6 +156,35 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         <p class="lead">Everything that has gone through the bank. Search by batch number, supplier, invoice number, payment reference, note or amount; expand a pack to see each payment and its proof of payment.</p>
         <app-payment-history [defaultDays]="historySupplier() ? 0 : 365" [supplier]="historySupplier()" [initialQuery]="historyQuery()"></app-payment-history>
       </div>
+    } @else if (statusFilter() === 'queried') {
+      <section class="cr-queries" aria-label="Queried payments">
+        <p class="lead">When the director queries a payment it is neither approved nor rejected. It waits here for the preparer or the company accountant to answer; once every query on a pack is answered, the pack goes straight back to the director to decide.</p>
+        @for (q of queries(); track q.itemId) {
+          <article class="cq" [class.done]="q.state !== 'Open'">
+            <header>
+              <ng-container *ngTemplateOutlet="coMark; context: { $implicit: q.companyCode }"></ng-container>
+              <div class="who">
+                <b>{{ q.supplierName }}</b>
+                <small>{{ q.companyName }} · <a href="" (click)="$event.preventDefault(); open(q.batchId)">{{ q.batchNumber }}</a>@if (q.invoiceNumbers) { · inv {{ q.invoiceNumbers }} }@if (q.fromBatch) { · split from {{ q.fromBatch }} }</small>
+              </div>
+              <span class="amt">R {{ q.amount | number:'1.2-2' }}</span>
+              <span [class]="'qstate ' + q.state">{{ q.state === 'Open' ? 'Needs an answer' : q.state === 'Answered' ? 'Answered' : 'With the director' }}</span>
+            </header>
+            <div class="qa q"><mat-icon>help</mat-icon><div><small>{{ q.askedBy || 'Director' }}@if (q.askedAt) { · {{ q.askedAt | date:'d MMM HH:mm' }} }</small><p>{{ q.question }}</p></div></div>
+            @if (q.answer) {
+              <div class="qa a"><mat-icon>reply</mat-icon><div><small>{{ q.answeredBy }}@if (q.answeredAt) { · {{ q.answeredAt | date:'d MMM HH:mm' }} }</small><p>{{ q.answer }}</p></div></div>
+            }
+            @if (q.state === 'Open' && canAnswer()) {
+              <div class="qreply">
+                <textarea rows="2" [ngModel]="answerDraft()[q.itemId] || ''" (ngModelChange)="setAnswer(q.itemId, $event)" placeholder="Answer the director, or say what you changed"></textarea>
+                <button mat-flat-button color="primary" [disabled]="busy() || !(answerDraft()[q.itemId] || '').trim()" (click)="answer(q)"><mat-icon>send</mat-icon> Send answer</button>
+              </div>
+            }
+          </article>
+        } @empty {
+          <div class="cr-state"><mat-icon>task_alt</mat-icon><h3>No queried payments</h3><p>Nothing the director has queried is waiting.</p></div>
+        }
+      </section>
     } @else {
     @if (loading()) { <div class="cr-state"><mat-spinner diameter="32"></mat-spinner></div> }
     @else if (!groups().length) {
@@ -601,7 +631,19 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   <button mat-stroked-button [class.sel-bad]="it.decisionStatus === 'Rejected'" (click)="decide(it, 'Rejected')"><mat-icon>thumb_down</mat-icon> Reject</button>
                   @if (it.decisionComment) { <em>“{{ it.decisionComment }}”</em> }
                 </div>
-              } @else if (it.decisionComment) { <div class="deccomment"><mat-icon>chat</mat-icon> Director: “{{ it.decisionComment }}”</div> }
+              } @else if (it.decisionComment && !it.queryQuestion) { <div class="deccomment"><mat-icon>chat</mat-icon> Director: “{{ it.decisionComment }}”</div> }
+              @if (it.queryQuestion) {
+                <div class="itq">
+                  <div class="qa q"><mat-icon>help</mat-icon><div><small>Query from {{ it.queryAskedByName || 'the director' }}@if (it.queryAskedAt) { · {{ it.queryAskedAt | date:'d MMM HH:mm' }} }@if (it.queriedFromBatchNumber) { · split from {{ it.queriedFromBatchNumber }} }</small><p>{{ it.queryQuestion }}</p></div></div>
+                  @if (it.queryResponse) { <div class="qa a"><mat-icon>reply</mat-icon><div><small>{{ it.queryRespondedByName }}@if (it.queryRespondedAt) { · {{ it.queryRespondedAt | date:'d MMM HH:mm' }} }</small><p>{{ it.queryResponse }}</p></div></div> }
+                  @else if (b.status === 'QueriedByDirector' && it.decisionStatus === 'Queried' && canAnswer()) {
+                    <div class="qreply">
+                      <textarea rows="2" [ngModel]="answerDraft()[it.id] || ''" (ngModelChange)="setAnswer(it.id, $event)" placeholder="Answer the director, or say what you changed"></textarea>
+                      <button mat-flat-button color="primary" [disabled]="busy() || !(answerDraft()[it.id] || '').trim()" (click)="answerItem(b, it)"><mat-icon>send</mat-icon> Send answer</button>
+                    </div>
+                  }
+                </div>
+              }
 
               @if (openItem() === it.id) {
                 <div class="body">
@@ -839,6 +881,18 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; b { display: flex; align-items: center; gap: var(--space-2); } small { color: var(--color-text-3); font-size: var(--text-sm); em { color: var(--color-warn); font-style: normal; font-weight: 600; } } .bad { color: var(--color-danger); display: flex; align-items: center; gap: 4px; mat-icon { font-size: 16px; width: 16px; height: 16px; } } .note { font-style: italic; } }
         .amt { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: var(--text-lg); } .go { color: var(--color-text-3); } }
       @media (max-width: 640px) { .cr-inbox-row { flex-wrap: wrap; .amt { width: 100%; order: 3; } .go { display: none; } } } }
+    .cr-seg button.attn b { background: var(--color-warn); color: var(--color-on-warn, #fff); }
+    .cr-queries { display: flex; flex-direction: column; gap: var(--space-3); .lead { margin: 0; color: var(--color-text-3); font-size: var(--text-sm); } }
+    .cq { border: 1px solid var(--color-warn); border-left-width: 4px; border-radius: var(--radius-md); background: var(--color-surface); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2);
+      &.done { border-color: var(--color-line); border-left-color: var(--color-info); }
+      header { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; .who { flex: 1; min-width: 180px; display: flex; flex-direction: column; small { color: var(--color-text-3); font-size: var(--text-sm); } } .amt { font-weight: 700; font-variant-numeric: tabular-nums; font-size: var(--text-lg); } }
+      .qstate { font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: var(--radius-pill, 999px); &.Open { background: var(--color-warn-soft); color: var(--color-warn); } &.Answered, &.WithDirector { background: var(--color-info-soft, var(--color-surface-2)); color: var(--color-info); } } }
+    .qa { display: flex; gap: var(--space-2); align-items: flex-start; padding: var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-sm);
+      mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; } p { margin: 2px 0 0; white-space: pre-wrap; } small { color: var(--color-text-3); font-size: var(--text-xs); }
+      &.q { background: var(--color-warn-soft); mat-icon { color: var(--color-warn); } } &.a { background: var(--color-surface-2); mat-icon { color: var(--color-info); } } }
+    .qreply { display: flex; gap: var(--space-2); align-items: flex-end; textarea { flex: 1; min-width: 0; font: inherit; font-size: var(--text-sm); padding: var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); color: inherit; resize: vertical; }
+      @media (max-width: 640px) { flex-direction: column; align-items: stretch; } }
+    .itq { display: flex; flex-direction: column; gap: 6px; padding: 0 12px 10px 40px; }
     .cr-alerts { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-md); mat-icon { color: var(--color-warn); } .txt { flex: 1; font-size: var(--text-sm); } }
     .cr-alert-list { display: grid; gap: 4px; margin-bottom: var(--space-3); }
     .cr-alert { display: grid; grid-template-columns: 170px 1fr; gap: 2px 12px; text-align: left; font: inherit; padding: 8px 12px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); .b { font-weight: 600; } .d { grid-column: 2; color: var(--color-text-2); font-size: var(--text-xs); } &.fail { border-color: var(--color-danger); } &:hover { border-color: var(--color-primary); } }
@@ -1026,6 +1080,11 @@ export class FinanceCreditorsComponent implements OnInit {
   alerts = signal<CreditorAlert[]>([]);
   showAlerts = signal(false);
   inbox = signal<InboxRow[]>([]);
+  /** Payments the director queried (open, answered, or back with the director). */
+  queries = signal<QueryRow[]>([]);
+  queriesOpen = computed(() => this.queries().filter(q => q.state === 'Open').length);
+  answerDraft = signal<Record<number, string>>({});
+  canAnswer = computed(() => { const me = this.meta()?.me; return !!me && !me.readOnly && (me.clerk || me.accountant || me.isAdmin); });
   inboxDirector = computed(() => this.inbox().filter(r => r.role === 'director'));
   inboxAccountant = computed(() => this.inbox().filter(r => r.role === 'accountant'));
   inboxTotal = computed(() => this.inbox().reduce((s, r) => s + (r.totalAmount || 0), 0));
@@ -1197,6 +1256,27 @@ export class FinanceCreditorsComponent implements OnInit {
     this.api.list().subscribe({ next: r => { this.rows.set(r); this.loading.set(false); this.openPrepay.set(r.filter(x => x.openPrepayments > 0).length); }, error: () => { this.loading.set(false); this.toast.error("Couldn't load batches."); } });
     this.api.alerts().subscribe({ next: a => this.alerts.set(a), error: () => {} });
     this.api.inbox().subscribe({ next: i => this.inbox.set(i), error: () => {} });
+    this.api.queries().subscribe({ next: q => this.queries.set(q), error: () => {} });
+  }
+  setAnswer(itemId: number, v: string): void { this.answerDraft.update(m => ({ ...m, [itemId]: v })); }
+  private sentAnswer(itemId: number, r: BatchDetail): string {
+    this.answerDraft.update(m => { const n = { ...m }; delete n[itemId]; return n; });
+    return r.status === 'AwaitingDirector' ? `Answer sent — every query on ${r.batchNumber} is answered, so it's back with the director` : 'Answer sent — other queries on this pack still need answers';
+  }
+  /** Answer from the Queried payments tab. */
+  answer(q: QueryRow): void {
+    const text = (this.answerDraft()[q.itemId] || '').trim(); if (!text) return;
+    this.busy.set(true);
+    this.api.answerQuery(q.batchId, q.itemId, text).subscribe({
+      next: r => { this.busy.set(false); this.toast.done(this.sentAnswer(q.itemId, r)); this.loadBoard(); },
+      error: e => this.fail(e, "Couldn't send the answer.")
+    });
+  }
+  /** Answer from inside the pack. */
+  answerItem(b: BatchDetail, it: BatchItem): void {
+    const text = (this.answerDraft()[it.id] || '').trim(); if (!text) return;
+    this.busy.set(true);
+    this.api.answerQuery(b.id, it.id, text).subscribe({ next: r => this.apply(r, this.sentAnswer(it.id, r)), error: e => this.fail(e, "Couldn't send the answer.") });
   }
 
   /** Whole pack (approval sheet + every PDF) in the preview dialog — what the accountant / director reads before deciding. */
@@ -1346,14 +1426,14 @@ export class FinanceCreditorsComponent implements OnInit {
         return { icon: 'send', tone: 'ok', title: 'Ready to submit', body: `All required documents are attached. Submitting runs the system checks and sends the pack to ${acc}.` };
       case 'ChecksFailed': return { icon: 'report', tone: 'bad', title: 'The system checks found blocking problems', body: 'See the red items under System checks and on each payment. Click Reopen & fix, correct them, then submit again.' };
       case 'QueriedByAccountant': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.accountantName || 'the accountant'}`, body: b.returnReason || 'Reopen, fix what was asked, and submit again.' };
-      case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.directorName || 'the director'}`, body: b.returnReason || 'The queried payments are marked below. Reopen, fix, and submit again — it will go back through the accountant.' };
+      case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.directorName || 'the director'}`, body: (b.returnReason ? b.returnReason + ' — ' : '') + 'Answer each query below (or on the Queried payments tab). Once all are answered the pack goes straight back to the director.' };
       case 'AwaitingAccountant': return b.can.accountant
         ? { icon: 'fact_check', tone: 'warn', title: 'Your approval is needed', body: `Check the schedule against the recon and the supporting documents. Approve to send it to ${dir}, or send it back with a note.` }
         : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${acc} to approve`, body: 'Nothing for you to do here right now.' };
       case 'AwaitingDirector':
         if (b.can.directorConflict) return { icon: 'block', tone: 'warn', title: 'Another director must sign this one', body: b.can.directorConflict };
         return b.can.direct
-        ? { icon: 'draw', tone: 'warn', title: this.pendingCount(b) > 0 ? `Decide on ${this.pendingCount(b)} payment${this.pendingCount(b) === 1 ? '' : 's'}, then sign` : 'All decided — sign the batch', body: `${b.accountantName} has approved. Open “Review the pack” to read every document, then approve, query or reject each payment below. Queried payments send the pack back; the rest are paid once you sign.` }
+        ? { icon: 'draw', tone: 'warn', title: this.pendingCount(b) > 0 ? `Decide on ${this.pendingCount(b)} payment${this.pendingCount(b) === 1 ? '' : 's'}, then sign` : 'All decided — sign the batch', body: `${b.accountantName} has approved. Open “Review the pack” to read every document, then approve, query or reject each payment below. When you sign, approved payments go to pay; queried ones move to their own pack and wait on the Queried payments tab for an answer, then come back to you.` }
         : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${dir} to sign`, body: `Approved by ${b.accountantName}. Nothing for you to do until the director signs.` };
       case 'Approved': return { icon: 'account_balance', tone: 'ok', title: 'Signed and locked — ready for the bank', body: `${b.directorName} signed. The bank user downloads the bank file (approved payments only), loads it, and marks it loaded.` };
       case 'LoadedOnBank': return { icon: 'price_check', tone: 'ok', title: 'Loaded on the bank', body: 'Once the payments have been released, mark the batch as paid.' };

@@ -192,6 +192,19 @@ public class PaymentBatchItem
     [MaxLength(1000)] public string? DecisionComment { get; set; }
     public DateTime? DecidedAt { get; set; }
 
+    // ── Director query on one payment ──
+    // The director's question is kept here (DecisionComment is overwritten once the director decides again).
+    // When the director signs a pack that also has approved payments, the queried ones move to their own pack
+    // (QueriedFromBatchNumber says where they came from) so the rest can be paid. The preparer or accountant answers,
+    // and once every query on the pack is answered it goes straight back to the director.
+    [MaxLength(1000)] public string? QueryQuestion { get; set; }
+    [MaxLength(150)] public string? QueryAskedByName { get; set; }
+    public DateTime? QueryAskedAt { get; set; }
+    [MaxLength(2000)] public string? QueryResponse { get; set; }
+    [MaxLength(150)] public string? QueryRespondedByName { get; set; }
+    public DateTime? QueryRespondedAt { get; set; }
+    [MaxLength(20)] public string? QueriedFromBatchNumber { get; set; }
+
     /// <summary>Prepayments: stays true after payment until the tax invoice and GRV are uploaded.</summary>
     public bool PrepaymentOpen { get; set; }
     public DateTime? PaidAt { get; set; }
