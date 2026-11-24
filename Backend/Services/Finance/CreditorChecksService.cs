@@ -427,27 +427,56 @@ public class CreditorChecksService
                     Add("C3s", "Account not found on bank statement", "REVIEW", $"Could not find account {Mask(acc)} on the bank statement for {it.SupplierName} — check it by eye.", it, CreditorDocTypes.BankStatement);
             }
 
-        // C4 — duplicate invoice numbers (inside the batch and against other batches of the same company)
-        // Staff payments carry requisition references rather than invoice numbers, so a repeat there is only a REVIEW note.
-        var dupSeverity = isStaff ? "REVIEW" : "FAIL";
+        // C4 — duplicate invoice numbers (inside the batch and against other batches of the same company).
+        // Kept loose on purpose: invoice numbers are only unique per supplier ("001" from two suppliers is two invoices),
+        // and layouts vary, so a number only counts as a repeat when the supplier is the same too (same name or same bank account).
+        // It blocks (FAIL) only when the amount is also the same — a true double payment. Anything else is a REVIEW note.
+        // Staff payments carry requisition references rather than invoice numbers, so a repeat there is only ever a REVIEW note.
+        static string SupKey(string? name) => Regex.Replace((name ?? "").ToUpperInvariant(), @"\b(PTY|LTD|CC|INC|THE|T/A|TRADING|ENTERPRISES?|PROJECTS?)\b|[^A-Z0-9]", "");
+        bool SameSupplier(string? nameA, string? accA, string? nameB, string? accB)
+        {
+            var a = Digits(accA ?? ""); var b = Digits(accB ?? "");
+            if (a != null && b != null && a == b) return true;
+            var ka = SupKey(nameA); var kb = SupKey(nameB);
+            return ka.Length >= 3 && kb.Length >= 3 && (ka == kb || ka.StartsWith(kb) || kb.StartsWith(ka));
+        }
         var invMap = new Dictionary<string, List<PaymentBatchItem>>(StringComparer.OrdinalIgnoreCase);
         foreach (var it in items)
-            foreach (var inv in SplitInvoices(it.InvoiceNumbers))
+            foreach (var inv in SplitInvoices(it.InvoiceNumbers).Select(Norm).Where(n => n.Length > 0).Distinct())
             { if (!invMap.TryGetValue(inv, out var l)) invMap[inv] = l = new(); l.Add(it); }
         foreach (var (inv, list) in invMap.Where(k => k.Value.Count > 1))
-            Add("C4", isStaff ? "Duplicate reference in batch" : "Duplicate invoice in batch", dupSeverity, $"{(isStaff ? "Reference" : "Invoice")} {inv} appears {list.Count} times ({string.Join(", ", list.Select(l => l.SupplierName).Distinct())}).", list[0]);
+        {
+            var reported = new HashSet<int>();
+            for (var x = 0; x < list.Count; x++)
+                for (var y = x + 1; y < list.Count; y++)
+                {
+                    var a = list[x]; var b = list[y];
+                    if (reported.Contains(b.Id) || !SameSupplier(a.SupplierName, a.AccountNumber, b.SupplierName, b.AccountNumber)) continue;
+                    reported.Add(b.Id);
+                    var sev = !isStaff && a.Amount == b.Amount ? "FAIL" : "REVIEW";
+                    Add("C4", isStaff ? "Duplicate reference in batch" : "Duplicate invoice in batch", sev,
+                        $"{(isStaff ? "Reference" : "Invoice")} {inv} for {a.SupplierName} appears twice on this batch (R{a.Amount:N2} and R{b.Amount:N2}).", b);
+                }
+        }
 
         if (invMap.Count > 0)
         {
             var others = await _db.PaymentBatchItems.AsNoTracking()
                 .Where(i => i.BatchId != batch.Id && i.Batch!.CompanyCode == batch.CompanyCode
                             && i.Batch.Status != CreditorWorkflow.Rejected && i.InvoiceNumbers != null)
-                .Select(i => new { i.SupplierName, i.InvoiceNumbers, i.Batch!.BatchNumber, i.Batch.Status })
+                .Select(i => new { i.SupplierName, i.AccountNumber, i.Amount, i.InvoiceNumbers, i.Batch!.BatchNumber, i.Batch.Status })
                 .ToListAsync();
+            var seen = new HashSet<string>();
             foreach (var o in others)
-                foreach (var inv in SplitInvoices(o.InvoiceNumbers))
+                foreach (var inv in SplitInvoices(o.InvoiceNumbers).Select(Norm))
                     if (invMap.TryGetValue(inv, out var mine))
-                        Add("C4", isStaff ? "Reference already used on another batch" : "Invoice already paid or in another batch", dupSeverity, $"{(isStaff ? "Reference" : "Invoice")} {inv} ({o.SupplierName}) is on batch {o.BatchNumber} ({CreditorWorkflow.Title(o.Status)}).", mine[0]);
+                        foreach (var m in mine.Where(m => SameSupplier(m.SupplierName, m.AccountNumber, o.SupplierName, o.AccountNumber)))
+                        {
+                            if (!seen.Add($"{m.Id}|{inv}|{o.BatchNumber}")) continue;
+                            var sev = !isStaff && m.Amount == o.Amount ? "FAIL" : "REVIEW";
+                            Add("C4", isStaff ? "Reference already used on another batch" : "Invoice already paid or in another batch", sev,
+                                $"{(isStaff ? "Reference" : "Invoice")} {inv} ({o.SupplierName}, R{o.Amount:N2}) is on batch {o.BatchNumber} ({CreditorWorkflow.Title(o.Status)}).", m);
+                        }
         }
 
         // C5 — VAT number format (SA: 10 digits starting with 4)
