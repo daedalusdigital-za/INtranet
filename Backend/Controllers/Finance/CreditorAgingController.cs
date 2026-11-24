@@ -91,7 +91,7 @@ public class CreditorAgingController : ControllerBase
         // Payment packs in flight for these vendors (so finance can see what is already being paid).
         var names = vendors.Select(v => Key(v.name)).ToHashSet();
         var inFlight = (await _db.PaymentBatchItems.AsNoTracking()
-            .Where(i => i.Batch!.CompanyCode == snap.CompanyCode && i.DecisionStatus != "Rejected" && i.Batch.Status != CreditorWorkflow.Paid && i.Batch.Status != CreditorWorkflow.Closed && i.Batch.Status != CreditorWorkflow.Rejected)
+            .Where(i => i.Batch!.CompanyCode == snap.CompanyCode && i.DecisionStatus != "Rejected" && i.DecisionStatus != "SentBack" && i.Batch.Status != CreditorWorkflow.Paid && i.Batch.Status != CreditorWorkflow.Closed && i.Batch.Status != CreditorWorkflow.Rejected)
             .Select(i => new { i.SupplierName, i.Amount, i.Batch!.BatchNumber, i.Batch.Status, i.BatchId }).ToListAsync())
             .Where(i => names.Contains(Key(i.SupplierName)))
             .GroupBy(i => Key(i.SupplierName))
@@ -135,7 +135,7 @@ public class CreditorAgingController : ControllerBase
             .ToListAsync();
         var numbers = docs.Select(d => d.DocNumber.ToUpperInvariant()).ToHashSet();
         var inPacks = (await _db.PaymentBatchItems.AsNoTracking()
-            .Where(i => i.Batch!.CompanyCode == snap.CompanyCode && i.DecisionStatus != "Rejected" && i.Batch.Status != CreditorWorkflow.Rejected && i.InvoiceNumbers != null && i.InvoiceNumbers != "")
+            .Where(i => i.Batch!.CompanyCode == snap.CompanyCode && i.DecisionStatus != "Rejected" && i.DecisionStatus != "SentBack" && i.Batch.Status != CreditorWorkflow.Rejected && i.InvoiceNumbers != null && i.InvoiceNumbers != "")
             .Select(i => new { i.InvoiceNumbers, i.Batch!.BatchNumber, i.Batch.Status, i.BatchId }).ToListAsync())
             .SelectMany(i => Regex.Split(i.InvoiceNumbers!, @"[,;/\s]+").Select(n => n.Trim().ToUpperInvariant()).Where(n => n.Length > 0).Select(n => new { n, i.BatchNumber, i.Status, i.BatchId }))
             .Where(x => numbers.Contains(x.n))

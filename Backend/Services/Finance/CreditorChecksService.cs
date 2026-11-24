@@ -463,7 +463,7 @@ public class CreditorChecksService
         {
             var others = await _db.PaymentBatchItems.AsNoTracking()
                 .Where(i => i.BatchId != batch.Id && i.Batch!.CompanyCode == batch.CompanyCode
-                            && i.Batch.Status != CreditorWorkflow.Rejected && i.DecisionStatus != "Rejected" && i.InvoiceNumbers != null)
+                            && i.Batch.Status != CreditorWorkflow.Rejected && i.DecisionStatus != "Rejected" && i.DecisionStatus != "SentBack" && i.InvoiceNumbers != null)
                 .Select(i => new { i.SupplierName, i.AccountNumber, i.Amount, i.InvoiceNumbers, i.Batch!.BatchNumber, i.Batch.Status })
                 .ToListAsync();
             var seen = new HashSet<string>();

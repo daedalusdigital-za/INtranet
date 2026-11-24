@@ -93,10 +93,10 @@ public class CreditorCashflowController : ControllerBase
             var bal = balances.FirstOrDefault(b => b.CompanyCode == c.Code);
             var cb = batches.Where(b => b.CompanyCode == c.Code).ToList();
             var refs = cb.Select(b => new BatchRef(b.Id, b.BatchNumber, b.Status, b.PaymentType, b.BatchDate,
-                b.Items.Where(i => i.DecisionStatus != "Rejected").Sum(i => i.Amount), ApprovedStatuses.Contains(b.Status))).ToList();
+                b.Items.Where(i => i.DecisionStatus != "Rejected" && i.DecisionStatus != "SentBack").Sum(i => i.Amount), ApprovedStatuses.Contains(b.Status))).ToList();
             var plines = new List<PaymentLine>(); var n = 0;
             foreach (var b in cb)
-                foreach (var i in b.Items.Where(i => i.DecisionStatus != "Rejected").OrderBy(i => i.SortOrder).ThenBy(i => i.Id))
+                foreach (var i in b.Items.Where(i => i.DecisionStatus != "Rejected" && i.DecisionStatus != "SentBack").OrderBy(i => i.SortOrder).ThenBy(i => i.Id))
                     plines.Add(new PaymentLine(++n, i.SupplierName, invDocs.TryGetValue(i.Id, out var d) ? d : null, i.InvoiceNumbers?.Trim() ?? "", i.DisplayDescription, b.BatchDate, i.Amount, b.BatchNumber, b.Status));
             var cl = lines.Where(l => l.CompanyCode == c.Code).ToList();
             var pay = refs.Sum(r => r.Amount); var payOk = refs.Where(r => r.Approved).Sum(r => r.Amount);

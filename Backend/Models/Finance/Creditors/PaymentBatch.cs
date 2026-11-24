@@ -187,7 +187,16 @@ public class PaymentBatchItem
     [NotMapped] public string? DisplayDescription => ComplianceTitle == null ? Description
         : string.IsNullOrWhiteSpace(Description) ? $"Compliance: {ComplianceTitle}" : $"Compliance: {ComplianceTitle} — {Description}";
 
-    /// <summary>Pending | Approved | Queried | Rejected — the director's decision per payment.</summary>
+    /// <summary>
+    /// The accountant's decision per payment: null (not decided — counts as approved when the accountant approves the pack),
+    /// Approved, or SentBack. When the accountant approves the pack, SentBack payments get DecisionStatus "SentBack":
+    /// they stay on the pack as a record, are never paid from it, and the preparer can fix and resubmit them on a new pack.
+    /// </summary>
+    [MaxLength(20)] public string? AccountantDecision { get; set; }
+    [MaxLength(1000)] public string? AccountantDecisionComment { get; set; }
+    public DateTime? AccountantDecidedAt { get; set; }
+
+    /// <summary>Pending | Approved | Queried | Rejected — the director's decision per payment. SentBack = sent back by the accountant (not for the director).</summary>
     [Required, MaxLength(20)] public string DecisionStatus { get; set; } = "Pending";
     [MaxLength(1000)] public string? DecisionComment { get; set; }
     public DateTime? DecidedAt { get; set; }

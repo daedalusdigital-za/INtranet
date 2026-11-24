@@ -249,7 +249,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           @if (b.can.reopen) { <button mat-flat-button color="primary" (click)="setStatus('Draft')"><mat-icon>edit</mat-icon> Reopen & fix</button> }
           @if (b.can.edit) { <button mat-flat-button color="primary" [disabled]="!b.can.submit || busy()" (click)="openSend('submit')"><mat-icon>send</mat-icon> Submit to accountant</button> }
           @if (b.can.accountant) {
-            <button mat-flat-button color="primary" (click)="openSend('approve')" [disabled]="busy()"><mat-icon>task_alt</mat-icon> Approve &amp; send to director</button>
+            <button mat-flat-button color="primary" (click)="openSend('approve')" [disabled]="busy() || accSendBackCount(b) === accLiveCount(b)" [matTooltip]="accSendBackCount(b) === accLiveCount(b) ? 'Every payment is marked Send back — use Send back for the whole pack' : ''"><mat-icon>task_alt</mat-icon> @if (accSendBackCount(b)) { Approve {{ accLiveCount(b) - accSendBackCount(b) }} &amp; send back {{ accSendBackCount(b) }} } @else { Approve &amp; send to director }</button>
             <button mat-stroked-button (click)="accountant('query')" [disabled]="busy()"><mat-icon>reply</mat-icon> Send back</button>
           }
           @if (b.can.direct) {
@@ -614,7 +614,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 @if (it.isUrgent) { <span class="urg" matTooltip="Flagged urgent by the preparer"><mat-icon>priority_high</mat-icon> Urgent</span> }
                 @if (it.paymentMode === 'PayAndClear') { <span class="pre pac" matTooltip="Pay and clear the supplier account">pay &amp; clear</span> }
                 @if (it.prepaymentOpen && it.paidAt) { <span class="pre">awaiting invoice + GRV</span> }
-                @if (it.decisionStatus !== 'Pending') { <span [class]="'dec ' + it.decisionStatus.toLowerCase()">{{ it.decisionStatus }}</span> }
+                @if (it.decisionStatus !== 'Pending') { <span [class]="'dec ' + it.decisionStatus.toLowerCase()">{{ it.decisionStatus === 'SentBack' ? 'Sent back' : it.decisionStatus }}</span> }
                 <span class="amt">R {{ it.amount | number:'1.2-2' }}</span>
                 @if (previewableDocs(it).length) { <button mat-icon-button (click)="$event.stopPropagation(); previewItem(it)" [matTooltip]="'Preview all — approval sheet + ' + (previewableDocs(it).length === 1 ? 'the document' : previewableDocs(it).length + ' documents') + ' for this payment'"><mat-icon>visibility</mat-icon></button> }
                 @if (b.can.edit) {
@@ -623,13 +623,28 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                 }
               </div>
 
-              @if (b.can.direct) {
+              @if (b.can.accountant && it.decisionStatus !== 'SentBack') {
+                <div class="decide">
+                  <span>Accountant:</span>
+                  <button mat-stroked-button [class.sel-ok]="it.accountantDecision === 'Approved'" (click)="accDecide(it, it.accountantDecision === 'Approved' ? 'Pending' : 'Approved')" matTooltip="Send this payment forward to the director"><mat-icon>thumb_up</mat-icon> Approve</button>
+                  <button mat-stroked-button [class.sel-bad]="it.accountantDecision === 'SentBack'" (click)="accDecide(it, it.accountantDecision === 'SentBack' ? 'Pending' : 'SentBack')" matTooltip="Send this one payment back to the preparer; the rest can still go to the director"><mat-icon>reply</mat-icon> Send back</button>
+                  @if (it.accountantDecisionComment) { <em>“{{ it.accountantDecisionComment }}”</em> }
+                </div>
+              }
+              @if (b.can.direct && it.decisionStatus !== 'SentBack') {
                 <div class="decide">
                   <span>Your decision:</span>
                   <button mat-stroked-button [class.sel-ok]="it.decisionStatus === 'Approved'" (click)="decide(it, 'Approved')"><mat-icon>thumb_up</mat-icon> Approve</button>
                   <button mat-stroked-button [class.sel-warn]="it.decisionStatus === 'Queried'" (click)="decide(it, 'Queried')"><mat-icon>help</mat-icon> Query</button>
                   <button mat-stroked-button [class.sel-bad]="it.decisionStatus === 'Rejected'" (click)="decide(it, 'Rejected')"><mat-icon>thumb_down</mat-icon> Reject</button>
                   @if (it.decisionComment) { <em>“{{ it.decisionComment }}”</em> }
+                </div>
+              } @else if (it.decisionStatus === 'SentBack') {
+                <div class="itrej">
+                  <mat-icon>reply</mat-icon>
+                  <div class="t"><b>Sent back by {{ b.accountantName || 'the accountant' }}</b><span>{{ it.accountantDecisionComment || it.decisionComment || 'No reason given' }}</span></div>
+                  @if (it.resubmittedAsBatchNumber) { <span class="re">Resubmitted on {{ it.resubmittedAsBatchNumber }}</span> }
+                  @else if (meta()!.me.clerk || meta()!.me.isAdmin) { <button mat-stroked-button [disabled]="busy()" (click)="$event.stopPropagation(); resubmit(b, it)" matTooltip="Put a copy of this payment, with its documents, on a new draft pack to correct and send through again"><mat-icon>restart_alt</mat-icon> Fix and resubmit</button> }
                 </div>
               } @else if (it.decisionStatus === 'Rejected' && b.directorSignedAt) {
                 <div class="itrej">
@@ -639,6 +654,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   @else if (meta()!.me.clerk || meta()!.me.isAdmin) { <button mat-stroked-button [disabled]="busy()" (click)="$event.stopPropagation(); resubmit(b, it)" matTooltip="Put a copy of this payment, with its documents, on a new draft pack to correct and send through again"><mat-icon>restart_alt</mat-icon> Fix and resubmit</button> }
                 </div>
               } @else if (it.decisionComment && !it.queryQuestion) { <div class="deccomment"><mat-icon>chat</mat-icon> Director: “{{ it.decisionComment }}”</div> }
+              @if (it.accountantDecisionComment && it.decisionStatus !== 'SentBack' && !b.can.accountant) { <div class="deccomment"><mat-icon>fact_check</mat-icon> Accountant: “{{ it.accountantDecisionComment }}”</div> }
               @if (it.queryQuestion) {
                 <div class="itq">
                   <div class="qa q"><mat-icon>help</mat-icon><div><small>Query from {{ it.queryAskedByName || 'the director' }}@if (it.queryAskedAt) { · {{ it.queryAskedAt | date:'d MMM HH:mm' }} }@if (it.queriedFromBatchNumber) { · split from {{ it.queriedFromBatchNumber }} }</small><p>{{ it.queryQuestion }}</p></div></div>
@@ -1052,7 +1068,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         .docpill { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); font-weight: 600; padding: 3px 10px 3px 6px; border-radius: 999px; background: var(--color-danger-soft); color: var(--color-danger); mat-icon { font-size: 16px; width: 16px; height: 16px; } &.ok { background: var(--color-ok-soft); color: var(--color-ok); } &.none { background: var(--color-surface-3); color: var(--color-text-3); } }
         .flag { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-xs); font-weight: 700; color: var(--color-warn); mat-icon { font-size: 16px; width: 16px; height: 16px; } &.fail { color: var(--color-danger); } }
         .amt { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; min-width: 120px; text-align: right; font-size: var(--text-md); }
-        .dec { font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: 999px; &.approved { background: var(--color-ok-soft); color: var(--color-ok); } &.queried { background: var(--color-warn-soft); color: var(--color-warn); } &.rejected { background: var(--color-danger-soft); color: var(--color-danger); } }
+        .dec { font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: 999px; &.approved { background: var(--color-ok-soft); color: var(--color-ok); } &.queried { background: var(--color-warn-soft); color: var(--color-warn); } &.rejected, &.sentback { background: var(--color-danger-soft); color: var(--color-danger); } }
         .pre { font-size: var(--text-xs); color: var(--color-warn); font-weight: 600; &.pac { color: var(--color-info); } }
         .cmp { font-size: var(--text-xs); font-weight: 600; padding: 2px var(--space-2); border-radius: 999px; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); white-space: nowrap; }
         .urg { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-xs); font-weight: 700; padding: 2px 8px 2px 4px; border-radius: 999px; background: var(--color-danger-soft); color: var(--color-danger); mat-icon { font-size: 14px; width: 14px; height: 14px; } } }
@@ -1060,7 +1076,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         button mat-icon { font-size: 16px; width: 16px; height: 16px; } .sel-ok { background: var(--color-ok-soft); border-color: var(--color-ok); color: var(--color-ok); } .sel-warn { background: var(--color-warn-soft); border-color: var(--color-warn); color: var(--color-warn); } .sel-bad { background: var(--color-danger-soft); border-color: var(--color-danger); color: var(--color-danger); } em { color: var(--color-text-3); } }
       .deccomment { display: flex; align-items: center; gap: 6px; padding: 4px 12px 8px 40px; font-size: var(--text-xs); color: var(--color-text-2); mat-icon { font-size: 14px; width: 14px; height: 14px; } }
       .body { padding: 4px 12px 12px 40px; border-top: 1px solid var(--color-line); background: var(--color-surface); }
-      &.dec-Approved { border-left: 4px solid var(--color-ok); } &.dec-Queried { border-left: 4px solid var(--color-warn); } &.dec-Rejected { border-left: 4px solid var(--color-danger); opacity: .8; } }
+      &.dec-Approved { border-left: 4px solid var(--color-ok); } &.dec-Queried { border-left: 4px solid var(--color-warn); } &.dec-Rejected { border-left: 4px solid var(--color-danger); opacity: .8; } &.dec-SentBack { border-left: 4px solid var(--color-danger); opacity: .85; } }
 
     .chk-verdict { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: var(--radius-md); margin-bottom: var(--space-2); strong { display: block; font-size: var(--text-sm); } small { color: var(--color-text-3); font-size: var(--text-xs); }
       &.fail { background: var(--color-danger-soft); mat-icon { color: var(--color-danger); } } &.review { background: var(--color-warn-soft); mat-icon { color: var(--color-warn); } } &.pass { background: var(--color-ok-soft); mat-icon { color: var(--color-ok); } } }
@@ -1281,6 +1297,15 @@ export class FinanceCreditorsComponent implements OnInit {
       error: e => this.fail(e, "Couldn't send the answer.")
     });
   }
+  accLiveCount(b: BatchDetail): number { return b.items.filter(i => i.decisionStatus !== 'SentBack').length; }
+  accSendBackCount(b: BatchDetail): number { return b.items.filter(i => i.decisionStatus !== 'SentBack' && i.accountantDecision === 'SentBack').length; }
+  /** Accountant's call on one payment. Send back needs a reason; clicking the chosen button again clears it. */
+  accDecide(it: BatchItem, d: 'Approved' | 'SentBack' | 'Pending'): void {
+    const b = this.batch()!; let c: string | null = null;
+    if (d === 'SentBack') { c = prompt(`Why is ${it.supplierName} being sent back? The preparer sees this.`); if (!c?.trim()) return; }
+    this.busy.set(true);
+    this.api.accountantDecide(b.id, it.id, d, c || undefined).subscribe({ next: r => this.apply(r), error: e => this.fail(e, "Couldn't save your decision.") });
+  }
   /** Copy a rejected payment (with its documents) onto a new draft pack and open it to fix. */
   resubmit(b: BatchDetail, it: BatchItem): void {
     if (!confirm(`Put ${it.supplierName} (R ${it.amount.toFixed(2)}) on a new draft pack so you can fix it and send it through again?`)) return;
@@ -1446,7 +1471,7 @@ export class FinanceCreditorsComponent implements OnInit {
       case 'QueriedByAccountant': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.accountantName || 'the accountant'}`, body: b.returnReason || 'Reopen, fix what was asked, and submit again.' };
       case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.directorName || 'the director'}`, body: (b.returnReason ? b.returnReason + ' — ' : '') + 'Answer each query below (or on the Queried payments tab). Once all are answered the pack goes straight back to the director.' };
       case 'AwaitingAccountant': return b.can.accountant
-        ? { icon: 'fact_check', tone: 'warn', title: 'Your approval is needed', body: `Check the schedule against the recon and the supporting documents. Approve to send it to ${dir}, or send it back with a note.` }
+        ? { icon: 'fact_check', tone: 'warn', title: 'Your approval is needed', body: `Check the schedule against the recon and the supporting documents. You can approve or send back each payment below: when you sign, approved payments go to ${dir} and sent-back ones return to the preparer with your reason. Or send the whole pack back with a note.` }
         : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${acc} to approve`, body: 'Nothing for you to do here right now.' };
       case 'AwaitingDirector':
         if (b.can.directorConflict) return { icon: 'block', tone: 'warn', title: 'Another director must sign this one', body: b.can.directorConflict };

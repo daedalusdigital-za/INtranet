@@ -948,7 +948,7 @@ public class CreditorPacksController : ControllerBase
             var invDate = docs?.Select(d => d.DocumentDate).Where(d => d.HasValue).Max();
             var docNo = !string.IsNullOrWhiteSpace(i.InvoiceNumbers) ? i.InvoiceNumbers!.Trim()
                       : docs?.Select(d => d.ExtractedInvoiceNumber).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? "";
-            var payable = i.DecisionStatus == "Rejected" ? 0m : i.Amount;
+            var payable = i.DecisionStatus is "Rejected" or "SentBack" ? 0m : i.Amount;
             return new
             {
                 no = n + 1, itemId = i.Id, supplier = i.SupplierName, invoiceDate = invDate, documentNumber = docNo,
@@ -1204,8 +1204,14 @@ public class CreditorPacksController : ControllerBase
 
         var approve = dto.Decision.Equals("approve", StringComparison.OrdinalIgnoreCase);
         if (!approve && string.IsNullOrWhiteSpace(dto.Comment)) return BadRequest(new { message = "Say what needs fixing when you send a pack back." });
+        List<PaymentBatchItem>? pendingEmail = null;
 
         var from = b.Status;
+        // Per-payment: anything the accountant marked "Send back" stays on the pack as SentBack (never paid from it); the rest goes forward.
+        var live = b.Items.Where(i => i.DecisionStatus != "SentBack").ToList();
+        var sendBack = live.Where(i => i.AccountantDecision == "SentBack").ToList();
+        if (approve && live.Count > 0 && sendBack.Count == live.Count)
+            return BadRequest(new { message = "You've sent back every payment — use “Send back” for the whole pack instead." });
         if (approve)
         {
             var (candidates, _) = await CandidateApproversAsync(b.CompanyCode, CreditorWorkflow.RoleDirector);
@@ -1217,12 +1223,25 @@ public class CreditorPacksController : ControllerBase
 
             b.Status = CreditorWorkflow.AwaitingDirector;
             b.AccountantUserId = UserId; b.AccountantName = UserName; b.AccountantApprovedAt = DateTime.UtcNow; b.AccountantComment = dto.Comment;
+            foreach (var it in live)
+            {
+                if (it.AccountantDecision == "SentBack") { it.DecisionStatus = "SentBack"; it.DecisionComment = it.AccountantDecisionComment; it.DecidedAt = DateTime.UtcNow; }
+                else { it.AccountantDecision = "Approved"; it.AccountantDecidedAt ??= DateTime.UtcNow; }
+            }
+            if (sendBack.Count > 0)
+                b.Events.Add(Ev("AccountantSentBackItems", null, null, Trunc($"{sendBack.Count} payment(s) sent back: " + string.Join("; ", sendBack.Select(i => $"{i.SupplierName} R{i.Amount:N2} — {i.AccountantDecisionComment}")), 1000)));
             b.RequestedDirectorIds = wanted.Count == 0 ? null : string.Join(",", chosen.Select(a => a.UserId));
             b.RequestedDirectorNames = chosen.Count == 0 ? null : string.Join(", ", chosen.Select(a => a.Name));
             await _sign.SignAsync(new SignatureRequest { EntityType = "PaymentBatch", EntityId = b.Id, Context = "AccountantApproval", SignerUserId = UserId, SignerName = UserName, SignerRole = CreditorWorkflow.RoleAccountant, Action = "Approve", Comment = dto.Comment, Method = sig.Value.Method, IpAddress = Ip(), UserAgent = Ua(), Payload = Snapshot(b), SignatureImage = sig.Value.Bytes, SignatureImageMimeType = sig.Value.Mime });
             b.Events.Add(Ev("AccountantApproved", from, b.Status, (dto.Comment ?? "") + (chosen.Count > 0 ? $" · sent to {b.RequestedDirectorNames}" : "")));
             await NotifyAsync(chosen.Select(d => (int?)d.UserId), "Payment pack ready for your signature", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · prepared by {b.PreparedByName}, approved by {UserName}", b.Id);
             await EmailApproversAsync(chosen, b, "check and sign", "Director sign-off", approvedBy: UserName);
+            if (sendBack.Count > 0)
+            {
+                await NotifyAsync(new[] { (int?)b.PreparedByUserId }, $"{sendBack.Count} payment{(sendBack.Count == 1 ? "" : "s")} sent back by {UserName}",
+                    $"{b.BatchNumber}: " + string.Join("; ", sendBack.Select(i => $"{i.SupplierName} R{i.Amount:N2} — {i.AccountantDecisionComment}")), b.Id);
+                pendingEmail = sendBack;
+            }
         }
         else
         {
@@ -1232,6 +1251,28 @@ public class CreditorPacksController : ControllerBase
             await NotifyAsync(new[] { (int?)b.PreparedByUserId }, "Payment pack sent back", $"{b.BatchNumber}: {dto.Comment}", b.Id);
         }
         b.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        if (pendingEmail != null) await EmailRejectedAsync(b, pendingEmail, "accountant");
+        return Ok(await DetailAsync(id));
+    }
+
+    /// <summary>Accountant decides one payment: Approved | SentBack (needs a reason) | Pending (undecided). Applied when the accountant signs.</summary>
+    [HttpPost("batches/{id:int}/items/{itemId:int}/accountant-decision")]
+    public async Task<IActionResult> AccountantDecide(int id, int itemId, [FromBody] DecisionDto dto)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (b.Status != CreditorWorkflow.AwaitingAccountant) return Conflict(new { message = "The pack is not with the accountant." });
+        var c = await _db.CreditorCompanies.AsNoTracking().FirstOrDefaultAsync(x => x.Code == b.CompanyCode);
+        if (!await IsAccountantForAsync(b, c)) return Forbid();
+        if (b.PreparedByUserId == UserId && !IsSystemAdmin) return Conflict(new { message = "The preparer cannot approve their own batch." });
+        var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
+        if (it.DecisionStatus == "SentBack") return Conflict(new { message = "This payment was already sent back — the preparer fixes it on a new pack." });
+        var d = dto.Decision switch { "Approved" => "Approved", "SentBack" => "SentBack", "Pending" => null, _ => "?" };
+        if (d == "?") return BadRequest(new { message = "Decision must be Approved or SentBack." });
+        if (d == "SentBack" && string.IsNullOrWhiteSpace(dto.Comment)) return BadRequest(new { message = "Say why this payment is being sent back." });
+        it.AccountantDecision = d; it.AccountantDecisionComment = d == "SentBack" ? Trunc(dto.Comment!.Trim(), 1000) : (string.IsNullOrWhiteSpace(dto.Comment) ? null : Trunc(dto.Comment.Trim(), 1000));
+        it.AccountantDecidedAt = d == null ? null : DateTime.UtcNow;
+        b.Events.Add(Ev("AccountantItemDecision", null, null, Trunc($"{it.SupplierName} R{it.Amount:N2} → {d ?? "undecided"}" + (it.AccountantDecisionComment != null ? $": {it.AccountantDecisionComment}" : ""), 1000)));
         await _db.SaveChangesAsync();
         return Ok(await DetailAsync(id));
     }
@@ -1246,6 +1287,7 @@ public class CreditorPacksController : ControllerBase
         if (!await IsDirectorForAsync(b, c)) return Forbid();
         if (DirectorConflict(b) is { } conflict) return StatusCode(403, new { message = conflict });
         var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
+        if (it.DecisionStatus == "SentBack") return Conflict(new { message = "The accountant sent this payment back — it isn't for your decision." });
         var d = dto.Decision switch { "Approved" => "Approved", "Queried" => "Queried", "Rejected" => "Rejected", "Pending" => "Pending", _ => null };
         if (d == null) return BadRequest(new { message = "Decision must be Approved, Queried or Rejected." });
         if (d != "Approved" && d != "Pending" && string.IsNullOrWhiteSpace(dto.Comment)) return BadRequest(new { message = "Give a reason when querying or rejecting a payment." });
@@ -1311,7 +1353,8 @@ public class CreditorPacksController : ControllerBase
     {
         var b = await Load(id); if (b == null) return NotFound();
         var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
-        if (it.DecisionStatus != "Rejected" || b.DirectorSignedAt == null) return Conflict(new { message = "Only a payment the director has rejected and signed off can be resubmitted." });
+        var sentBack = it.DecisionStatus == "SentBack" && b.AccountantApprovedAt != null;
+        if (!sentBack && (it.DecisionStatus != "Rejected" || b.DirectorSignedAt == null)) return Conflict(new { message = "Only a payment the accountant sent back, or the director rejected and signed off, can be resubmitted." });
         if (it.ResubmittedAsBatchNumber != null) return Conflict(new { message = $"This payment was already resubmitted on {it.ResubmittedAsBatchNumber}." });
         if (!await CanPrepareAsync(b)) return Forbid();
 
@@ -1321,10 +1364,11 @@ public class CreditorPacksController : ControllerBase
         var nb = new PaymentBatch
         {
             BatchNumber = $"{prefix}{seq:0000}", CompanyCode = b.CompanyCode, PaymentType = b.PaymentType, BatchDate = DateTime.UtcNow.Date,
-            Notes = Trunc($"Resubmitted: {it.SupplierName} was rejected on {b.BatchNumber} by {b.DirectorName} — {it.DecisionComment}", 1000),
+            Notes = Trunc(sentBack ? $"Resubmitted: {it.SupplierName} was sent back on {b.BatchNumber} by {b.AccountantName} — {it.DecisionComment}"
+                                   : $"Resubmitted: {it.SupplierName} was rejected on {b.BatchNumber} by {b.DirectorName} — {it.DecisionComment}", 1000),
             PreparedByUserId = UserId, PreparedByName = UserName
         };
-        nb.Events.Add(Ev("Created", null, CreditorWorkflow.Draft, $"Resubmitting {it.SupplierName} R{it.Amount:N2}, rejected on {b.BatchNumber}: {it.DecisionComment}"));
+        nb.Events.Add(Ev("Created", null, CreditorWorkflow.Draft, Trunc($"Resubmitting {it.SupplierName} R{it.Amount:N2}, {(sentBack ? "sent back" : "rejected")} on {b.BatchNumber}: {it.DecisionComment}", 1000)));
         _db.PaymentBatches.Add(nb);
         await _db.SaveChangesAsync();
 
@@ -1334,6 +1378,7 @@ public class CreditorPacksController : ControllerBase
         copy.PrepaymentOpen = b.PaymentType == CreditorPaymentTypes.Prepayment;
         copy.QueryQuestion = null; copy.QueryAskedByName = null; copy.QueryAskedAt = null; copy.QueryResponse = null; copy.QueryRespondedByName = null; copy.QueryRespondedAt = null;
         copy.QueriedFromBatchNumber = null; copy.ResubmittedAsBatchNumber = null;
+        copy.AccountantDecision = null; copy.AccountantDecisionComment = null; copy.AccountantDecidedAt = null;
         _db.PaymentBatchItems.Add(copy);
         await _db.SaveChangesAsync();
 
@@ -1360,8 +1405,10 @@ public class CreditorPacksController : ControllerBase
     }
 
     /// <summary>Emails the preparer: which payments the director rejected, why, and a link to open the pack and fix/resubmit them.</summary>
-    private async Task EmailRejectedAsync(PaymentBatch b, List<PaymentBatchItem> rejected)
+    private async Task EmailRejectedAsync(PaymentBatch b, List<PaymentBatchItem> rejected, string by)
     {
+        var acc = by == "accountant";
+        var verb = acc ? "sent back" : "rejected";
         var to = await _db.Users.AsNoTracking().Where(u => u.UserId == b.PreparedByUserId).Select(u => new { u.Email, u.Name }).FirstOrDefaultAsync();
         if (to == null || string.IsNullOrWhiteSpace(to.Email)) return;
         var company = await _db.CreditorCompanies.AsNoTracking().Where(x => x.Code == b.CompanyCode).Select(x => x.Name).FirstOrDefaultAsync() ?? b.CompanyCode;
@@ -1371,13 +1418,13 @@ public class CreditorPacksController : ControllerBase
       <tr><td style='padding:8px 10px;border-top:1px solid #fecaca;vertical-align:top'><b>{H(i.SupplierName)}</b>{(string.IsNullOrWhiteSpace(i.InvoiceNumbers) ? "" : $"<br/><span style='color:#6b7280;font-size:12px'>Invoice {H(i.InvoiceNumbers)}</span>")}</td>
           <td style='padding:8px 10px;border-top:1px solid #fecaca;vertical-align:top;white-space:nowrap;text-align:right'>R {i.Amount:N2}</td>
           <td style='padding:8px 10px;border-top:1px solid #fecaca;vertical-align:top'>{(string.IsNullOrWhiteSpace(i.DecisionComment) ? "<em>No reason given</em>" : H(i.DecisionComment))}</td></tr>"));
-        var subject = $"[Intranet] {rejected.Count} payment{(rejected.Count == 1 ? "" : "s")} rejected on {b.BatchNumber} — {company}";
+        var subject = $"[Intranet] {rejected.Count} payment{(rejected.Count == 1 ? "" : "s")} {verb} on {b.BatchNumber} — {company}";
         var html = $@"
 <div style='font-family:Segoe UI,Arial,sans-serif;max-width:620px;margin:0 auto;color:#1f2937'>
-  <div style='background:#b91c1c;color:#fff;padding:18px 24px;border-radius:12px 12px 0 0'><h2 style='margin:0;font-size:18px'>Payment{(rejected.Count == 1 ? "" : "s")} rejected by the director</h2><div style='opacity:.9;font-size:13px'>{H(company)} · {H(b.BatchNumber)}</div></div>
+  <div style='background:#b91c1c;color:#fff;padding:18px 24px;border-radius:12px 12px 0 0'><h2 style='margin:0;font-size:18px'>Payment{(rejected.Count == 1 ? "" : "s")} {verb} by the {by}</h2><div style='opacity:.9;font-size:13px'>{H(company)} · {H(b.BatchNumber)}</div></div>
   <div style='border:1px solid #e5e7eb;border-top:0;padding:22px 24px;border-radius:0 0 12px 12px'>
     <p style='margin:0 0 12px'>Hi {H((to.Name ?? b.PreparedByName ?? "").Split(' ')[0])},</p>
-    <p style='margin:0 0 14px'><b>{H(UserName)}</b> signed payment pack <b>{H(b.BatchNumber)}</b> and rejected {(rejected.Count == 1 ? "one of your payments" : $"{rejected.Count} of your payments")}. {(rejected.Count == 1 ? "It will not be paid" : "They will not be paid")} on this pack.</p>
+    <p style='margin:0 0 14px'><b>{H(UserName)}</b> {(acc ? "approved" : "signed")} payment pack <b>{H(b.BatchNumber)}</b> and {verb} {(rejected.Count == 1 ? "one of your payments" : $"{rejected.Count} of your payments")}. {(rejected.Count == 1 ? "It will not be paid" : "They will not be paid")} on this pack{(acc ? "; the rest have gone to the director" : "")}.</p>
     <table style='border-collapse:collapse;font-size:14px;margin:0 0 18px;width:100%;background:#fef2f2;border:1px solid #fecaca;border-radius:8px'>
       <tr style='color:#991b1b;font-size:12px;text-align:left'><th style='padding:8px 10px'>Payment</th><th style='padding:8px 10px;text-align:right'>Amount</th><th style='padding:8px 10px'>Reason</th></tr>{rows}
     </table>
@@ -1502,7 +1549,7 @@ public class CreditorPacksController : ControllerBase
             b.Events.Add(Ev("DirectorQueried", from, b.Status, dto.Comment ?? b.ReturnReason));
             await NotifyAsync(new[] { (int?)b.PreparedByUserId, b.AccountantUserId }, "Director queried a payment pack", $"{b.BatchNumber}: {b.ReturnReason}", b.Id);
         }
-        else if (b.Items.All(i => i.DecisionStatus == "Rejected"))
+        else if (b.Items.All(i => i.DecisionStatus is "Rejected" or "SentBack"))
         {
             b.Status = CreditorWorkflow.Rejected;
             b.ReturnReason = "All payments rejected by the director.";
@@ -1543,7 +1590,7 @@ public class CreditorPacksController : ControllerBase
         {
             await NotifyAsync(new[] { (int?)b.PreparedByUserId }, $"{rejected.Count} payment{(rejected.Count == 1 ? "" : "s")} rejected by {UserName}",
                 $"{b.BatchNumber}: " + string.Join("; ", rejected.Select(i => $"{i.SupplierName} R{i.Amount:N2} — {i.DecisionComment}")), b.Id);
-            await EmailRejectedAsync(b, rejected);
+            await EmailRejectedAsync(b, rejected, "director");
         }
         return Ok(await DetailAsync(id));
     }
@@ -1667,7 +1714,7 @@ public class CreditorPacksController : ControllerBase
                 if (b.Status is not (CreditorWorkflow.ChecksFailed or CreditorWorkflow.QueriedByAccountant or CreditorWorkflow.QueriedByDirector or CreditorWorkflow.Rejected)) return Conflict(new { message = "This batch can't be reopened." });
                 if (!await CanPrepareAsync(b)) return Forbid();
                 b.Status = CreditorWorkflow.Draft; b.AccountantApprovedAt = null; b.AccountantUserId = null; b.AccountantName = null;
-                foreach (var it in b.Items) { it.DecisionStatus = "Pending"; it.DecisionComment = null; it.DecidedAt = null; }
+                foreach (var it in b.Items.Where(i => i.DecisionStatus != "SentBack")) { it.DecisionStatus = "Pending"; it.DecisionComment = null; it.DecidedAt = null; it.AccountantDecision = null; it.AccountantDecisionComment = null; it.AccountantDecidedAt = null; }
                 break;
             default: return BadRequest(new { message = "Unknown status." });
         }
@@ -1731,7 +1778,7 @@ public class CreditorPacksController : ControllerBase
             .Where(b => scope.Allows(b.CompanyCode)).ToList();
         var inProgress = inProgressBatches.Select(b =>
         {
-            var live = b.Items.Where(i => i.DecisionStatus != "Rejected").OrderBy(i => i.SortOrder).ThenBy(i => i.Id).ToList();
+            var live = b.Items.Where(i => i.DecisionStatus != "Rejected" && i.DecisionStatus != "SentBack").OrderBy(i => i.SortOrder).ThenBy(i => i.Id).ToList();
             object Doc(PaymentBatchDocument d) => new { d.Id, d.DocType, title = CreditorChecksService.Label(d.DocType), d.OriginalFileName, d.TextMethod, d.UploadedAt, d.UploadedByName };
             var uploaded = b.Documents.Where(d => d.StoragePath != null).ToList();
             return new
@@ -2017,6 +2064,7 @@ public class CreditorPacksController : ControllerBase
                 i.ComplianceKind, i.ComplianceDetail, i.ComplianceTitle,
                 i.DecisionStatus, i.DecisionComment, i.DecidedAt, i.PrepaymentOpen, i.PaidAt, i.SortOrder,
                 i.QueryQuestion, i.QueryAskedByName, i.QueryAskedAt, i.QueryResponse, i.QueryRespondedByName, i.QueryRespondedAt, i.QueriedFromBatchNumber, i.ResubmittedAsBatchNumber,
+                i.AccountantDecision, i.AccountantDecisionComment, i.AccountantDecidedAt,
                 required = itemReq[i.Id],
                 recommended = itemRec[i.Id],
                 documents = b.Documents.Where(d => d.ItemId == i.Id).OrderBy(d => d.DocType).ThenBy(d => d.Version).Select(DocDto)

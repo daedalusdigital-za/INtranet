@@ -60,7 +60,9 @@ export interface BatchItem {
   payoutMethod?: 'EFT' | 'EWallet' | null;
   /** Compliance payments only. complianceTitle is "Licence" / "Other — {detail}". */
   complianceKind?: ComplianceKind | null; complianceDetail?: string | null; complianceTitle?: string | null;
-  decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string; decidedAt?: string; prepaymentOpen: boolean; paidAt?: string; sortOrder: number;
+  decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected' | 'SentBack';
+  /** The accountant's call on this payment (applied when they approve the pack): SentBack payments go back to the preparer. */
+  accountantDecision?: 'Approved' | 'SentBack' | null; accountantDecisionComment?: string | null; accountantDecidedAt?: string | null; decisionComment?: string; decidedAt?: string; prepaymentOpen: boolean; paidAt?: string; sortOrder: number;
   /** Director's query on this payment and the preparer/accountant's answer. queriedFromBatchNumber: the pack it was split off. */
   queryQuestion?: string | null; queryAskedByName?: string | null; queryAskedAt?: string | null;
   queryResponse?: string | null; queryRespondedByName?: string | null; queryRespondedAt?: string | null; queriedFromBatchNumber?: string | null;
@@ -140,6 +142,7 @@ export class CreditorPacksService {
   summary() { return this.http.get<{ byStatus: { status: string; count: number; amount: number }[]; openPrepayments: number }>(`${this.base}/summary`); }
   inbox() { return this.http.get<InboxRow[]>(`${this.base}/inbox`); }
   alerts() { return this.http.get<CreditorAlert[]>(`${this.base}/alerts`); }
+  accountantDecide(id: number, itemId: number, decision: string, comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/accountant-decision`, { decision, comment }); }
   resubmitRejected(id: number, itemId: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/resubmit`, {}); }
   queries() { return this.http.get<QueryRow[]>(`${this.base}/queries`); }
   answerQuery(id: number, itemId: number, answer: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/query-answer`, { answer }); }
