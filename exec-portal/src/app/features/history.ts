@@ -64,15 +64,13 @@ import { Api, History } from '../core/api';
     }
   `,
   styles: [`
-    .head { margin-bottom: 14px; } h1 { margin: 0 0 4px; font-size: 22px; } .head p { margin: 0; }
     .filters { padding: 12px; display: grid; gap: 10px; margin-bottom: 14px; }
-    .seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-    .seg button { flex: 1; min-height: 40px; border: 0; border-right: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 14px; } .seg button:last-child { border-right: 0; } .seg button.on { background: #eef2ff; color: var(--brand); font-weight: 700; }
-    .fr { display: flex; gap: 8px; flex-wrap: wrap; } .fr input, .fr select { flex: 1; min-width: 160px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 14px; }
-    .sum { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 10px; font-size: 14px; }
-    .list { display: grid; gap: 10px; }
+    .seg { display: flex; gap: 4px; padding: 4px; background: var(--line-2); border-radius: 12px; }
+    .seg button { flex: 1; min-height: 36px; border: 0; border-radius: 9px; background: transparent; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--muted); transition: background .15s, color .15s; } .seg button:hover { color: var(--ink); } .seg button.on { background: #fff; color: var(--brand); box-shadow: var(--shadow-sm); }
+    .fr { display: flex; gap: 8px; flex-wrap: wrap; } .fr input, .fr select { flex: 1; min-width: 160px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 14px; } .fr input:focus, .fr select:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 4px rgba(99, 102, 241, .15); }
+    .sum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 2px 12px; font-size: 14px; color: var(--ink-2); } .sum b { color: var(--ink); }
     .pb { padding: 0; overflow: hidden; }
-    .pbh { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; background: none; border: 0; text-align: left; cursor: pointer; color: inherit; } .pbh:active { background: #eef2ff; }
+    .pbh { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 15px 16px; background: none; border: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; transition: background .15s; } .pbh:hover { background: #fafbff; } .pbh:active { background: #f1f3ff; }
     .co { font-weight: 700; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .r { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; } .chev { color: #9ca3af; }
     .lines { border-top: 1px solid var(--line); padding: 8px 16px 14px; }
@@ -80,7 +78,6 @@ import { Api, History } from '../core/api';
     .sup { font-weight: 600; } .r2 { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
     .link { background: none; border: 0; padding: 0; color: var(--brand); font-size: 13px; cursor: pointer; text-decoration: underline; }
     .sm { font-size: 12px; }
-    .empty { text-align: center; padding: 40px 20px; } .big { font-size: 40px; } .empty h2 { margin: 8px 0 4px; }
   `]
 })
 export class HistoryPage implements OnInit {

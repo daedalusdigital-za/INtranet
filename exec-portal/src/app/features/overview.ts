@@ -10,7 +10,7 @@ import { Api, Executive } from '../core/api';
   template: `
     <div class="head">
       <div><h1>Overview</h1><p class="muted">Where every payment pack stands across your companies.</p></div>
-      <button type="button" class="btn ghost sm" (click)="load()" [disabled]="loading()">Refresh</button>
+      <button type="button" class="icon-btn" [class.spin]="loading()" (click)="load()" [disabled]="loading()" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
     </div>
     @if (loading()) { <div class="spinner"></div> }
     @else if (forbidden()) { <div class="card empty"><div class="big">🔒</div><h2>Overview is for directors</h2><p class="muted">Your account can approve packs but doesn't have the executive overview. Use <a routerLink="/">Sign</a> for what's waiting for you.</p></div> }
@@ -35,7 +35,9 @@ import { Api, Executive } from '../core/api';
         </a>
       </div>
 
+      <div class="cols">
       @if (d.awaiting.length) {
+        <div class="full">
         <h2 class="sec">Awaiting director signature</h2>
         <div class="list">
           @for (a of d.awaiting; track a.id) {
@@ -47,27 +49,33 @@ import { Api, Executive } from '../core/api';
             </a>
           }
         </div>
+        </div>
       }
 
       @if (d.schedule.length) {
+        <div>
         <h2 class="sec">Upcoming pay-runs</h2>
         <div class="card">
           @for (s of d.schedule; track s.date) {
             <a class="line" routerLink="/payruns"><span>{{ s.date | date:'EEE d MMM' }} <span class="muted sm">· {{ s.count }} pack{{ s.count === 1 ? '' : 's' }}</span></span><b class="amt">{{ s.amount | currency:'ZAR':'R ':'1.0-0' }}</b></a>
           }
         </div>
+        </div>
       }
 
       @if (d.pipeline.length) {
+        <div>
         <h2 class="sec">Pipeline</h2>
         <div class="card">
           @for (p of d.pipeline; track p.status) {
             <div class="line"><span>{{ p.title }} <span class="muted sm">· {{ p.count }}</span></span><b class="amt">{{ p.amount | currency:'ZAR':'R ':'1.0-0' }}</b></div>
           }
         </div>
+        </div>
       }
 
       @if (d.perCompany.length) {
+        <div class="full">
         <h2 class="sec">By company</h2>
         <div class="list">
           @for (c of d.perCompany; track c.code) {
@@ -81,43 +89,45 @@ import { Api, Executive } from '../core/api';
             </div>
           }
         </div>
+        </div>
       }
 
       @if (d.paidByMonth.length) {
+        <div>
         <h2 class="sec">Paid per month</h2>
         <div class="card">
           @for (m of d.paidByMonth; track m.label) {
             <div class="bar"><span class="bl">{{ m.label }}</span><span class="track"><span class="fill" [style.width.%]="pct(m.total)"></span></span><b class="amt sm">{{ m.total | currency:'ZAR':'R ':'1.0-0' }}</b></div>
           }
         </div>
+        </div>
       }
 
       @if (d.topSuppliers.length) {
+        <div>
         <h2 class="sec">Top payees · last 90 days</h2>
         <div class="card">
           @for (s of d.topSuppliers; track s.supplier) {
             <div class="line"><span>{{ s.supplier }} <span class="muted sm">· {{ s.payments }} payment{{ s.payments === 1 ? '' : 's' }}</span></span><b class="amt">{{ s.amount | currency:'ZAR':'R ':'1.0-0' }}</b></div>
           }
         </div>
+        </div>
       }
+      </div>
     }
   `,
   styles: [`
-    .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; } h1 { margin: 0 0 4px; font-size: 22px; } .head p { margin: 0; }
-    .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } @media (min-width: 720px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-    .kpi { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; padding: 14px; } .kpi .k { font-size: 13px; color: var(--muted); font-weight: 600; } .kpi b { font-size: 22px; }
-    .kpi.accent { border-color: var(--brand); background: #eef2ff; } .kpi.warn b { color: var(--warn); } .kpi:active { background: #eef2ff; }
-    .sec { font-size: 16px; margin: 22px 0 8px; }
-    .list { display: grid; gap: 10px; }
+    @media (min-width: 760px) { .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    /* Desktop: sections sit two-up so the whole picture fits on one screen. */
+    @media (min-width: 900px) { .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-items: start; } .cols .full { grid-column: 1 / -1; } }
     .row { display: flex; justify-content: space-between; gap: 12px; align-items: center; text-decoration: none; color: inherit; padding: 14px 16px; } .row:active { background: #eef2ff; }
     .co { font-weight: 700; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .row .pill.ok { margin-top: 6px; }
     .big2 { font-weight: 700; font-size: 17px; white-space: nowrap; }
     .line { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; } .line:last-child { border-bottom: 0; } .line:first-child { padding-top: 0; }
     .co-card { padding: 14px 16px; } .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; } .grid3 div { display: flex; flex-direction: column; } .grid3 b { font-size: 15px; }
     .bar { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 10px; padding: 6px 0; } .bl { font-size: 13px; color: var(--muted); }
-    .track { height: 10px; background: var(--bg); border-radius: 999px; overflow: hidden; } .fill { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+    .track { height: 10px; background: var(--line-2); border-radius: 999px; overflow: hidden; } .fill { display: block; height: 100%; background: linear-gradient(90deg, #818cf8, var(--brand)); border-radius: 999px; transition: width .4s ease-out; }
     .sm { font-size: 12px; }
-    .empty { text-align: center; padding: 40px 20px; } .big { font-size: 40px; } .empty h2 { margin: 8px 0 4px; }
   `]
 })
 export class OverviewPage implements OnInit {

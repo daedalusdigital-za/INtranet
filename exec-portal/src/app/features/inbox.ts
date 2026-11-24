@@ -10,7 +10,7 @@ import { AuthStore } from '../core/auth';
   template: `
     <div class="head">
       <div><h1>Waiting for you</h1><p class="muted">Payment packs that need your {{ auth.user()?.role === 'Admin' ? 'approval or signature' : 'attention' }}.</p></div>
-      <button type="button" class="btn ghost sm" (click)="load()" [disabled]="loading()">Refresh</button>
+      <button type="button" class="icon-btn" [class.spin]="loading()" (click)="load()" [disabled]="loading()" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
     </div>
     @if (openQueries().length) {
       <h2 class="sec">Director queries to answer</h2>
@@ -35,7 +35,7 @@ import { AuthStore } from '../core/auth';
     } @else {
       <div class="list">
         @for (r of rows(); track r.id) {
-          <a class="card row" [routerLink]="['/pack', r.id]">
+          <a class="card row" [class.acc]="r.role !== 'director'" [routerLink]="['/pack', r.id]">
             <div class="l">
               <div class="co">{{ r.companyName }} <span class="pill neutral">{{ r.paymentTypeTitle }}</span></div>
               <div class="bn">{{ r.batchNumber }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }} · prepared by {{ r.preparedByName }}</div>
@@ -54,15 +54,16 @@ import { AuthStore } from '../core/auth';
     }
   `,
   styles: [`
-    .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; } h1 { margin: 0 0 4px; font-size: 22px; } .head p { margin: 0; }
-    .list { display: grid; gap: 10px; } .qlist { margin-bottom: 8px; } .row.q { border-left: 5px solid var(--warn); }
-    .sec { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 14px 0 8px; }
-    .row { display: flex; gap: 14px; justify-content: space-between; text-decoration: none; color: inherit; padding: 14px 16px; }
-    .row:active { background: #eef2ff; }
+    .qlist { margin-bottom: 4px; } .sec:first-of-type { margin-top: 6px; }
+    .row { position: relative; display: flex; gap: 14px; justify-content: space-between; text-decoration: none; color: inherit; padding: 15px 16px 15px 19px; overflow: hidden; }
+    .row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--brand); }
+    .row.q::before { background: #f59e0b; } .row.acc::before { background: #0ea5e9; }
+    .row:active { background: #f8faff; }
     .co { font-weight: 700; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .bn { font-size: 14px; margin-top: 2px; } .nt { font-size: 14px; margin-top: 4px; }
     .ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; } .note { margin-top: 8px; }
-    .r { text-align: right; flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; } .amt { font-weight: 700; font-size: 18px; } .sm { font-size: 12px; } .chev { font-size: 26px; color: #9ca3af; margin-top: auto; line-height: 1; }
-    .empty { text-align: center; padding: 40px 20px; } .big { font-size: 40px; } .empty h2 { margin: 8px 0 4px; }
+    .r { text-align: right; flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; } .amt { font-weight: 700; font-size: 18px; letter-spacing: -.02em; } .sm { font-size: 12px; } .chev { font-size: 24px; color: #94a3b8; margin-top: auto; line-height: 1; transition: transform .15s; }
+    a.row:hover .chev { transform: translateX(3px); color: var(--brand); }
+    @media (max-width: 480px) { .row { flex-direction: column; gap: 8px; } .r { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; text-align: left; } .chev { display: none; } .bn { font-size: 13.5px; } }
   `]
 })
 export class InboxPage implements OnInit {

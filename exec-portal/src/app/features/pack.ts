@@ -173,15 +173,21 @@ import { AuthStore } from '../core/auth';
     }
   `,
   styles: [`
-    .back { display: inline-block; margin-bottom: 10px; text-decoration: none; font-weight: 600; }
+    .back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 12px; padding: 6px 12px 6px 9px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-sm); text-decoration: none; font-weight: 600; font-size: 13.5px; color: var(--ink-2); }
+    .back:hover { color: var(--brand); border-color: #c7d2fe; }
+    .card.head { align-items: flex-start; background: linear-gradient(135deg, #f5f6ff, #fff 60%); }
+    @media (max-width: 560px) {
+      .card.head { flex-direction: column-reverse; gap: 6px; } .card.head h1 { font-size: 21px; }
+      .card.head .sum { text-align: left; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; width: 100%; } .card.head .sum .amt { margin-top: 0; font-size: 22px; }
+    }
     .head { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 12px; } h1 { margin: 0 0 4px; font-size: 20px; } .nt { margin-top: 6px; font-size: 14px; }
     .sum { text-align: right; flex: 0 0 auto; } .amt { font-weight: 800; font-size: 20px; margin-top: 6px; } .sm { font-size: 13px; }
     .act { margin-bottom: 12px; } .act p { margin: 8px 0 0; }
-    .sec { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 8px; }
-    .items { display: grid; gap: 10px; } .item { padding: 14px 16px; border-left: 5px solid var(--line); }
-    .item.sel-ok { border-left-color: var(--ok); } .item.sel-warn { border-left-color: var(--warn); } .item.sel-bad { border-left-color: var(--bad); }
+    .items { display: grid; gap: 10px; } .item { position: relative; padding: 15px 16px 15px 19px; overflow: hidden; }
+    .item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--line); transition: background .2s; }
+    .item.sel-ok::before { background: var(--ok); } .item.sel-warn::before { background: #f59e0b; } .item.sel-bad::before { background: #ef4444; }
     .ir { display: flex; justify-content: space-between; gap: 12px; } .sup { font-weight: 700; } .iamt { font-weight: 700; white-space: nowrap; }
-    .prev { margin-top: 10px; } .docs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .doc { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+    .prev { margin-top: 10px; } .docs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .doc { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--ink-2); transition: border-color .15s, color .15s; } .doc:hover { border-color: #a5b4fc; color: var(--brand); }
     .dec { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
     .item.dim { opacity: .85; } .dec.two { grid-template-columns: repeat(2, 1fr); }
     .rej { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; background: var(--bad-bg); color: var(--bad); border-radius: 10px; padding: 10px 12px; font-size: 14px; } .rej span { color: var(--ink); }
@@ -195,7 +201,7 @@ import { AuthStore } from '../core/auth';
     .modes { display: flex; gap: 6px; margin-bottom: 10px; } .mode { flex: 1; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; } .mode.on { border-color: var(--brand); background: #eef2ff; color: var(--brand); font-weight: 600; } .mode:disabled { opacity: .5; }
     .saved { display: block; max-height: 90px; max-width: 100%; }
     .pad { width: 100%; height: 150px; border: 1px solid var(--line); border-radius: 10px; background: #fff; touch-action: none; display: block; } .padfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
-    .ok-box { text-align: center; padding: 32px 20px; } .big { font-size: 40px; } .ok-box h2 { margin: 8px 0 4px; } .ok-box .btn { margin-top: 16px; }
+    .ok-box { text-align: center; padding: 36px 20px; } .big { font-size: 34px; width: 72px; height: 72px; display: grid; place-items: center; margin: 0 auto 6px; border-radius: 50%; background: var(--ok-bg); } .ok-box h2 { margin: 8px 0 4px; } .ok-box .btn { margin-top: 16px; }
     .hist .ev { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; } .hist .ev:last-child { border-bottom: 0; }
   `]
 })

@@ -17,7 +17,7 @@ type Filter = 'toLoad' | 'loaded' | 'pop' | 'overdue' | 'progress' | null;
     <input #popInput type="file" accept="application/pdf,.pdf" hidden (change)="onPopFile($event)">
     <div class="head">
       <div><h1>Pay-runs</h1><p class="muted">Signed packs booked on the Monday and Wednesday runs.</p></div>
-      <button type="button" class="btn ghost sm" (click)="load()" [disabled]="loading()">{{ loading() ? 'Loading…' : 'Refresh' }}</button>
+      <button type="button" class="icon-btn" [class.spin]="loading()" (click)="load()" [disabled]="loading()" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
     </div>
     @if (msg(); as m) { <p class="toast" [class.bad]="m.bad" (click)="msg.set(null)">{{ m.text }}</p> }
     @if (loading() && !s()) { <div class="spinner"></div> }
@@ -128,23 +128,19 @@ type Filter = 'toLoad' | 'loaded' | 'pop' | 'overdue' | 'progress' | null;
     }
   `,
   styles: [`
-    .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; } h1 { margin: 0 0 4px; font-size: 22px; } .head p { margin: 0; }
-    .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } @media (min-width: 720px) { .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
-    .kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
-    .kpi:hover { border-color: var(--brand); } .kpi.on { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand) inset; }
-    .kpi .k { font-size: 13px; color: var(--muted); font-weight: 600; } .kpi b { font-size: 20px; } .kpi.bad b { color: var(--bad); } .kpi.ip { border-style: dashed; }
+    .kpi.on { border-color: #a5b4fc; background: linear-gradient(135deg, #eef2ff, #fff 75%); box-shadow: 0 0 0 1px #a5b4fc, var(--shadow); } .kpi.ip { border-style: dashed; }
     .filt { margin: 12px 0 0; font-size: 14px; } .how { margin: 10px 0 0; }
-    .toast { background: var(--ok-bg); color: var(--ok); padding: 10px 14px; border-radius: 10px; font-size: 14px; cursor: pointer; } .toast.bad { background: var(--bad-bg); color: var(--bad); }
+    .toast { position: sticky; top: 56px; z-index: 4; background: var(--ok-bg); color: var(--ok); border: 1px solid #a7f3d0; padding: 11px 14px; border-radius: 12px; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: var(--shadow); } .toast.bad { background: var(--bad-bg); color: var(--bad); border-color: #fecaca; }
+    @media (max-width: 759px) { .toast { top: 8px; } }
     .ipb { border-style: dashed; } .ipb.back { border-color: var(--bad); }
     .steps { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; } .steps span { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); } .steps span.done { background: var(--ok-bg); color: var(--ok); } .steps span.now { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
     .acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
     .dls { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
     .docs { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; } .doc { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: inherit; }
     .note { margin: 0 0 10px; } .badtxt { color: var(--bad); font-weight: 600; }
-    .sec { font-size: 16px; margin: 22px 0 8px; } .sec .muted { font-weight: 400; }
-    .list { display: grid; gap: 10px; }
     .pb { padding: 0; overflow: hidden; } .pb.overdue { border-color: var(--bad); }
-    .pbh { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; background: none; border: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; } .pbh:active { background: #eef2ff; }
+    .pbh { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 15px 16px; background: none; border: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; transition: background .15s; } .pbh:hover { background: #fafbff; } .pbh:active { background: #f1f3ff; }
+    .acts .btn { flex: 1 1 auto; } @media (min-width: 760px) { .acts .btn { flex: 0 0 auto; } }
     .co { font-weight: 700; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .r { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; } .chev { color: #9ca3af; }
     .lines { border-top: 1px solid var(--line); padding: 8px 16px 14px; }
@@ -152,7 +148,7 @@ type Filter = 'toLoad' | 'loaded' | 'pop' | 'overdue' | 'progress' | null;
     .sup { font-weight: 600; } .r2 { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
     .link { background: none; border: 0; padding: 0; color: var(--brand); font-size: 13px; cursor: pointer; text-decoration: underline; } .link.ok { color: var(--ok); }
     .sm { font-size: 12px; } .foot { text-align: center; margin-top: 18px; }
-    .empty { text-align: center; padding: 40px 20px; margin-top: 14px; } .big { font-size: 40px; } .empty h2 { margin: 8px 0 4px; }
+    .empty { margin-top: 14px; }
   `]
 })
 export class PayrunsPage implements OnInit {

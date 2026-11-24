@@ -14,6 +14,7 @@ interface SavedChallenge { challenge: string; hint: string; email: string; at: n
   imports: [FormsModule],
   template: `
     <div class="card login">
+      <div class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
       @if (notice()) { <p class="note">{{ notice() }}</p> }
       @if (step() === 'password') {
         <h1>Sign in</h1>
@@ -43,8 +44,11 @@ interface SavedChallenge { challenge: string; hint: string; email: string; at: n
     </div>
   `,
   styles: [`
-    .login { max-width: 420px; margin: 8vh auto 0; }
-    h1 { margin: 0 0 6px; font-size: 24px; } p { margin: 0 0 18px; }
+    .login { max-width: 420px; margin: 7vh auto 0; padding: 28px 26px 24px; box-shadow: var(--shadow-lg); border-color: #e0e7ff; }
+    .lock { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; margin-bottom: 16px; color: #fff; background: linear-gradient(135deg, #6366f1, #4338ca); box-shadow: 0 8px 20px -6px rgba(79, 70, 229, .55); }
+    .lock svg { width: 24px; height: 24px; }
+    @media (max-width: 480px) { .login { margin-top: 3vh; padding: 22px 18px 18px; } }
+    h1 { margin: 0 0 6px; font-size: 24px; font-weight: 700; } p { margin: 0 0 18px; }
     .code { letter-spacing: 10px; font-size: 26px; text-align: center; font-variant-numeric: tabular-nums; }
     .row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
     .err { margin-bottom: 14px; } .note { margin-bottom: 14px; }
