@@ -48,6 +48,7 @@ type Tab = typeof TABS[number];
 
     @if (sched) {
       <div class="tr-kpis">
+        <button class="kpi" (click)="go('payruns')"><mat-icon>hourglass_top</mat-icon><div><span class="v">{{ sched.totals.inProgressCount ?? 0 }}</span><span class="l">in progress, not signed</span><span class="s">{{ (sched.totals.inProgress ?? 0) | currency:'ZAR':'R':'1.0-0' }}</span></div></button>
         <button class="kpi hot" (click)="go('payruns')"><mat-icon>upload_file</mat-icon><div><span class="v">{{ sched.totals.toLoadCount }}</span><span class="l">to load on bank</span><span class="s">{{ sched.totals.toLoad | currency:'ZAR':'R':'1.0-0' }}</span></div></button>
         <button class="kpi" (click)="go('payruns')"><mat-icon>account_balance</mat-icon><div><span class="v">{{ sched.totals.loadedCount }}</span><span class="l">loaded, to release</span><span class="s">{{ sched.totals.loaded | currency:'ZAR':'R':'1.0-0' }}</span></div></button>
         <button class="kpi" [class.warn]="sched.totals.awaitingPopCount > 0" (click)="go('payruns')"><mat-icon>receipt_long</mat-icon><div><span class="v">{{ sched.totals.awaitingPopCount }}</span><span class="l">paid, POPs to attach</span><span class="s">{{ sched.totals.awaitingPop | currency:'ZAR':'R':'1.0-0' }}</span></div></button>
@@ -60,7 +61,7 @@ type Tab = typeof TABS[number];
       <mat-tab>
         <ng-template mat-tab-label><mat-icon class="tab-icon">event_available</mat-icon>Pay-runs</ng-template>
         <div class="tab-body">
-          <p class="intro">Signed packs, grouped by pay-run. Download the <b>bank file</b>, mark <b>Loaded on bank</b>, release it and <b>Mark paid</b>, then attach a <b>proof of payment</b> to every line. When all POPs are on, <b>Close</b> the batch.</p>
+          <p class="intro"><b>In progress</b> shows packs still being prepared or approved, with their stage and documents to preview (view only). Below that are the signed packs, grouped by pay-run. Download the <b>bank file</b>, mark <b>Loaded on bank</b>, release it and <b>Mark paid</b>, then attach a <b>proof of payment</b> to every line. When all POPs are on, <b>Close</b> the batch.</p>
           @if (tab === 'payruns') { <app-finance-payment-schedule></app-finance-payment-schedule> }
         </div>
       </mat-tab>
@@ -142,7 +143,7 @@ type Tab = typeof TABS[number];
   styles: [`
 :host { display:block; }
 .tr-inner { max-width: 1400px; margin: 0 auto; padding: 0 24px 48px; }
-.tr-kpis { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin: 16px 0; }
+.tr-kpis { display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin: 16px 0; }
 .kpi { display:flex; gap:12px; align-items:center; text-align:left; padding:14px 16px; border-radius:12px; background: var(--surface,#fff); border:1px solid var(--border,#e5e7eb); font: inherit; color: inherit; cursor:pointer; }
 div.kpi { cursor:default; }
 .kpi mat-icon { font-size:28px; width:28px; height:28px; color: var(--primary,#4f46e5); }

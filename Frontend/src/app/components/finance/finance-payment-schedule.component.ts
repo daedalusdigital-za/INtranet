@@ -8,8 +8,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog } from '@angular/material/dialog';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, PaymentSchedule, ScheduleBatch, ScheduleItem } from '../../services/creditor-packs.service';
+import { CreditorPacksService, PaymentSchedule, ScheduleBatch, ScheduleItem, InProgressBatch, InProgressDoc } from '../../services/creditor-packs.service';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
+import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
 
 interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean; batches: ScheduleBatch[]; amount: number; }
 
@@ -31,6 +32,11 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
   <div class="ps">
     <!-- Totals -->
     <div class="ps-kpis">
+      <button class="ps-kpi ip" [class.on]="filter() === 'InProgress'" (click)="toggleFilter('InProgress')">
+        <div class="k-head"><mat-icon>hourglass_top</mat-icon> In progress</div>
+        <div class="k-val">{{ (data()!.totals.inProgress ?? 0) | currency:'ZAR':'R':'1.0-0' }}</div>
+        <div class="k-sub">{{ data()!.totals.inProgressCount ?? 0 }} pack{{ data()!.totals.inProgressCount === 1 ? '' : 's' }} not yet signed</div>
+      </button>
       <button class="ps-kpi" [class.on]="filter() === 'Approved'" (click)="toggleFilter('Approved')">
         <div class="k-head"><mat-icon>account_balance</mat-icon> To load on bank</div>
         <div class="k-val">{{ data()!.totals.toLoad | currency:'ZAR':'R':'1.0-0' }}</div>
@@ -62,11 +68,77 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
       </div>
     </div>
 
-    @if (runs().length === 0) {
+    @if (showInProgress() && (inProgress().length || filter() === 'InProgress')) {
+      <section class="run ip-run">
+        <header class="run-head">
+          <div class="run-date"><mat-icon>hourglass_top</mat-icon><b>In progress</b><span class="tag ip">Not signed yet</span></div>
+          <div class="run-sum">{{ inProgress().length }} pack{{ inProgress().length === 1 ? '' : 's' }} · <b>{{ inProgressAmount() | currency:'ZAR':'R':'1.2-2' }}</b></div>
+        </header>
+        <p class="ip-note"><mat-icon>visibility</mat-icon> For information only. These packs are still with the preparer, the accountant or a director, so there is nothing to load yet. Each one moves to a pay-run once a director signs it.</p>
+        @for (b of inProgress(); track b.id) {
+          <article class="batch ip" [class.open]="open() === -b.id">
+            <div class="b-row" (click)="toggle(-b.id)">
+              <div class="b-co"><span class="code">{{ b.companyCode }}</span><div><b>{{ b.companyName }}</b><small>{{ b.batchNumber }} · {{ b.paymentTypeTitle }}</small></div></div>
+              <div class="b-amt"><b>{{ b.amount | currency:'ZAR':'R':'1.2-2' }}</b><small>{{ b.itemCount }} payment{{ b.itemCount === 1 ? '' : 's' }} · {{ b.documentCount }} document{{ b.documentCount === 1 ? '' : 's' }}</small></div>
+              <ol class="ip-steps" [attr.aria-label]="'Stage: ' + b.statusTitle">
+                @for (s of ipSteps; track s; let k = $index) {
+                  <li [class.done]="k < b.stage" [class.cur]="k === b.stage" [class.back]="k === b.stage && b.sentBack">{{ s }}</li>
+                }
+              </ol>
+              <div class="b-status">
+                <span class="pill" [class.back]="b.sentBack" [class.cur]="!b.sentBack">{{ b.statusTitle }}</span>
+                <small>{{ whereNow(b) }}</small>
+              </div>
+              <div class="b-actions" (click)="$event.stopPropagation()">
+                <button mat-icon-button matTooltip="Preview the full pack (PDF)" (click)="previewPack(b)"><mat-icon>picture_as_pdf</mat-icon></button>
+                <button mat-icon-button matTooltip="Open the pack" (click)="openPack(b)"><mat-icon>open_in_new</mat-icon></button>
+                <mat-icon class="chev">{{ open() === -b.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+              </div>
+            </div>
+            @if (open() === -b.id) {
+              <div class="b-body">
+                <div class="b-meta">
+                  <span><mat-icon>person</mat-icon> Prepared by {{ b.preparedByName || '—' }} · {{ b.createdAt | date:'d MMM HH:mm' }}</span>
+                  @if (b.submittedAt) { <span><mat-icon>send</mat-icon> Submitted {{ b.submittedAt | date:'d MMM HH:mm' }}</span> }
+                  @if (b.accountantApprovedAt) { <span><mat-icon>fact_check</mat-icon> Accountant {{ b.accountantName }} approved {{ b.accountantApprovedAt | date:'d MMM HH:mm' }}</span> }
+                  <span><mat-icon>event</mat-icon> Earliest pay-run {{ b.expectedPayDate | date:'EEE d MMM' }} (once signed)</span>
+                </div>
+                @if (b.sentBack && b.returnReason) { <p class="ip-back"><mat-icon>reply</mat-icon> {{ b.returnReason }}</p> }
+                @if (b.batchDocuments.length) {
+                  <div class="ip-docs"><span class="lbl">Pack documents</span>
+                    @for (d of b.batchDocuments; track d.id) { <button class="doc" (click)="previewDoc(b, d)" [matTooltip]="d.originalFileName || d.title"><mat-icon>{{ d.textMethod === 'sheet' ? 'table_view' : 'picture_as_pdf' }}</mat-icon>{{ d.title }}</button> }
+                  </div>
+                }
+                <table class="items">
+                  <thead><tr><th>Beneficiary</th><th>Invoice(s) / reference</th><th class="r">Amount</th><th>Uploaded documents</th></tr></thead>
+                  <tbody>
+                    @for (i of b.items; track i.id) {
+                      <tr>
+                        <td><b>{{ i.supplierName }}</b>@if (i.complianceTitle) { <span class="cmp-tag">Compliance · {{ i.complianceTitle }}</span> }@if (i.description) { <small>{{ i.description }}</small> }@if (i.decisionStatus === 'Queried') { <small class="warn">Queried</small> }</td>
+                        <td>{{ i.invoiceNumbers || '—' }}</td>
+                        <td class="r"><b>{{ i.amount | currency:'ZAR':'R':'1.2-2' }}</b></td>
+                        <td>
+                          <div class="ip-docs">
+                            @for (d of i.documents; track d.id) { <button class="doc" (click)="previewDoc(b, d, i.supplierName)" [matTooltip]="(d.originalFileName || d.title) + (d.uploadedByName ? ' · ' + d.uploadedByName : '')"><mat-icon>{{ d.textMethod === 'sheet' ? 'table_view' : 'picture_as_pdf' }}</mat-icon>{{ d.title }}</button> }
+                            @empty { <span class="muted">Nothing uploaded yet</span> }
+                          </div>
+                        </td>
+                      </tr>
+                    } @empty { <tr><td colspan="4" class="muted">No payments on this pack yet.</td></tr> }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </article>
+        } @empty { <div class="ps-empty"><mat-icon>task_alt</mat-icon><p>No packs in progress@if (company()) { for this company }.</p></div> }
+      </section>
+    }
+
+    @if (filter() !== 'InProgress' && runs().length === 0) {
       <div class="ps-empty"><mat-icon>event_available</mat-icon><p>Nothing on the schedule@if (filter() || company()) { for this filter }. Batches land here the moment a director signs them.</p></div>
     }
 
-    @for (run of runs(); track run.date) {
+    @for (run of (filter() === 'InProgress' ? [] : runs()); track run.date) {
       <section class="run" [class.next]="run.isNext" [class.past]="run.isPast">
         <header class="run-head">
           <div class="run-date"><mat-icon>{{ run.isPast ? 'history' : 'event' }}</mat-icon><b>{{ run.label }}</b>@if (run.isNext) { <span class="tag next">Next pay-run</span> }@if (run.isPast) { <span class="tag past">Past pay-run</span> }</div>
@@ -146,7 +218,22 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
     .cmp-tag { display:inline-block; margin-left: var(--space-2); padding: 1px var(--space-2); border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); white-space: nowrap; }
     .ps { display:flex; flex-direction:column; gap: var(--space-4); }
     .ps-loading, .ps-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:48px 16px; color: var(--color-text-2); text-align:center; mat-icon { font-size:40px; width:40px; height:40px; } p { margin:0; } }
-    .ps-kpis { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: var(--space-3); }
+    .ps-kpis { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: var(--space-3); }
+    .ps-kpi.ip .k-head mat-icon { color: var(--color-info); }
+    .ip-run { border-style: dashed; }
+    .tag.ip { background: var(--color-info-soft); color: var(--color-info); }
+    .ip-note { display:flex; align-items:center; gap: var(--space-2); margin:0; padding: var(--space-2) var(--space-4); font-size: var(--text-sm); color: var(--color-text-2); border-bottom:1px solid var(--color-line); mat-icon { font-size:16px; width:16px; height:16px; flex-shrink:0; } }
+    .ip-steps { list-style:none; display:flex; gap:2px; margin:0; padding:0; flex-wrap:wrap;
+      li { font-size: var(--text-xs); padding:2px var(--space-2); border-radius:999px; background: var(--color-surface-3); color: var(--color-text-3); white-space:nowrap;
+        &.done { background: var(--color-ok-soft); color: var(--color-ok); }
+        &.cur { background: var(--color-info-soft); color: var(--color-info); font-weight:700; }
+        &.back { background: var(--color-warn-soft); color: var(--color-warn); } } }
+    .pill.cur { background: var(--color-info-soft); color: var(--color-info); } .pill.back { background: var(--color-warn-soft); color: var(--color-warn); }
+    .ip-back { display:flex; align-items:flex-start; gap: var(--space-2); margin:0 0 var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-warn-soft); color: var(--color-warn); font-size: var(--text-sm); mat-icon { font-size:16px; width:16px; height:16px; flex-shrink:0; } }
+    .ip-docs { display:flex; flex-wrap:wrap; align-items:center; gap: var(--space-1); .lbl { font-size: var(--text-xs); text-transform:uppercase; letter-spacing:.4px; color: var(--color-text-3); margin-right: var(--space-2); } }
+    .b-body > .ip-docs { margin-bottom: var(--space-3); }
+    .doc { display:inline-flex; align-items:center; gap:4px; font: inherit; font-size: var(--text-xs); padding:3px var(--space-2); border:1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); cursor:pointer;
+      mat-icon { font-size:14px; width:14px; height:14px; color: var(--color-danger); } &:hover { border-color: var(--color-primary); color: var(--color-primary); } }
     .ps-kpi { text-align:left; background: var(--color-surface); border:1px solid var(--color-line); border-radius: var(--radius-lg); padding:14px 16px; cursor:pointer; font: inherit; color: inherit; transition: border-color .15s, transform .15s;
       &:hover { border-color: var(--color-primary); } &.on { border-color: var(--color-primary); background: var(--color-primary-soft); } &.next { cursor: default; }
       .k-head { display:flex; align-items:center; gap:6px; font-size:var(--text-sm); color: var(--color-text-2); text-transform: uppercase; letter-spacing:.4px; mat-icon { font-size:18px; width:18px; height:18px; } }
@@ -177,7 +264,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
     .b-meta { display:flex; flex-wrap:wrap; gap:16px; font-size:var(--text-sm); color: var(--color-text-2); margin-bottom:10px; span { display:inline-flex; align-items:center; gap:4px; } mat-icon { font-size:16px; width:16px; height:16px; }
       .resched select { font: inherit; font-size:var(--text-sm); padding:3px 6px; border:1px solid var(--color-line); border-radius:6px; background: var(--color-surface); color: var(--color-text); margin-left:4px; } }
     .items { width:100%; border-collapse:collapse; font-size:var(--text-md); th { text-align:left; font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.4px; color: var(--color-text-3); padding:6px 8px; border-bottom:1px solid var(--color-line); } td { padding:8px; border-bottom:1px solid var(--color-line); vertical-align:top; small { display:block; color: var(--color-text-2); font-size:var(--text-xs); } } .r { text-align:right; font-variant-numeric: tabular-nums; } .pop { white-space:nowrap; } tr:last-child td { border-bottom:0; } }
-    @media (max-width: 1100px) { .ps-kpis { grid-template-columns: repeat(2, 1fr); } .b-row { grid-template-columns: 1fr 1fr; } .b-body { padding-left:16px; } }
+    @media (max-width: 1100px) { .ps-kpis { grid-template-columns: repeat(3, 1fr); } .b-row { grid-template-columns: 1fr 1fr; } .b-body { padding-left:16px; } }
   `]
 })
 export class FinancePaymentScheduleComponent implements OnInit {
@@ -191,13 +278,17 @@ export class FinancePaymentScheduleComponent implements OnInit {
   loading = signal(true);
   busy = signal(false);
   open = signal<number | null>(null);
-  filter = signal<'' | 'Approved' | 'LoadedOnBank' | 'Paid'>('');
+  filter = signal<'' | 'InProgress' | 'Approved' | 'LoadedOnBank' | 'Paid'>('');
+  readonly ipSteps = ['Preparing', 'Accountant', 'Director', 'Signed'];
+  inProgress = computed(() => { const co = this.company(); return (this.data()?.inProgress ?? []).filter(b => !co || b.companyCode === co); });
+  inProgressAmount = computed(() => this.inProgress().reduce((s, b) => s + b.amount, 0));
+  showInProgress = computed(() => this.filter() === '' || this.filter() === 'InProgress');
   company = signal('');
   private pendingPop: { b: ScheduleBatch; i: ScheduleItem } | null = null;
 
   companies = computed(() => {
     const seen = new Map<string, string>();
-    for (const b of this.data()?.batches ?? []) seen.set(b.companyCode, b.companyName);
+    for (const b of [...(this.data()?.batches ?? []), ...(this.data()?.inProgress ?? [])]) seen.set(b.companyCode, b.companyName);
     return [...seen].map(([code, name]) => ({ code, name })).sort((a, b) => a.name.localeCompare(b.name));
   });
 
@@ -232,8 +323,29 @@ export class FinancePaymentScheduleComponent implements OnInit {
   }
 
   toggle(id: number): void { this.open.set(this.open() === id ? null : id); }
-  toggleFilter(f: 'Approved' | 'LoadedOnBank' | 'Paid'): void { this.filter.set(this.filter() === f ? '' : f); }
-  openPack(b: ScheduleBatch): void { this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'creditors', batch: b.id } }); }
+  toggleFilter(f: 'InProgress' | 'Approved' | 'LoadedOnBank' | 'Paid'): void { this.filter.set(this.filter() === f ? '' : f); }
+
+  /** Who the in-progress pack is waiting on, in plain words. */
+  whereNow(b: InProgressBatch): string {
+    switch (b.status) {
+      case 'Draft': return 'Being prepared';
+      case 'ChecksFailed': return 'Checks failed: back with the preparer';
+      case 'QueriedByAccountant': return 'Queried by the accountant: back with the preparer';
+      case 'QueriedByDirector': return 'Queried by a director: back with the preparer';
+      case 'AwaitingAccountant': return `Waiting on ${b.requestedApproverNames || 'the accountant'}`;
+      case 'AwaitingDirector': return `Waiting on ${b.requestedDirectorNames || 'a director'} to sign`;
+      default: return b.statusTitle;
+    }
+  }
+  previewPack(b: InProgressBatch): void {
+    PackPreviewDialogComponent.open(this.dialog, { url: this.api.reviewPackUrl(b.id), title: `${b.batchNumber}: full pack`, subtitle: `${b.companyName} · ${b.paymentTypeTitle} · ${b.statusTitle}`, fileName: `Pack-${b.batchNumber}.pdf` });
+  }
+  previewDoc(b: InProgressBatch, d: InProgressDoc, supplier?: string): void {
+    const title = `${d.title}${supplier ? ' · ' + supplier : ''}`, subtitle = `${b.batchNumber} · ${d.originalFileName || ''}`;
+    if (d.textMethod === 'sheet') ReconPreviewDialogComponent.open(this.dialog, { sheetUrl: this.api.sheetUrl(b.id, d.id), fileUrl: this.api.fileUrl(b.id, d.id), title, subtitle, fileName: d.originalFileName });
+    else PackPreviewDialogComponent.open(this.dialog, { url: this.api.fileUrl(b.id, d.id), title, subtitle, fileName: d.originalFileName });
+  }
+  openPack(b: { id: number }): void { this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'creditors', batch: b.id } }); }
 
   bankFile(b: ScheduleBatch): void {
     this.api.bankFile(b.id).subscribe({

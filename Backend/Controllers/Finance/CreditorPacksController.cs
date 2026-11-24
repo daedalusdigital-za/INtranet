@@ -1495,8 +1495,37 @@ public class CreditorPacksController : ControllerBase
             };
         }).ToList();
 
+        // In progress: packs still being prepared or approved. Read-only for Treasury — shows where each one is and what has been uploaded.
+        var inProgressBatches = (await _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
+            .Where(b => CreditorWorkflow.InProgress.Contains(b.Status))
+            .OrderBy(b => b.SubmittedAt ?? b.CreatedAt).ThenBy(b => b.Id).ToListAsync())
+            .Where(b => scope.Allows(b.CompanyCode)).ToList();
+        var inProgress = inProgressBatches.Select(b =>
+        {
+            var live = b.Items.Where(i => i.DecisionStatus != "Rejected").OrderBy(i => i.SortOrder).ThenBy(i => i.Id).ToList();
+            object Doc(PaymentBatchDocument d) => new { d.Id, d.DocType, title = CreditorChecksService.Label(d.DocType), d.OriginalFileName, d.TextMethod, d.UploadedAt, d.UploadedByName };
+            var uploaded = b.Documents.Where(d => d.StoragePath != null).ToList();
+            return new
+            {
+                b.Id, b.BatchNumber, b.CompanyCode, companyName = companies.TryGetValue(b.CompanyCode, out var n) ? n : b.CompanyCode,
+                b.PaymentType, paymentTypeTitle = CreditorChecksService.Label(b.PaymentType), b.Status, statusTitle = CreditorWorkflow.Title(b.Status),
+                stage = CreditorWorkflow.StageOf(b.Status), sentBack = b.Status is CreditorWorkflow.ChecksFailed or CreditorWorkflow.QueriedByAccountant or CreditorWorkflow.QueriedByDirector,
+                b.BatchDate, b.CreatedAt, b.SubmittedAt, b.PreparedByName, b.AccountantName, b.AccountantApprovedAt, b.ChecksStatus, b.ReturnReason,
+                b.RequestedApproverNames, b.RequestedDirectorNames,
+                amount = live.Sum(i => i.Amount), itemCount = live.Count, documentCount = uploaded.Count,
+                expectedPayDate = CreditorWorkflow.NextPayDay(DateTime.UtcNow),
+                batchDocuments = uploaded.Where(d => d.ItemId == null).OrderBy(d => d.DocType).Select(Doc),
+                items = live.Select(i => new
+                {
+                    i.Id, i.SupplierName, i.Amount, i.InvoiceNumbers, i.Description, i.ComplianceKind, i.ComplianceTitle, i.DecisionStatus,
+                    documents = uploaded.Where(d => d.ItemId == i.Id).OrderBy(d => d.DocType).ThenBy(d => d.Version).Select(Doc)
+                })
+            };
+        }).ToList();
+
         return Ok(new
         {
+            inProgress,
             payDays = CreditorWorkflow.UpcomingPayDays(DateTime.UtcNow, 6),
             nextPayDay = CreditorWorkflow.NextPayDay(DateTime.UtcNow),
             me = new { bank = isBank, clerk = isClerk },
@@ -1505,7 +1534,8 @@ public class CreditorPacksController : ControllerBase
                 toLoad = rows.Where(r => r.Status == CreditorWorkflow.Approved).Sum(r => r.approvedAmount), toLoadCount = rows.Count(r => r.Status == CreditorWorkflow.Approved),
                 loaded = rows.Where(r => r.Status == CreditorWorkflow.LoadedOnBank).Sum(r => r.approvedAmount), loadedCount = rows.Count(r => r.Status == CreditorWorkflow.LoadedOnBank),
                 awaitingPop = rows.Where(r => r.Status == CreditorWorkflow.Paid).Sum(r => r.approvedAmount), awaitingPopCount = rows.Count(r => r.Status == CreditorWorkflow.Paid),
-                overdue = rows.Count(r => r.overdue)
+                overdue = rows.Count(r => r.overdue),
+                inProgress = inProgress.Sum(r => r.amount), inProgressCount = inProgress.Count
             },
             batches = rows
         });

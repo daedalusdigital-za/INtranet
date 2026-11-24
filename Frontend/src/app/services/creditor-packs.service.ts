@@ -256,10 +256,24 @@ export interface GeneratedSchedule {
   head: { batchNumber: string; company: string; companyCode: string; paymentType: string; paymentRunDate: string; preparedBy: string; generatedAt: string; total: number; totalPayable: number; count: number; missingInvoiceDates: number; missingDocNumbers: number; };
   lines: GeneratedScheduleLine[];
 }
+/** A document already uploaded on a pack that is still in progress. */
+export interface InProgressDoc { id: number; docType: string; title: string; originalFileName?: string; textMethod?: string | null; uploadedAt: string; uploadedByName?: string; }
+/** A pack still being prepared or approved — shown read-only to Treasury. stage: 0 preparing, 1 accountant, 2 director. */
+export interface InProgressBatch {
+  id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; status: string; statusTitle: string;
+  stage: 0 | 1 | 2; sentBack: boolean; batchDate: string; createdAt: string; submittedAt?: string | null; preparedByName?: string | null;
+  accountantName?: string | null; accountantApprovedAt?: string | null; checksStatus?: string | null; returnReason?: string | null;
+  requestedApproverNames?: string | null; requestedDirectorNames?: string | null;
+  amount: number; itemCount: number; documentCount: number; expectedPayDate: string;
+  batchDocuments: InProgressDoc[];
+  items: { id: number; supplierName: string; amount: number; invoiceNumbers?: string | null; description?: string | null; complianceKind?: string | null; complianceTitle?: string | null; decisionStatus: string; documents: InProgressDoc[] }[];
+}
 export interface PaymentSchedule {
   payDays: string[]; nextPayDay: string; me: { bank: boolean; clerk: boolean };
-  totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number };
+  totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number; inProgress?: number; inProgressCount?: number };
   batches: ScheduleBatch[];
+  /** Older backends don't send it. */
+  inProgress?: InProgressBatch[];
 }
 export interface ApAgingSnapshot { id: number; companyCode: string; reportCompany?: string | null; asOfDate: string; sourceFileName?: string | null; uploadedAt: string; uploadedByName?: string | null; vendorCount: number; activeVendorCount: number; totalCurrent: number; totalOverdue: number; totalPayables: number; notes?: string | null; hasDetail?: boolean; documentCount?: number; }
 export interface ApAgingIndex { companies: { code: string; name: string }[]; snapshots: ApAgingSnapshot[]; }

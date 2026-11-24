@@ -38,6 +38,17 @@ public static class CreditorWorkflow
     /// <summary>Statuses that sit on the Payment Schedule: signed and waiting to be loaded / paid / closed with POP.</summary>
     public static readonly HashSet<string> OnSchedule = new() { Approved, LoadedOnBank, Paid };
 
+    /// <summary>Packs still being prepared or approved (not yet signed, not rejected) — shown read-only to Treasury as "In progress".</summary>
+    public static readonly HashSet<string> InProgress = new() { Draft, ChecksFailed, AwaitingAccountant, QueriedByAccountant, AwaitingDirector, QueriedByDirector };
+
+    /// <summary>Where an unsigned pack sits: 0 preparing (incl. checks failed / sent back), 1 with the accountant, 2 with the director.</summary>
+    public static int StageOf(string status) => status switch
+    {
+        AwaitingAccountant => 1,
+        AwaitingDirector => 2,
+        _ => 0
+    };
+
     /// <summary>The group pays suppliers on Mondays and Wednesdays.</summary>
     public static readonly DayOfWeek[] PayDays = { DayOfWeek.Monday, DayOfWeek.Wednesday };
     private static readonly TimeSpan Sast = TimeSpan.FromHours(2);
