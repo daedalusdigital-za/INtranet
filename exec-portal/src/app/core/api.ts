@@ -39,7 +39,9 @@ export interface Executive {
 export interface PayLine { id: number; supplierName: string; amount: number; invoiceNumbers?: string; description?: string; bankName?: string; accountNumber?: string; paymentReference?: string; paidAt?: string; hasPop?: boolean; popDocId?: number | null; }
 export interface PayBatch {
   id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; status: string; statusTitle: string; scheduledPayDate: string; overdue: boolean;
-  directorName?: string; directorSignedAt?: string; paidAt?: string; approvedAmount: number; approvedItems: number; popDone: number; popMissing: number; items: PayLine[];
+  directorName?: string; directorSignedAt?: string; paidAt?: string; bankExportedAt?: string | null; approvedAmount: number; approvedItems: number; popDone: number; popMissing: number; openPrepayments?: number; items: PayLine[];
+  /** What this user may do on the pack (the server checks every action again). */
+  can?: { bankFile: boolean; markLoaded: boolean; markPaid: boolean; uploadPop: boolean; close: boolean; reschedule: boolean };
 }
 export interface IpDoc { id: number; docType: string; title: string; originalFileName?: string; uploadedAt: string; uploadedByName?: string; }
 /** A pack still being prepared or approved — read-only for Treasury. stage: 0 preparing, 1 accountant, 2 director. */
@@ -51,7 +53,7 @@ export interface IpBatch {
 }
 export interface PaySchedule {
   nextPayDay: string; totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number; inProgress?: number; inProgressCount?: number };
-  batches: PayBatch[]; inProgress?: IpBatch[];
+  batches: PayBatch[]; inProgress?: IpBatch[]; me?: { bank: boolean; clerk: boolean };
 }
 /** A payment the director queried: Open = needs an answer; WithDirector = answered and back with the director. */
 export interface QueryRow {
@@ -87,6 +89,14 @@ export class Api {
   // Read-only director views
   executive() { return this.http.get<Executive>(`${this.cr}/executive`); }
   schedule() { return this.http.get<PaySchedule>(`${this.cr}/schedule`); }
+  // Treasury
+  setStatus(id: number, decision: 'LoadedOnBank' | 'Paid' | 'Closed', comment?: string) { return this.http.post<unknown>(`${this.cr}/batches/${id}/status`, { decision, comment }); }
+  uploadPop(id: number, itemId: number, file: File) {
+    const fd = new FormData(); fd.append('file', file, file.name); fd.append('docType', 'ProofOfPayment'); fd.append('itemId', String(itemId));
+    return this.http.post<unknown>(`${this.cr}/batches/${id}/documents`, fd);
+  }
+  bankFileUrl(id: number) { return `${this.cr}/batches/${id}/bank-file`; }
+
   history(f: { from?: string; to?: string; company?: string; q?: string }) {
     let params = new HttpParams().set('take', 300);
     for (const [k, v] of Object.entries(f)) if (v) params = params.set(k, v);
@@ -96,10 +106,26 @@ export class Api {
   blob(url: string) { return this.http.get(url, { responseType: 'blob' }); }
   /** Fetch a PDF with the exec token and open it in a new tab (falls back to the same tab on phones that block pop-ups). */
   openPdf(url: string, done?: (ok: boolean) => void) {
+    const w = window.open('', '_blank');
+    if (w) { try { w.document.title = 'Opening…'; w.document.body.style.font = '16px system-ui, sans-serif'; w.document.body.textContent = 'Opening the document…'; } catch { } }
     this.blob(url).subscribe({
-      next: bl => { const u = URL.createObjectURL(bl); const w = window.open(u, '_blank'); if (!w) location.href = u; done?.(true); },
-      error: () => { done?.(false); alert("Couldn't open the document."); }
+      next: bl => {
+        const u = URL.createObjectURL(bl);
+        if (w && !w.closed) w.location.href = u;
+        else { const a = document.createElement('a'); a.href = u; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); }
+        setTimeout(() => URL.revokeObjectURL(u), 5 * 60_000);
+        done?.(true);
+      },
+      error: async e => { try { w?.close(); } catch { } done?.(false); alert(await Api.errorText(e, "Couldn't open the document.")); }
     });
+  }
+  /** The server's message from a failed request, including blob (file) requests. */
+  static async errorText(e: any, fallback: string): Promise<string> {
+    if (e?.name === 'TimeoutError') return 'The server took too long. Try again.';
+    if (e?.status === 0) return 'Could not reach the server. Check your connection.';
+    let body = e?.error;
+    if (body instanceof Blob) { try { body = JSON.parse(await body.text()); } catch { body = null; } }
+    return body?.message ?? (e?.status === 403 ? "You don't have access to that." : e?.status === 404 ? 'Not found — it may have moved on. Refresh.' : fallback);
   }
   reviewPdfUrl(id: number) { return `${this.cr}/batches/${id}/review-pack.pdf`; }
   approvalSheetUrl(id: number) { return `${this.cr}/batches/${id}/approval-sheet.pdf`; }
@@ -110,7 +136,7 @@ export class Api {
   download(url: string, name: string, done?: (ok: boolean) => void) {
     this.blob(url).subscribe({
       next: bl => { const a = document.createElement('a'); a.href = URL.createObjectURL(bl); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000); done?.(true); },
-      error: () => { done?.(false); alert("Couldn't download that."); }
+      error: async e => { done?.(false); alert(await Api.errorText(e, "Couldn't download that.")); }
     });
   }
   /** One payment: approval sheet + every PDF attached to it. */

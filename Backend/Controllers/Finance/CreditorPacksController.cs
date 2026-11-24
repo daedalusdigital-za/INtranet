@@ -769,6 +769,8 @@ public class CreditorPacksController : ControllerBase
         if (isSheet && (string.IsNullOrWhiteSpace(docType) || !CreditorDocTypes.AllowsSpreadsheet(docType)))
             return BadRequest(new { message = "Spreadsheets are only accepted for the supplier recon, creditors recon, payment schedule and Sage batch slots. Pick that slot first." });
         if (itemId != null && b.Items.All(i => i.Id != itemId)) return BadRequest(new { message = "That payment is not on this batch." });
+        if (IsExecToken && (docType != CreditorDocTypes.ProofOfPayment || itemId == null || !isPdf || b.Status != CreditorWorkflow.Paid || !await HasAsync(CreditorWorkflow.RoleBank)))
+            return StatusCode(403, new { message = "From the off-site portal you can only upload a proof of payment (PDF) on a paid pack." });
 
         var locked = CreditorWorkflow.Locked.Contains(b.Status);
         var editable = CreditorWorkflow.PreparerEditable.Contains(b.Status);
@@ -1743,6 +1745,8 @@ public class CreditorPacksController : ControllerBase
     public async Task<IActionResult> SetStatus(int id, [FromBody] DecisionDto dto)
     {
         var b = await Load(id); if (b == null) return NotFound();
+        if (IsExecToken && dto.Decision is not ("LoadedOnBank" or "Paid" or "Closed"))
+            return StatusCode(403, new { message = "Only Treasury steps (loaded, paid, closed) can be done from the off-site portal." });
         var from = b.Status;
         switch (dto.Decision)
         {
@@ -1759,7 +1763,8 @@ public class CreditorPacksController : ControllerBase
                 break;
             case "Closed":
                 if (b.Status != CreditorWorkflow.Paid) return Conflict(new { message = "Only a paid batch can be closed." });
-                if (!await CanPrepareAsync(b)) return Forbid();
+                // The pay-run screen offers Close to Treasury as well as the preparer — honour that here.
+                if (!await CanPrepareAsync(b) && !await HasAsync(CreditorWorkflow.RoleBank)) return Forbid();
                 var approved = b.Items.Where(i => i.DecisionStatus == "Approved").ToList();
                 var missingPop = approved.Where(i => !b.Documents.Any(d => d.ItemId == i.Id && d.DocType == CreditorDocTypes.ProofOfPayment && d.StoragePath != null)).ToList();
                 if (missingPop.Count > 0) return Conflict(new { message = "Proof of payment missing for: " + string.Join(", ", missingPop.Select(i => i.SupplierName)) });
@@ -1781,6 +1786,28 @@ public class CreditorPacksController : ControllerBase
         return Ok(await DetailAsync(id));
     }
 
+    /// <summary>
+    /// Lists only need a document's type, owner and file — not the text read off it (which runs to ~1 MB across the open packs).
+    /// Loads that light shape and hangs it on the (untracked) batches.
+    /// </summary>
+    private async Task AttachLiteDocsAsync(List<PaymentBatch> batches)
+    {
+        if (batches.Count == 0) return;
+        var ids = batches.Select(b => b.Id).ToList();
+        var docs = await _db.PaymentBatchDocuments.AsNoTracking().Where(d => ids.Contains(d.BatchId))
+            .Select(d => new PaymentBatchDocument
+            {
+                Id = d.Id, BatchId = d.BatchId, ItemId = d.ItemId, DocType = d.DocType, IsNotApplicable = d.IsNotApplicable,
+                FileName = d.FileName, OriginalFileName = d.OriginalFileName, ContentType = d.ContentType, StoragePath = d.StoragePath,
+                TextMethod = d.TextMethod, UploadedByName = d.UploadedByName, UploadedAt = d.UploadedAt, Version = d.Version
+            }).ToListAsync();
+        var byBatch = docs.ToLookup(d => d.BatchId);
+        foreach (var b in batches) b.Documents = byBatch[b.Id].ToList();
+    }
+
+    /// <summary>True when the request came in on an off-site (exec portal) token.</summary>
+    private bool IsExecToken => User.HasClaim(ExecAuth.ClaimScope, ExecAuth.ScopeValue);
+
     // ───────────────────────── payment schedule (treasury) ─────────────────────────
 
     /// <summary>
@@ -1794,10 +1821,11 @@ public class CreditorPacksController : ControllerBase
         var isClerk = await HasAsync(CreditorWorkflow.RoleClerk);
         var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.Name);
         var scope = await ScopeAsync();
-        var batches = (await _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
+        var batches = (await _db.PaymentBatches.AsNoTracking().Include(b => b.Items)
             .Where(b => CreditorWorkflow.OnSchedule.Contains(b.Status))
-            .OrderBy(b => b.ScheduledPayDate).ThenBy(b => b.Id).ToListAsync())
+            .OrderBy(b => b.ScheduledPayDate).ThenBy(b => b.Id).AsSplitQuery().ToListAsync())
             .Where(b => scope.Allows(b.CompanyCode)).ToList();
+        await AttachLiteDocsAsync(batches);
 
         var rows = batches.Select(b =>
         {
@@ -1829,10 +1857,11 @@ public class CreditorPacksController : ControllerBase
         }).ToList();
 
         // In progress: packs still being prepared or approved. Read-only for Treasury — shows where each one is and what has been uploaded.
-        var inProgressBatches = (await _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
+        var inProgressBatches = (await _db.PaymentBatches.AsNoTracking().Include(b => b.Items)
             .Where(b => CreditorWorkflow.InProgress.Contains(b.Status))
-            .OrderBy(b => b.SubmittedAt ?? b.CreatedAt).ThenBy(b => b.Id).ToListAsync())
+            .OrderBy(b => b.SubmittedAt ?? b.CreatedAt).ThenBy(b => b.Id).AsSplitQuery().ToListAsync())
             .Where(b => scope.Allows(b.CompanyCode)).ToList();
+        await AttachLiteDocsAsync(inProgressBatches);
         var inProgress = inProgressBatches.Select(b =>
         {
             var live = b.Items.Where(i => i.DecisionStatus != "Rejected" && i.DecisionStatus != "SentBack").OrderBy(i => i.SortOrder).ThenBy(i => i.Id).ToList();
@@ -1906,7 +1935,7 @@ public class CreditorPacksController : ControllerBase
         var scope = await ScopeAsync();
         if (!scope.All) companies = companies.Where(kv => scope.Allows(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
         if (!string.IsNullOrWhiteSpace(company) && !scope.Allows(company)) return StatusCode(403, new { message = "You are not assigned to that company." });
-        var query = _db.PaymentBatches.AsNoTracking().Include(b => b.Items).Include(b => b.Documents)
+        var query = _db.PaymentBatches.AsNoTracking().Include(b => b.Items)
             .Where(b => b.Status == CreditorWorkflow.Paid || b.Status == CreditorWorkflow.Closed);
         if (!scope.All) { var codes = scope.CreditorCodes.ToList(); query = query.Where(b => codes.Contains(b.CompanyCode)); }
         if (from.HasValue) query = query.Where(b => (b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt) >= from.Value.Date);
@@ -1922,7 +1951,8 @@ public class CreditorPacksController : ControllerBase
                 || b.Items.Any(i => i.SupplierName.ToLower().Contains(s) || (i.PaymentReference != null && i.PaymentReference.ToLower().Contains(s)) || (i.InvoiceNumbers != null && i.InvoiceNumbers.ToLower().Contains(s)) || (i.Description != null && i.Description.ToLower().Contains(s)) || (i.ComplianceDetail != null && i.ComplianceDetail.ToLower().Contains(s)))
                 || (amt != null && (b.TotalAmount == amt || b.Items.Any(i => i.Amount == amt))));
         }
-        var batches = await query.OrderByDescending(b => b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt).Take(Math.Clamp(take, 1, 2000)).ToListAsync();
+        var batches = await query.OrderByDescending(b => b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt).Take(Math.Clamp(take, 1, 2000)).AsSplitQuery().ToListAsync();
+        await AttachLiteDocsAsync(batches);
 
         var rows = batches.Select(b =>
         {
@@ -2068,7 +2098,7 @@ public class CreditorPacksController : ControllerBase
     /// <summary>Loads a batch for editing; null when it doesn't exist OR belongs to a company outside the caller's scope.</summary>
     private async Task<PaymentBatch?> Load(int id)
     {
-        var b = await _db.PaymentBatches.Include(b => b.Items).Include(b => b.Documents).Include(b => b.Events).FirstOrDefaultAsync(b => b.Id == id);
+        var b = await _db.PaymentBatches.Include(b => b.Items).Include(b => b.Documents).Include(b => b.Events).AsSplitQuery().FirstOrDefaultAsync(b => b.Id == id);
         return b != null && await InScopeAsync(b.CompanyCode) ? b : null;
     }
 
