@@ -114,7 +114,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                   <tbody>
                     @for (i of b.items; track i.id) {
                       <tr>
-                        <td><b>{{ i.supplierName }}</b>@if (i.description) { <small>{{ i.description }}</small> }</td>
+                        <td><b>{{ i.supplierName }}</b>@if (i.complianceTitle) { <span class="cmp-tag">Compliance · {{ i.complianceTitle }}</span> }@if (i.description) { <small>{{ i.description }}</small> }</td>
                         <td>{{ i.invoiceNumbers || '—' }}@if (i.paymentReference) { <small>ref {{ i.paymentReference }}</small> }</td>
                         <td>{{ i.bankName || '—' }}@if (i.accountNumber) { <small>{{ i.accountNumber }}@if (i.branchCode) { · {{ i.branchCode }} }</small> }</td>
                         <td class="r"><b>{{ i.amount | currency:'ZAR':'R':'1.2-2' }}</b></td>
@@ -143,6 +143,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
   `,
   styles: [`
     :host { display:block; }
+    .cmp-tag { display:inline-block; margin-left: var(--space-2); padding: 1px var(--space-2); border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); white-space: nowrap; }
     .ps { display:flex; flex-direction:column; gap: var(--space-4); }
     .ps-loading, .ps-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:48px 16px; color: var(--color-text-2); text-align:center; mat-icon { font-size:40px; width:40px; height:40px; } p { margin:0; } }
     .ps-kpis { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: var(--space-3); }

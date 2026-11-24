@@ -82,7 +82,7 @@ import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
               <tbody>
                 @for (l of b.lines; track l.id) {
                   <tr>
-                    <td><b>{{ l.supplierName }}</b>@if (l.description) {<div class="sub">{{ l.description }}</div>}</td>
+                    <td><b>{{ l.supplierName }}</b>@if (l.complianceTitle) { <span class="cmp-tag">Compliance · {{ l.complianceTitle }}</span> }@if (l.description) {<div class="sub">{{ l.description }}</div>}</td>
                     <td>{{ l.invoiceNumbers || '—' }}</td>
                     <td>{{ l.bankName || '—' }}<div class="sub">{{ l.accountNumber }}</div></td>
                     <td>{{ l.paymentReference || '—' }}</td>
@@ -105,6 +105,7 @@ import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 </div>
   `,
   styles: [`
+.cmp-tag { display:inline-block; margin-left: var(--space-2); padding: 1px var(--space-2); border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); white-space: nowrap; }
 .ph-filters { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:14px; }
 .ph-filters label { display:flex; flex-direction:column; gap:4px; font-size:var(--text-xs); color: var(--color-text-3); }
 .ph-filters label.grow { flex:1; min-width:220px; }
@@ -197,7 +198,7 @@ export class PaymentHistoryComponent implements OnInit {
     const rows = this.data.batches.flatMap(b => b.lines.map(l => ({
       'Batch': b.batchNumber, 'Company': b.companyName, 'Type': b.paymentTypeTitle, 'Status': b.statusTitle,
       'Paid on': b.paidAt ? b.paidAt.slice(0, 10) : '', 'Signed by': b.directorName || '', 'Checked by': b.accountantName || '', 'Prepared by': b.preparedByName || '',
-      'Supplier': l.supplierName, 'Invoices': l.invoiceNumbers || '', 'Description': l.description || '', 'Bank': l.bankName || '', 'Account': l.accountNumber || '',
+      'Supplier': l.supplierName, 'Invoices': l.invoiceNumbers || '', 'Compliance': l.complianceTitle || '', 'Description': l.description || '', 'Bank': l.bankName || '', 'Account': l.accountNumber || '',
       'Reference': l.paymentReference || '', 'Amount': l.amount, 'POP': l.popDocId ? 'Yes' : 'Missing'
     })));
     const ws = XLSX.utils.json_to_sheet(rows);

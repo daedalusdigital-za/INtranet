@@ -17,10 +17,20 @@ export interface CompanyApprovers {
   accountants: Approver[]; directors: Approver[]; treasurers: Approver[]; clerks: Approver[];
   accountantsPinned: boolean; directorsPinned: boolean;
 }
+/** Compliance payment sub-kinds (mirrors CreditorComplianceKinds on the server). */
+export type ComplianceKind = 'Invoice' | 'Licence' | 'CrossBorder' | 'Other';
+export const COMPLIANCE_KINDS: { key: ComplianceKind; title: string }[] = [
+  { key: 'Invoice', title: 'Invoice' }, { key: 'Licence', title: 'Licence' }, { key: 'CrossBorder', title: 'Cross-border payment' }, { key: 'Other', title: 'Other' },
+];
+/** "Licence, Cross-border payment" for a pack's distinct compliance kinds. */
+export function complianceKindsLabel(keys?: (string | null)[] | null): string {
+  return (keys ?? []).filter(Boolean).map(k => COMPLIANCE_KINDS.find(c => c.key === k)?.title ?? k).join(', ');
+}
 export interface DocRule { docType: string; required: boolean; afterDelivery: boolean; ifReturned: boolean; withRecon?: boolean; }
 export interface CreditorMeta {
   companies: CreditorCompany[];
   paymentTypes: { key: string; title: string }[];
+  complianceKinds?: { key: ComplianceKind; title: string }[];
   docTypes: { key: string; title: string; scope: 'batch' | 'item' }[];
   rules: Record<string, DocRule[]>;
   statuses: { key: string; title: string }[];
@@ -32,6 +42,8 @@ export interface BatchRow {
   totalAmount: number; items: number; documents: number; preparedByUserId: number; preparedByName?: string; createdAt: string; submittedAt?: string; updatedAt?: string; checksStatus?: string;
   accountantName?: string; accountantApprovedAt?: string; directorName?: string; directorSignedAt?: string; paidAt?: string; closedAt?: string;
   returnReason?: string; openPrepayments: number; approvedItems: number; queriedItems: number; rejectedItems: number;
+  /** Compliance packs: the distinct sub-kinds of their payments. */
+  complianceKinds?: string[];
 }
 export interface RequiredDoc { docType: string; title: string; filled: boolean; }
 export interface BatchDoc {
@@ -46,6 +58,8 @@ export interface BatchItem {
   isUrgent: boolean; paymentMode: 'Normal' | 'PayAndClear'; paymentModeTitle?: string;
   /** Staff payments only: EFT (bank details) or EWallet (cellphone number in accountNumber). */
   payoutMethod?: 'EFT' | 'EWallet' | null;
+  /** Compliance payments only. complianceTitle is "Licence" / "Other — {detail}". */
+  complianceKind?: ComplianceKind | null; complianceDetail?: string | null; complianceTitle?: string | null;
   decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string; decidedAt?: string; prepaymentOpen: boolean; paidAt?: string; sortOrder: number;
   required: RequiredDoc[]; recommended: RequiredDoc[]; documents: BatchDoc[];
 }
@@ -69,6 +83,7 @@ export interface InboxRow {
   id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; batchDate: string; status: string; statusTitle: string;
   totalAmount: number; notes?: string | null; items: number; pendingItems: number; preparedByName?: string; accountantName?: string | null; accountantComment?: string | null;
   waitingSince?: string | null; role: 'accountant' | 'director'; blocked?: string | null;
+  complianceKinds?: string[];
 }
 export interface ApproverOption { userId: number; name: string; role: string; email?: string | null; }
 export interface SignaturePayload { signatureImageBase64?: string; useSavedSignature: boolean; }
@@ -78,6 +93,7 @@ export interface ItemInput {
   bankName?: string; accountNumber?: string; branchCode?: string; accountHolder?: string; paymentReference?: string; stockReturned: boolean;
   isUrgent: boolean; paymentMode: 'Normal' | 'PayAndClear';
   payoutMethod?: 'EFT' | 'EWallet';
+  complianceKind?: ComplianceKind | null; complianceDetail?: string;
 }
 /** Staff payment requisition filled in on the intranet (generated as a PDF on the server). */
 export interface RequisitionFormInput {
@@ -216,7 +232,7 @@ export class CreditorPacksService {
   }
 }
 
-export interface HistoryLine { id: number; supplierName: string; amount: number; invoiceNumbers?: string; description?: string; bankName?: string; accountNumber?: string; paymentReference?: string; paidAt?: string; popDocId?: number | null; }
+export interface HistoryLine { id: number; supplierName: string; amount: number; invoiceNumbers?: string; description?: string; bankName?: string; accountNumber?: string; paymentReference?: string; paidAt?: string; popDocId?: number | null; complianceKind?: string | null; complianceTitle?: string | null; }
 export interface HistoryBatch {
   id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; status: string; statusTitle: string;
   scheduledPayDate?: string; directorName?: string; directorSignedAt?: string; accountantName?: string; accountantApprovedAt?: string; preparedByName?: string; bankExportedAt?: string; paidAt?: string; closedAt?: string;
@@ -227,6 +243,7 @@ export interface PaymentHistory { count: number; total: number; popMissing: numb
 export interface ScheduleItem {
   id: number; supplierName: string; amount: number; invoiceNumbers?: string; description?: string; bankName?: string; accountNumber?: string; branchCode?: string;
   accountHolder?: string; paymentReference?: string; paidAt?: string; prepaymentOpen: boolean; hasPop: boolean; popDocId?: number | null;
+  complianceKind?: string | null; complianceTitle?: string | null;
 }
 export interface ScheduleBatch {
   id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; status: string; statusTitle: string;

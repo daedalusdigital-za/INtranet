@@ -20,7 +20,7 @@ import { environment } from '../../../environments/environment';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { Observable } from 'rxjs';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow, RequisitionFormInput } from '../../services/creditor-packs.service';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow, RequisitionFormInput, COMPLIANCE_KINDS, complianceKindsLabel } from '../../services/creditor-packs.service';
 
 type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
@@ -61,7 +61,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               <ng-container *ngTemplateOutlet="coMark; context: { $implicit: r.companyCode }"></ng-container>
               <span class="who">
                 <b>{{ r.batchNumber }} <span [class]="'badge ' + badge(r.status)">{{ r.role === 'director' ? 'Sign' : 'Approve' }}</span></b>
-                <small>{{ r.companyName }} · {{ r.paymentTypeTitle }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.role === 'director' && r.pendingItems) { · <em>{{ r.pendingItems }} still to decide</em> }</small>
+                <small>{{ r.companyName }} · {{ r.paymentTypeTitle }}@if (r.complianceKinds?.length) { ({{ kindsLabel(r.complianceKinds) }}) } · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.role === 'director' && r.pendingItems) { · <em>{{ r.pendingItems }} still to decide</em> }</small>
                 <small>Prepared by {{ r.preparedByName }}@if (r.accountantName) { · approved by {{ r.accountantName }} }@if (r.waitingSince) { · waiting {{ ago(r.waitingSince) }} }</small>
                 @if (r.blocked) { <small class="bad"><mat-icon>block</mat-icon> {{ r.blocked }}</small> }
                 @else if (r.accountantComment) { <small class="note">“{{ r.accountantComment }}”</small> }
@@ -428,12 +428,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <div class="cr-itemform">
               <h4>{{ itemForm() === 'new' ? 'New payment' : 'Edit payment' }}</h4>
 
-              <h5>1 · {{ isPrepayment() ? 'Request form' : 'Invoice and recon' }}</h5>
+              <h5>1 · {{ isPrepayment() ? 'Request form' : isCompliance() ? 'Supporting document (optional)' : 'Invoice and recon' }}</h5>
               <div class="inv-src">
                 @if (!pendingInvoiceFile && !pendingLink) {
-                  <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> {{ isPrepayment() ? 'Upload request form' : 'Upload invoice' }}</button>
-                  @if (!isPrepayment()) { <button mat-stroked-button (click)="openPicker()"><mat-icon>link</mat-icon> Link from Books</button> }
+                  <button mat-stroked-button (click)="invFileInput.click()" [disabled]="reading()"><mat-icon>upload_file</mat-icon> {{ isPrepayment() ? 'Upload request form' : isCompliance() ? 'Upload document' : 'Upload invoice' }}</button>
+                  @if (!isPrepayment() && !isCompliance()) { <button mat-stroked-button (click)="openPicker()"><mat-icon>link</mat-icon> Link from Books</button> }
                   @if (isPrepayment()) { <small class="muted">A prepayment starts from the signed <strong>request form</strong> — we read it and fill in who is being paid, the amount and what it's for. Once the payment is added, attach the <strong>quote</strong>, <strong>bank letter</strong> and <strong>purchase order</strong> under it. The tax invoice comes later, once the goods are delivered.</small> }
+                  @else if (isCompliance()) { <small class="muted">Attach the invoice, licence or payment instruction behind this payment if you have it. The amount is typed in below — it isn't taken from an invoice in the system.</small> }
                   @else { <small class="muted">We read the PDF and fill in who is being paid, the amount, invoice number, description and any bank details printed on it. Or link an invoice already captured in Books.</small> }
                   @if (reading()) { <mat-spinner diameter="18"></mat-spinner> }
                 } @else if (pendingInvoiceFile) {
@@ -506,12 +507,25 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                     </ul>
                   }
                 </label>
-                <label>Amount incl. VAT (R) <input type="number" step="0.01" [(ngModel)]="itemDraft.amount"></label>
+                <label>{{ isCompliance() ? 'Amount to pay (R)' : 'Amount incl. VAT (R)' }} <input type="number" step="0.01" [(ngModel)]="itemDraft.amount"></label>
               </div>
 
               <h5>3 · What is it for</h5>
+              @if (isCompliance()) {
+                <div class="row">
+                  <label>Compliance payment type
+                    <select [(ngModel)]="itemDraft.complianceKind" required>
+                      <option [ngValue]="null" disabled>Choose…</option>
+                      @for (k of complianceKinds; track k.key) { <option [ngValue]="k.key">{{ k.title }}</option> }
+                    </select>
+                  </label>
+                  @if (itemDraft.complianceKind === 'Other') {
+                    <label class="grow">What is it for? <input [(ngModel)]="itemDraft.complianceDetail" maxlength="200" placeholder="e.g. SAHPRA annual fee, import permit…" required></label>
+                  }
+                </div>
+              }
               <div class="row">
-                <label class="grow">{{ isPrepayment() ? 'Request / quote / PO numbers' : 'Invoice / reference numbers being paid' }} <input [(ngModel)]="itemDraft.invoiceNumbers" [placeholder]="isPrepayment() ? 'REQ12, Q1234, PO5678' : 'INV123, INV124'"></label>
+                <label class="grow">{{ isPrepayment() ? 'Request / quote / PO numbers' : isCompliance() ? 'Invoice / licence / reference numbers' : 'Invoice / reference numbers being paid' }} <input [(ngModel)]="itemDraft.invoiceNumbers" [placeholder]="isPrepayment() ? 'REQ12, Q1234, PO5678' : 'INV123, INV124'"></label>
                 <label class="grow">Description <input [(ngModel)]="itemDraft.description" placeholder="e.g. March stock, repairs to bakkie…"></label>
               </div>
 
@@ -542,8 +556,9 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               </div>
               <div class="actions">
                 @if (itemForm() === 'new' && needsRecon() && !pendingReconFile) { <small class="warn-txt"><mat-icon>warning</mat-icon> Attach the supplier recon before adding this payment.</small> }
+                @else if (!complianceOk()) { <small class="warn-txt"><mat-icon>warning</mat-icon> {{ itemDraft.complianceKind === 'Other' ? 'Say what the compliance payment is for.' : 'Choose the compliance payment type.' }}</small> }
                 @else if (itemForm() === 'new' && needsSage()) { <small class="warn-txt"><mat-icon>warning</mat-icon> The recon must come with the Sage aged payables PDF.</small> }
-                <button mat-button (click)="cancelItem()">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy() || (itemForm() === 'new' && ((needsRecon() && !pendingReconFile) || needsSage()))" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button>
+                <button mat-button (click)="cancelItem()">Cancel</button><button mat-flat-button color="primary" [disabled]="!itemDraft.supplierName || !itemDraft.amount || busy() || !complianceOk() || (itemForm() === 'new' && ((needsRecon() && !pendingReconFile) || needsSage()))" (click)="saveItem()">{{ itemForm() === 'new' ? 'Add payment' : 'Save' }}</button>
               </div>
             </div>
           }
@@ -565,6 +580,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   {{ filledCount(it.required) }}/{{ it.required.length }} docs
                 </span>
                 @if (findingsFor(it.id).length) { <span class="flag" [class.fail]="hasFail(it.id)" [matTooltip]="findingsFor(it.id).length + ' check(s) to look at'"><mat-icon>flag</mat-icon>{{ findingsFor(it.id).length }}</span> }
+                @if (it.complianceTitle) { <span class="cmp" matTooltip="Compliance payment">Compliance · {{ it.complianceTitle }}</span> }
                 @if (it.isUrgent) { <span class="urg" matTooltip="Flagged urgent by the preparer"><mat-icon>priority_high</mat-icon> Urgent</span> }
                 @if (it.paymentMode === 'PayAndClear') { <span class="pre pac" matTooltip="Pay and clear the supplier account">pay &amp; clear</span> }
                 @if (it.prepaymentOpen && it.paidAt) { <span class="pre">awaiting invoice + GRV</span> }
@@ -975,6 +991,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         .amt { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; min-width: 120px; text-align: right; font-size: var(--text-md); }
         .dec { font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: 999px; &.approved { background: var(--color-ok-soft); color: var(--color-ok); } &.queried { background: var(--color-warn-soft); color: var(--color-warn); } &.rejected { background: var(--color-danger-soft); color: var(--color-danger); } }
         .pre { font-size: var(--text-xs); color: var(--color-warn); font-weight: 600; &.pac { color: var(--color-info); } }
+        .cmp { font-size: var(--text-xs); font-weight: 600; padding: 2px var(--space-2); border-radius: 999px; background: var(--color-cat-purple-soft); color: var(--color-cat-purple); white-space: nowrap; }
         .urg { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-xs); font-weight: 700; padding: 2px 8px 2px 4px; border-radius: 999px; background: var(--color-danger-soft); color: var(--color-danger); mat-icon { font-size: 14px; width: 14px; height: 14px; } } }
       .decide { display: flex; align-items: center; gap: 8px; padding: 6px 12px 10px 40px; font-size: var(--text-sm); color: var(--color-text-2); flex-wrap: wrap; border-top: 1px dashed var(--color-line);
         button mat-icon { font-size: 16px; width: 16px; height: 16px; } .sel-ok { background: var(--color-ok-soft); border-color: var(--color-ok); color: var(--color-ok); } .sel-warn { background: var(--color-warn-soft); border-color: var(--color-warn); color: var(--color-warn); } .sel-bad { background: var(--color-danger-soft); border-color: var(--color-danger); color: var(--color-danger); } em { color: var(--color-text-3); } }
@@ -1224,11 +1241,16 @@ export class FinanceCreditorsComponent implements OnInit {
   /** Paid off a requisition (no invoice): staff payments and requisition-form payments share the same form and rules. */
   isStaff(): boolean { const t = this.batch()?.paymentType; return t === 'StaffPayment' || t === 'RequisitionForm'; }
   /** Requisition-form pack (payee need not be an employee) — only the wording differs from a staff payment. */
+  isCompliance(): boolean { return this.batch()?.paymentType === 'Compliance'; }
+  readonly complianceKinds = COMPLIANCE_KINDS;
+  kindsLabel(keys?: string[] | null): string { return complianceKindsLabel(keys); }
+  /** Compliance payments need a sub-kind, and a description when it's Other. Always true for other payment types. */
+  complianceOk(): boolean { const d = this.itemDraft; return !this.isCompliance() || (!!d.complianceKind && (d.complianceKind !== 'Other' || !!d.complianceDetail?.trim())); }
   isReqPay(): boolean { return this.batch()?.paymentType === 'RequisitionForm'; }
   /** Doc type the "first upload" in the add-payment form is stored as: the request form for prepayments, the requisition for staff payments, the tax invoice otherwise. */
-  primaryDocType(): string { return this.isPrepayment() || this.isStaff() ? 'Requisition' : 'TaxInvoice'; }
+  primaryDocType(): string { return this.isPrepayment() || this.isStaff() ? 'Requisition' : this.isCompliance() ? 'ComplianceDocument' : 'TaxInvoice'; }
   /** Human name of the step-1 document ("request form" / "requisition form" / "invoice"). */
-  primaryName(): string { return this.isPrepayment() ? 'request form' : this.isStaff() ? 'requisition form' : 'invoice'; }
+  primaryName(): string { return this.isPrepayment() ? 'request form' : this.isStaff() ? 'requisition form' : this.isCompliance() ? 'supporting document' : 'invoice'; }
   /** Step numbers on the staff / requisition form: the bank statement step only shows when it is a separate file. */
   staffStep(k: 'pay' | 'when'): number { const stmt = this.reqMode() === 'fill' || !this.stmtIncluded() ? 1 : 0; return (k === 'pay' ? 3 : 4) + stmt; }
   isEWallet(): boolean { return this.itemDraft.payoutMethod === 'EWallet'; }
@@ -1450,7 +1472,7 @@ export class FinanceCreditorsComponent implements OnInit {
   bankFile(): void { const b = this.batch()!; this.api.bankFile(b.id).subscribe({ next: blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.batchNumber}-bank.csv`; a.click(); URL.revokeObjectURL(a.href); this.open(b.id); }, error: e => this.fail(e, "Couldn't export.") }); }
 
   // ── items ──
-  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned, isUrgent: !!it.isUrgent, paymentMode: it.paymentMode === 'PayAndClear' ? 'PayAndClear' : 'Normal', payoutMethod: it.payoutMethod === 'EWallet' ? 'EWallet' : 'EFT' } : { ...EMPTY_ITEM }; this.clearInvoice(); this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new');
+  startItem(it?: BatchItem): void { this.itemDraft = it ? { supplierName: it.supplierName, supplierVatNumber: it.supplierVatNumber ?? '', invoiceNumbers: it.invoiceNumbers ?? '', description: it.description ?? '', amount: it.amount, bankName: it.bankName ?? '', accountNumber: it.accountNumber ?? '', branchCode: it.branchCode ?? '', accountHolder: it.accountHolder ?? '', paymentReference: it.paymentReference ?? '', stockReturned: it.stockReturned, isUrgent: !!it.isUrgent, paymentMode: it.paymentMode === 'PayAndClear' ? 'PayAndClear' : 'Normal', payoutMethod: it.payoutMethod === 'EWallet' ? 'EWallet' : 'EFT', complianceKind: it.complianceKind ?? null, complianceDetail: it.complianceDetail ?? '' } : { ...EMPTY_ITEM, complianceKind: null, complianceDetail: '' }; this.clearInvoice(); this.supplierHits.set([]); this.itemForm.set(it ? it.id : 'new');
     if (this.itemDraft.payoutMethod === 'EWallet') { this.itemDraft.bankName = ''; this.itemDraft.branchCode = ''; }
     this.reqForm = this.blankReqForm(); this.eftStash = null;
     // A new staff payment defaults to filling the requisition in; an existing one that already has a requisition defaults to upload (replace).
@@ -1486,7 +1508,7 @@ export class FinanceCreditorsComponent implements OnInit {
           this.busy.set(true);
           this.api.upload(b.id, recon, 'SupplierRecon', itemId, undefined, undefined, this.track('Attaching the recon', recon, ++n, total)).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachSage(afterMsg + ' + recon'); }, error: e => { this.untrack(); this.fail(e, 'Payment saved but the recon could not be attached — upload it under the payment.'); } });
         };
-        if (file) { this.busy.set(true); this.api.upload(b.id, file, this.primaryDocType(), itemId, undefined, undefined, this.track(`Attaching the ${this.primaryName()}`, file, ++n, total)).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon(this.isPrepayment() ? 'Payment added and request form attached — now add the quote, bank letter and purchase order below' : 'Payment added and invoice attached'); }, error: e => { this.untrack(); this.fail(e, `Payment saved but the ${this.primaryName()} could not be attached.`); } }); }
+        if (file) { this.busy.set(true); this.api.upload(b.id, file, this.primaryDocType(), itemId, undefined, undefined, this.track(`Attaching the ${this.primaryName()}`, file, ++n, total)).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon(this.isPrepayment() ? 'Payment added and request form attached — now add the quote, bank letter and purchase order below' : `Payment added and ${this.primaryName()} attached`); }, error: e => { this.untrack(); this.fail(e, `Payment saved but the ${this.primaryName()} could not be attached.`); } }); }
         else if (link) { this.busy.set(true); this.api.linkInvoice(b.id, itemId, link.id).subscribe({ next: x => { this.batch.set(x); this.busy.set(false); attachRecon('Payment added and linked to the Books invoice'); }, error: e => this.fail(e, 'Payment saved but the Books invoice could not be linked.') }); }
       },
       error: e => this.fail(e, "Couldn't save the payment.")

@@ -117,6 +117,31 @@ public static class StaffPayoutMethods
     public static string Title(string? m) => m == EWallet ? "eWallet" : "EFT";
 }
 
+/// <summary>Compliance payments: what kind of compliance payment a line is. "Other" carries a free-text description.</summary>
+public static class CreditorComplianceKinds
+{
+    public const string Invoice = "Invoice";
+    public const string Licence = "Licence";
+    public const string CrossBorder = "CrossBorder";
+    public const string Other = "Other";
+
+    public static readonly (string Key, string Title)[] All =
+    {
+        (Invoice, "Invoice"), (Licence, "Licence"), (CrossBorder, "Cross-border payment"), (Other, "Other"),
+    };
+
+    /// <summary>The stored key for <paramref name="kind"/> (case-insensitive), or null if it isn't a known kind.</summary>
+    public static string? Normalise(string? kind) => All.Where(k => string.Equals(k.Key, kind?.Trim(), StringComparison.OrdinalIgnoreCase)).Select(k => k.Key).FirstOrDefault();
+
+    /// <summary>"Licence", "Cross-border payment", or "Other — {detail}".</summary>
+    public static string? Title(string? kind, string? detail)
+    {
+        if (kind == null) return null;
+        if (kind == Other) return string.IsNullOrWhiteSpace(detail) ? "Other" : $"Other — {detail.Trim()}";
+        return All.Where(k => k.Key == kind).Select(k => k.Title).FirstOrDefault() ?? kind;
+    }
+}
+
 /// <summary>One payment (one beneficiary) inside a batch — a line on the payment schedule.</summary>
 public class PaymentBatchItem
 {
@@ -150,6 +175,17 @@ public class PaymentBatchItem
     /// so the schedule, bank file and PDFs show it without special-casing. Null for every other payment type.
     /// </summary>
     [MaxLength(10)] public string? PayoutMethod { get; set; }
+
+    /// <summary>Compliance payments only: see <see cref="CreditorComplianceKinds"/>. Null for every other payment type.</summary>
+    [MaxLength(20)] public string? ComplianceKind { get; set; }
+    /// <summary>Compliance payments of kind Other: what the payment is for.</summary>
+    [MaxLength(200)] public string? ComplianceDetail { get; set; }
+
+    /// <summary>"Compliance · Licence" style label for the line, or null when it isn't a compliance payment.</summary>
+    [NotMapped] public string? ComplianceTitle => CreditorComplianceKinds.Title(ComplianceKind, ComplianceDetail);
+    /// <summary>Description as shown on schedules and PDFs: the compliance kind in front of the typed description.</summary>
+    [NotMapped] public string? DisplayDescription => ComplianceTitle == null ? Description
+        : string.IsNullOrWhiteSpace(Description) ? $"Compliance: {ComplianceTitle}" : $"Compliance: {ComplianceTitle} — {Description}";
 
     /// <summary>Pending | Approved | Queried | Rejected — the director's decision per payment.</summary>
     [Required, MaxLength(20)] public string DecisionStatus { get; set; } = "Pending";

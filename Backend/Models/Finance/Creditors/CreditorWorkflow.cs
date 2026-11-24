@@ -117,11 +117,14 @@ public static class CreditorPaymentTypes
     /// <summary>Payment types paid off a requisition (no invoice): requisition + bank statement, EFT or eWallet, lenient checks.</summary>
     public static bool IsRequisitionBased(string? paymentType) => paymentType is StaffPayment or RequisitionForm;
     public const string CreditNote = "CreditNote";
+    /// <summary>Compliance payment (licence, cross-border payment, compliance invoice…): amount typed in by the clerk, sub-kind per payment.</summary>
+    public const string Compliance = "Compliance";
 
     public static readonly (string Key, string Title)[] All =
     {
         (DailyCreditor, "Daily creditor"), (MonthlyCreditor, "Monthly creditor"), (Prepayment, "Prepayment"),
         (Intercompany, "Intercompany"), (Utility, "Utility"), (StaffPayment, "Staff payment"), (RequisitionForm, "Requisition form"), (CreditNote, "Credit note"),
+        (Compliance, "Compliance payment"),
     };
 }
 
@@ -151,6 +154,8 @@ public static class CreditorDocTypes
     public const string WarehouseReturnGrv = "WarehouseReturnGRV";
     public const string ReinvoiceNumber = "ReinvoiceNumber";
     public const string ProofOfPayment = "ProofOfPayment";
+    /// <summary>Compliance payments: the invoice, licence or payment instruction behind the amount.</summary>
+    public const string ComplianceDocument = "ComplianceDocument";
     public const string Other = "Other";
 
     public static readonly (string Key, string Title, string Scope)[] All =
@@ -175,6 +180,7 @@ public static class CreditorDocTypes
         (WarehouseReturnGrv, "Warehouse return GRV", "item"),
         (ReinvoiceNumber, "Re-invoice number (if re-billed)", "item"),
         (ProofOfPayment, "Proof of payment", "item"),
+        (ComplianceDocument, "Compliance document (invoice / licence / instruction)", "item"),
         (Other, "Other", "any"),
     };
 
@@ -256,6 +262,13 @@ public static class CreditorDocRules
             new Rule(CreditorDocTypes.CustomerReason, true), new Rule(CreditorDocTypes.ReinvoiceNumber, true),
             new Rule(CreditorDocTypes.CustomerCollectionSlip, false, IfReturned: true),
             new Rule(CreditorDocTypes.WarehouseReturnGrv, false, IfReturned: true),
+        },
+        // Compliance payment: amount typed in by hand, not derived from an invoice in the system. Kept loose for now —
+        // the supporting document and bank letter are recommended (REVIEW when missing), nothing blocks.
+        [CreditorPaymentTypes.Compliance] = new[]
+        {
+            new Rule(CreditorDocTypes.ComplianceDocument, false),
+            new Rule(CreditorDocTypes.BankLetter, false),
         },
     };
 

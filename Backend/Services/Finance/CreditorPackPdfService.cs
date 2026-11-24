@@ -224,7 +224,7 @@ th{{width:32%;background:#f3f4f6;font-weight:bold}} .amt{{font-size:14pt;font-we
         var prepay = b.PaymentType == CreditorPaymentTypes.Prepayment;
         var decided = items.Any(i => i.DecisionStatus != "Pending");
         string Row(PaymentBatchItem i, int n) => $@"<tr class='{(i.DecisionStatus == "Rejected" ? "rej" : "")}'>
-<td class='c'>{n}</td><td><b>{E(i.SupplierName)}</b>{(i.IsUrgent ? " <span class='urg'>URGENT</span>" : "")}{(i.PaymentMode == CreditorPaymentModes.PayAndClear ? "<br/><em>pay &amp; clear</em>" : "")}{(string.IsNullOrWhiteSpace(i.Description) ? "" : "<br/><small>" + E(i.Description) + "</small>")}</td>
+<td class='c'>{n}</td><td><b>{E(i.SupplierName)}</b>{(i.IsUrgent ? " <span class='urg'>URGENT</span>" : "")}{(i.PaymentMode == CreditorPaymentModes.PayAndClear ? "<br/><em>pay &amp; clear</em>" : "")}{(string.IsNullOrWhiteSpace(i.DisplayDescription) ? "" : "<br/><small>" + E(i.DisplayDescription) + "</small>")}</td>
 <td>{E(i.InvoiceNumbers)}</td><td>{E(i.BankName)}</td><td>{E(i.AccountHolder)}</td><td class='mono'>{(prepay && string.IsNullOrEmpty(i.AccountNumber) ? "<em>Treasury</em>" : E(i.AccountNumber))}</td><td class='mono'>{E(i.BranchCode)}</td><td>{E(i.PaymentReference)}</td>
 <td class='r mono'>{i.Amount:N2}</td>{(decided ? $"<td>{E(i.DecisionStatus)}{(string.IsNullOrWhiteSpace(i.DecisionComment) ? "" : "<br/><small>" + E(i.DecisionComment) + "</small>")}</td>" : "<td class='tick'>&#9744;</td>")}</tr>";
 
@@ -263,7 +263,7 @@ tr.rej td{{color:#9ca3af;text-decoration:line-through}} tr.tot td{{font-weight:b
         var approved = items.Where(i => i.DecisionStatus != "Rejected").Sum(i => i.Amount);
         var prepay = b.PaymentType == CreditorPaymentTypes.Prepayment;
         string Row(PaymentBatchItem i, int n) => $@"<tr class='{(i.DecisionStatus == "Rejected" ? "rej" : "")}'>
-<td>{n}</td><td>{E(i.SupplierName)}{(i.IsUrgent ? " <b style='color:#b91c1c'>URGENT</b>" : "")}{(i.PaymentMode == CreditorPaymentModes.PayAndClear ? " <em>(pay &amp; clear)</em>" : "")}</td><td>{E(i.InvoiceNumbers)}</td><td>{E(i.Description)}</td><td>{(prepay && string.IsNullOrEmpty(i.AccountNumber) ? "<em>Treasury</em>" : E(i.AccountNumber))}</td><td class='r'>{i.Amount:N2}</td><td>{E(i.DecisionStatus)}</td></tr>";
+<td>{n}</td><td>{E(i.SupplierName)}{(i.IsUrgent ? " <b style='color:#b91c1c'>URGENT</b>" : "")}{(i.PaymentMode == CreditorPaymentModes.PayAndClear ? " <em>(pay &amp; clear)</em>" : "")}</td><td>{E(i.InvoiceNumbers)}</td><td>{E(i.DisplayDescription)}</td><td>{(prepay && string.IsNullOrEmpty(i.AccountNumber) ? "<em>Treasury</em>" : E(i.AccountNumber))}</td><td class='r'>{i.Amount:N2}</td><td>{E(i.DecisionStatus)}</td></tr>";
 
         string Slot(Slot s)
         {

@@ -142,6 +142,7 @@ public class CreditorPacksController : ControllerBase
             paymentTypes = CreditorPaymentTypes.All.Select(p => new { key = p.Key, title = p.Title }),
             docTypes = CreditorDocTypes.All.Select(d => new { key = d.Key, title = d.Title, scope = d.Scope }),
             paymentModes = CreditorPaymentModes.All.Select(m => new { key = m, title = CreditorPaymentModes.Title(m) }),
+            complianceKinds = CreditorComplianceKinds.All.Select(k => new { key = k.Key, title = k.Title }),
             rules = CreditorPaymentTypes.All.ToDictionary(p => p.Key, p => CreditorDocRules.For(p.Key).Select(r => new { r.DocType, r.Required, r.AfterDelivery, r.IfReturned, r.WithRecon })),
             statuses = new[] { CreditorWorkflow.Draft, CreditorWorkflow.ChecksFailed, CreditorWorkflow.AwaitingAccountant, CreditorWorkflow.QueriedByAccountant, CreditorWorkflow.AwaitingDirector, CreditorWorkflow.QueriedByDirector, CreditorWorkflow.Rejected, CreditorWorkflow.Approved, CreditorWorkflow.LoadedOnBank, CreditorWorkflow.Paid, CreditorWorkflow.Closed }
                 .Select(s => new { key = s, title = CreditorWorkflow.Title(s) }),
@@ -296,7 +297,8 @@ public class CreditorPacksController : ControllerBase
             b.TotalAmount, items = b.Items.Count, documents = b.Documents.Count(d => d.StoragePath != null),
             b.PreparedByUserId, b.PreparedByName, b.CreatedAt, b.SubmittedAt, b.UpdatedAt, b.ChecksStatus, b.AccountantName, b.AccountantApprovedAt, b.DirectorName, b.DirectorSignedAt,
             b.PaidAt, b.ClosedAt, b.ReturnReason, b.ScheduledPayDate, openPrepayments = b.Items.Count(i => i.PrepaymentOpen),
-            approvedItems = b.Items.Count(i => i.DecisionStatus == "Approved"), queriedItems = b.Items.Count(i => i.DecisionStatus == "Queried"), rejectedItems = b.Items.Count(i => i.DecisionStatus == "Rejected")
+            approvedItems = b.Items.Count(i => i.DecisionStatus == "Approved"), queriedItems = b.Items.Count(i => i.DecisionStatus == "Queried"), rejectedItems = b.Items.Count(i => i.DecisionStatus == "Rejected"),
+            complianceKinds = b.Items.Where(i => i.ComplianceKind != null).Select(i => i.ComplianceKind).Distinct().ToList()
         }).ToListAsync();
         return Ok(rows);
     }
@@ -323,7 +325,8 @@ public class CreditorPacksController : ControllerBase
             b.Id, b.BatchNumber, b.CompanyCode, b.PaymentType, b.BatchDate, b.Status, b.TotalAmount, b.Notes,
             items = b.Items.Count, pendingItems = b.Items.Count(i => i.DecisionStatus == "Pending"),
             b.PreparedByUserId, b.PreparedByName, b.SubmittedAt, b.AccountantUserId, b.AccountantName, b.AccountantApprovedAt, b.AccountantComment,
-            b.RequestedApproverIds, b.RequestedDirectorIds, b.UpdatedAt
+            b.RequestedApproverIds, b.RequestedDirectorIds, b.UpdatedAt,
+            complianceKinds = b.Items.Where(i => i.ComplianceKind != null).Select(i => i.ComplianceKind).Distinct().ToList()
         }).ToListAsync();
         var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(x => x.Code, x => x);
         var list = new List<object>();
@@ -353,7 +356,7 @@ public class CreditorPacksController : ControllerBase
             {
                 r.Id, r.BatchNumber, r.CompanyCode, companyName = c?.Name ?? r.CompanyCode, r.PaymentType, paymentTypeTitle = CreditorPaymentTypes.All.Where(p => p.Key == r.PaymentType).Select(p => p.Title).FirstOrDefault() ?? r.PaymentType,
                 r.BatchDate, r.Status, statusTitle = CreditorWorkflow.Title(r.Status), r.TotalAmount, r.Notes, r.items, r.pendingItems,
-                r.PreparedByName, r.AccountantName, r.AccountantComment, waitingSince, role, blocked
+                r.PreparedByName, r.AccountantName, r.AccountantComment, waitingSince, role, blocked, r.complianceKinds
             });
         }
         return Ok(list);
@@ -433,7 +436,17 @@ public class CreditorPacksController : ControllerBase
 
     public record ItemDto(string SupplierName, string? SupplierVatNumber, string? InvoiceNumbers, string? Description, decimal Amount,
         string? BankName, string? AccountNumber, string? BranchCode, string? AccountHolder, string? PaymentReference, bool StockReturned,
-        bool IsUrgent = false, string? PaymentMode = null, string? PayoutMethod = null);
+        bool IsUrgent = false, string? PaymentMode = null, string? PayoutMethod = null, string? ComplianceKind = null, string? ComplianceDetail = null);
+
+    /// <summary>Compliance payments must say what kind they are; "Other" needs a description.</summary>
+    private static string? ValidateItem(ItemDto d, string paymentType)
+    {
+        if (paymentType != CreditorPaymentTypes.Compliance) return null;
+        var kind = CreditorComplianceKinds.Normalise(d.ComplianceKind);
+        if (kind == null) return "Choose what kind of compliance payment this is.";
+        if (kind == CreditorComplianceKinds.Other && string.IsNullOrWhiteSpace(d.ComplianceDetail)) return "Describe what the compliance payment is for.";
+        return null;
+    }
 
     [HttpPost("batches/{id:int}/items")]
     public async Task<IActionResult> AddItem(int id, [FromBody] ItemDto dto)
@@ -441,6 +454,7 @@ public class CreditorPacksController : ControllerBase
         var b = await Load(id); if (b == null) return NotFound();
         if (!CreditorWorkflow.PreparerEditable.Contains(b.Status)) return Conflict(new { message = "This batch can no longer be edited." });
         if (!await CanPrepareAsync(b)) return Forbid();
+        if (ValidateItem(dto, b.PaymentType) is { } bad) return BadRequest(new { message = bad });
         var it = new PaymentBatchItem { BatchId = id, SortOrder = b.Items.Count + 1, PrepaymentOpen = b.PaymentType == CreditorPaymentTypes.Prepayment };
         Apply(it, dto, b.PaymentType);
         b.Items.Add(it);
@@ -457,6 +471,7 @@ public class CreditorPacksController : ControllerBase
         var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
         if (!CreditorWorkflow.PreparerEditable.Contains(b.Status)) return Conflict(new { message = "This batch can no longer be edited." });
         if (!await CanPrepareAsync(b)) return Forbid();
+        if (ValidateItem(dto, b.PaymentType) is { } bad) return BadRequest(new { message = bad });
         Apply(it, dto, b.PaymentType);
         if (b.Status is CreditorWorkflow.QueriedByDirector && it.DecisionStatus == "Queried") { it.DecisionStatus = "Pending"; it.DecisionComment = null; }
         Recalc(b);
@@ -485,6 +500,13 @@ public class CreditorPacksController : ControllerBase
         it.SupplierName = d.SupplierName.Trim(); it.SupplierVatNumber = d.SupplierVatNumber?.Replace(" ", ""); it.InvoiceNumbers = d.InvoiceNumbers?.Trim();
         it.Description = d.Description; it.Amount = d.Amount; it.PaymentReference = d.PaymentReference; it.StockReturned = d.StockReturned;
         it.IsUrgent = d.IsUrgent; it.PaymentMode = CreditorPaymentModes.Normalise(d.PaymentMode);
+        if (paymentType == CreditorPaymentTypes.Compliance)
+        {
+            it.ComplianceKind = CreditorComplianceKinds.Normalise(d.ComplianceKind);
+            var detail = d.ComplianceDetail?.Trim();
+            it.ComplianceDetail = it.ComplianceKind == CreditorComplianceKinds.Other && !string.IsNullOrEmpty(detail) ? detail[..Math.Min(detail.Length, 200)] : null;
+        }
+        else { it.ComplianceKind = null; it.ComplianceDetail = null; }
         if (paymentType == CreditorPaymentTypes.Prepayment)
         {
             // Prepayments are paid off the quote; Treasury loads the beneficiary manually from the bank letter, so nothing is captured here.
@@ -930,7 +952,7 @@ public class CreditorPacksController : ControllerBase
             return new
             {
                 no = n + 1, itemId = i.Id, supplier = i.SupplierName, invoiceDate = invDate, documentNumber = docNo,
-                description = i.Description, payableBy = b.BatchDate, amount = i.Amount, payable,
+                description = i.DisplayDescription, payableBy = b.BatchDate, amount = i.Amount, payable,
                 bank = i.BankName, accountNumber = i.AccountNumber, branchCode = i.BranchCode, reference = i.PaymentReference,
                 decision = i.DecisionStatus, hasInvoice = docs != null && docs.Count > 0
             };
@@ -1461,6 +1483,7 @@ public class CreditorPacksController : ControllerBase
                 items = approved.Select(i => new
                 {
                     i.Id, i.SupplierName, i.Amount, i.InvoiceNumbers, i.Description, i.BankName, i.AccountNumber, i.BranchCode, i.AccountHolder, i.PaymentReference, i.PaidAt, i.PrepaymentOpen,
+                    i.ComplianceKind, i.ComplianceTitle,
                     hasPop = HasPop(i.Id),
                     popDocId = b.Documents.Where(d => d.ItemId == i.Id && d.DocType == CreditorDocTypes.ProofOfPayment && d.StoragePath != null).OrderByDescending(d => d.Version).Select(d => (int?)d.Id).FirstOrDefault()
                 }),
@@ -1533,7 +1556,7 @@ public class CreditorPacksController : ControllerBase
             // "12 345.67" / "R12,345.67" also matches on amount (pack total or a single payment)
             var amt = decimal.TryParse(s.Replace("r", "").Replace(" ", "").Replace(",", ""), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var a) ? a : (decimal?)null;
             query = query.Where(b => b.BatchNumber.ToLower().Contains(s) || (b.Notes != null && b.Notes.ToLower().Contains(s)) || (b.PreparedByName != null && b.PreparedByName.ToLower().Contains(s))
-                || b.Items.Any(i => i.SupplierName.ToLower().Contains(s) || (i.PaymentReference != null && i.PaymentReference.ToLower().Contains(s)) || (i.InvoiceNumbers != null && i.InvoiceNumbers.ToLower().Contains(s)) || (i.Description != null && i.Description.ToLower().Contains(s)))
+                || b.Items.Any(i => i.SupplierName.ToLower().Contains(s) || (i.PaymentReference != null && i.PaymentReference.ToLower().Contains(s)) || (i.InvoiceNumbers != null && i.InvoiceNumbers.ToLower().Contains(s)) || (i.Description != null && i.Description.ToLower().Contains(s)) || (i.ComplianceDetail != null && i.ComplianceDetail.ToLower().Contains(s)))
                 || (amt != null && (b.TotalAmount == amt || b.Items.Any(i => i.Amount == amt))));
         }
         var batches = await query.OrderByDescending(b => b.PaidAt ?? b.ClosedAt ?? b.UpdatedAt).Take(Math.Clamp(take, 1, 2000)).ToListAsync();
@@ -1549,7 +1572,7 @@ public class CreditorPacksController : ControllerBase
                 b.PaymentType, paymentTypeTitle = CreditorChecksService.Label(b.PaymentType), b.Status, statusTitle = CreditorWorkflow.Title(b.Status),
                 b.ScheduledPayDate, b.DirectorName, b.DirectorSignedAt, b.AccountantName, b.AccountantApprovedAt, b.PreparedByName, b.BankExportedAt, b.PaidAt, b.ClosedAt,
                 amount = approved.Sum(i => i.Amount), items = approved.Count, popDone, popMissing = approved.Count - popDone,
-                lines = approved.Select(i => new { i.Id, i.SupplierName, i.Amount, i.InvoiceNumbers, i.Description, i.BankName, i.AccountNumber, i.PaymentReference, i.PaidAt, popDocId = Pop(i.Id) })
+                lines = approved.Select(i => new { i.Id, i.SupplierName, i.Amount, i.InvoiceNumbers, i.Description, i.ComplianceKind, i.ComplianceTitle, i.BankName, i.AccountNumber, i.PaymentReference, i.PaidAt, popDocId = Pop(i.Id) })
             };
         }).ToList();
 
@@ -1732,6 +1755,7 @@ public class CreditorPacksController : ControllerBase
             {
                 i.Id, i.SupplierName, i.SupplierVatNumber, i.InvoiceNumbers, i.Description, i.Amount, i.BankName, i.AccountNumber, i.BranchCode, i.AccountHolder, i.PaymentReference,
                 i.StockReturned, i.IsUrgent, i.PaymentMode, paymentModeTitle = CreditorPaymentModes.Title(i.PaymentMode), i.PayoutMethod,
+                i.ComplianceKind, i.ComplianceDetail, i.ComplianceTitle,
                 i.DecisionStatus, i.DecisionComment, i.DecidedAt, i.PrepaymentOpen, i.PaidAt, i.SortOrder,
                 required = itemReq[i.Id],
                 recommended = itemRec[i.Id],

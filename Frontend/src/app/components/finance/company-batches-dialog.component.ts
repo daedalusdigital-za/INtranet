@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { BatchRow } from '../../services/creditor-packs.service';
+import { BatchRow, complianceKindsLabel } from '../../services/creditor-packs.service';
 
 export interface CompanyBatchesData {
   code: string; name: string; logo: string | null; monogram: string; hue: number;
@@ -30,7 +30,7 @@ export interface CompanyBatchesData {
           @for (r of d.rows; track r.id) {
             <tr (click)="ref.close(r.id)" [class.back]="d.isSentBack(r.status)">
               <td><span class="ref">{{ r.batchNumber }}</span><br><small>{{ r.batchDate | date:'dd MMM yyyy' }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
-              <td>{{ d.typeTitle(r.paymentType) }}</td>
+              <td>{{ d.typeTitle(r.paymentType) }}@if (r.complianceKinds?.length) { <small> · {{ kinds(r) }}</small> }</td>
               <td class="num">R {{ r.totalAmount | number:'1.2-2' }}</td>
               <td>
                 <span [class]="'badge ' + d.badge(r.status)">{{ r.statusTitle }}</span>
@@ -66,6 +66,7 @@ export interface CompanyBatchesData {
 export class CompanyBatchesDialogComponent {
   d = inject<CompanyBatchesData>(MAT_DIALOG_DATA);
   ref = inject<MatDialogRef<CompanyBatchesDialogComponent, number | undefined>>(MatDialogRef);
+  kinds(r: BatchRow) { return complianceKindsLabel(r.complianceKinds); }
   get openCount() { return this.d.rows.filter(r => r.status !== 'Closed').length; }
   get openAmount() { return this.d.rows.filter(r => r.status !== 'Closed').reduce((s, r) => s + (r.totalAmount || 0), 0); }
   static open(dialog: MatDialog, data: CompanyBatchesData) {
