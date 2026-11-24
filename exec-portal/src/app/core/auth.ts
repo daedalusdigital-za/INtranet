@@ -1,7 +1,7 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { catchError, throwError } from 'rxjs';
+import { catchError, throwError, timeout } from 'rxjs';
 
 export interface ExecUser { userId: number; name: string; email: string; role: string; hasSignature: boolean; }
 interface Session { token: string; expiresAt: string; user: ExecUser; }
@@ -28,12 +28,21 @@ export class AuthStore {
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const store = inject(AuthStore); const router = inject(Router);
+  const isAuth = req.url.includes('/api/exec/auth/');
   const t = store.token();
-  const r = t && !req.url.includes('/api/exec/auth/') ? req.clone({ setHeaders: { Authorization: `Bearer ${t}` } }) : req;
-  return next(r).pipe(catchError((e: HttpErrorResponse) => {
-    if (e.status === 401 && t) { store.clear(); router.navigate(['/login'], { queryParams: { next: router.url } }); }
-    return throwError(() => e);
-  }));
+  const r = t && !isAuth ? req.clone({ setHeaders: { Authorization: `Bearer ${t}` } }) : req;
+  // A request that never answers would leave a spinner up for good; file downloads get longer.
+  const limit = req.responseType === 'blob' ? 180_000 : 60_000;
+  return next(r).pipe(
+    timeout(limit),
+    catchError((e: HttpErrorResponse | Error) => {
+      if (!isAuth && e instanceof HttpErrorResponse && e.status === 401 && t && store.token() === t) {
+        store.clear();
+        const here = router.url.startsWith('/login') ? '/' : router.url;
+        router.navigate(['/login'], { queryParams: { next: here, expired: 1 } });
+      }
+      return throwError(() => e);
+    }));
 };
 
 export const signedInGuard: CanActivateFn = (_r, state) => {

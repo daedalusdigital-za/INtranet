@@ -43,7 +43,43 @@ public class ExecAuthController : ControllerBase
 
     private static readonly string[] ApprovalRoles = { CreditorWorkflow.RoleAccountant, CreditorWorkflow.RoleDirector, CreditorWorkflow.RoleBank, "*" };
 
-    private sealed class Challenge { public int UserId; public string Code = ""; public int Attempts; }
+    private sealed class CodeTries { public int Attempts; }
+
+    // The challenge is signed, not stored: "{userId}.{expiresUnix}.{nonce}.{tag}" where tag = HMAC(secret, payload + code).
+    // A backend restart or redeploy between the e-mail and the code therefore no longer loses the sign-in.
+    // Only the attempt counter and the single-use marker live in memory.
+    private byte[] Secret() => System.Text.Encoding.UTF8.GetBytes("exec-code|" + ExecAuth.SigningKey(_cfg));
+
+    private string Tag(string payload, string code)
+    {
+        using var h = new HMACSHA256(Secret());
+        return Convert.ToHexString(h.ComputeHash(System.Text.Encoding.UTF8.GetBytes(payload + "|" + code))).ToLowerInvariant();
+    }
+
+    private string NewChallenge(int userId, string code)
+    {
+        var exp = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds();
+        var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(12)).ToLowerInvariant();
+        var payload = $"{userId}.{exp}.{nonce}";
+        return $"{payload}.{Tag(payload, code)}";
+    }
+
+    private static bool TryReadChallenge(string? challenge, out int userId, out string nonce)
+    {
+        userId = 0; nonce = "";
+        var p = (challenge ?? "").Split('.');
+        if (p.Length != 4 || !int.TryParse(p[0], out userId) || !long.TryParse(p[1], out var exp)) return false;
+        if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > exp) return false;
+        nonce = p[2];
+        return nonce.Length > 0;
+    }
+
+    private bool CodeMatches(string challenge, string code)
+    {
+        var i = challenge.LastIndexOf('.');
+        var expected = Tag(challenge[..i], code);
+        return CryptographicOperations.FixedTimeEquals(System.Text.Encoding.ASCII.GetBytes(expected), System.Text.Encoding.ASCII.GetBytes(challenge[(i + 1)..]));
+    }
 
     /// <summary>Step 1: e-mail + password. Returns a challenge id (code e-mailed) or, when codes are disabled, the token.</summary>
     [HttpPost("login")]
@@ -78,8 +114,7 @@ public class ExecAuthController : ControllerBase
         }
 
         var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("000000");
-        var id = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
-        _cache.Set($"exec-chal:{id}", new Challenge { UserId = u.UserId, Code = code }, TimeSpan.FromMinutes(10));
+        var id = NewChallenge(u.UserId, code);
 
         var html = $@"<div style='font-family:Segoe UI,Arial,sans-serif;max-width:480px'>
 <p>Hi {System.Net.WebUtility.HtmlEncode(u.Name)},</p>
@@ -99,15 +134,19 @@ public class ExecAuthController : ControllerBase
     [HttpPost("verify")]
     public async Task<IActionResult> Verify([FromBody] VerifyDto dto)
     {
-        var key = $"exec-chal:{dto.Challenge}";
-        if (!_cache.TryGetValue<Challenge>(key, out var ch) || ch == null) return Unauthorized(new { message = "That code has expired. Sign in again." });
-        if (!string.Equals((dto.Code ?? "").Trim(), ch.Code, StringComparison.Ordinal))
+        var expired = Unauthorized(new { message = "That code has expired. Sign in again." });
+        if (!TryReadChallenge(dto.Challenge, out var userId, out var nonce)) return expired;
+        if (_cache.TryGetValue($"exec-chal-used:{nonce}", out _)) return expired;
+        var tries = _cache.GetOrCreate($"exec-chal-tries:{nonce}", e => { e.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(11); return new CodeTries(); })!;
+        if (tries.Attempts >= 5) return Unauthorized(new { message = "Too many wrong codes. Sign in again." });
+        var code = new string((dto.Code ?? "").Where(char.IsDigit).ToArray());
+        if (!CodeMatches(dto.Challenge, code))
         {
-            if (++ch.Attempts >= 5) { _cache.Remove(key); return Unauthorized(new { message = "Too many wrong codes. Sign in again." }); }
+            if (Interlocked.Increment(ref tries.Attempts) >= 5) return Unauthorized(new { message = "Too many wrong codes. Sign in again." });
             return Unauthorized(new { message = "That code is not right. Check the e-mail and try again." });
         }
-        _cache.Remove(key);
-        var u = await _db.Users.FirstOrDefaultAsync(x => x.UserId == ch.UserId && x.IsActive);
+        _cache.Set($"exec-chal-used:{nonce}", true, TimeSpan.FromMinutes(11));
+        var u = await _db.Users.FirstOrDefaultAsync(x => x.UserId == userId && x.IsActive);
         if (u == null) return Unauthorized(new { message = "Account unavailable." });
         u.LastLoginAt = DateTime.UtcNow; await _db.SaveChangesAsync();
         var (tok, exp) = _tokens.Issue(u);
