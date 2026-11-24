@@ -90,7 +90,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                 <small>{{ whereNow(b) }}</small>
               </div>
               <div class="b-actions" (click)="$event.stopPropagation()">
-                <button mat-icon-button matTooltip="Preview the full pack (PDF)" (click)="previewPack(b)"><mat-icon>picture_as_pdf</mat-icon></button>
+                <button mat-icon-button aria-label="Preview the full pack" matTooltip="Preview the full pack: approval sheet and every document" (click)="previewPack(b)"><mat-icon>visibility</mat-icon></button>
                 <button mat-icon-button matTooltip="Open the pack" (click)="openPack(b)"><mat-icon>open_in_new</mat-icon></button>
                 <mat-icon class="chev">{{ open() === -b.id ? 'expand_less' : 'expand_more' }}</mat-icon>
               </div>
@@ -110,7 +110,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                   </div>
                 }
                 <table class="items">
-                  <thead><tr><th>Beneficiary</th><th>Invoice(s) / reference</th><th class="r">Amount</th><th>Uploaded documents</th></tr></thead>
+                  <thead><tr><th>Beneficiary</th><th>Invoice(s) / reference</th><th class="r">Amount</th><th>Uploaded documents</th><th class="eye"><span class="sr">Preview</span></th></tr></thead>
                   <tbody>
                     @for (i of b.items; track i.id) {
                       <tr>
@@ -123,8 +123,9 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                             @empty { <span class="muted">Nothing uploaded yet</span> }
                           </div>
                         </td>
+                        <td class="eye">@if (i.documents.length) { <button mat-icon-button aria-label="Preview this payment" matTooltip="Preview this payment: approval sheet and its documents" (click)="previewItem(b, i)"><mat-icon>visibility</mat-icon></button> }</td>
                       </tr>
-                    } @empty { <tr><td colspan="4" class="muted">No payments on this pack yet.</td></tr> }
+                    } @empty { <tr><td colspan="5" class="muted">No payments on this pack yet.</td></tr> }
                   </tbody>
                 </table>
               </div>
@@ -161,6 +162,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                 @if (b.can.markLoaded) { <button mat-flat-button color="primary" [disabled]="busy()" (click)="setStatus(b, 'LoadedOnBank')"><mat-icon>account_balance</mat-icon> Loaded on bank</button> }
                 @if (b.can.markPaid && b.status === 'LoadedOnBank') { <button mat-flat-button color="primary" [disabled]="busy()" (click)="setStatus(b, 'Paid')"><mat-icon>price_check</mat-icon> Mark paid</button> }
                 @if (b.can.close) { <button mat-flat-button color="primary" [disabled]="busy() || b.popMissing > 0 || b.openPrepayments > 0" [matTooltip]="b.popMissing > 0 ? 'Upload proof of payment for every payment first' : (b.openPrepayments > 0 ? 'Prepayments still open (tax invoice + GRV)' : 'Close the batch')" (click)="setStatus(b, 'Closed')"><mat-icon>inventory</mat-icon> Close</button> }
+                <button mat-icon-button aria-label="Preview the full pack" matTooltip="Preview the full pack: approval sheet and every document" (click)="previewPack(b)"><mat-icon>visibility</mat-icon></button>
                 <button mat-icon-button matTooltip="Open the pack" (click)="openPack(b)"><mat-icon>open_in_new</mat-icon></button>
                 <mat-icon class="chev">{{ open() === b.id ? 'expand_less' : 'expand_more' }}</mat-icon>
               </div>
@@ -182,7 +184,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                   }
                 </div>
                 <table class="items">
-                  <thead><tr><th>Beneficiary</th><th>Invoice(s) / reference</th><th>Bank</th><th class="r">Amount</th><th>Proof of payment</th></tr></thead>
+                  <thead><tr><th>Beneficiary</th><th>Invoice(s) / reference</th><th>Bank</th><th class="r">Amount</th><th>Proof of payment</th><th class="eye"><span class="sr">Preview</span></th></tr></thead>
                   <tbody>
                     @for (i of b.items; track i.id) {
                       <tr>
@@ -200,6 +202,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                           @else { <span class="muted">after payment</span> }
                           @if (i.prepaymentOpen) { <small class="warn">Prepayment open</small> }
                         </td>
+                        <td class="eye"><button mat-icon-button aria-label="Preview this payment" matTooltip="Preview this payment: approval sheet and its documents" (click)="previewItem(b, i)"><mat-icon>visibility</mat-icon></button></td>
                       </tr>
                     }
                   </tbody>
@@ -220,6 +223,8 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
     .ps-loading, .ps-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:48px 16px; color: var(--color-text-2); text-align:center; mat-icon { font-size:40px; width:40px; height:40px; } p { margin:0; } }
     .ps-kpis { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: var(--space-3); }
     .ps-kpi.ip .k-head mat-icon { color: var(--color-info); }
+    .items td.eye, .items th.eye { width:1%; padding:2px 0; text-align:right; }
+    .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
     .ip-run { border-style: dashed; }
     .tag.ip { background: var(--color-info-soft); color: var(--color-info); }
     .ip-note { display:flex; align-items:center; gap: var(--space-2); margin:0; padding: var(--space-2) var(--space-4); font-size: var(--text-sm); color: var(--color-text-2); border-bottom:1px solid var(--color-line); mat-icon { font-size:16px; width:16px; height:16px; flex-shrink:0; } }
@@ -337,8 +342,12 @@ export class FinancePaymentScheduleComponent implements OnInit {
       default: return b.statusTitle;
     }
   }
-  previewPack(b: InProgressBatch): void {
+  previewPack(b: InProgressBatch | ScheduleBatch): void {
     PackPreviewDialogComponent.open(this.dialog, { url: this.api.reviewPackUrl(b.id), title: `${b.batchNumber}: full pack`, subtitle: `${b.companyName} · ${b.paymentTypeTitle} · ${b.statusTitle}`, fileName: `Pack-${b.batchNumber}.pdf` });
+  }
+  /** One payment in one scroll: its approval sheet followed by every document attached to it. */
+  previewItem(b: InProgressBatch | ScheduleBatch, i: { id: number; supplierName: string }): void {
+    PackPreviewDialogComponent.open(this.dialog, { url: this.api.itemReviewUrl(b.id, i.id), title: `${i.supplierName}: approval sheet and documents`, subtitle: `${b.batchNumber} · ${b.companyName}`, fileName: `${b.batchNumber}-${i.supplierName}.pdf` });
   }
   previewDoc(b: InProgressBatch, d: InProgressDoc, supplier?: string): void {
     const title = `${d.title}${supplier ? ' · ' + supplier : ''}`, subtitle = `${b.batchNumber} · ${d.originalFileName || ''}`;
