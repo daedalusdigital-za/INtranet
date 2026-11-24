@@ -398,6 +398,8 @@ namespace ProjectTracker.API.Controllers.Logistics
                 
                 await transaction.CommitAsync();
 
+                await SplitAndLinkLinesAsync(load.Id);
+
                 _logger.LogInformation("Created new load {LoadNumber} with {StopCount} stops", loadNumber, dto.Stops.Count);
 
                 // Fetch and return the created load
@@ -632,7 +634,27 @@ namespace ProjectTracker.API.Controllers.Logistics
             load.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+            await SplitAndLinkLinesAsync(load.Id);
             return NoContent();
+        }
+
+        /// <summary>
+        /// Lines arrive from the tripsheet preview as one row per invoice, so an invoice with several products comes in
+        /// as "NAME xQty; NAME xQty". Split those into one line per product and link each to its stock item, or
+        /// Approve Dispatch finds no mappable line. Never fails the save that called it.
+        /// </summary>
+        private async Task SplitAndLinkLinesAsync(int loadId)
+        {
+            try
+            {
+                var r = await StopLineLinker.LinkAsync(_context, loadId, createMissingCommodities: false);
+                if (r.LinesConsidered > 0)
+                    _logger.LogInformation("Load {LoadId}: linked {Linked} of {Considered} stock line(s)", loadId, r.LinesLinked, r.LinesConsidered);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not split/link stock lines for load {LoadId}", loadId);
+            }
         }
 
         [HttpPut("{id}/status")]

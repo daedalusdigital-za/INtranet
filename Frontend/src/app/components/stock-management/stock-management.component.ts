@@ -664,6 +664,8 @@ interface ComprehensiveAnalysisResponse {
                               @switch (loadStockState(l)) {
                                 @case ('deducted') { <app-status-chip status="Deducted" tone="ok"></app-status-chip> }
                                 @case ('baseline') { <span class="stk-chip" matTooltip="Left before its items were counted, so the count already took it off">Already counted</span> }
+                                @case ('elsewhere') { <span class="stk-chip" [matTooltip]="loadHandledReason(l)">Deducted on another load</span> }
+                                @case ('pickup') { <span class="stk-chip" [matTooltip]="loadHandledReason(l)">Pick-up, no stock</span> }
                                 @default { <app-status-chip status="Awaiting" tone="warn"></app-status-chip> }
                               }
                             </td>
@@ -1780,7 +1782,8 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   }
 
   /** Server-computed state per load (same rule dispatch approval uses: per-item count dates vs the dispatch date) */
-  loadStockStates = new Map<number, { state: string; dispatchDate: string; delivered: boolean }>();
+  loadStockStates = new Map<number, { state: string; dispatchDate: string; delivered: boolean;
+    excluded?: { lineId: number; reason: string; otherLoad: string | null }[] }>();
 
   isLoadDeducted(loadId: number): boolean { return this.deductedLoadIds.has(loadId); }
 
@@ -1808,9 +1811,24 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     return this.pendingDispatchAll.filter(l => l.status === 'Delivered' || l.status === 'Completed').length;
   }
   /** Awaiting = after baseline and not yet deducted */
-  isLoadAwaiting(l: any): boolean { return !this.deductedLoadIds.has(l.id) && !this.isLoadBaseline(l); }
-  loadStockState(l: any): 'deducted' | 'awaiting' | 'baseline' {
-    return this.deductedLoadIds.has(l.id) ? 'deducted' : (this.isLoadBaseline(l) ? 'baseline' : 'awaiting');
+  isLoadAwaiting(l: any): boolean { return !this.deductedLoadIds.has(l.id) && !this.isLoadHandled(l) && !this.isLoadBaseline(l); }
+  loadStockState(l: any): 'deducted' | 'awaiting' | 'baseline' | 'elsewhere' | 'pickup' {
+    if (this.deductedLoadIds.has(l.id)) return 'deducted';
+    if (this.isLoadHandled(l)) return this.loadStockStates.get(l.id)!.state as 'elsewhere' | 'pickup';
+    return this.isLoadBaseline(l) ? 'baseline' : 'awaiting';
+  }
+
+  /**
+   * Nothing on the load may come off stock: every line is a pick-up, or its invoice + item was already
+   * deducted on another load (re-tripsheeted / rescheduled). Approving it would deduct the same goods twice.
+   */
+  isLoadHandled(l: any): boolean {
+    const s = this.loadStockStates.get(l.id)?.state;
+    return !this.deductedLoadIds.has(l.id) && (s === 'elsewhere' || s === 'pickup');
+  }
+  loadHandledReason(l: any): string {
+    const ex = this.loadStockStates.get(l.id)?.excluded || [];
+    return [...new Set(ex.map(e => e.reason))].join(' / ');
   }
 
   openManualMovement(type: 'Receive' | 'Return' | 'Adjustment' | 'Scrap'): void {
@@ -1818,6 +1836,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     const ref = this.dialog.open(ManualMovementDialog, {
       width: '860px', maxWidth: '96vw',
       data: { warehouse: w, warehouses: this.warehouses, type, inventory: this.allInventory,
+              companies: this.stockCompanies.filter(c => c.key !== 'DAMAGED-EXPIRED'),
               onPartial: () => { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } }
     });
     ref.afterClosed().subscribe(done => { if (done) { this.loadLedger(); this.loadDashboardData(); this.loadWarehouses(); } });
@@ -1941,9 +1960,17 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   }
 
   private openApproveDialog(load: any, whId: number): void {
+    // Lines that must not deduct (pick-ups, invoices already deducted on another load) are left out of the dialog
+    this.http.get<any[]>(`${environment.apiUrl}/logistics/stock-movements/loads/${load.id}/dispatch-exclusions`).subscribe({
+      next: ex => this.openApproveDialogWith(load, whId, ex || []),
+      error: () => this.openApproveDialogWith(load, whId, [])
+    });
+  }
+
+  private openApproveDialogWith(load: any, whId: number, exclusions: any[]): void {
     const ref = this.dialog.open(ApproveDispatchDialog, {
       width: '1100px', maxWidth: '96vw',
-      data: { load, inventory: this.allInventory.filter(r => r.warehouseId === whId) }
+      data: { load, exclusions, inventory: this.allInventory.filter(r => r.warehouseId === whId) }
     });
     const inst = ref.componentInstance;
     ref.afterClosed().subscribe(done => {
@@ -2032,7 +2059,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
 
   // ═══ Dispatch: tripsheets / picking slips / invoices from logistics ═══
   dispatchMode: 'tripsheets' | 'picking' | 'invoices' = 'tripsheets';
-  dispatchDeductFilter: '' | 'pending' | 'done' | 'baseline' = '';
+  dispatchDeductFilter: '' | 'pending' | 'done' | 'baseline' = 'pending';
   dispatchSearch = '';
   loads: any[] = [];
   loadsLoading = true;
@@ -2044,7 +2071,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   private matchesDeductFilter(l: any): boolean {
     switch (this.dispatchDeductFilter) {
       case 'pending': return this.isLoadAwaiting(l);
-      case 'done': return this.isLoadDeducted(l.id);
+      case 'done': return this.isLoadDeducted(l.id) || this.isLoadHandled(l);
       case 'baseline': return this.isLoadBaseline(l);
       default: return true;
     }
@@ -2075,7 +2102,7 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
   }
 
   dispatchCount(kind: 'pending' | 'done' | 'baseline'): number {
-    return this.loadsScoped.filter(l => kind === 'done' ? this.isLoadDeducted(l.id) : (kind === 'baseline' ? this.isLoadBaseline(l) : this.isLoadAwaiting(l))).length;
+    return this.loadsScoped.filter(l => kind === 'done' ? (this.isLoadDeducted(l.id) || this.isLoadHandled(l)) : (kind === 'baseline' ? this.isLoadBaseline(l) : this.isLoadAwaiting(l))).length;
   }
 
   /** Flatten tripsheet stops into invoice rows (invoice numbers can be multi-valued per stop, or sit on the stop lines) */
@@ -2490,7 +2517,9 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
         break;
       case 'dispatch': {
         const deducted = text('deducted');
-        this.dispatchDeductFilter = deducted === 'pending' || deducted === 'done' || deducted === 'baseline' ? deducted : '';
+        // Default to the loads still waiting: deducted / picked-up loads drop off the list ('all' shows everything)
+        this.dispatchDeductFilter = deducted === 'pending' || deducted === 'done' || deducted === 'baseline' ? deducted
+          : (deducted === 'all' ? '' : 'pending');
         this.dispatchSearch = text('q');
         break;
       }
@@ -3732,6 +3761,43 @@ interface MovementLine { inv: any; quantity: number | null; reference: string; r
           @if (search) { <button matSuffix mat-icon-button aria-label="Clear" (click)="search = ''"><mat-icon>close</mat-icon></button> }
         </mat-form-field>
       </div>
+      @if (data.type === 'Receive' && warehouseId) {
+        @if (!newItemOpen) {
+          <button mat-stroked-button type="button" class="mm-new-btn" (click)="openNewItem()"
+                  matTooltip="The item isn't in the stock list yet: add it here and receive it in one go">
+            <mat-icon>add_box</mat-icon> New item</button>
+        } @else {
+          <div class="mm-new">
+            <div class="mm-new-head"><mat-icon>add_box</mat-icon> New stock item <small>Created when you save, then received into this warehouse</small></div>
+            <div class="mm-new-grid">
+              <mat-form-field appearance="outline">
+                <mat-label>Code (optional)</mat-label>
+                <input matInput [(ngModel)]="newItem.code" maxlength="100" autocomplete="off">
+              </mat-form-field>
+              <mat-form-field appearance="outline" class="mm-new-name">
+                <mat-label>Name / description</mat-label>
+                <input matInput [(ngModel)]="newItem.name" maxlength="200" autocomplete="off" required (keydown.enter)="addNewItem()">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Company</mat-label>
+                <mat-select [(ngModel)]="newItem.company">
+                  <mat-option [value]="''">Not set</mat-option>
+                  @for (c of data.companies || []; track c.key) { <mat-option [value]="c.key">{{ c.shortName }}</mat-option> }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Unit</mat-label>
+                <input matInput [(ngModel)]="newItem.unit" maxlength="20" placeholder="Each" autocomplete="off">
+              </mat-form-field>
+            </div>
+            @if (newItemWarning()) { <div class="mm-new-warn"><mat-icon>info</mat-icon> {{ newItemWarning() }}</div> }
+            <div class="mm-new-actions">
+              <button mat-button type="button" (click)="newItemOpen = false">Cancel</button>
+              <button mat-flat-button color="primary" type="button" [disabled]="!newItem.name.trim()" (click)="addNewItem()"><mat-icon>add</mat-icon> Add line</button>
+            </div>
+          </div>
+        }
+      }
 
       @if (search.trim().length) {
         <div class="mm-list" #listBox>
@@ -3742,7 +3808,13 @@ interface MovementLine { inv: any; quantity: number | null; reference: string; r
               <span class="mm-qty">{{ r.quantityOnHand | number }} on hand</span>
               <mat-icon class="mm-add">{{ isAdded(r) ? 'done' : 'add' }}</mat-icon>
             </button>
-          } @empty { <div class="mm-empty">{{ warehouseId ? 'No item at this warehouse matches "' + search + '"' : 'Choose a warehouse first' }}</div> }
+          } @empty {
+            <div class="mm-empty">{{ warehouseId ? 'No item at this warehouse matches "' + search + '"' : 'Choose a warehouse first' }}
+              @if (data.type === 'Receive' && warehouseId) {
+                <div class="mm-empty-act"><button mat-stroked-button type="button" (click)="openNewItem(search)"><mat-icon>add_box</mat-icon> Add "{{ search.trim() }}" as a new item</button></div>
+              }
+            </div>
+          }
         </div>
       }
 
@@ -3760,8 +3832,8 @@ interface MovementLine { inv: any; quantity: number | null; reference: string; r
           <tbody>
             @for (l of lines; track l.inv.id; let i = $index) {
               <tr [class.bad]="lineError(l)">
-                <td class="mono">{{ l.inv.commodityCode }}</td>
-                <td class="name">{{ l.inv.commodityName }}</td>
+                <td class="mono">{{ l.inv.commodityCode || '—' }}</td>
+                <td class="name">{{ l.inv.commodityName }} @if (l.inv.isNew) { <span class="mm-new-tag">New item</span> }</td>
                 <td class="num">{{ l.inv.quantityOnHand | number }}</td>
                 <td class="num qty">
                   <input class="mm-qty-input" type="number" [attr.id]="'qty-' + i" [(ngModel)]="l.quantity"
@@ -3805,6 +3877,18 @@ interface MovementLine { inv: any; quantity: number | null; reference: string; r
   styles: [`
     h2 { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
     .mm-sub { font-size: var(--text-xs); font-weight: 400; color: var(--color-text-3); }
+    .mm-new-btn { margin: -6px 0 12px; }
+    .mm-new { border: 1px solid var(--color-line); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px; background: var(--color-surface-2); }
+    .mm-new-head { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 10px; }
+    .mm-new-head small { font-weight: 400; color: var(--color-text-3); }
+    .mm-new-head mat-icon { color: var(--color-ok); }
+    .mm-new-grid { display: grid; grid-template-columns: 160px 1fr 160px 110px; gap: 10px; }
+    @media (max-width: 700px) { .mm-new-grid { grid-template-columns: 1fr 1fr; } .mm-new-name { grid-column: 1 / -1; } }
+    .mm-new-warn { display: flex; gap: 6px; align-items: center; font-size: var(--text-sm); color: var(--color-warn); margin-bottom: 6px; }
+    .mm-new-warn mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .mm-new-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .mm-new-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: var(--text-xs); background: var(--color-ok-soft); color: var(--color-ok); }
+    .mm-empty-act { margin-top: 10px; }
     .mm-top { display: grid; grid-template-columns: 240px 1fr; gap: 12px; }
     .mm-list { max-height: 220px; overflow: auto; border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-bottom: 12px; }
     .mm-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--color-surface-2); background: var(--color-surface); cursor: pointer; font: inherit; }
@@ -3857,7 +3941,49 @@ export class ManualMovementDialog {
     if (!this.warehouseId && data.warehouses?.length === 1) this.warehouseId = data.warehouses[0].id;
   }
 
-  onWarehouseChange(): void { this.search = ''; this.lines = []; }
+  onWarehouseChange(): void { this.search = ''; this.lines = []; this.newItemOpen = false; }
+
+  // -- Receive > New item: an item that isn't in the stock list yet --
+  newItemOpen = false;
+  newItem = { code: '', name: '', company: '', unit: '' };
+  private newSeq = 0;
+
+  openNewItem(prefill = ''): void {
+    const t = prefill.trim();
+    // A search that looks like a code (one word with digits) prefills the code, otherwise the name
+    const looksLikeCode = !!t && !/\s/.test(t) && /\d/.test(t);
+    this.newItem = { code: looksLikeCode ? t : '', name: looksLikeCode ? '' : t, company: '', unit: '' };
+    this.newItemOpen = true;
+    this.search = '';
+  }
+
+  /** Warn when the code already exists, so the user picks that item rather than making a duplicate */
+  newItemWarning(): string {
+    const code = this.newItem.code.trim().toLowerCase();
+    if (!code) return '';
+    const hit = (this.data.inventory || []).find((r: any) => (r.commodityCode || '').toLowerCase() === code);
+    if (!hit) return '';
+    return hit.warehouseId === this.warehouseId
+      ? `${hit.commodityCode} is already in this warehouse as "${hit.commodityName}". Search for it instead.`
+      : `${hit.commodityCode} exists as "${hit.commodityName}"; receiving uses that item when the company matches.`;
+  }
+
+  addNewItem(): void {
+    const name = this.newItem.name.trim();
+    if (!name) return;
+    const code = this.newItem.code.trim();
+    this.lines.push({
+      inv: {
+        id: `new-${++this.newSeq}`, commodityId: 0, isNew: true,
+        commodityCode: code, commodityName: name, quantityOnHand: 0,
+        newItem: { code: code || null, name, company: this.newItem.company || null, unitOfMeasure: this.newItem.unit.trim() || null }
+      },
+      quantity: null, reference: '', reason: ''
+    });
+    this.newItemOpen = false;
+    const idx = this.lines.length - 1;
+    setTimeout(() => (document.getElementById('qty-' + idx) as HTMLInputElement | null)?.focus(), 0);
+  }
 
   /** Code, name or description — several words all have to appear somewhere (so "glove m" finds "GLV-M Nitrile glove medium"). */
   matches(): any[] {
@@ -3916,10 +4042,11 @@ export class ManualMovementDialog {
 
   async save(): Promise<void> {
     this.saving = true;
-    let done = 0; const failed: string[] = [];
+    let done = 0; const failed: string[] = []; const failedLines: MovementLine[] = [];
     for (let i = 0; i < this.lines.length; i++) {
       const l = this.lines[i];
-      this.progress = `Saving line ${i + 1} of ${this.lines.length} — ${l.inv.commodityCode}…`;
+      const label = l.inv.commodityCode || l.inv.commodityName;
+      this.progress = `Saving line ${i + 1} of ${this.lines.length} — ${label}…`;
       try {
         await this.http.post(`${environment.apiUrl}/logistics/stock-movements`, {
           warehouseId: this.warehouseId,
@@ -3927,11 +4054,13 @@ export class ManualMovementDialog {
           movementType: this.data.type,
           quantity: l.quantity,
           reference: (this.perLineRef && l.reference.trim()) ? l.reference.trim() : (this.reference || null),
-          reason: this.reason || null
+          reason: this.reason || null,
+          newItem: l.inv.isNew ? l.inv.newItem : null
         }).toPromise();
         done++;
       } catch (e: any) {
-        failed.push(`${l.inv.commodityCode}: ${e?.error?.message || 'failed'}`);
+        failed.push(`${label}: ${e?.message || e?.error?.message || 'failed'}`);
+        failedLines.push(l);
       }
     }
     this.progress = '';
@@ -3940,8 +4069,7 @@ export class ManualMovementDialog {
       this.dialogRef.close(true);
     } else {
       // Keep only the lines that failed so they can be fixed and resubmitted.
-      const failedCodes = new Set(failed.map(f => f.split(':')[0]));
-      this.lines = this.lines.filter(l => failedCodes.has(l.inv.commodityCode));
+      this.lines = failedLines;
       this.saving = false;
       this.toast.warn(`${done} saved, ${failed.length} failed — ${failed.slice(0, 3).join('; ')}`);
       if (done) this.data.onPartial?.();
@@ -4192,6 +4320,20 @@ interface WellySuggestion {
         <div><span class="ad-meta-lbl">Units to dispatch</span><span class="ad-meta-val ad-strong">{{ totalQty() | number }}</span></div>
       </div>
 
+      @if (excluded.length) {
+        <div class="ad-unmapped">
+          <div class="ad-unmapped-head"><mat-icon>block</mat-icon> {{ excluded.length }} line(s) will <b>not</b> deduct stock again</div>
+          <table class="app-table ad-table ad-table-sm">
+            <thead><tr><th>Description</th><th class="num">Qty</th><th>Why</th></tr></thead>
+            <tbody>
+              @for (x of excluded; track $index) {
+                <tr><td>{{ x.name }}</td><td class="num">{{ x.qty | number }}</td><td>{{ x.reason }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
       @if (unmapped.length) {
         <div class="ad-unmapped">
           <div class="ad-unmapped-head"><mat-icon>link_off</mat-icon> {{ unmapped.length }} line(s) are not linked to a stock item and will <b>not</b> deduct stock — search and link them below</div>
@@ -4371,6 +4513,8 @@ export class ApproveDispatchDialog {
   lines: { commodityId: number; code: string; name: string; planned: number; qty: number; onHand: number }[] = [];
   /** Stop lines that have no commodity mapping and therefore cannot deduct stock */
   unmapped: { id: number; code: string; name: string; planned: number; invoice: string; search: string; linking: boolean }[] = [];
+  /** Lines that will not deduct: pick-ups, or invoices whose stock already came off on another load */
+  excluded: { name: string; qty: number; reason: string }[] = [];
   private invOptions: { commodityId: number; code: string; name: string; onHand: number }[] = [];
   negativeReason = '';
   saving = false;
@@ -4388,8 +4532,14 @@ export class ApproveDispatchDialog {
   ) {
     // Aggregate commodity quantities across all stops of the load
     const byId = new Map<number, any>();
+    const excludedById = new Map<number, any>((data.exclusions || []).map((e: any) => [e.lineId, e]));
     for (const s of (data.load.stops || [])) {
       for (const c of (s.commodities || [])) {
+        const ex = excludedById.get(c.id);
+        if (ex) {
+          this.excluded.push({ name: c.commodityName || c.comment || 'Unnamed line', qty: c.quantity || 0, reason: ex.reason });
+          continue;
+        }
         if (!c.commodityId) {
           this.unmapped.push({
             id: c.id,

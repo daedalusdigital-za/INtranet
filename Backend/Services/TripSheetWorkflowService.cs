@@ -402,6 +402,11 @@ namespace ProjectTracker.API.Services
                 // Retroactively link any existing PODs whose invoices are on this tripsheet.
                 await PodTripsheetLinker.LinkForLoadsAsync(db, new[] { load.Id });
 
+                // Link every line to its stock item: by code first, then by description (invoice lines, the
+                // warehouse's items, the whole catalogue) so lines without a clean product code still deduct.
+                try { await ProjectTracker.API.Services.Logistics.StopLineLinker.LinkAsync(db, load.Id, createMissingCommodities: false); }
+                catch (Exception linkEx) { _logger.LogWarning(linkEx, "Stock-line linking failed for load {LoadId}", load.Id); }
+
                 _logger.LogInformation(
                     "AI TripSheet: Created {TripSheetNumber} with {InvoiceCount} invoices, {StopCount} stops, value R{Value} for {User}",
                     tripSheetNumber, invoices.Count, customerGroups.Count, totalValue, user.FullName);

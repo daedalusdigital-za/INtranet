@@ -514,6 +514,11 @@ public class TripSheetImportService
             // Retroactively link any existing PODs whose invoices are on this tripsheet.
             await PodTripsheetLinker.LinkForLoadsAsync(_context, new[] { load.Id });
 
+            // Link every line to its stock item: by code first, then by description (invoice lines, the
+            // warehouse's items, the whole catalogue) so lines without a clean product code still deduct.
+            try { await ProjectTracker.API.Services.Logistics.StopLineLinker.LinkAsync(_context, load.Id, createMissingCommodities: false); }
+            catch (Exception linkEx) { _logger.LogWarning(linkEx, "Stock-line linking failed for load {LoadId}", load.Id); }
+
             response.TripSheetNumber = tripSheetNumber;
             response.LoadId = load.Id;
             response.ImportedCount = successCount + syncedCount;
@@ -631,31 +636,72 @@ public class TripSheetImportService
     /// "20 x 50", "20x50ml", "20 X 50's". The OLD parser stripped every non-digit and
     /// turned that into 2050 — which then tried to deduct 2050 from stock. We now take
     /// the pack COUNT (the number before the x) and ignore the unit size. Also tolerates
-    /// "x20" (leading x), thousands separators ("1,000") and trailing text ("20 boxes").
+    /// "x20" (leading x), trailing text ("20 boxes") and every thousands separator the
+    /// sheets use: "1,000", "1.000", "1'000" and the South African space — "10 000 UNITS"
+    /// (also non-breaking / narrow spaces). The space form used to be read as 10.
     /// </summary>
     internal static decimal? ParseTripsheetQuantity(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
-        var s = raw.Trim().Replace('×', 'x').Replace('*', 'x').Replace('X', 'x');
+        var s = NormalizeSpaces(raw).Trim().Replace('×', 'x').Replace('*', 'x').Replace('X', 'x');
 
-        // "20 x 50" / "20x50ml" → 20
-        var m = Regex.Match(s, @"^\s*(\d{1,3}(?:[ ,]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*x\s*\d");
-        if (m.Success) return ParseNum(m.Groups[1].Value);
+        // "20 x 50" / "20x50ml" / "1 000 x 5" → the count before the x
+        var m = Regex.Match(s, @"^\s*(" + GroupedNumber + @")\s*x\s*\d");
+        if (m.Success) return ParseLocaleNumber(m.Groups[1].Value);
 
         // "x20" → 20
-        m = Regex.Match(s, @"^\s*x\s*(\d+(?:\.\d+)?)");
-        if (m.Success) return ParseNum(m.Groups[1].Value);
+        m = Regex.Match(s, @"^\s*x\s*(" + GroupedNumber + ")");
+        if (m.Success) return ParseLocaleNumber(m.Groups[1].Value);
 
-        // First number in the cell ("20 boxes", "1,000", "20.5")
-        m = Regex.Match(s, @"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)");
-        return m.Success ? ParseNum(m.Groups[1].Value) : null;
+        // First number in the cell ("20 boxes", "10 000 UNITS", "1,000", "20.5")
+        m = Regex.Match(s, GroupedNumber);
+        return m.Success ? ParseLocaleNumber(m.Value) : null;
+    }
 
-        static decimal? ParseNum(string v)
+    /// <summary>
+    /// A number with optional thousands groups (space, comma, dot or apostrophe) and an optional
+    /// decimal part. A group only counts when it is exactly three digits and is not glued to a
+    /// unit ("20 100ML" stays 20, "10 000 UNITS" is 10000).
+    /// </summary>
+    private const string GroupedNumber =
+        @"\d{1,3}(?:[ ,.'](?:\d{3})(?![\d\p{L}]))+(?:[.,]\d+)?|\d+(?:[.,]\d+)?";
+
+    private static string NormalizeSpaces(string s) =>
+        s.Replace(' ', ' ').Replace(' ', ' ').Replace(' ', ' ').Replace(' ', ' ');
+
+    /// <summary>
+    /// Parse a number written either way round: "10 000", "10,000", "10.000", "1 234,50",
+    /// "1,234.50", "2,5", "20.5". Never depends on the server's culture.
+    /// </summary>
+    internal static decimal? ParseLocaleNumber(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var v = Regex.Replace(NormalizeSpaces(raw), @"[\s']", "");
+        var neg = v.StartsWith("-") || (v.StartsWith("(") && v.EndsWith(")"));
+        v = Regex.Replace(v, @"[^\d.,]", "");
+        if (v.Length == 0) return null;
+
+        int lastComma = v.LastIndexOf(','), lastDot = v.LastIndexOf('.');
+        if (lastComma >= 0 && lastDot >= 0)
         {
-            v = v.Replace(",", "").Replace(" ", "");
-            return decimal.TryParse(v, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+            // Both present: whichever comes last is the decimal point.
+            var dec = lastComma > lastDot ? ',' : '.';
+            var grp = dec == ',' ? '.' : ',';
+            v = v.Replace(grp.ToString(), "").Replace(dec, '.');
         }
+        else if (lastComma >= 0 || lastDot >= 0)
+        {
+            var sep = lastComma >= 0 ? ',' : '.';
+            var parts = v.Split(sep);
+            // "1,000" / "2.000" / "1,000,000" → grouping; "2,5" / "20.5" / "1.25" → decimal
+            var grouping = parts.Length > 2
+                || (parts.Length == 2 && parts[1].Length == 3 && parts[0].Length is >= 1 and <= 3 && parts[0] != "0");
+            v = grouping ? v.Replace(sep.ToString(), "") : v.Replace(sep, '.');
+        }
+
+        if (!decimal.TryParse(v, System.Globalization.NumberStyles.AllowDecimalPoint,
+                System.Globalization.CultureInfo.InvariantCulture, out var d)) return null;
+        return neg ? -d : d;
     }
 
     /// <summary>
@@ -856,8 +902,7 @@ public class TripSheetImportService
                 var amountStr = GetCellValue(row, columnMap, "SalesAmount");
                 if (!string.IsNullOrEmpty(amountStr))
                 {
-                    var cleanAmount = Regex.Replace(amountStr, @"[^\d.,\-]", "");
-                    if (decimal.TryParse(cleanAmount, out decimal amount))
+                    if (ParseLocaleNumber(amountStr) is decimal amount)
                     {
                         // Store the value exactly as captured on the trip sheet (VAT-inclusive),
                         // matching the sales invoice total.
@@ -877,8 +922,7 @@ public class TripSheetImportService
                 var continuationAmountStr = GetCellValue(row, columnMap, "SalesAmount");
 
                 bool hasQuantity = ParseTripsheetQuantity(continuationQtyStr).HasValue;
-                bool hasAmount = !string.IsNullOrEmpty(continuationAmountStr) && 
-                    decimal.TryParse(Regex.Replace(continuationAmountStr, @"[^\d.,\-]", ""), out _);
+                bool hasAmount = ParseLocaleNumber(continuationAmountStr).HasValue;
 
                 if (hasQuantity || hasAmount)
                 {
@@ -910,8 +954,7 @@ public class TripSheetImportService
                     // Parse sales amount
                     if (!string.IsNullOrEmpty(continuationAmountStr))
                     {
-                        var cleanAmount = Regex.Replace(continuationAmountStr, @"[^\d.,\-]", "");
-                        if (decimal.TryParse(cleanAmount, out decimal contAmount))
+                        if (ParseLocaleNumber(continuationAmountStr) is decimal contAmount)
                         {
                             // Store the value exactly as captured on the trip sheet (VAT-inclusive).
                             continuationDto.SalesAmount = contAmount;
@@ -1040,7 +1083,12 @@ public class TripSheetImportService
     {
         if (columnMap.TryGetValue(fieldName, out int col))
         {
-            var value = row.Cell(col).GetValue<string>();
+            var cell = row.Cell(col);
+            // Numeric cells: write the raw number invariantly so a culture with a comma decimal
+            // or a grouping separator can never change what the quantity/amount parsers see.
+            var value = cell.DataType == XLDataType.Number
+                ? cell.GetDouble().ToString("0.############", System.Globalization.CultureInfo.InvariantCulture)
+                : cell.GetValue<string>();
             return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
         return null;

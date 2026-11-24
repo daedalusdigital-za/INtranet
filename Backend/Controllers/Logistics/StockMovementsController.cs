@@ -118,11 +118,25 @@ namespace ProjectTracker.API.Controllers.Logistics
             var countOf = counts.ToDictionary(c => (c.WarehouseId, c.CommodityId), c => c.Counted);
             var warehouseCount = counts.GroupBy(c => c.WarehouseId).ToDictionary(g => g.Key, g => g.Max(c => c.Counted));
 
+            // Loads not yet deducted whose every line is a pick-up or was already deducted on another load:
+            // nothing on them may come off stock, so they leave the approval queue.
+            var pendingIds = loads.Where(l => !deducted.Contains(l.Id)).Select(l => l.Id).ToList();
+            var exclusions = await LoadStockGuard.ExclusionsAsync(_context, pendingIds);
+            var allLines = (await _context.StopCommodities.AsNoTracking()
+                    .Where(sc => sc.Quantity > 0 && pendingIds.Contains(sc.LoadStop.LoadId))
+                    .Select(sc => new { sc.LoadStop.LoadId, sc.Id })
+                    .ToListAsync())
+                .ToLookup(x => x.LoadId, x => x.Id);
+
             var result = loads.Select(l =>
             {
                 var dispatched = LoadStockGuard.DispatchDate(l);
+                var lineIds = allLines[l.Id].ToList();
+                var excluded = lineIds.Where(exclusions.ContainsKey).Select(id => exclusions[id]).ToList();
                 string state;
                 if (deducted.Contains(l.Id)) state = "deducted";
+                else if (lineIds.Count > 0 && excluded.Count == lineIds.Count)
+                    state = excluded.Any(e => e.OtherLoadNumber != null) ? "elsewhere" : "pickup";
                 else if (l.WarehouseId == null) state = "awaiting";
                 else
                 {
@@ -133,7 +147,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                         : warehouseCount.TryGetValue(wh, out var whCounted) && dispatched < whCounted;
                     state = baseline ? "baseline" : "awaiting";
                 }
-                return new { loadId = l.Id, state, dispatchDate = dispatched, delivered = l.Status == "Delivered" || l.Status == "Completed" };
+                return new
+                {
+                    loadId = l.Id, state, dispatchDate = dispatched, delivered = l.Status == "Delivered" || l.Status == "Completed",
+                    excludedLines = excluded.Count,
+                    excluded = excluded.Select(e => new { lineId = e.LineId, reason = e.Reason, otherLoad = e.OtherLoadNumber }).ToList()
+                };
             }).ToList();
             return Ok(result);
         }
@@ -161,11 +180,61 @@ namespace ProjectTracker.API.Controllers.Logistics
                 _ => Math.Abs(dto.Quantity)
             };
 
+            if (dto.CommodityId <= 0)
+            {
+                if (dto.MovementType != "Receive" || dto.NewItem == null || string.IsNullOrWhiteSpace(dto.NewItem.Name))
+                    return BadRequest(new { message = "Pick a stock item, or give the new item's name when receiving stock" });
+                if (dto.NewItem.Name.Trim().Length > 200 || (dto.NewItem.Code?.Trim().Length ?? 0) > 100)
+                    return BadRequest(new { message = "Item name is limited to 200 characters and code to 100" });
+            }
+            if (!await _context.Warehouses.AnyAsync(w => w.Id == dto.WarehouseId))
+                return BadRequest(new { message = "Warehouse not found" });
+
             using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-                var result = await ApplyMovementAsync(dto.WarehouseId, dto.CommodityId, dto.MovementType, qty,
+                var commodityId = dto.CommodityId;
+                var createdItem = false;
+                if (commodityId <= 0)
+                {
+                    // Receive Stock › New item: reuse an existing item with the same code for that company, else create it
+                    var n = dto.NewItem!;
+                    var code = string.IsNullOrWhiteSpace(n.Code) ? null : n.Code.Trim();
+                    var company = string.IsNullOrWhiteSpace(n.Company) ? null : CommodityCodeMatcher.NormalizeCompany(n.Company);
+                    if (code != null)
+                    {
+                        var map = await CommodityCodeMatcher.BuildAsync(_context, new[] { code });
+                        var existing = CommodityCodeMatcher.Match(map, code, company);
+                        if (existing == null && map.TryGetValue(CommodityCodeMatcher.Normalize(code), out var cands) && cands.Count > 0 && company == null)
+                        {
+                            await tx.RollbackAsync();
+                            return Conflict(new { message = $"Code {code} already exists for more than one company — pick the item from the list, or set the company." });
+                        }
+                        if (existing != null) commodityId = existing.Value;
+                    }
+                    if (commodityId <= 0)
+                    {
+                        var c = new Models.Logistics.Commodity
+                        {
+                            Code = code,
+                            Name = n.Name.Trim(),
+                            Description = "Added while receiving stock",
+                            Category = company,
+                            UnitOfMeasure = string.IsNullOrWhiteSpace(n.UnitOfMeasure) ? "Each" : n.UnitOfMeasure.Trim(),
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        _context.Commodities.Add(c);
+                        await _context.SaveChangesAsync();
+                        commodityId = c.Id;
+                        createdItem = true;
+                        _logger.LogInformation("Stock item {Code} '{Name}' ({Company}) created while receiving stock by {User}",
+                            code, c.Name, company, CurrentUserName);
+                    }
+                }
+
+                var result = await ApplyMovementAsync(dto.WarehouseId, commodityId, dto.MovementType, qty,
                     null, null, dto.Reference, dto.Reason);
+                if (createdItem) Response.Headers["X-Stock-Item-Created"] = commodityId.ToString();
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
                 return Ok(result);
@@ -240,6 +309,14 @@ namespace ProjectTracker.API.Controllers.Logistics
         }
 
         // ═══ POST: approve a dispatch (deducts stock per picking-slip line) ═══
+        // ═══ GET: lines on a load that must not deduct (pick-ups, invoices already deducted on another load) ═══
+        [HttpGet("loads/{loadId:int}/dispatch-exclusions")]
+        public async Task<ActionResult<IEnumerable<object>>> GetDispatchExclusions(int loadId)
+        {
+            var ex = await LoadStockGuard.ExclusionsAsync(_context, new[] { loadId });
+            return Ok(ex.Values.Select(e => new { lineId = e.LineId, reason = e.Reason, otherLoad = e.OtherLoadNumber }));
+        }
+
         [HttpPost("approve-dispatch")]
         public async Task<ActionResult<object>> ApproveDispatch([FromBody] ApproveDispatchDto dto)
         {
@@ -261,10 +338,15 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (dto.Lines == null || dto.Lines.Count == 0)
                 return BadRequest(new { message = "No lines to dispatch" });
 
+            // Pick-up lines and lines whose invoice + item already came off on another load never deduct here.
+            var exclusions = await LoadStockGuard.ExclusionsAsync(_context, new[] { dto.LoadId });
+            var excludedIds = exclusions.Keys.ToList();
+
             // A line with no stock item would never deduct, and once a load is approved nothing
             // more can be added to it, so every line must be linked first.
             var unlinked = await _context.StopCommodities
-                .CountAsync(sc => sc.LoadStop.LoadId == dto.LoadId && sc.CommodityId == null && sc.Quantity > 0);
+                .CountAsync(sc => sc.LoadStop.LoadId == dto.LoadId && sc.CommodityId == null && sc.Quantity > 0
+                               && !excludedIds.Contains(sc.Id));
             if (unlinked > 0 && !dto.SkipUnlinked)
                 return Conflict(new
                 {
@@ -275,15 +357,24 @@ namespace ProjectTracker.API.Controllers.Logistics
                 _logger.LogWarning("Approving {Load} with {Unlinked} unlinked line(s) skipped by {User}", load.LoadNumber, unlinked, CurrentUserName);
 
             // What the load actually carries — the dispatch may ship less than this, never more or anything else.
-            var planned = await _context.StopCommodities
+            var linkedLines = await _context.StopCommodities
                 .Where(sc => sc.LoadStop.LoadId == dto.LoadId && sc.CommodityId != null && sc.Quantity > 0)
-                .GroupBy(sc => sc.CommodityId!.Value)
-                .Select(g => new { CommodityId = g.Key, Qty = g.Sum(x => x.Quantity) })
-                .ToDictionaryAsync(x => x.CommodityId, x => x.Qty);
-            if (planned.Count == 0)
+                .Select(sc => new { sc.Id, CommodityId = sc.CommodityId!.Value, sc.Quantity })
+                .ToListAsync();
+            var plannedAll = linkedLines.GroupBy(x => x.CommodityId).ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+            var planned = linkedLines.Where(x => !exclusions.ContainsKey(x.Id))
+                .GroupBy(x => x.CommodityId).ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+            var excludedNotes = exclusions.Values.Select(e => e.Reason).Distinct().ToList();
+            if (plannedAll.Count == 0)
                 return Conflict(new { message = $"{load.LoadNumber} has no stock lines, so there is nothing to deduct." });
+            if (planned.Count == 0)
+                return Conflict(new
+                {
+                    message = $"Nothing on {load.LoadNumber} should come off stock: " + string.Join("; ", excludedNotes),
+                    excluded = excludedNotes
+                });
 
-            var requested = dto.Lines
+            var requestedRaw = dto.Lines
                 .Where(l => l.DispatchedQuantity > 0)
                 .GroupBy(l => l.CommodityId)
                 .Select(g => new
@@ -293,15 +384,27 @@ namespace ProjectTracker.API.Controllers.Logistics
                     Reason = g.Select(x => x.Reason).FirstOrDefault(r => !string.IsNullOrWhiteSpace(r))
                 })
                 .ToList();
-            if (requested.Count == 0)
+            if (requestedRaw.Count == 0)
                 return BadRequest(new { message = "All dispatched quantities were zero" });
 
-            var notOnLoad = requested.Where(r => !planned.ContainsKey(r.CommodityId)).Select(r => r.CommodityId).ToList();
+            var notOnLoad = requestedRaw.Where(r => !plannedAll.ContainsKey(r.CommodityId)).Select(r => r.CommodityId).ToList();
             if (notOnLoad.Count > 0)
                 return BadRequest(new { message = $"{notOnLoad.Count} line(s) are not on {load.LoadNumber}. Only the load's own items can be dispatched." });
-            var over = requested.Where(r => r.Qty > planned[r.CommodityId]).ToList();
+            var over = requestedRaw.Where(r => r.Qty > plannedAll[r.CommodityId]).ToList();
             if (over.Count > 0)
                 return BadRequest(new { message = $"{over.Count} line(s) dispatch more than {load.LoadNumber} carries. Correct the load first, then approve." });
+
+            // Never deduct the excluded part again: cap each item at what its remaining lines carry.
+            var requested = requestedRaw
+                .Select(r => new { r.CommodityId, Qty = Math.Min(r.Qty, planned.TryGetValue(r.CommodityId, out var p) ? p : 0), r.Reason })
+                .Where(r => r.Qty > 0)
+                .ToList();
+            if (requested.Count == 0)
+                return Conflict(new
+                {
+                    message = $"Nothing left to deduct on {load.LoadNumber}: " + string.Join("; ", excludedNotes),
+                    excluded = excludedNotes
+                });
 
             // Lines counted after the load went out are already reflected in that count, so they are skipped
             // (per item, so a recount of one product doesn't block every other load in the warehouse).
@@ -327,6 +430,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ? $"Stock deducted for {load.LoadNumber}"
                     : $"Stock deducted for {load.LoadNumber}; {skipped} line(s) skipped because they were counted after the load went out";
                 if (unlinked > 0) message += $"; {unlinked} unlinked line(s) not deducted";
+                if (exclusions.Count > 0) message += $"; {exclusions.Count} line(s) not deducted ({string.Join("; ", excludedNotes)})";
                 return Ok(new { loadId = dto.LoadId, loadNumber = load.LoadNumber, lines = toDeduct.Count, skippedLines = skipped, unlinkedLines = unlinked, message });
             }
             catch (InvalidOperationException ex)
@@ -1385,6 +1489,17 @@ namespace ProjectTracker.API.Controllers.Logistics
         public decimal Quantity { get; set; }
         public string? Reference { get; set; }
         public string? Reason { get; set; }
+        /// <summary>Receive only: an item not in the stock list yet. Used when CommodityId is 0.</summary>
+        public NewStockItemDto? NewItem { get; set; }
+    }
+
+    public class NewStockItemDto
+    {
+        public string? Code { get; set; }
+        public string Name { get; set; } = string.Empty;
+        /// <summary>Owning company (PROMED / ACCESS / SEBENZANI / PHARMACARE / KOG) — the same code can differ per company.</summary>
+        public string? Company { get; set; }
+        public string? UnitOfMeasure { get; set; }
     }
 
     public class AskWellyDto

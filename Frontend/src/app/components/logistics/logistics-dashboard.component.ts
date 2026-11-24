@@ -3087,7 +3087,7 @@ Notes: ${record.notes || 'No notes'}
           city: item.city || '',
           province: '',
           productDescription: item.productDescription || 'Product',
-          productCode: item.productBrand || item.productCode,
+          productCode: item.productCode || item.productBrand,
           quantity: item.qty || 1,
           salesAmount: item.value || 0,
           netSales: item.value || 0,

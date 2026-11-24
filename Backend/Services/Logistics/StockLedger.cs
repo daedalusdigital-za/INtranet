@@ -229,6 +229,102 @@ namespace ProjectTracker.API.Services.Logistics
     {
         public record Result(int CommoditiesCreated, int LinesConsidered, int LinesLinked, int StillUnlinked);
 
+        private static readonly System.Text.RegularExpressions.Regex PartQty =
+            new(@"\s[xX]\s*(\d[\d ,.]*)\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>
+        /// A merged multi-product line ("TOILET PAPER 1 PLY x100; TOILET PAPER 2PLY VIRGIN x150") split into its
+        /// products with their own quantities. Returns null when the text is a single product or a part has no
+        /// quantity of its own (then a split would have to guess).
+        /// </summary>
+        public static List<(string Name, decimal Qty)>? SplitMerged(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text) || !text.Contains(';')) return null;
+            var parts = text.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(p => p.Length > 0).ToList();
+            if (parts.Count < 2) return null;
+            var result = new List<(string, decimal)>();
+            foreach (var p in parts)
+            {
+                var m = PartQty.Match(p);
+                if (!m.Success) return null;
+                var q = TripSheetImportService.ParseLocaleNumber(m.Groups[1].Value);
+                if (q is not > 0) return null;
+                result.Add((p[..m.Index].Trim(), q.Value));
+            }
+            return result;
+        }
+
+        /// <summary>Words of a product description, with "2PLY" read as "2 PLY" and punctuation dropped.</summary>
+        public static HashSet<string> DescriptionTokens(string? s)
+        {
+            var t = System.Text.RegularExpressions.Regex.Replace((s ?? "").ToUpperInvariant(), @"(?<=\d)(?=[A-Z])|(?<=[A-Z])(?=\d)", " ");
+            return System.Text.RegularExpressions.Regex.Split(t, @"[^A-Z0-9.]+")
+                .Select(w => w.Trim('.'))
+                .Where(w => w.Length > 0 && w is not ("X" or "OF" or "THE" or "AND" or "WITH" or "FOR" or "IN"))
+                .ToHashSet();
+        }
+
+        /// <summary>
+        /// How well a candidate description covers a line's description, 0..1: the share of the line's words found
+        /// in the candidate. Numbers must agree — "1 PLY" never matches "2 PLY", "SIZE 7" never matches "SIZE 8".
+        /// </summary>
+        public static double DescriptionScore(HashSet<string> line, HashSet<string> candidate)
+        {
+            if (line.Count == 0 || candidate.Count == 0) return 0;
+            var numsLine = line.Where(w => w.Any(char.IsDigit)).ToHashSet();
+            var numsCand = candidate.Where(w => w.Any(char.IsDigit)).ToHashSet();
+            if (numsCand.Count > 0 && numsLine.Except(numsCand).Any()) return 0;
+            return (double)line.Count(candidate.Contains) / line.Count;
+        }
+
+        /// <summary>The one candidate that clearly fits a description best (at least 75% of its words, ahead of the rest), or default.</summary>
+        public static T? BestByDescription<T>(string? description, IEnumerable<T> candidates, Func<T, string?> describe)
+        {
+            var line = DescriptionTokens(description);
+            if (line.Count < 2) return default;
+            var scored = candidates.Select(c => (c, Score: DescriptionScore(line, DescriptionTokens(describe(c)))))
+                .Where(x => x.Score >= 0.75).OrderByDescending(x => x.Score).ToList();
+            if (scored.Count == 0) return default;
+            if (scored.Count > 1 && scored[1].Score >= scored[0].Score - 0.001) return default;
+            return scored[0].c;
+        }
+
+        /// <summary>
+        /// Split unlinked merged multi-product lines into one line per product so each can link to its own stock
+        /// item. The value stays on the first part. Does not save; returns how many lines were split.
+        /// </summary>
+        public static int SplitMergedLines(ApplicationDbContext db, IEnumerable<Models.Logistics.StopCommodity> lines)
+        {
+            var split = 0;
+            foreach (var sc in lines.ToList())
+            {
+                if (sc.CommodityId != null) continue;
+                var parts = SplitMerged(sc.Comment);
+                if (parts == null) continue;
+                for (int i = 1; i < parts.Count; i++)
+                {
+                    db.StopCommodities.Add(new Models.Logistics.StopCommodity
+                    {
+                        LoadStopId = sc.LoadStopId,
+                        Quantity = parts[i].Qty,
+                        UnitOfMeasure = sc.UnitOfMeasure,
+                        UnitPrice = 0,
+                        TotalPrice = 0,
+                        InvoiceNumber = sc.InvoiceNumber,
+                        OrderNumber = sc.OrderNumber,
+                        Brand = sc.Brand,
+                        Comment = parts[i].Name,
+                        CreatedAt = sc.CreatedAt
+                    });
+                }
+                sc.Comment = parts[0].Name;
+                sc.Quantity = parts[0].Qty;
+                split++;
+            }
+            return split;
+        }
+
         /// <summary>Sage source-company code → company name used in Commodities.Category.</summary>
         public static string? CompanyName(string? sourceCompany) => sourceCompany?.Trim().ToUpperInvariant() switch
         {
@@ -298,6 +394,19 @@ namespace ProjectTracker.API.Services.Logistics
                 .ToListAsync();
             if (lines.Count == 0) return new Result(0, 0, 0, 0);
 
+            // A merged multi-product line can never link to one stock item: split it first.
+            if (SplitMergedLines(db, lines) > 0)
+            {
+                await db.SaveChangesAsync();
+                lines = await db.StopCommodities
+                    .Include(sc => sc.LoadStop)
+                    .Where(sc => sc.CommodityId == null
+                                 && (loadId == null || sc.LoadStop.LoadId == loadId)
+                                 && sc.LoadStop.Load.Status != "Cancelled"
+                                 && !deductedLoadIds.Contains(sc.LoadStop.LoadId))
+                    .ToListAsync();
+            }
+
             static List<string> InvoiceNumbers(string? s) =>
                 (s ?? "").Split(new[] { ',', ';', '/' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
@@ -331,6 +440,10 @@ namespace ProjectTracker.API.Services.Logistics
                     var codes = set.Select(c => c.ProductCode!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                     if (codes.Count == 1) return codes[0];
                 }
+                // Several products on the invoice and no exact name: the one whose description clearly fits
+                // ("TOILET PAPER 1 PLY" → "Toilet Paper 1 Ply Virgin", never "... 2 Ply ...").
+                var best = BestByDescription(sc.Comment, candidates, c => c.ProductDescription);
+                if (best != null) return best.ProductCode!.Trim();
                 var colon = (sc.Comment ?? "").IndexOf(':');
                 return colon > 0 && colon <= 30 ? sc.Comment![..colon].Trim() : null;
             }
@@ -360,12 +473,48 @@ namespace ProjectTracker.API.Services.Logistics
                     .GroupBy(c => c.Name.Trim().ToLowerInvariant())
                     .Where(g => g.Count() == 1 && names.Contains(g.Key))
                     .ToDictionary(g => g.Key, g => g.First());
+                var stillOpen = new List<Models.Logistics.StopCommodity>();
                 foreach (var sc in byDescription)
                 {
-                    if (!nameMap.TryGetValue(sc.Comment!.Trim().ToLowerInvariant(), out var c)) continue;
+                    if (!nameMap.TryGetValue(sc.Comment!.Trim().ToLowerInvariant(), out var c)) { stillOpen.Add(sc); continue; }
                     sc.CommodityId = c.Id;
                     sc.ProductCode ??= c.Code;
                     linked++;
+                }
+
+                // Then the stock item in the load's own warehouse whose name clearly fits best.
+                if (stillOpen.Count > 0)
+                {
+                    var stopIds = stillOpen.Select(sc => sc.LoadStopId).Distinct().ToList();
+                    var whByStop = await db.LoadStops.AsNoTracking().Where(st => stopIds.Contains(st.Id))
+                        .Select(st => new { st.Id, st.Load.WarehouseId }).ToDictionaryAsync(x => x.Id, x => x.WarehouseId);
+                    var whIds = whByStop.Values.Where(v => v != null).Select(v => v!.Value).Distinct().ToList();
+                    var stockByWh = (await db.WarehouseInventory.AsNoTracking().Where(i => whIds.Contains(i.WarehouseId))
+                            .Select(i => new { i.WarehouseId, i.CommodityId, i.Commodity.Name, i.Commodity.Code }).ToListAsync())
+                        .ToLookup(i => i.WarehouseId);
+                    List<(int Id, string Name, string? Code)>? catalogue = null;
+                    foreach (var sc in stillOpen)
+                    {
+                        if (!whByStop.TryGetValue(sc.LoadStopId, out var wh) || wh == null) continue;
+                        // Items named after a merged line ("A x10; B x20", made by the pre-count sweep) are not real products
+                        var best = BestByDescription(sc.Comment, stockByWh[wh.Value].Where(i => !i.Name.Contains(';')), i => i.Name);
+                        if (best != null)
+                        {
+                            sc.CommodityId = best.CommodityId;
+                            sc.ProductCode ??= best.Code;
+                            linked++;
+                            continue;
+                        }
+                        // Nothing in that warehouse yet: the one catalogue item whose name clearly fits
+                        catalogue ??= (await db.Commodities.AsNoTracking().Where(c => c.Name != "" && !c.Name.Contains(";"))
+                            .Select(c => new { c.Id, c.Name, c.Code }).ToListAsync())
+                            .Select(c => (c.Id, c.Name, c.Code)).ToList();
+                        var any = BestByDescription(sc.Comment, catalogue, c => c.Name);
+                        if (any.Id == 0) continue;
+                        sc.CommodityId = any.Id;
+                        sc.ProductCode ??= any.Code;
+                        linked++;
+                    }
                 }
             }
 

@@ -107,6 +107,7 @@ namespace ProjectTracker.API.Controllers.Logistics
                         CustomerName = invoice.CustomerName,
                         ProductDescription = invoice.ProductDescription,
                         ProductBrand = !string.IsNullOrWhiteSpace(invoice.Brand) ? invoice.Brand : invoice.ProductCode,
+                        ProductCode = invoice.ProductCode,
                         Qty = (int)invoice.Quantity,
                         TimeDispatched = invoice.ScheduledDeliveryDate?.ToString("HH:mm"),
                         OrderNo = invoice.CustomerNumber,
@@ -133,7 +134,12 @@ namespace ProjectTracker.API.Controllers.Logistics
                         totalValue += itemValue;
                         lineItems.Add(new TripSheetLineItemDto
                         {
-                            InvNo = stop.InvoiceNumber ?? $"INV{load.Id:D6}",
+                            // The line's OWN invoice. The stop carries every invoice at that customer joined
+                            // ("IN1, IN2"); using it here stamped that merged list on every line, and saving
+                            // an edit then wrote it back onto each line (separate invoices merged).
+                            InvNo = !string.IsNullOrWhiteSpace(commodity.InvoiceNumber) ? commodity.InvoiceNumber
+                                  : stop.InvoiceNumber ?? $"INV{load.Id:D6}",
+                            ProductCode = commodity.ProductCode ?? commodity.Commodity?.Code,
                             No = lineNo.ToString(),
                             CustomerName = stop.Customer?.Name ?? stop.CompanyName ?? "Unknown",
                             ProductDescription = commodity.Commodity?.Name ?? commodity.Comment ?? "Product",
@@ -411,6 +417,11 @@ namespace ProjectTracker.API.Controllers.Logistics
                 }
 
                 await transaction.CommitAsync();
+
+                // Link every line to its stock item: by code first, then by description (invoice lines, the
+                // warehouse's items, the whole catalogue) so lines without a clean product code still deduct.
+                try { await ProjectTracker.API.Services.Logistics.StopLineLinker.LinkAsync(_context, load.Id, createMissingCommodities: false); }
+                catch (Exception linkEx) { _logger.LogWarning(linkEx, "Stock-line linking failed for load {LoadId}", load.Id); }
 
                 _logger.LogInformation("Created TripSheet {TripSheetNumber} from {InvoiceCount} invoices with total value {TotalValue}", 
                     tripSheetNumber, invoices.Count, totalValue);
@@ -2951,6 +2962,7 @@ namespace ProjectTracker.API.Controllers.Logistics
         public string CustomerName { get; set; } = string.Empty;     // e.g., PHOLOSONG HOSPITAL
         public string ProductDescription { get; set; } = string.Empty; // e.g., BROWN BAG RECTANGULAR SMALL
         public string? ProductBrand { get; set; }                    // Can be blank
+        public string? ProductCode { get; set; }                     // Stock code of the line, when known
         public int Qty { get; set; }                                 // e.g., 10
         public string? TimeDispatched { get; set; }                  // e.g., 08:15
         public string? OrderNo { get; set; }                         // Order reference number
