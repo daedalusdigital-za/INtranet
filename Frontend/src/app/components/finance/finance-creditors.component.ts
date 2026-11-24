@@ -631,6 +631,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
                   <button mat-stroked-button [class.sel-bad]="it.decisionStatus === 'Rejected'" (click)="decide(it, 'Rejected')"><mat-icon>thumb_down</mat-icon> Reject</button>
                   @if (it.decisionComment) { <em>“{{ it.decisionComment }}”</em> }
                 </div>
+              } @else if (it.decisionStatus === 'Rejected' && b.directorSignedAt) {
+                <div class="itrej">
+                  <mat-icon>block</mat-icon>
+                  <div class="t"><b>Rejected by {{ b.directorName || 'the director' }}</b><span>{{ it.decisionComment || 'No reason given' }}</span></div>
+                  @if (it.resubmittedAsBatchNumber) { <span class="re">Resubmitted on {{ it.resubmittedAsBatchNumber }}</span> }
+                  @else if (meta()!.me.clerk || meta()!.me.isAdmin) { <button mat-stroked-button [disabled]="busy()" (click)="$event.stopPropagation(); resubmit(b, it)" matTooltip="Put a copy of this payment, with its documents, on a new draft pack to correct and send through again"><mat-icon>restart_alt</mat-icon> Fix and resubmit</button> }
+                </div>
               } @else if (it.decisionComment && !it.queryQuestion) { <div class="deccomment"><mat-icon>chat</mat-icon> Director: “{{ it.decisionComment }}”</div> }
               @if (it.queryQuestion) {
                 <div class="itq">
@@ -892,6 +899,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       &.q { background: var(--color-warn-soft); mat-icon { color: var(--color-warn); } } &.a { background: var(--color-surface-2); mat-icon { color: var(--color-info); } } }
     .qreply { display: flex; gap: var(--space-2); align-items: flex-end; textarea { flex: 1; min-width: 0; font: inherit; font-size: var(--text-sm); padding: var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); color: inherit; resize: vertical; }
       @media (max-width: 640px) { flex-direction: column; align-items: stretch; } }
+    .itrej { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin: 0 12px 10px 40px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-danger-soft); border: 1px solid var(--color-danger); color: var(--color-danger); font-size: var(--text-sm);
+      > mat-icon { font-size: 18px; width: 18px; height: 18px; } .t { flex: 1; min-width: 180px; display: flex; flex-direction: column; span { color: var(--color-text); } } .re { font-size: var(--text-xs); font-weight: 600; } }
     .itq { display: flex; flex-direction: column; gap: 6px; padding: 0 12px 10px 40px; }
     .cr-alerts { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); background: var(--color-warn-soft); border: 1px solid var(--color-warn); border-radius: var(--radius-md); mat-icon { color: var(--color-warn); } .txt { flex: 1; font-size: var(--text-sm); } }
     .cr-alert-list { display: grid; gap: 4px; margin-bottom: var(--space-3); }
@@ -1270,6 +1279,15 @@ export class FinanceCreditorsComponent implements OnInit {
     this.api.answerQuery(q.batchId, q.itemId, text).subscribe({
       next: r => { this.busy.set(false); this.toast.done(this.sentAnswer(q.itemId, r)); this.loadBoard(); },
       error: e => this.fail(e, "Couldn't send the answer.")
+    });
+  }
+  /** Copy a rejected payment (with its documents) onto a new draft pack and open it to fix. */
+  resubmit(b: BatchDetail, it: BatchItem): void {
+    if (!confirm(`Put ${it.supplierName} (R ${it.amount.toFixed(2)}) on a new draft pack so you can fix it and send it through again?`)) return;
+    this.busy.set(true);
+    this.api.resubmitRejected(b.id, it.id).subscribe({
+      next: r => { this.apply(r, `${it.supplierName} copied to ${r.batchNumber} — fix it, then submit`); this.router.navigate([], { relativeTo: this.route, queryParams: { batch: r.id }, queryParamsHandling: 'merge', replaceUrl: true }); },
+      error: e => this.fail(e, "Couldn't resubmit the payment.")
     });
   }
   /** Answer from inside the pack. */

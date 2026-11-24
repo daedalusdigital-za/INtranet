@@ -204,6 +204,8 @@ public class PaymentBatchItem
     [MaxLength(150)] public string? QueryRespondedByName { get; set; }
     public DateTime? QueryRespondedAt { get; set; }
     [MaxLength(20)] public string? QueriedFromBatchNumber { get; set; }
+    /// <summary>Rejected by the director, then fixed and put on a new draft pack: that pack's number (so it's only resubmitted once).</summary>
+    [MaxLength(20)] public string? ResubmittedAsBatchNumber { get; set; }
 
     /// <summary>Prepayments: stays true after payment until the tax invoice and GRV are uploaded.</summary>
     public bool PrepaymentOpen { get; set; }

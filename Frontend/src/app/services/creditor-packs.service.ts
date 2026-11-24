@@ -64,6 +64,8 @@ export interface BatchItem {
   /** Director's query on this payment and the preparer/accountant's answer. queriedFromBatchNumber: the pack it was split off. */
   queryQuestion?: string | null; queryAskedByName?: string | null; queryAskedAt?: string | null;
   queryResponse?: string | null; queryRespondedByName?: string | null; queryRespondedAt?: string | null; queriedFromBatchNumber?: string | null;
+  /** Rejected by the director, then fixed and put on a new draft pack: that pack's number. */
+  resubmittedAsBatchNumber?: string | null;
   required: RequiredDoc[]; recommended: RequiredDoc[]; documents: BatchDoc[];
 }
 /** One queried payment for the Queried payments tab. Open = waiting for an answer; WithDirector = answered and back for a decision. */
@@ -138,6 +140,7 @@ export class CreditorPacksService {
   summary() { return this.http.get<{ byStatus: { status: string; count: number; amount: number }[]; openPrepayments: number }>(`${this.base}/summary`); }
   inbox() { return this.http.get<InboxRow[]>(`${this.base}/inbox`); }
   alerts() { return this.http.get<CreditorAlert[]>(`${this.base}/alerts`); }
+  resubmitRejected(id: number, itemId: number) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/resubmit`, {}); }
   queries() { return this.http.get<QueryRow[]>(`${this.base}/queries`); }
   answerQuery(id: number, itemId: number, answer: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/query-answer`, { answer }); }
   get(id: number) { return this.http.get<BatchDetail>(`${this.base}/batches/${id}`); }

@@ -1302,6 +1302,94 @@ public class CreditorPacksController : ControllerBase
 
     private static string Trunc(string s, int max) => s.Length > max ? s[..max] : s;
 
+    /// <summary>
+    /// Fix and resubmit a payment the director rejected: copies it (and its documents, as new files) onto a new draft pack for the
+    /// same company and payment type, prepared by whoever clicks. The original stays on its signed pack, marked as resubmitted.
+    /// </summary>
+    [HttpPost("batches/{id:int}/items/{itemId:int}/resubmit")]
+    public async Task<IActionResult> ResubmitRejected(int id, int itemId)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        var it = b.Items.FirstOrDefault(i => i.Id == itemId); if (it == null) return NotFound();
+        if (it.DecisionStatus != "Rejected" || b.DirectorSignedAt == null) return Conflict(new { message = "Only a payment the director has rejected and signed off can be resubmitted." });
+        if (it.ResubmittedAsBatchNumber != null) return Conflict(new { message = $"This payment was already resubmitted on {it.ResubmittedAsBatchNumber}." });
+        if (!await CanPrepareAsync(b)) return Forbid();
+
+        var prefix = $"CB-{b.CompanyCode.ToUpperInvariant()}-{DateTime.UtcNow.Year}-";
+        var last = await _db.PaymentBatches.Where(x => x.BatchNumber.StartsWith(prefix)).OrderByDescending(x => x.BatchNumber).Select(x => x.BatchNumber).FirstOrDefaultAsync();
+        var seq = last != null && int.TryParse(last[prefix.Length..], out var n) ? n + 1 : 1;
+        var nb = new PaymentBatch
+        {
+            BatchNumber = $"{prefix}{seq:0000}", CompanyCode = b.CompanyCode, PaymentType = b.PaymentType, BatchDate = DateTime.UtcNow.Date,
+            Notes = Trunc($"Resubmitted: {it.SupplierName} was rejected on {b.BatchNumber} by {b.DirectorName} — {it.DecisionComment}", 1000),
+            PreparedByUserId = UserId, PreparedByName = UserName
+        };
+        nb.Events.Add(Ev("Created", null, CreditorWorkflow.Draft, $"Resubmitting {it.SupplierName} R{it.Amount:N2}, rejected on {b.BatchNumber}: {it.DecisionComment}"));
+        _db.PaymentBatches.Add(nb);
+        await _db.SaveChangesAsync();
+
+        var copy = (PaymentBatchItem)_db.Entry(it).CurrentValues.ToObject();
+        copy.Id = 0; copy.BatchId = nb.Id; copy.Batch = null; copy.SortOrder = 1;
+        copy.DecisionStatus = "Pending"; copy.DecisionComment = null; copy.DecidedAt = null; copy.PaidAt = null;
+        copy.PrepaymentOpen = b.PaymentType == CreditorPaymentTypes.Prepayment;
+        copy.QueryQuestion = null; copy.QueryAskedByName = null; copy.QueryAskedAt = null; copy.QueryResponse = null; copy.QueryRespondedByName = null; copy.QueryRespondedAt = null;
+        copy.QueriedFromBatchNumber = null; copy.ResubmittedAsBatchNumber = null;
+        _db.PaymentBatchItems.Add(copy);
+        await _db.SaveChangesAsync();
+
+        foreach (var d in b.Documents.Where(d => d.ItemId == it.Id).ToList())
+        {
+            var dc = (PaymentBatchDocument)_db.Entry(d).CurrentValues.ToObject();
+            dc.Id = 0; dc.BatchId = nb.Id; dc.ItemId = copy.Id; dc.Batch = null; dc.Version = 1; dc.SupersedesDocumentId = null; dc.VersionReason = null;
+            if (d.StoragePath != null)
+            {
+                var src = Abs(d.StoragePath);
+                if (!System.IO.File.Exists(src)) continue; // file gone — the preparer re-attaches it
+                var rel = $"Finance/Creditors/{nb.CompanyCode}/{nb.BatchNumber}/{Guid.NewGuid():N}{Path.GetExtension(d.StoragePath)}";
+                var dst = Abs(rel); Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
+                System.IO.File.Copy(src, dst);
+                dc.StoragePath = rel; dc.FileName = Path.GetFileName(rel);
+            }
+            _db.PaymentBatchDocuments.Add(dc);
+        }
+        nb.TotalAmount = copy.Amount;
+        it.ResubmittedAsBatchNumber = nb.BatchNumber;
+        b.Events.Add(Ev("Resubmitted", null, null, $"{it.SupplierName} R{it.Amount:N2} resubmitted on {nb.BatchNumber}"));
+        await _db.SaveChangesAsync();
+        return Ok(await DetailAsync(nb.Id));
+    }
+
+    /// <summary>Emails the preparer: which payments the director rejected, why, and a link to open the pack and fix/resubmit them.</summary>
+    private async Task EmailRejectedAsync(PaymentBatch b, List<PaymentBatchItem> rejected)
+    {
+        var to = await _db.Users.AsNoTracking().Where(u => u.UserId == b.PreparedByUserId).Select(u => new { u.Email, u.Name }).FirstOrDefaultAsync();
+        if (to == null || string.IsNullOrWhiteSpace(to.Email)) return;
+        var company = await _db.CreditorCompanies.AsNoTracking().Where(x => x.Code == b.CompanyCode).Select(x => x.Name).FirstOrDefaultAsync() ?? b.CompanyCode;
+        var link = $"{IntranetUrl()}/finance?tab=creditors&batch={b.Id}";
+        static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
+        var rows = string.Concat(rejected.Select(i => $@"
+      <tr><td style='padding:8px 10px;border-top:1px solid #fecaca;vertical-align:top'><b>{H(i.SupplierName)}</b>{(string.IsNullOrWhiteSpace(i.InvoiceNumbers) ? "" : $"<br/><span style='color:#6b7280;font-size:12px'>Invoice {H(i.InvoiceNumbers)}</span>")}</td>
+          <td style='padding:8px 10px;border-top:1px solid #fecaca;vertical-align:top;white-space:nowrap;text-align:right'>R {i.Amount:N2}</td>
+          <td style='padding:8px 10px;border-top:1px solid #fecaca;vertical-align:top'>{(string.IsNullOrWhiteSpace(i.DecisionComment) ? "<em>No reason given</em>" : H(i.DecisionComment))}</td></tr>"));
+        var subject = $"[Intranet] {rejected.Count} payment{(rejected.Count == 1 ? "" : "s")} rejected on {b.BatchNumber} — {company}";
+        var html = $@"
+<div style='font-family:Segoe UI,Arial,sans-serif;max-width:620px;margin:0 auto;color:#1f2937'>
+  <div style='background:#b91c1c;color:#fff;padding:18px 24px;border-radius:12px 12px 0 0'><h2 style='margin:0;font-size:18px'>Payment{(rejected.Count == 1 ? "" : "s")} rejected by the director</h2><div style='opacity:.9;font-size:13px'>{H(company)} · {H(b.BatchNumber)}</div></div>
+  <div style='border:1px solid #e5e7eb;border-top:0;padding:22px 24px;border-radius:0 0 12px 12px'>
+    <p style='margin:0 0 12px'>Hi {H((to.Name ?? b.PreparedByName ?? "").Split(' ')[0])},</p>
+    <p style='margin:0 0 14px'><b>{H(UserName)}</b> signed payment pack <b>{H(b.BatchNumber)}</b> and rejected {(rejected.Count == 1 ? "one of your payments" : $"{rejected.Count} of your payments")}. {(rejected.Count == 1 ? "It will not be paid" : "They will not be paid")} on this pack.</p>
+    <table style='border-collapse:collapse;font-size:14px;margin:0 0 18px;width:100%;background:#fef2f2;border:1px solid #fecaca;border-radius:8px'>
+      <tr style='color:#991b1b;font-size:12px;text-align:left'><th style='padding:8px 10px'>Payment</th><th style='padding:8px 10px;text-align:right'>Amount</th><th style='padding:8px 10px'>Reason</th></tr>{rows}
+    </table>
+    <p style='margin:0 0 16px'>Open the pack on the intranet to see the details. If it can be fixed, use <b>Fix and resubmit</b> on the payment: it puts a copy, with its documents, on a new draft pack for you to correct and send through again.</p>
+    <a href='{link}' style='display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600'>Log on and view the pack</a>
+    <p style='margin:18px 0 0;font-size:12px;color:#6b7280'>Sent automatically by the intranet. If the button doesn't work, copy this link: {link}</p>
+  </div>
+</div>";
+        try { if (!await _email.SendEmailAsync(to.Email, subject, html)) _log.LogWarning("Rejection email to {Email} failed: {Err}", to.Email, _email.LastError); }
+        catch (Exception e) { _log.LogWarning(e, "Rejection email to {Email} failed", to.Email); }
+    }
+
     public record QueryAnswerDto(string Answer);
 
     /// <summary>
@@ -1448,6 +1536,15 @@ public class CreditorPacksController : ControllerBase
         });
         b.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        // Tell the preparer which payments were rejected and why (in-app + email), with a link to fix and resubmit them.
+        var rejected = b.Items.Where(i => i.DecisionStatus == "Rejected").ToList();
+        if (rejected.Count > 0)
+        {
+            await NotifyAsync(new[] { (int?)b.PreparedByUserId }, $"{rejected.Count} payment{(rejected.Count == 1 ? "" : "s")} rejected by {UserName}",
+                $"{b.BatchNumber}: " + string.Join("; ", rejected.Select(i => $"{i.SupplierName} R{i.Amount:N2} — {i.DecisionComment}")), b.Id);
+            await EmailRejectedAsync(b, rejected);
+        }
         return Ok(await DetailAsync(id));
     }
 
@@ -1919,7 +2016,7 @@ public class CreditorPacksController : ControllerBase
                 i.StockReturned, i.IsUrgent, i.PaymentMode, paymentModeTitle = CreditorPaymentModes.Title(i.PaymentMode), i.PayoutMethod,
                 i.ComplianceKind, i.ComplianceDetail, i.ComplianceTitle,
                 i.DecisionStatus, i.DecisionComment, i.DecidedAt, i.PrepaymentOpen, i.PaidAt, i.SortOrder,
-                i.QueryQuestion, i.QueryAskedByName, i.QueryAskedAt, i.QueryResponse, i.QueryRespondedByName, i.QueryRespondedAt, i.QueriedFromBatchNumber,
+                i.QueryQuestion, i.QueryAskedByName, i.QueryAskedAt, i.QueryResponse, i.QueryRespondedByName, i.QueryRespondedAt, i.QueriedFromBatchNumber, i.ResubmittedAsBatchNumber,
                 required = itemReq[i.Id],
                 recommended = itemRec[i.Id],
                 documents = b.Documents.Where(d => d.ItemId == i.Id).OrderBy(d => d.DocType).ThenBy(d => d.Version).Select(DocDto)
