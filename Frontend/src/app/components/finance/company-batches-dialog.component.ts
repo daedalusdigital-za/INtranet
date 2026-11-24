@@ -50,7 +50,7 @@ export interface CompanyBatchesData {
     .cb { display: flex; flex-direction: column; max-height: 85vh; }
     header { display: flex; align-items: center; gap: 14px; padding: 14px 12px 14px 20px; border-bottom: 1px solid var(--color-line);
       .mark { width: 96px; height: 54px; flex: 0 0 auto; display: grid; place-items: center; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-md); overflow: hidden; img { width: 100%; height: 100%; object-fit: contain; padding: 5px; box-sizing: border-box; } }
-      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 18px; letter-spacing: .06em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
+      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: var(--text-xl); letter-spacing: .06em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
       .nm { flex: 1; min-width: 0; h2 { margin: 0; font-size: var(--text-lg); } small { color: var(--color-text-3); font-size: var(--text-xs); } } }
     .body { overflow: auto; }
     table { width: 100%; border-collapse: collapse;

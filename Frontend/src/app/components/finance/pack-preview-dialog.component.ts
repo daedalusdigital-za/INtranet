@@ -37,7 +37,7 @@ export interface PackPreviewData { url: string; title: string; subtitle?: string
     .pv { display:flex; flex-direction:column; height: 92vh; }
     .pv__head { display:flex; align-items:center; gap:10px; padding:10px 12px 10px 16px; border-bottom:1px solid var(--color-line); }
     .pv__icon { color:var(--color-danger); }
-    .pv__title { flex:1; min-width:0; display:flex; flex-direction:column; b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } small { color: var(--color-text-3); font-size:.78rem; } }
+    .pv__title { flex:1; min-width:0; display:flex; flex-direction:column; b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } small { color: var(--color-text-3); font-size:var(--text-xs); } }
     .pv__body { flex:1; min-height:0; background:#525659; display:flex; align-items:center; justify-content:center;
       iframe { width:100%; height:100%; border:0; } img { max-width:100%; max-height:100%; object-fit:contain; } }
     .pv__state { display:flex; flex-direction:column; align-items:center; gap:8px; color:var(--color-on-dark); &--err { mat-icon { font-size:40px; width:40px; height:40px; } p { margin:0; } } }

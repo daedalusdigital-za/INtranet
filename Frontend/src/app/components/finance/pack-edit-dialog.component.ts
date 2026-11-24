@@ -64,14 +64,14 @@ export interface PackEditData {
   styles: [`
     h2 { display:flex; align-items:center; gap:8px; }
     .grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px 14px; }
-    label { display:flex; flex-direction:column; gap:4px; font-size:.8rem; color: var(--color-text-3); font-weight:600; &.wide { grid-column: 1 / -1; } }
-    input, select, textarea { font: inherit; font-size:.92rem; color: var(--color-text); padding:8px 10px; border:1px solid var(--color-line); border-radius:8px; background: var(--color-surface); }
+    label { display:flex; flex-direction:column; gap:4px; font-size:var(--text-sm); color: var(--color-text-3); font-weight:600; &.wide { grid-column: 1 / -1; } }
+    input, select, textarea { font: inherit; font-size:var(--text-lg); color: var(--color-text); padding:8px 10px; border:1px solid var(--color-line); border-radius:8px; background: var(--color-surface); }
     .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
-    h4 { margin:16px 0 8px; font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; color: var(--color-text-3); }
+    h4 { margin:16px 0 8px; font-size:var(--text-sm); text-transform:uppercase; letter-spacing:.04em; color: var(--color-text-3); }
     .kinds { display:flex; flex-wrap:wrap; gap:8px; }
-    .kind { flex-direction:row; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; border:1px solid var(--color-line); background: var(--color-surface); font-size:.85rem; cursor:pointer;
+    .kind { flex-direction:row; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; border:1px solid var(--color-line); background: var(--color-surface); font-size:var(--text-md); cursor:pointer;
       mat-icon { font-size:18px; width:18px; height:18px; } &.on { border-color:var(--color-ok); background:var(--color-ok-soft); color:var(--color-ok); } }
-    .hint { display:flex; gap:6px; align-items:flex-start; margin:14px 0 0; font-size:.8rem; color: var(--color-text-3); mat-icon { font-size:16px; width:16px; height:16px; flex:0 0 auto; margin-top:1px; } }
+    .hint { display:flex; gap:6px; align-items:flex-start; margin:14px 0 0; font-size:var(--text-sm); color: var(--color-text-3); mat-icon { font-size:16px; width:16px; height:16px; flex:0 0 auto; margin-top:1px; } }
     mat-dialog-actions button mat-spinner { display:inline-block; }
   `]
 })

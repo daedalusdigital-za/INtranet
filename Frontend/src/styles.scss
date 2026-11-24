@@ -23,6 +23,9 @@ html[data-density='compact'] {
   @include mat.radio-density($compact);
 }
 
+/* Appearance > Text size: Material sizes its text in rem, so scaling the root scales it too. */
+html { font-size: calc(100% * var(--text-scale, 1)); }
+
 html, body { 
   height: 100%; 
   margin: 0;

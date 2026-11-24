@@ -29,7 +29,7 @@ import { IHatePdfDialogComponent } from '../../i-hate-pdf/i-hate-pdf-dialog.comp
 import { UploaderDialogComponent } from '../../uploader/uploader-dialog.component';
 import { CommandPaletteComponent, PaletteCommand } from '../../../ui/command-palette/command-palette.component';
 import { SubPage } from '../../../ui/sub-pages';
-import { AppearanceService, Density, ThemeChoice } from '../../../ui/appearance.service';
+import { AppearanceService, Density, FontChoice, TextSize, ThemeChoice, loadFontSheet } from '../../../ui/appearance.service';
 import { LOGISTICS_SECTIONS } from '../../logistics/logistics-sections';
 import { SALES_SECTIONS } from '../../sales/sales-sections';
 import { STOCK_SECTIONS } from '../../stock-management/stock-sections';
@@ -354,7 +354,7 @@ interface NavGroup {
           <mat-icon>draw</mat-icon>
           <span>My signature</span>
         </button>
-        <button mat-menu-item class="pm-menu-item" [matMenuTriggerFor]="appearanceMenu">
+        <button mat-menu-item class="pm-menu-item" [matMenuTriggerFor]="appearanceMenu" (menuOpened)="previewFonts()">
           <mat-icon>{{ appearance.dark() ? 'dark_mode' : 'light_mode' }}</mat-icon>
           <span>Appearance</span>
         </button>
@@ -364,7 +364,7 @@ interface NavGroup {
           <span>Sign out</span>
         </button>
       </mat-menu>
-      <!-- Light or dark, and row density (design review D-04). Kept on this computer. -->
+      <!-- Light or dark, row density (design review D-04), text size and font. Kept on this computer. -->
       <mat-menu #appearanceMenu="matMenu" class="shell-menu profile-menu-panel">
         <div class="pm-group" role="presentation">Theme</div>
         @for (t of themeChoices; track t.value) {
@@ -381,6 +381,24 @@ interface NavGroup {
                   (click)="appearance.setDensity(d.value); $event.stopPropagation()">
             <mat-icon>{{ appearance.density() === d.value ? 'radio_button_checked' : 'radio_button_unchecked' }}</mat-icon>
             <span>{{ d.label }}</span>
+          </button>
+        }
+        <div class="pm-divider"></div>
+        <div class="pm-group" role="presentation">Text size</div>
+        @for (z of textSizeChoices; track z.value) {
+          <button mat-menu-item class="pm-menu-item" role="menuitemradio" [attr.aria-checked]="appearance.textSize() === z.value"
+                  (click)="appearance.setTextSize(z.value); $event.stopPropagation()">
+            <mat-icon>{{ appearance.textSize() === z.value ? 'radio_button_checked' : 'radio_button_unchecked' }}</mat-icon>
+            <span>{{ z.label }}</span>
+          </button>
+        }
+        <div class="pm-divider"></div>
+        <div class="pm-group" role="presentation">Font</div>
+        @for (f of fontChoices; track f.value) {
+          <button mat-menu-item class="pm-menu-item" role="menuitemradio" [attr.aria-checked]="appearance.font() === f.value"
+                  (click)="appearance.setFont(f.value); $event.stopPropagation()">
+            <mat-icon>{{ appearance.font() === f.value ? 'radio_button_checked' : 'radio_button_unchecked' }}</mat-icon>
+            <span [style.font-family]="f.family">{{ f.label }}</span>
           </button>
         }
       </mat-menu>
@@ -912,6 +930,24 @@ export class NavbarComponent implements OnInit, OnDestroy {
     { value: 'comfortable', label: 'Comfortable' },
     { value: 'compact', label: 'Compact' }
   ];
+  readonly textSizeChoices: { value: TextSize; label: string }[] = [
+    { value: 'default', label: 'Default' },
+    { value: 'large', label: 'Large' },
+    { value: 'xlarge', label: 'Extra large' }
+  ];
+  // Each name is shown in its own font, so people can see what they're picking.
+  readonly fontChoices: { value: FontChoice; label: string; family: string }[] = [
+    { value: 'manrope', label: 'Manrope (default)', family: "'Manrope', sans-serif" },
+    { value: 'inter', label: 'Inter', family: "'Inter', sans-serif" },
+    { value: 'atkinson', label: 'Atkinson Hyperlegible (easiest to read)', family: "'Atkinson Hyperlegible', sans-serif" },
+    { value: 'source', label: 'Source Sans', family: "'Source Sans 3', sans-serif" },
+    { value: 'system', label: 'System (Segoe UI)', family: "'Segoe UI', system-ui, sans-serif" }
+  ];
+
+  /** Load the font choices when the Appearance menu opens, so each name shows in its own font. */
+  previewFonts(): void {
+    this.fontChoices.forEach(f => loadFontSheet(f.value));
+  }
 
   private subscriptions: Subscription[] = [];
 

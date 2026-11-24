@@ -537,7 +537,7 @@ interface Summary {
       h3 { margin:0 0 10px; font-size: var(--text-md); display:flex; align-items:center; gap:6px; mat-icon { color: var(--color-primary); } } }
     .cn-trend { display:flex; align-items:flex-end; gap:6px; height:160px;
       .bar { flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:100%; gap:4px;
-        i { display:block; width:100%; background: var(--color-danger); opacity:.7; border-radius:4px 4px 0 0; min-height:2px; } span { font-size:10px; color: var(--color-text-3); } } }
+        i { display:block; width:100%; background: var(--color-danger); opacity:.7; border-radius:4px 4px 0 0; min-height:2px; } span { font-size:var(--text-xs); color: var(--color-text-3); } } }
     .cn-mini { width:100%; border-collapse:collapse; td { padding:6px 4px; border-bottom:1px solid var(--color-line); } tr { cursor:pointer; &:hover { background: var(--color-surface-2); } } }
 
     .cn-backdrop { position:fixed; inset:0; background: rgba(0,0,0,.35); z-index:900; &.top { z-index:950; } }

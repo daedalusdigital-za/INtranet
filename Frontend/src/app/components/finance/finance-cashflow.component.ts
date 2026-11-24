@@ -179,7 +179,7 @@ interface LineForm extends CashLineInput { id?: number }
       tbody tr:not(.detail) { cursor: pointer; border-bottom: 1px solid var(--color-line); &:hover { background: var(--color-surface-2); } &.open { background: var(--color-primary-soft); } &.neg .cl { color: var(--color-danger); } }
       td.co { display: flex; align-items: center; gap: 10px; min-width: 260px; }
       .mark { width: 72px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; background: #fff; border: 1px solid var(--color-line); border-radius: var(--radius-sm); overflow: hidden; img { max-width: 84%; max-height: 80%; width: auto; height: auto; object-fit: contain; display: block; } }
-      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: 12px; letter-spacing: .06em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
+      .mono { width: 100%; height: 100%; display: grid; place-items: center; font-weight: 800; font-size: var(--text-xs); letter-spacing: .06em; color: hsl(var(--hue) 45% 32%); background: linear-gradient(135deg, hsl(var(--hue) 55% 94%), hsl(var(--hue) 45% 86%)); }
       .nm { display: flex; flex-direction: column; line-height: 1.2; b { font-size: var(--text-md); } small { color: var(--color-text-3); font-size: var(--text-xs); } }
       .cl { font-weight: 700; } .missing em { color: var(--color-warn); font-size: var(--text-xs); font-style: normal; }
       .chev { width: 32px; color: var(--color-text-3); }

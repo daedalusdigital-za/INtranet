@@ -12,7 +12,7 @@
   <!-- The app's one icon set (design review D-03). -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!-- Apply the saved light/dark and density choice before the app starts, so pages don't
+  <!-- Apply the saved light/dark, density, text size and font before the app starts, so pages don't
        flash white (AppearanceService keeps it up to date afterwards). -->
   <script>
     try {
@@ -21,6 +21,20 @@
       var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
       document.documentElement.dataset.density = localStorage.getItem('ui.density') === 'compact' ? 'compact' : 'comfortable';
+      var size = localStorage.getItem('ui.textSize');
+      document.documentElement.dataset.textSize = size === 'large' || size === 'xlarge' ? size : 'default';
+      // Fonts other than Manrope load on demand; keep these in step with AppearanceService.
+      var fonts = { inter: 'Inter:wght@400;500;600;700;800', atkinson: 'Atkinson+Hyperlegible:wght@400;700', source: 'Source+Sans+3:wght@400;500;600;700;800', system: '' };
+      var font = localStorage.getItem('ui.font');
+      if (!(font in fonts)) font = 'manrope';
+      document.documentElement.dataset.font = font;
+      if (fonts[font]) {
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = 'https://fonts.googleapis.com/css2?family=' + fonts[font] + '&display=swap';
+        l.setAttribute('data-font-sheet', font);
+        document.head.appendChild(l);
+      }
     } catch (e) {}
   </script>
 </head>

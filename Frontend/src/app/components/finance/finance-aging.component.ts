@@ -255,16 +255,16 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
       .chev { width: 32px; mat-icon { color: var(--color-text-3); } } }
     .ag-name { display: flex; flex-direction: column; small { color: var(--color-text-3); font-size: var(--text-xs); } }
     .ag-docs { width: 100%; border-collapse: collapse; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); overflow: hidden;
-      th { position: static; font-size: 10px; padding: 6px var(--space-2); }
+      th { position: static; font-size: var(--text-xs); padding: 6px var(--space-2); }
       td { padding: 6px var(--space-2); font-size: var(--text-xs); border-bottom: 1px solid var(--color-line); }
       tr.credit td { color: var(--color-ok); }
       tfoot td { border-bottom: 0; background: var(--color-surface-2); } }
     .ag-foot { display: flex; flex-wrap: wrap; gap: 6px; }
     .ref { font-family: var(--font-mono); }
     .nowrap { white-space: nowrap; } .muted { color: var(--color-text-3); }
-    .type { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--color-surface-2); color: var(--color-text-2);
+    .type { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-2); color: var(--color-text-2);
       &.t-IN { background: var(--color-primary-soft); color: var(--color-primary); } &.t-PY, &.t-PI, &.t-CR { background: var(--color-ok-soft); color: var(--color-ok); } }
-    .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; color: var(--color-text-2); background: var(--color-surface-3);
+    .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; color: var(--color-text-2); background: var(--color-surface-3);
       &.b0 { background: var(--color-ok-soft); color: var(--color-ok); } &.b1 { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); } &.b2 { background: var(--color-warn-soft); color: var(--color-warn); } &.b3 { background: var(--color-warn); color: var(--color-on-primary); } &.b4 { background: var(--color-danger); color: var(--color-on-primary); } }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-2);
       &.warn { background: var(--color-warn-soft); color: var(--color-warn); } &.danger { background: var(--color-danger-soft); color: var(--color-danger); } }
@@ -274,7 +274,7 @@ type SortKey = keyof Pick<AgingCustomer, 'name' | 'current' | 'd30' | 'd60' | 'd
       mat-icon { font-size: 44px; width: 44px; height: 44px; } h3 { margin: 0; color: var(--color-text); } p { margin: 0; max-width: 520px; }
       &.small { padding: var(--space-4); mat-icon { font-size: 28px; width: 28px; height: 28px; } } }
     @media (max-width: 1100px) { .ag-buckets { grid-template-columns: repeat(3, 1fr); } }
-    .stale { font-style:normal; font-size:10px; padding:1px 6px; border-radius:999px; margin-left:4px; background:var(--color-ok-soft); color:var(--color-ok); &.amber { background:var(--color-warn-soft); color:var(--color-warn); } &.red { background:var(--color-danger-soft); color:var(--color-danger); } }
+    .stale { font-style:normal; font-size:var(--text-xs); padding:1px 6px; border-radius:999px; margin-left:4px; background:var(--color-ok-soft); color:var(--color-ok); &.amber { background:var(--color-warn-soft); color:var(--color-warn); } &.red { background:var(--color-danger-soft); color:var(--color-danger); } }
     .ag-nopod { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--color-line); background: var(--color-surface); border-radius:999px; padding:5px 12px; font: inherit; font-size: var(--text-sm); cursor:pointer; color: var(--color-text-2);
       mat-icon { font-size:16px; width:16px; height:16px; } .n { background: var(--color-danger); color:var(--color-on-primary); border-radius:999px; padding:0 7px; font-size: var(--text-xs); }
       &.active { background: var(--color-danger-soft); border-color:color-mix(in srgb, var(--color-danger) 35%, transparent); color:var(--color-danger); } }

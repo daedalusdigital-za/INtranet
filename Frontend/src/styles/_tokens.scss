@@ -67,14 +67,17 @@
   --font-body: 'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-heading: var(--font-body);
   --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-md: 14px;
-  --text-lg: 16px;
-  --text-xl: 18px;
-  --text-2xl: 20px;
-  --text-3xl: 24px;
-  --text-4xl: 32px;
+  // Text size (Appearance > Text size) multiplies every step, and the root font size, so
+  // Material's rem-based components grow with them.
+  --text-scale: 1;
+  --text-xs: calc(12px * var(--text-scale));
+  --text-sm: calc(13px * var(--text-scale));
+  --text-md: calc(14px * var(--text-scale));
+  --text-lg: calc(16px * var(--text-scale));
+  --text-xl: calc(18px * var(--text-scale));
+  --text-2xl: calc(20px * var(--text-scale));
+  --text-3xl: calc(24px * var(--text-scale));
+  --text-4xl: calc(32px * var(--text-scale));
 
   // Radius: three steps plus controls
   --radius-sm: 6px;
@@ -164,6 +167,17 @@
   --shadow-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
+
+// Appearance > Text size
+:root[data-text-size='large']  { --text-scale: 1.125; }
+:root[data-text-size='xlarge'] { --text-scale: 1.25; }
+
+// Appearance > Font. Fonts other than Manrope load only when someone picks them
+// (AppearanceService and the start-up script in index.html add the stylesheet).
+:root[data-font='inter']    { --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif; }
+:root[data-font='atkinson'] { --font-body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, -apple-system, sans-serif; }
+:root[data-font='source']   { --font-body: 'Source Sans 3', 'Segoe UI', system-ui, -apple-system, sans-serif; }
+:root[data-font='system']   { --font-body: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif; }
 
 :root[data-density='compact'] {
   --row-pad-y: 5px;
