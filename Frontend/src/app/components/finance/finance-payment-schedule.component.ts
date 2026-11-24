@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
 import { ToastService } from '../../ui/toast.service';
 import { CreditorPacksService, PaymentSchedule, ScheduleBatch, ScheduleItem, InProgressBatch, InProgressDoc } from '../../services/creditor-packs.service';
@@ -22,7 +23,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
 @Component({
   selector: 'app-finance-payment-schedule',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatTooltipModule, MatProgressSpinnerModule, MatMenuModule],
   template: `
   <input #popInput type="file" accept="application/pdf,image/*" hidden (change)="onPopFile($event)">
 
@@ -158,7 +159,14 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                 @if (b.overdue) { <small class="bad">Overdue — not paid on its run</small> }
               </div>
               <div class="b-actions" (click)="$event.stopPropagation()">
-                @if (b.can.bankFile) { <button mat-icon-button matTooltip="Download bank file (CSV)" (click)="bankFile(b)"><mat-icon>download</mat-icon></button> }
+                <button mat-icon-button [matMenuTriggerFor]="dl" matTooltip="Download: bank file, all documents, signed pack, schedule" aria-label="Downloads"><mat-icon>download</mat-icon></button>
+                <mat-menu #dl="matMenu">
+                  @if (b.can.bankFile) { <button mat-menu-item (click)="bankFile(b)"><mat-icon>table_view</mat-icon> Bank file (CSV)</button> }
+                  <button mat-menu-item (click)="download(b, 'zip')"><mat-icon>folder_zip</mat-icon> All documents (ZIP)</button>
+                  <button mat-menu-item (click)="download(b, 'signed')"><mat-icon>workspace_premium</mat-icon> Signed pack (one PDF)</button>
+                  <button mat-menu-item (click)="download(b, 'schedule')"><mat-icon>list_alt</mat-icon> Payment schedule (PDF)</button>
+                  <button mat-menu-item (click)="download(b, 'sheet')"><mat-icon>fact_check</mat-icon> Approval sheet (PDF)</button>
+                </mat-menu>
                 @if (b.can.markLoaded) { <button mat-flat-button color="primary" [disabled]="busy()" (click)="setStatus(b, 'LoadedOnBank')"><mat-icon>account_balance</mat-icon> Loaded on bank</button> }
                 @if (b.can.markPaid && b.status === 'LoadedOnBank') { <button mat-flat-button color="primary" [disabled]="busy()" (click)="setStatus(b, 'Paid')"><mat-icon>price_check</mat-icon> Mark paid</button> }
                 @if (b.can.close) { <button mat-flat-button color="primary" [disabled]="busy() || b.popMissing > 0 || b.openPrepayments > 0" [matTooltip]="b.popMissing > 0 ? 'Upload proof of payment for every payment first' : (b.openPrepayments > 0 ? 'Prepayments still open (tax invoice + GRV)' : 'Close the batch')" (click)="setStatus(b, 'Closed')"><mat-icon>inventory</mat-icon> Close</button> }
@@ -182,6 +190,14 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                       </select>
                     </span>
                   }
+                </div>
+                <div class="b-dl">
+                  <span class="lbl"><mat-icon>download</mat-icon> Download</span>
+                  @if (b.can.bankFile) { <button mat-stroked-button (click)="bankFile(b)"><mat-icon>table_view</mat-icon> Bank file (CSV)</button> }
+                  <button mat-stroked-button [disabled]="dlBusy() === b.id" (click)="download(b, 'zip')"><mat-icon>folder_zip</mat-icon> All documents (ZIP)</button>
+                  <button mat-stroked-button [disabled]="dlBusy() === b.id" (click)="download(b, 'signed')"><mat-icon>workspace_premium</mat-icon> Signed pack (PDF)</button>
+                  <button mat-stroked-button [disabled]="dlBusy() === b.id" (click)="download(b, 'schedule')"><mat-icon>list_alt</mat-icon> Payment schedule (PDF)</button>
+                  @if (dlBusy() === b.id) { <mat-spinner diameter="18"></mat-spinner> }
                 </div>
                 <table class="items">
                   <thead><tr><th>Beneficiary</th><th>Invoice(s) / reference</th><th>Bank</th><th class="r">Amount</th><th>Proof of payment</th><th class="eye"><span class="sr">Preview</span></th></tr></thead>
@@ -266,6 +282,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
       &.s-Approved { background: var(--color-primary-soft); color: var(--color-primary); } &.s-LoadedOnBank { background: var(--color-warn-soft); color: var(--color-warn); } &.s-Paid { background: var(--color-ok-soft); color: var(--color-ok); } }
     .b-actions { display:flex; align-items:center; gap:4px; .chev { color: var(--color-text-3); } }
     .b-body { padding: 4px 16px 16px 70px; }
+    .b-dl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); .lbl { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-2); mat-icon { font-size: 18px; width: 18px; height: 18px; } } }
     .b-meta { display:flex; flex-wrap:wrap; gap:16px; font-size:var(--text-sm); color: var(--color-text-2); margin-bottom:10px; span { display:inline-flex; align-items:center; gap:4px; } mat-icon { font-size:16px; width:16px; height:16px; }
       .resched select { font: inherit; font-size:var(--text-sm); padding:3px 6px; border:1px solid var(--color-line); border-radius:6px; background: var(--color-surface); color: var(--color-text); margin-left:4px; } }
     .items { width:100%; border-collapse:collapse; font-size:var(--text-md); th { text-align:left; font-size:var(--text-xs); text-transform:uppercase; letter-spacing:.4px; color: var(--color-text-3); padding:6px 8px; border-bottom:1px solid var(--color-line); } td { padding:8px; border-bottom:1px solid var(--color-line); vertical-align:top; small { display:block; color: var(--color-text-2); font-size:var(--text-xs); } } .r { text-align:right; font-variant-numeric: tabular-nums; } .pop { white-space:nowrap; } tr:last-child td { border-bottom:0; } }
@@ -355,6 +372,18 @@ export class FinancePaymentScheduleComponent implements OnInit {
     else PackPreviewDialogComponent.open(this.dialog, { url: this.api.fileUrl(b.id, d.id), title, subtitle, fileName: d.originalFileName });
   }
   openPack(b: { id: number }): void { this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'creditors', batch: b.id } }); }
+
+  dlBusy = signal(0);
+  /** Treasury downloads for a signed pack: every document (ZIP), the stamped signed pack, the payment schedule or the approval sheet. */
+  download(b: ScheduleBatch, kind: 'zip' | 'signed' | 'schedule' | 'sheet'): void {
+    const req = kind === 'zip' ? this.api.documentsZip(b.id) : kind === 'signed' ? this.api.signedPack(b.id) : kind === 'schedule' ? this.api.schedulePdf(b.id) : this.api.approvalSheet(b.id);
+    const name = kind === 'zip' ? `Documents-${b.batchNumber}.zip` : kind === 'signed' ? `Signed-pack-${b.batchNumber}.pdf` : kind === 'schedule' ? `Payment-schedule-${b.batchNumber}.pdf` : `Approval-sheet-${b.batchNumber}.pdf`;
+    this.dlBusy.set(b.id);
+    req.subscribe({
+      next: blob => { this.dlBusy.set(0); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 30_000); },
+      error: () => { this.dlBusy.set(0); this.toast.error("Couldn't download that."); }
+    });
+  }
 
   bankFile(b: ScheduleBatch): void {
     this.api.bankFile(b.id).subscribe({

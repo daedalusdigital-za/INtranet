@@ -224,6 +224,7 @@ export class CreditorPacksService {
   decide(id: number, itemId: number, decision: string, comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/decision`, { decision, comment }); }
   sign(id: number, typedName: string, comment?: string, signatureImageBase64?: string, useSavedSignature = true) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/sign`, { typedName, comment, signatureImageBase64, useSavedSignature }); }
   bankFile(id: number) { return this.http.get(`${this.base}/batches/${id}/bank-file`, { responseType: 'blob' }); }
+  documentsZip(id: number) { return this.http.get(`${this.base}/batches/${id}/documents.zip`, { responseType: 'blob' }); }
   setStatus(id: number, decision: 'LoadedOnBank' | 'Paid' | 'Closed' | 'Draft', comment?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/status`, { decision, comment }); }
 
   // ── Payment schedule (treasury) ──

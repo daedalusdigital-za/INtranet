@@ -1667,6 +1667,63 @@ public class CreditorPacksController : ControllerBase
         return File(pdf, "application/pdf", $"Pack-{b.BatchNumber}-{SafeName(it.SupplierName)}.pdf");
     }
 
+    /// <summary>
+    /// Every document of a signed pack in one ZIP, for Treasury when loading on the bank: the approval sheet, the payment schedule,
+    /// the pack-level documents and each approved payment's documents (originals, numbered by payment). Rejected and
+    /// sent-back payments are left out — they are not being paid.
+    /// </summary>
+    [HttpGet("batches/{id:int}/documents.zip")]
+    public async Task<IActionResult> DocumentsZip(int id)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (!await InScopeAsync(b.CompanyCode)) return Forbid();
+        if (!CreditorWorkflow.Locked.Contains(b.Status)) return Conflict(new { message = "The documents can be downloaded once the director has signed." });
+        var paid = b.Items.Where(i => i.DecisionStatus == "Approved").OrderBy(i => i.SortOrder).ThenBy(i => i.Id).ToList();
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string Unique(string name)
+        {
+            var n = name; var k = 2;
+            while (!used.Add(n)) n = $"{Path.GetFileNameWithoutExtension(name)} ({k++}){Path.GetExtension(name)}";
+            return n;
+        }
+        using var ms = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            async Task AddBytes(string name, byte[] bytes)
+            {
+                var e = zip.CreateEntry(Unique(name), System.IO.Compression.CompressionLevel.Fastest);
+                await using var es = e.Open(); await es.WriteAsync(bytes);
+            }
+            void AddFile(string name, string abs)
+            {
+                var e = zip.CreateEntry(Unique(name), System.IO.Compression.CompressionLevel.Fastest);
+                using var es = e.Open(); using var fs = System.IO.File.OpenRead(abs); fs.CopyTo(es);
+            }
+            await AddBytes($"00 Approval sheet {b.BatchNumber}.pdf", await _packPdf.ApprovalSheetAsync(b));
+            await AddBytes($"00 Payment schedule {b.BatchNumber}.pdf", await _packPdf.ScheduleAsync(b));
+            string Ext(PaymentBatchDocument d) => Path.GetExtension(d.StoragePath ?? d.OriginalFileName ?? ".pdf");
+            string Orig(PaymentBatchDocument d) => SafeName(Path.GetFileNameWithoutExtension((d.OriginalFileName ?? d.FileName ?? "document").Split('|').Last()));
+            foreach (var d in b.Documents.Where(d => d.ItemId == null && !d.IsNotApplicable && d.StoragePath != null))
+            {
+                var abs = Abs(d.StoragePath!); if (!System.IO.File.Exists(abs)) continue;
+                AddFile($"00 Pack - {CreditorChecksService.Label(d.DocType)} - {Orig(d)}{Ext(d)}", abs);
+            }
+            var n = 0;
+            foreach (var it in paid)
+            {
+                n++;
+                foreach (var d in b.Documents.Where(d => d.ItemId == it.Id && !d.IsNotApplicable && d.StoragePath != null).OrderBy(d => d.Id))
+                {
+                    var abs = Abs(d.StoragePath!); if (!System.IO.File.Exists(abs)) continue;
+                    AddFile($"{n:00} {SafeName(it.SupplierName)} - {CreditorChecksService.Label(d.DocType)} - {Orig(d)}{Ext(d)}", abs);
+                }
+            }
+        }
+        b.Events.Add(Ev("DocumentsDownloaded", null, null, "All documents downloaded (ZIP)"));
+        await _db.SaveChangesAsync();
+        return File(ms.ToArray(), "application/zip", $"Documents-{b.BatchNumber}.zip");
+    }
+
     /// <summary>Bank file (CSV) for approved payments only. Marks the batch exported.</summary>
     [HttpGet("batches/{id:int}/bank-file")]
     public async Task<IActionResult> BankFile(int id)

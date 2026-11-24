@@ -31,6 +31,13 @@ import { AuthStore } from '../core/auth';
       <div class="card act">
         <button type="button" class="btn ghost block" (click)="openPdf(api.reviewPdfUrl(b.id))" [disabled]="pdfBusy()">{{ pdfBusy() ? 'Opening…' : '📄 Read the whole pack (PDF)' }}</button>
         <p class="muted sm">Approval sheet plus every invoice, PO and bank letter in one document — easiest on a phone.</p>
+        <div class="dls">
+          <button type="button" class="btn ghost sm" (click)="openPdf(api.approvalSheetUrl(b.id))" [disabled]="pdfBusy()">Approval sheet</button>
+          @if (b.lockedAt) {
+            <button type="button" class="btn ghost sm" (click)="openPdf(api.signedPackUrl(b.id))" [disabled]="pdfBusy()">Signed pack (PDF)</button>
+            <button type="button" class="btn ghost sm" (click)="save(api.documentsZipUrl(b.id), 'Documents-' + b.batchNumber + '.zip')" [disabled]="pdfBusy()">All documents (ZIP)</button>
+          }
+        </div>
       </div>
 
       @if (b.can.directorConflict) { <p class="note">{{ b.can.directorConflict }}</p> }
@@ -39,14 +46,15 @@ import { AuthStore } from '../core/auth';
       @if (b.can.accountant) {
         <div class="card step">
           <h2>Approve as accountant</h2>
-          <p class="muted">Confirms the pack has been checked. It then goes to the company's director(s) to sign.</p>
+          <p class="muted">Confirms the pack has been checked. You can approve or send back each payment below: approved ones go to the company's director(s) to sign; sent-back ones return to the preparer with your reason.</p>
+          @if (accSendBack() > 0) { <p class="note">{{ accSendBack() }} payment{{ accSendBack() === 1 ? '' : 's' }} will be sent back to the preparer; {{ accLive() - accSendBack() }} go{{ accLive() - accSendBack() === 1 ? 'es' : '' }} to the director.</p> }
           <label class="f">Note for the director (optional) <input type="text" [(ngModel)]="comment"></label>
           <ng-container *ngTemplateOutlet="sig"></ng-container>
           <div class="btns">
-            <button type="button" class="btn ok" (click)="accountant('approve')" [disabled]="busy() || !sigReady()">Sign &amp; approve</button>
+            <button type="button" class="btn ok" (click)="accountant('approve')" [disabled]="busy() || !sigReady() || (accLive() > 0 && accSendBack() === accLive())">{{ accSendBack() ? 'Sign: approve ' + (accLive() - accSendBack()) + ', send back ' + accSendBack() : 'Sign & approve' }}</button>
             <button type="button" class="btn ghost" (click)="accountant('query')" [disabled]="busy() || !comment.trim()">Send back</button>
           </div>
-          @if (!comment.trim()) { <p class="muted sm">To send the pack back, type what needs fixing in the note first.</p> }
+          @if (!comment.trim()) { <p class="muted sm">To send the whole pack back, type what needs fixing in the note first.</p> }
         </div>
       }
 
@@ -54,11 +62,12 @@ import { AuthStore } from '../core/auth';
       <h2 class="sec">Payments</h2>
       <div class="items">
         @for (it of b.items; track it.id) {
-          <div class="card item" [class.sel-ok]="it.decisionStatus === 'Approved'" [class.sel-warn]="it.decisionStatus === 'Queried'" [class.sel-bad]="it.decisionStatus === 'Rejected'">
+          <div class="card item" [class.sel-ok]="it.decisionStatus === 'Approved'" [class.sel-warn]="it.decisionStatus === 'Queried'" [class.sel-bad]="it.decisionStatus === 'Rejected' || it.decisionStatus === 'SentBack'" [class.dim]="it.decisionStatus === 'SentBack'">
             <div class="ir">
               <div class="il">
                 <div class="sup">{{ it.supplierName }} @if (it.isUrgent) { <span class="pill bad">Urgent</span> }</div>
                 @if (it.invoiceNumbers) { <div class="muted sm">{{ isRequisitionBased(b) ? 'Ref' : 'Inv' }} {{ it.invoiceNumbers }}</div> }
+                @if (it.complianceTitle) { <div class="sm"><span class="pill neutral">Compliance · {{ it.complianceTitle }}</span></div> }
                 @if (it.description) { <div class="sm">{{ it.description }}</div> }
                 <div class="muted sm">{{ it.bankName }} · {{ it.accountNumber }}@if (it.paymentReference) { · ref {{ it.paymentReference }} }</div>
               </div>
@@ -72,7 +81,21 @@ import { AuthStore } from '../core/auth';
             }
             @for (d of notApplicable(it); track d.id) { <div class="muted sm">✓ {{ d.title || d.docType }} — {{ d.naReason || 'not applicable' }}</div> }
             @if (missing(it).length) { <div class="muted sm">Missing: {{ missing(it).join(', ') }}</div> }
-            @if (b.can.direct) {
+            @if (it.decisionStatus === 'SentBack') {
+              <div class="rej"><b>Sent back by {{ b.accountantName || 'the accountant' }}</b><span>{{ it.accountantDecisionComment || it.decisionComment || 'No reason given' }}</span>@if (it.resubmittedAsBatchNumber) { <span class="muted sm">Resubmitted on {{ it.resubmittedAsBatchNumber }}</span> }</div>
+            } @else if (b.can.accountant) {
+              <div class="dec two">
+                <button type="button" class="btn sm" [class.ok]="it.accountantDecision === 'Approved'" [class.ghost]="it.accountantDecision !== 'Approved'" (click)="accDecide(it, it.accountantDecision === 'Approved' ? 'Pending' : 'Approved')" [disabled]="busy()">👍 Approve</button>
+                <button type="button" class="btn sm" [class.bad]="it.accountantDecision === 'SentBack'" [class.ghost]="it.accountantDecision !== 'SentBack'" (click)="it.accountantDecision === 'SentBack' ? accDecide(it, 'Pending') : askSendBack(it)" [disabled]="busy()">↩ Send back</button>
+              </div>
+              @if (sendingBack() === it.id) {
+                <div class="askbox">
+                  <label class="f">Why is it being sent back? <input type="text" [(ngModel)]="askText" placeholder="e.g. Bank letter older than 3 months" autofocus></label>
+                  <div class="btns"><button type="button" class="btn sm bad" (click)="accDecide(it, 'SentBack', askText)" [disabled]="busy() || !askText.trim()">Send back</button><button type="button" class="btn ghost sm" (click)="sendingBack.set(null)">Cancel</button></div>
+                </div>
+              } @else if (it.accountantDecisionComment) { <div class="muted sm">“{{ it.accountantDecisionComment }}”</div> }
+            } @else if (b.can.direct) {
+              @if (it.accountantDecisionComment) { <div class="muted sm">Accountant: “{{ it.accountantDecisionComment }}”</div> }
               <div class="dec">
                 <button type="button" class="btn sm" [class.ok]="it.decisionStatus === 'Approved'" [class.ghost]="it.decisionStatus !== 'Approved'" (click)="decide(it, 'Approved')" [disabled]="busy()">👍 Approve</button>
                 <button type="button" class="btn sm" [class.warn]="it.decisionStatus === 'Queried'" [class.ghost]="it.decisionStatus !== 'Queried'" (click)="ask(it, 'Queried')" [disabled]="busy()">❓ Query</button>
@@ -84,8 +107,20 @@ import { AuthStore } from '../core/auth';
                   <div class="btns"><button type="button" class="btn sm" [class.warn]="askKind() === 'Queried'" [class.bad]="askKind() === 'Rejected'" (click)="decide(it, askKind(), askText)" [disabled]="busy() || !askText.trim()">Confirm</button><button type="button" class="btn ghost sm" (click)="asking.set(null)">Cancel</button></div>
                 </div>
               } @else if (it.decisionComment && it.decisionStatus !== 'Approved') { <div class="muted sm">“{{ it.decisionComment }}”</div> }
-            } @else if (it.decisionStatus !== 'Pending') {
+            } @else if (it.decisionStatus === 'Rejected') {
+              <div class="rej"><b>Rejected{{ b.directorName ? ' by ' + b.directorName : '' }}</b><span>{{ it.decisionComment || 'No reason given' }}</span></div>
+            } @else if (it.decisionStatus !== 'Pending' && !it.queryQuestion) {
               <div class="muted sm">{{ it.decisionStatus }}@if (it.decisionComment) { — “{{ it.decisionComment }}” }</div>
+            }
+            @if (it.queryQuestion) {
+              <div class="qa q"><span class="muted sm">❓ {{ it.queryAskedByName || 'Director' }}@if (it.queryAskedAt) { · {{ it.queryAskedAt | date:'d MMM HH:mm' }} }</span><div>{{ it.queryQuestion }}</div></div>
+              @if (it.queryResponse) { <div class="qa a"><span class="muted sm">↩ {{ it.queryRespondedByName }}@if (it.queryRespondedAt) { · {{ it.queryRespondedAt | date:'d MMM HH:mm' }} }</span><div>{{ it.queryResponse }}</div></div> }
+              @else if (b.status === 'QueriedByDirector' && it.decisionStatus === 'Queried' && canAnswer()) {
+                <div class="askbox">
+                  <label class="f">Your answer for the director <textarea rows="2" [(ngModel)]="answers[it.id]" placeholder="Answer the query, or say what you changed"></textarea></label>
+                  <button type="button" class="btn sm" (click)="answer(it)" [disabled]="busy() || !(answers[it.id] || '').trim()">Send answer</button>
+                </div>
+              }
             }
           </div>
         }
@@ -101,7 +136,8 @@ import { AuthStore } from '../core/auth';
           } @else {
             <ul class="facts">
               <li>{{ b.companyName }} pays <b>{{ approvedAmount() | currency:'ZAR':'R ':'1.2-2' }}</b> across <b>{{ count('Approved') }}</b> approved payment{{ count('Approved') === 1 ? '' : 's' }}.</li>
-              @if (count('Queried')) { <li class="w">{{ count('Queried') }} queried → the whole pack goes back to the preparer.</li> }
+              @if (count('Queried')) { <li class="w">{{ count('Queried') }} queried → @if (count('Approved')) { moved to a pack of their own and sent to the preparer / accountant to answer; they come back to you once answered. } @else { the pack goes back for answers, then returns to you. }</li> }
+              @if (count('SentBack')) { <li>{{ count('SentBack') }} sent back by the accountant — not for your decision.</li> }
               @if (count('Rejected')) { <li class="w">{{ count('Rejected') }} rejected — excluded from payment.</li> }
               <li>After signing, the pack is locked and released to the treasurer.</li>
             </ul>
@@ -147,6 +183,11 @@ import { AuthStore } from '../core/auth';
     .ir { display: flex; justify-content: space-between; gap: 12px; } .sup { font-weight: 700; } .iamt { font-weight: 700; white-space: nowrap; }
     .prev { margin-top: 10px; } .docs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .doc { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
     .dec { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+    .item.dim { opacity: .85; } .dec.two { grid-template-columns: repeat(2, 1fr); }
+    .rej { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; background: var(--bad-bg); color: var(--bad); border-radius: 10px; padding: 10px 12px; font-size: 14px; } .rej span { color: var(--ink); }
+    .qa { margin-top: 10px; border-radius: 10px; padding: 10px 12px; font-size: 14px; } .qa.q { background: var(--warn-bg); } .qa.a { background: var(--bg); } .qa div { white-space: pre-wrap; }
+    .askbox textarea { min-height: 70px; }
+    .dls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .askbox { margin-top: 10px; } .btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .step { margin-top: 14px; } .step h2 { margin: 0 0 6px; font-size: 18px; } .step p { margin: 0 0 12px; }
     .facts { margin: 0 0 14px; padding-left: 18px; } .facts .w { color: var(--warn); }
@@ -168,6 +209,11 @@ export class PackPage implements OnInit {
   @ViewChild('pad') pad?: ElementRef<HTMLCanvasElement>;
   private drawing = false;
 
+  sendingBack = signal<number | null>(null); answers: Record<number, string> = {};
+  /** Who may answer a director's query here: the company accountant (or an admin) — the server checks it too. */
+  canAnswer = signal(false);
+  accLive = computed(() => this.b()?.items.filter(i => i.decisionStatus !== 'SentBack').length ?? 0);
+  accSendBack = computed(() => this.b()?.items.filter(i => i.decisionStatus !== 'SentBack' && i.accountantDecision === 'SentBack').length ?? 0);
   pending = computed(() => this.b()?.items.filter(i => i.decisionStatus === 'Pending').length ?? 0);
   approvedAmount = computed(() => this.b()?.items.filter(i => i.decisionStatus === 'Approved').reduce((s, i) => s + i.amount, 0) ?? 0);
   count(s: string) { return this.b()?.items.filter(i => i.decisionStatus === s).length ?? 0; }
@@ -183,6 +229,7 @@ export class PackPage implements OnInit {
     this.typedName = this.auth.user()?.name ?? '';
     const has = !!this.auth.user()?.hasSignature; this.hasSig.set(has); if (!has) this.sigMode.set('draw');
     if (has) this.api.blob(this.api.signatureUrl()).subscribe({ next: bl => this.sigSrc.set(URL.createObjectURL(bl)), error: () => { this.hasSig.set(false); this.sigMode.set('draw'); } });
+    this.api.meta().subscribe({ next: m => this.canAnswer.set(!!(m.me.accountant || m.me.clerk || m.me.isAdmin)), error: () => {} });
     this.load();
   }
   load() {
@@ -196,6 +243,23 @@ export class PackPage implements OnInit {
     this.api.blob(url).subscribe({
       next: bl => { this.pdfBusy.set(false); const u = URL.createObjectURL(bl); const w = window.open(u, '_blank'); if (!w) location.href = u; },
       error: () => { this.pdfBusy.set(false); alert("Couldn't open the document."); }
+    });
+  }
+  save(url: string, name: string) { this.pdfBusy.set(true); this.api.download(url, name, () => this.pdfBusy.set(false)); }
+  askSendBack(it: Item) { this.askText = it.accountantDecisionComment ?? ''; this.sendingBack.set(it.id); }
+  accDecide(it: Item, d: 'Approved' | 'SentBack' | 'Pending', comment?: string) {
+    const b = this.b()!; this.busy.set(true);
+    this.api.accountantDecide(b.id, it.id, d, comment?.trim() || undefined).subscribe({
+      next: nb => { this.b.set(nb); this.busy.set(false); this.sendingBack.set(null); },
+      error: e => { this.busy.set(false); alert(e?.error?.message ?? "Couldn't save that decision."); }
+    });
+  }
+  answer(it: Item) {
+    const b = this.b()!; const text = (this.answers[it.id] || '').trim(); if (!text) return;
+    this.busy.set(true);
+    this.api.answerQuery(b.id, it.id, text).subscribe({
+      next: nb => { this.b.set(nb); this.busy.set(false); delete this.answers[it.id]; if (nb.status === 'AwaitingDirector') this.done.set('Answered — every query is answered, so the pack is back with the director.'); },
+      error: e => { this.busy.set(false); alert(e?.error?.message ?? "Couldn't send the answer."); }
     });
   }
   ask(it: Item, kind: 'Queried' | 'Rejected') { this.askKind.set(kind); this.askText = it.decisionComment ?? ''; this.asking.set(it.id); }
@@ -229,7 +293,7 @@ export class PackPage implements OnInit {
   accountant(decision: 'approve' | 'query') {
     const b = this.b()!; this.busy.set(true);
     this.api.accountant(b.id, { decision, comment: this.comment.trim() || undefined, ...this.sigPayload() }).subscribe({
-      next: nb => { this.busy.set(false); this.b.set(nb); this.done.set(decision === 'approve' ? 'Approved — the pack has gone to the director(s) to sign.' : 'Sent back to the preparer with your note.'); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+      next: nb => { this.busy.set(false); this.b.set(nb); this.done.set(decision === 'approve' ? (nb.items.some(i => i.decisionStatus === 'SentBack') ? 'Approved — the approved payments have gone to the director(s); the sent-back ones are with the preparer.' : 'Approved — the pack has gone to the director(s) to sign.') : 'Sent back to the preparer with your note.'); window.scrollTo({ top: 0, behavior: 'smooth' }); },
       error: e => { this.busy.set(false); alert(e?.error?.message ?? "Couldn't complete that."); }
     });
   }

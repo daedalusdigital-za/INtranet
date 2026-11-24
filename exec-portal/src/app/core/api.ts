@@ -10,7 +10,13 @@ export interface InboxRow {
 export interface Doc { id: number; docType: string; title?: string; docTypeTitle?: string; isNotApplicable?: boolean; naReason?: string; originalFileName?: string; fileName: string; contentType?: string; size?: number; version?: number; }
 export interface Item {
   id: number; supplierName: string; invoiceNumbers?: string; description?: string; amount: number; bankName?: string; accountNumber?: string; accountHolder?: string; paymentReference?: string;
-  isUrgent?: boolean; paymentModeTitle?: string; payoutMethod?: 'EFT' | 'EWallet' | null; decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected'; decisionComment?: string;
+  isUrgent?: boolean; paymentModeTitle?: string; payoutMethod?: 'EFT' | 'EWallet' | null; decisionStatus: 'Pending' | 'Approved' | 'Queried' | 'Rejected' | 'SentBack'; decisionComment?: string;
+  complianceTitle?: string | null;
+  /** Accountant's call per payment (applied when they approve): SentBack payments return to the preparer. */
+  accountantDecision?: 'Approved' | 'SentBack' | null; accountantDecisionComment?: string | null;
+  /** Director's query and the preparer / accountant's answer. */
+  queryQuestion?: string | null; queryAskedByName?: string | null; queryAskedAt?: string | null; queryResponse?: string | null; queryRespondedByName?: string | null; queryRespondedAt?: string | null; queriedFromBatchNumber?: string | null;
+  resubmittedAsBatchNumber?: string | null;
   required: { key: string; title: string; filled: boolean }[]; documents: Doc[];
 }
 export interface Batch {
@@ -35,7 +41,23 @@ export interface PayBatch {
   id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; status: string; statusTitle: string; scheduledPayDate: string; overdue: boolean;
   directorName?: string; directorSignedAt?: string; paidAt?: string; approvedAmount: number; approvedItems: number; popDone: number; popMissing: number; items: PayLine[];
 }
-export interface PaySchedule { nextPayDay: string; totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number }; batches: PayBatch[]; }
+export interface IpDoc { id: number; docType: string; title: string; originalFileName?: string; uploadedAt: string; uploadedByName?: string; }
+/** A pack still being prepared or approved — read-only for Treasury. stage: 0 preparing, 1 accountant, 2 director. */
+export interface IpBatch {
+  id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; status: string; statusTitle: string; stage: 0 | 1 | 2; sentBack: boolean;
+  preparedByName?: string | null; accountantName?: string | null; returnReason?: string | null; requestedApproverNames?: string | null; requestedDirectorNames?: string | null;
+  amount: number; itemCount: number; documentCount: number; expectedPayDate: string; batchDocuments: IpDoc[];
+  items: { id: number; supplierName: string; amount: number; invoiceNumbers?: string | null; documents: IpDoc[] }[];
+}
+export interface PaySchedule {
+  nextPayDay: string; totals: { toLoad: number; toLoadCount: number; loaded: number; loadedCount: number; awaitingPop: number; awaitingPopCount: number; overdue: number; inProgress?: number; inProgressCount?: number };
+  batches: PayBatch[]; inProgress?: IpBatch[];
+}
+/** A payment the director queried: Open = needs an answer; WithDirector = answered and back with the director. */
+export interface QueryRow {
+  itemId: number; batchId: number; batchNumber: string; companyName: string; supplierName: string; invoiceNumbers?: string; amount: number;
+  question: string; askedBy?: string; askedAt?: string; answer?: string | null; answeredBy?: string | null; answeredAt?: string | null; fromBatch?: string | null; state: 'Open' | 'Answered' | 'WithDirector';
+}
 export interface HistoryBatch {
   id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; status: string; statusTitle: string; directorName?: string; paidAt?: string; closedAt?: string;
   amount: number; items: number; popDone: number; popMissing: number; lines: PayLine[];
@@ -57,6 +79,9 @@ export class Api {
   batch(id: number) { return this.http.get<Batch>(`${this.cr}/batches/${id}`); }
   decide(id: number, itemId: number, decision: string, comment?: string) { return this.http.post<Batch>(`${this.cr}/batches/${id}/items/${itemId}/decision`, { decision, comment }); }
   sign(id: number, body: { typedName: string; comment?: string; signatureImageBase64?: string; useSavedSignature: boolean }) { return this.http.post<Batch>(`${this.cr}/batches/${id}/sign`, body); }
+  accountantDecide(id: number, itemId: number, decision: string, comment?: string) { return this.http.post<Batch>(`${this.cr}/batches/${id}/items/${itemId}/accountant-decision`, { decision, comment }); }
+  queries() { return this.http.get<QueryRow[]>(`${this.cr}/queries`); }
+  answerQuery(id: number, itemId: number, answer: string) { return this.http.post<Batch>(`${this.cr}/batches/${id}/items/${itemId}/query-answer`, { answer }); }
   accountant(id: number, body: { decision: 'approve' | 'query'; comment?: string; directorUserIds?: number[]; signatureImageBase64?: string; useSavedSignature: boolean }) { return this.http.post<Batch>(`${this.cr}/batches/${id}/accountant`, body); }
 
   // Read-only director views
@@ -77,6 +102,17 @@ export class Api {
     });
   }
   reviewPdfUrl(id: number) { return `${this.cr}/batches/${id}/review-pack.pdf`; }
+  approvalSheetUrl(id: number) { return `${this.cr}/batches/${id}/approval-sheet.pdf`; }
+  signedPackUrl(id: number) { return `${this.cr}/batches/${id}/signed-pack.pdf`; }
+  schedulePdfUrl(id: number) { return `${this.cr}/batches/${id}/schedule.pdf`; }
+  documentsZipUrl(id: number) { return `${this.cr}/batches/${id}/documents.zip`; }
+  /** Fetch a file with the exec token and save it under a name (ZIP / PDF downloads). */
+  download(url: string, name: string, done?: (ok: boolean) => void) {
+    this.blob(url).subscribe({
+      next: bl => { const a = document.createElement('a'); a.href = URL.createObjectURL(bl); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000); done?.(true); },
+      error: () => { done?.(false); alert("Couldn't download that."); }
+    });
+  }
   /** One payment: approval sheet + every PDF attached to it. */
   itemReviewUrl(id: number, itemId: number) { return `${this.cr}/batches/${id}/items/${itemId}/review.pdf`; }
   fileUrl(id: number, docId: number) { return `${this.cr}/batches/${id}/documents/${docId}/file`; }
