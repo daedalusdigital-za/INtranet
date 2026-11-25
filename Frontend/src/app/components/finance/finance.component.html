@@ -37,9 +37,9 @@
   <div class="kpi-grid animate-in delay-1">
     <button class="kpi kpi-debtors" (click)="goTab('aging')">
       <div class="kpi-head"><mat-icon>call_received</mat-icon><span>Debtors · owed to us</span></div>
-      <div class="kpi-value">{{ ov.debtors.total | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-value" [matTooltip]="(ov.debtors.total | currency:'ZAR':'R':'1.0-0') ?? ''" [countUp]="rAbbr(ov.debtors.total)"></div>
       @if (ov.debtors.companiesLoaded > 0) {
-        <div class="kpi-bar"><span class="seg cur" [style.width.%]="barPct(ov.debtors.current, ov.debtors.total)"></span><span class="seg od" [style.width.%]="barPct(ov.debtors.overdue - ov.debtors.d120, ov.debtors.total)"></span><span class="seg old" [style.width.%]="barPct(ov.debtors.d120, ov.debtors.total)"></span></div>
+        <div class="kpi-bar">@for (g of agingSegs(ov.debtors); track g.cls) {<span [class]="'seg ' + g.cls" [style.width.%]="g.pct"></span>}</div>
         <div class="kpi-foot">
           <span><b>{{ debtorsOverduePct }}%</b> overdue · <b>{{ ov.debtors.d120 | currency:'ZAR':'R':'1.0-0' }}</b> at 120+ days</span>
           <span class="kpi-sub">{{ ov.debtors.companiesLoaded }} of 4 companies · oldest aging {{ ov.debtors.oldestAsOf | date:'d MMM' }}</span>
@@ -50,8 +50,8 @@
     </button>
 
     <button class="kpi kpi-cash" (click)="goTab('remittances')">
-      <div class="kpi-head"><mat-icon>savings</mat-icon><span>Received this month</span></div>
-      <div class="kpi-value">{{ ov.remittances.thisMonthAmount | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-head"><mat-icon class="money-in">south_west</mat-icon><span>Received this month</span></div>
+      <div class="kpi-value money-in" [matTooltip]="(ov.remittances.thisMonthAmount | currency:'ZAR':'R':'1.0-0') ?? ''" [countUp]="rAbbr(ov.remittances.thisMonthAmount)"></div>
       <div class="kpi-foot">
         <span>on <b>{{ ov.remittances.thisMonth }}</b> remittance{{ ov.remittances.thisMonth === 1 ? '' : 's' }}</span>
         <span class="kpi-sub">{{ ov.remittances.new > 0 ? ov.remittances.new + ' new to allocate' : 'All remittances allocated' }}</span>
@@ -60,7 +60,7 @@
 
     <button class="kpi kpi-requests" [class.hot]="ov.pods.unlinked > 0" (click)="goTab('pods')">
       <div class="kpi-head"><mat-icon>fact_check</mat-icon><span>PODs not linked</span></div>
-      <div class="kpi-value">{{ ov.pods.unlinked }}</div>
+      <div class="kpi-value" [countUp]="ov.pods.unlinked"></div>
       <div class="kpi-foot">
         <span>deliveries without an invoice match</span>
         <span class="kpi-sub">{{ ov.pods.unlinked > 0 ? 'Link them so collections can be proven' : 'Every POD is matched' }}</span>
@@ -69,7 +69,7 @@
 
     <button class="kpi kpi-creditors" (click)="goTab('aging')">
       <div class="kpi-head"><mat-icon>warning_amber</mat-icon><span>120+ days</span></div>
-      <div class="kpi-value">{{ ov.debtors.d120 | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-value" [matTooltip]="(ov.debtors.d120 | currency:'ZAR':'R':'1.0-0') ?? ''" [countUp]="rAbbr(ov.debtors.d120)"></div>
       <div class="kpi-foot">
         <span><b>{{ barPct(ov.debtors.d120, ov.debtors.total) | number:'1.0-0' }}%</b> of the book is at risk</span>
         <span class="kpi-sub">Oldest buckets across all companies</span>
@@ -125,10 +125,10 @@
           @for (c of ov.debtors.byCompany; track c.company) {
             <li class="co" (click)="goTab('aging')">
               <div class="co-top">
-                <span class="co-name">{{ c.company }}</span>
+                <span class="co-name"><img class="co-logo" [src]="companyLogo(c.company)" alt="" width="22" height="22">{{ c.company }}</span>
                 <span class="co-total">{{ c.total | currency:'ZAR':'R':'1.0-0' }}</span>
               </div>
-              <div class="co-bar"><span class="seg cur" [style.width.%]="barPct(c.current, c.total)" matTooltip="Current"></span><span class="seg od" [style.width.%]="barPct(c.overdue - c.d120, c.total)" matTooltip="30–120 days"></span><span class="seg old" [style.width.%]="barPct(c.d120, c.total)" matTooltip="120+ days"></span></div>
+              <div class="co-bar">@for (g of agingSegs(c); track g.cls) {<span [class]="'seg ' + g.cls" [style.width.%]="g.pct" [matTooltip]="g.label + ' · ' + (g.pct | number:'1.0-0') + '%'"></span>}</div>
               <div class="co-foot">
                 <span>{{ barPct(c.overdue, c.total) | number:'1.0-0' }}% overdue · {{ c.d120 | currency:'ZAR':'R':'1.0-0' }} at 120+</span>
                 <span class="co-asof" [class.stale]="c.stale" [matTooltip]="c.stale ? 'This aging is more than 2 weeks old — upload a fresh export' : ''">{{ c.customerCount }} customers · as at {{ c.asOfDate | date:'d MMM' }}@if (c.stale) { <mat-icon>update</mat-icon> }</span>
@@ -136,7 +136,7 @@
             </li>
           }
         </ul>
-        <div class="legend"><span><i class="cur"></i>Current</span><span><i class="od"></i>30–120 days</span><span><i class="old"></i>120+ days</span></div>
+        <div class="legend"><span><i class="cur"></i>Current</span><span><i class="d30"></i>30–89 days</span><span><i class="d90"></i>90–119 days</span><span><i class="old"></i>120+ days</span></div>
       }
     </section>
   </div>
@@ -146,7 +146,7 @@
   <div class="kpi-grid animate-in delay-1">
     <button class="kpi kpi-creditors" (click)="goToCreditors()">
       <div class="kpi-head"><mat-icon>call_made</mat-icon><span>Creditors · payable</span></div>
-      <div class="kpi-value">{{ ov.creditors.totalPayable | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-value" [matTooltip]="(ov.creditors.totalPayable | currency:'ZAR':'R':'1.0-0') ?? ''" [countUp]="rAbbr(ov.creditors.totalPayable)"></div>
       <div class="kpi-foot kpi-breakdown">
         <span>Supplier invoices <b>{{ ov.creditors.unpaidInvoices | currency:'ZAR':'R':'1.0-0' }}</b></span>
         <span>Requisitions <b>{{ ov.creditors.requisitions | currency:'ZAR':'R':'1.0-0' }}</b></span>
@@ -157,7 +157,7 @@
 
     <button class="kpi kpi-requests" [class.hot]="ov.invoices.paymentRequested > 0" (click)="openRequestedPayments()">
       <div class="kpi-head"><mat-icon>request_quote</mat-icon><span>Payment requests waiting</span></div>
-      <div class="kpi-value">{{ ov.invoices.paymentRequested }}</div>
+      <div class="kpi-value" [countUp]="ov.invoices.paymentRequested"></div>
       <div class="kpi-foot">
         <span>{{ ov.invoices.paymentRequestedAmount | currency:'ZAR':'R':'1.0-0' }} asked by departments</span>
         <span class="kpi-sub">{{ ov.invoices.paymentRequested > 0 ? 'Click to review, pay or send back' : 'Nothing waiting on Finance' }}</span>
@@ -166,7 +166,7 @@
 
     <button class="kpi kpi-debtors" [class.hot]="ov.requisitions.requested > 0" (click)="goTab('approvals', 'requisitions')">
       <div class="kpi-head"><mat-icon>receipt_long</mat-icon><span>Requisitions to pay</span></div>
-      <div class="kpi-value">{{ ov.requisitions.requested }}</div>
+      <div class="kpi-value" [countUp]="ov.requisitions.requested"></div>
       <div class="kpi-foot">
         <span>{{ ov.requisitions.requestedAmount | currency:'ZAR':'R':'1.0-0' }} petty cash / e-wallet / diesel</span>
         <span class="kpi-sub">{{ quoteCounts.pending }} quotation request{{ quoteCounts.pending === 1 ? '' : 's' }} also pending</span>
@@ -174,8 +174,8 @@
     </button>
 
     <button class="kpi kpi-cash" (click)="selectedStatus='Paid'; goTab('invoices'); applyFilters()">
-      <div class="kpi-head"><mat-icon>savings</mat-icon><span>Paid out this month</span></div>
-      <div class="kpi-value">{{ ov.invoices.paidThisMonth | currency:'ZAR':'R':'1.0-0' }}</div>
+      <div class="kpi-head"><mat-icon class="money-out">north_east</mat-icon><span>Paid out this month</span></div>
+      <div class="kpi-value money-out" [matTooltip]="(ov.invoices.paidThisMonth | currency:'ZAR':'R':'1.0-0') ?? ''" [countUp]="rAbbr(ov.invoices.paidThisMonth)"></div>
       <div class="kpi-foot">
         <span>to suppliers on <b>{{ ov.invoices.paid }}</b> paid invoice{{ ov.invoices.paid === 1 ? '' : 's' }} total</span>
         <span class="kpi-sub">{{ ov.invoices.overdue }} overdue · {{ ov.invoices.unpaidAmount | currency:'ZAR':'R':'1.0-0' }} still unpaid</span>

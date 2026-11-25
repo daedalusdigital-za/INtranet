@@ -15,6 +15,7 @@ import { ConfirmService } from '../../ui/confirm.service';
 import { ToastService } from '../../ui/toast.service';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { AvatarComponent } from '../../ui/avatar/avatar.component';
 
 // Use the bundled pdf.js worker so we can render PDFs into scrollable canvases
 // (an <iframe> viewer scrolls internally and detaches the annotation overlay).
@@ -43,7 +44,7 @@ type ViewerTool = 'none' | 'annotate' | 'sign' | 'stack';
 @Component({
   selector: 'app-paperless',
   standalone: true,
-  imports: [CommonModule, FormsModule, EmptyStateComponent, SkeletonRowsComponent],
+  imports: [CommonModule, FormsModule, EmptyStateComponent, SkeletonRowsComponent, AvatarComponent],
   templateUrl: './paperless.component.html',
   styleUrls: ['./paperless.component.scss']
 })
@@ -653,6 +654,19 @@ export class PaperlessComponent {
   });
 
   // ── Status helpers ─────────────────────────────────────────
+  /** Steps of the status tracker shown on each document card. */
+  readonly trackerSteps = ['Draft', 'Sent', 'Signed', 'Done'];
+  /** Position of a status on the tracker; -1 hides it (declined / cancelled). */
+  stepIndex(s: PaperlessStatus): number {
+    switch (s) {
+      case 'draft': return 0;
+      case 'out_for_signature': return 1;
+      case 'in_progress': return 2;
+      case 'completed': return 3;
+      default: return -1;
+    }
+  }
+
   statusLabel(s: PaperlessStatus): string {
     return {
       draft: 'Draft',

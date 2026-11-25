@@ -35,6 +35,7 @@ import { SALES_SECTIONS } from '../../sales/sales-sections';
 import { STOCK_SECTIONS } from '../../stock-management/stock-sections';
 import { SETTINGS_SECTIONS } from '../../settings/settings-sections';
 import { Subscription } from 'rxjs';
+import { moduleForUrl } from '../../../ui/module-accent';
 
 interface NavItem {
   label: string;
@@ -87,7 +88,7 @@ interface NavGroup {
           <div class="sb-group">{{ group.label }}</div>
           @for (item of group.items; track item.label) {
             @if (item.action === 'paperless') {
-              <button type="button" class="sb-item" [class.active]="paperless.isOpen('right')"
+              <button type="button" class="sb-item" [attr.data-module]="navModule(item)" [class.active]="paperless.isOpen('right')"
                       (click)="paperless.toggle('right'); mobileOpen = false"
                       [matTooltip]="collapsed ? item.label : ''" matTooltipPosition="right">
                 <mat-icon>{{ item.icon }}</mat-icon><span class="sb-label">{{ item.label }}</span>
@@ -95,14 +96,14 @@ interface NavGroup {
             } @else if (item.route === '/finance') {
               <!-- Finance opens on Debtors when ?side= is absent, so its active state is worked out here
                    rather than by routerLinkActive (which would light Finance, not Debtors). -->
-              <a class="sb-item" [class.sb-sub]="item.sub" [routerLink]="item.route" [queryParams]="item.query ?? null"
+              <a class="sb-item" [attr.data-module]="navModule(item)" [class.sb-sub]="item.sub" [routerLink]="item.route" [queryParams]="item.query ?? null"
                  [class.active]="financeNavActive(item)" [attr.aria-current]="financeNavActive(item) ? 'page' : null"
                  (click)="onNavClick()" [matTooltip]="collapsed ? item.label : ''" matTooltipPosition="right">
                 @if (!item.sub) { <mat-icon>{{ item.icon }}</mat-icon> }
                 <span class="sb-label">{{ item.label }}</span>
               </a>
             } @else {
-              <a class="sb-item" [class.sb-sub]="item.sub" [routerLink]="item.route" [queryParams]="item.query ?? null"
+              <a class="sb-item" [attr.data-module]="navModule(item)" [class.sb-sub]="item.sub" [routerLink]="item.route" [queryParams]="item.query ?? null"
                  routerLinkActive="active" [routerLinkActiveOptions]="item.query ? queryMatch : item.exact ? exactMatch : subsetMatch"
                  (click)="onNavClick()" [matTooltip]="collapsed ? item.label : ''" matTooltipPosition="right">
                 @if (!item.sub) { <mat-icon>{{ item.icon }}</mat-icon> }
@@ -248,7 +249,7 @@ interface NavGroup {
                 [matBadgeHidden]="totalUnreadCount === 0"
                 (click)="toggleNotifications($event)"
                 matTooltip="Notifications">
-          <mat-icon>notifications</mat-icon>
+          <mat-icon [class.wiggle-once]="bellWiggle">notifications</mat-icon>
         </button>
 
         @if (showNotifications) {
@@ -460,7 +461,7 @@ interface NavGroup {
       z-index: 1001;
       display: flex;
       flex-direction: column;
-      background: var(--nav-bg);
+      background: linear-gradient(180deg, var(--sidebar-top), var(--sidebar-bottom));
       color: var(--nav-text);
       padding: 14px 10px 10px;
       transition: width 0.18s ease, transform 0.2s ease;
@@ -530,9 +531,17 @@ interface NavGroup {
     }
     .sb-item:hover { background: var(--nav-hover); color: var(--color-on-dark); }
     .sb-item:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
-    .sb-item mat-icon { font-size: 20px; width: 20px; height: 20px; color: var(--nav-text-dim); flex: none; }
-    .sb-item.active { background: var(--nav-active); color: var(--color-on-dark); }
-    .sb-item.active mat-icon { color: var(--color-focus); }
+    /* Visual refresh: each icon in its module accent (lightened for the dark rail) at 80%;
+       the active item gets the full accent, a soft glow and a 3px bar on the left. */
+    .sb-item { position: relative; transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease); }
+    .sb-item mat-icon { font-size: 20px; width: 20px; height: 20px; flex: none; color: color-mix(in srgb, var(--accent) 62%, #ffffff); opacity: 0.8; transition: opacity var(--fast) var(--ease), color var(--fast) var(--ease); }
+    .sb-item:hover mat-icon { opacity: 1; }
+    .sb-item.active { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--color-on-dark);
+      box-shadow: 0 0 18px -6px color-mix(in srgb, var(--accent) 70%, transparent); }
+    .sb-item.active mat-icon { color: color-mix(in srgb, var(--accent) 45%, #ffffff); opacity: 1; font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .sb-item.active:not(.sb-sub)::after { content: ''; position: absolute; left: -10px; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0;
+      background: color-mix(in srgb, var(--accent) 55%, #ffffff); animation: refresh-bar-in var(--base) var(--ease) both; }
+    @keyframes refresh-bar-in { from { transform: scaleY(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
     .sb-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .sb-count {
       font: 600 11px var(--font-mono);
@@ -833,6 +842,9 @@ interface NavGroup {
 export class NavbarComponent implements OnInit, OnDestroy {
   currentUser: any = null;
   totalUnreadCount: number = 0;
+  /** Visual refresh: the bell wiggles once when the count goes up (not on first load). */
+  bellWiggle = false;
+  private bellPrimed = false;
   unreadMessagesCount: number = 0;
   showMessages: boolean = false;
   showNotifications: boolean = false;
@@ -917,6 +929,9 @@ export class NavbarComponent implements OnInit, OnDestroy {
    * side=debtors, Creditors for side=creditors. Finance is only the parent: it's lit just
    * for a side neither sub-item covers.
    */
+  /** Visual refresh: the module an item belongs to, for its icon colour (styles/_refresh.scss). */
+  navModule(item: NavItem): string | null { return item.route ? moduleForUrl(item.route) : 'docs'; }
+
   financeNavActive(item: NavItem): boolean {
     const tree = this.router.parseUrl(this.router.url);
     const path = '/' + (tree.root.children['primary']?.segments.map(s => s.path).join('/') ?? '');
@@ -1124,6 +1139,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
         this.notifications = notifications;
       }),
       this.notificationService.totalUnread$.subscribe(count => {
+        if (count > this.totalUnreadCount && this.bellPrimed) { this.bellWiggle = false; setTimeout(() => this.bellWiggle = true); }
+        this.bellPrimed = true;
         this.totalUnreadCount = count;
       }),
       this.notificationService.loading$.subscribe(loading => {

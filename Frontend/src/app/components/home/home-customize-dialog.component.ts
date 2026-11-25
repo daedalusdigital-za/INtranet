@@ -194,13 +194,14 @@ const WIDGETS_BY_TYPE = (type: string) => widgetMeta(type as WidgetType)?.name ?
     .grp-note a { color: var(--color-primary); font-weight: 700; }
     .card.lib { border-color: var(--color-primary-soft); background: linear-gradient(180deg, var(--color-primary-soft) 0, var(--color-surface) 48px); }
     .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-2); }
-    .card { display: grid; grid-template-columns: auto 1fr; gap: 4px var(--space-3); align-items: center; padding: 12px; border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface); }
+    .card { display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto; gap: 4px var(--space-3); align-items: start; padding: 12px; border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface); }
     .card.sel { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-soft); }
     .card.used { opacity: .7; }
     .card-ic { color: var(--color-primary); }
     .card-t { font-size: var(--text-md); font-weight: 700; color: var(--color-text); display: grid; gap: 2px; }
     .card-t small { font-size: var(--text-xs); font-weight: 500; color: var(--color-text-3); line-height: 1.4; }
-    .card button, .card .on { grid-column: 2; justify-self: start; margin-top: 4px; }
+    /* Buttons sit on the card's bottom row so they line up across a row whatever the description length. */
+    .card button, .card .on { grid-column: 2; grid-row: 2; justify-self: start; align-self: end; margin-top: 8px; }
     .on { font-size: var(--text-xs); font-weight: 700; color: var(--color-ok); }
     .setup { margin-top: var(--space-4); padding: var(--space-4); border: 1px solid var(--color-primary); border-radius: var(--radius-md); background: var(--color-primary-soft); display: grid; gap: var(--space-2); }
     .setup h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--text-md); font-weight: 750; color: var(--color-text); }

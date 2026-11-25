@@ -9,7 +9,8 @@ import { MatDialog } from '@angular/material/dialog';
 import { Subject, catchError, debounceTime, forkJoin, of } from 'rxjs';
 
 import { NavbarComponent } from '../shared/navbar/navbar.component';
-import { EmptyStateComponent } from '../shared/ui/empty-state.component';
+import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { AvatarComponent } from '../../ui/avatar/avatar.component';
 import { KpiItem, KpiStripComponent } from '../../ui/kpi-strip/kpi-strip.component';
 import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
@@ -79,15 +80,16 @@ interface Person { name: string; department: string; when: string; photo?: strin
   standalone: true,
   imports: [
     DatePipe, NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule, MatTooltipModule, NavbarComponent,
-    EmptyStateComponent, KpiStripComponent, StatusChipComponent, SkeletonRowsComponent,
+    EmptyStateComponent, AvatarComponent, KpiStripComponent, StatusChipComponent, SkeletonRowsComponent,
     FlowStartWidgetComponent, FlowTasksWidgetComponent, FlowRunsWidgetComponent, FlowKpiWidgetComponent,
     PaymentTrackerWidgetComponent, CurrencyWidgetComponent, SalesGraphWidgetComponent, SalesVsStockWidgetComponent, BirdsWidgetComponent
   ],
   template: `
     <app-navbar></app-navbar>
     <main class="home">
-      <div class="hello">
-        <div>
+      <div class="hello" [class]="'hello hello-' + daypart">
+        <span class="hello-deco" aria-hidden="true"></span>
+        <div class="hello-text">
           <p class="hello-date">{{ today | date:'EEEE d MMMM' }}</p>
           <h1>{{ greeting }}, {{ firstName }}</h1>
         </div>
@@ -109,6 +111,21 @@ interface Person { name: string; department: string; when: string; photo?: strin
           }
         </div>
       </div>
+
+      @if (birthdaysToday().length) {
+        <div class="bday-strip">
+          <span class="bday-ic" aria-hidden="true"><mat-icon class="icon-filled">cake</mat-icon></span>
+          <span class="bday-avs">
+            @for (p of birthdaysToday().slice(0, 5); track p.name) {
+              <app-avatar [name]="p.name" [photo]="p.photo ? 'data:image/jpeg;base64,' + p.photo : null" size="32" />
+            }
+          </span>
+          <span class="bday-t">
+            <b>Birthday today</b>
+            <small>Happy birthday, {{ birthdayNames() }}!</small>
+          </span>
+        </div>
+      }
 
       @if (editing()) {
         <p class="edit-hint"><mat-icon>info</mat-icon>Grab a widget by its title bar and drop it where you want it (the blue line shows where it will land). Use the size buttons to make it wider or narrower, the arrows to nudge it, and <b>×</b> to remove. Changes save automatically.</p>
@@ -190,8 +207,8 @@ interface Person { name: string; department: string; when: string; photo?: strin
           </section>
         } @empty {
           <div class="panel size-xl empty-home">
-            <app-empty-state icon="dashboard_customize" title="Your Home is empty" message="Add widgets to see what needs you today.">
-              <button mat-flat-button color="primary" (click)="openCustomize(0)"><mat-icon>add</mat-icon>Add widgets</button>
+            <app-empty-state icon="dashboard_customize" [illustration]="'tiles'" title="Your Home is empty" message="Add widgets to see what needs you today.">
+              <button mat-flat-button color="primary" class="empty-add" (click)="openCustomize(0)"><mat-icon>add</mat-icon>Add widgets</button>
             </app-empty-state>
           </div>
         }
@@ -327,14 +344,14 @@ interface Person { name: string; department: string; when: string; photo?: strin
     <ng-template #aroundTpl>
               @for (p of birthdaysSoon(); track p.name) {
                 <div class="row person">
-                  <span class="av">@if (p.photo) { <img [src]="'data:image/jpeg;base64,' + p.photo" alt=""> } @else { {{ initials(p.name) }} }</span>
+                  <app-avatar [name]="p.name" [photo]="p.photo ? 'data:image/jpeg;base64,' + p.photo : null" size="34" />
                   <span class="row-t">{{ p.name }}<small>Birthday {{ p.when }} · {{ p.department }}</small></span>
                   <mat-icon class="muted-ic" aria-hidden="true">cake</mat-icon>
                 </div>
               }
               @for (p of newStarters(); track p.name) {
                 <div class="row person">
-                  <span class="av">@if (p.photo) { <img [src]="'data:image/jpeg;base64,' + p.photo" alt=""> } @else { {{ initials(p.name) }} }</span>
+                  <app-avatar [name]="p.name" [photo]="p.photo ? 'data:image/jpeg;base64,' + p.photo : null" size="34" />
                   <span class="row-t">{{ p.name }}<small>Joined {{ p.when }} · {{ p.department }}</small></span>
                   <mat-icon class="muted-ic" aria-hidden="true">waving_hand</mat-icon>
                 </div>
@@ -348,15 +365,40 @@ interface Person { name: string; department: string; when: string; photo?: strin
     :host { display: block; }
     .home { max-width: 1240px; margin: 0 auto; padding: var(--space-5) var(--space-5) var(--space-8); display: grid; gap: var(--space-4); }
 
-    .hello { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
-    .hello-date { margin: 0 0 2px; font-size: var(--text-sm); font-weight: 600; color: var(--color-text-3); }
-    .hello h1 { margin: 0; font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--color-text); }
-    .hello-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+    /* Greeting banner: gradient by time of day (brand colours, white text in both themes). */
+    .hello { position: relative; overflow: hidden; isolation: isolate; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap;
+      padding: 22px 24px; border-radius: 16px; color: #fff; box-shadow: 0 12px 30px -14px rgba(15, 23, 42, .45), 0 2px 6px rgba(15, 23, 42, .08);
+      background: linear-gradient(120deg, #2563eb 0%, #7c3aed 100%); animation: refresh-rise-in 300ms var(--ease) both; }
+    .hello-morning { background: linear-gradient(120deg, #c2410c 0%, #e11d48 100%); }
+    .hello-day { background: linear-gradient(120deg, #2563eb 0%, #7c3aed 100%); }
+    .hello-evening { background: linear-gradient(120deg, #312e81 0%, #6d28d9 100%); }
+    .hello-deco { position: absolute; z-index: -1; right: -60px; top: -90px; width: 260px; height: 260px; border-radius: 50%; pointer-events: none;
+      background: radial-gradient(circle, rgba(255,255,255,.22) 0%, rgba(255,255,255,.06) 60%, transparent 70%); }
+    .hello-deco::after { content: ''; position: absolute; left: -90px; top: 150px; width: 120px; height: 120px; border-radius: 50%; background: rgba(255,255,255,.10); }
+    .hello-text { position: relative; min-width: 0; }
+    .hello-date { margin: 0 0 2px; font-size: var(--text-sm); font-weight: 600; color: rgba(255,255,255,.88); }
+    .hello h1 { margin: 0; font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.15); }
+    .hello-actions { position: relative; display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+    .hello .mat-mdc-outlined-button { --mdc-outlined-button-label-text-color: #fff; --mdc-outlined-button-outline-color: rgba(255,255,255,.55);
+      color: #fff !important; border-color: rgba(255,255,255,.55) !important; background: rgba(255,255,255,.10); }
+    .hello .mat-mdc-outlined-button:hover { background: rgba(255,255,255,.20); }
+    .hello .mat-mdc-unelevated-button { --mdc-filled-button-container-color: #fff; --mdc-filled-button-label-text-color: #1e293b;
+      background-color: #fff !important; color: #1e293b !important; }
     .sc { position: relative; }
-    .sc-flow { border-color: var(--color-primary) !important; color: var(--color-primary) !important; }
+    .hello .sc-flow { background: rgba(255,255,255,.24); border-color: #fff !important; }
     .sc-x { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; font-size: 14px; display: grid; place-items: center; border-radius: 50%; background: var(--color-danger); color: #fff; margin: 0 !important; }
-    .edit-btn { color: var(--color-text-3); }
-    .done-btn { border-color: var(--color-ok) !important; color: var(--color-ok) !important; }
+    .edit-btn { color: rgba(255,255,255,.92) !important; }
+    .hello .done-btn { background: #fff !important; color: #15803d !important; border-color: #fff !important; }
+
+    .bday-strip { display: flex; align-items: center; gap: var(--space-3); padding: 10px 16px; border-radius: var(--radius-card); box-shadow: var(--shadow-card);
+      background: linear-gradient(90deg, var(--color-cat-pink-soft), var(--color-surface) 70%); animation: refresh-rise-in 300ms var(--ease) both; }
+    .bday-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--color-surface); color: var(--color-cat-pink); }
+    .bday-ic mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .bday-avs { display: flex; flex: none; }
+    .bday-avs app-avatar { border-radius: 50%; box-shadow: 0 0 0 2px var(--color-surface); }
+    .bday-avs app-avatar + app-avatar { margin-left: -8px; }
+    .bday-t { min-width: 0; display: grid; gap: 1px; font-size: var(--text-md); color: var(--color-text); }
+    .bday-t small { font-size: var(--text-xs); font-weight: 500; color: var(--color-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .edit-hint { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 14px; border-radius: var(--radius-md); background: var(--color-primary-soft); color: var(--color-primary); font-size: var(--text-sm); font-weight: 600; }
     .edit-hint mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
@@ -387,12 +429,13 @@ interface Person { name: string; department: string; when: string; photo?: strin
     .rm { width: 28px; height: 28px; padding: 0; margin-left: 4px; color: var(--color-text-3); }
     .rm mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .empty-home { padding: var(--space-6); display: grid; place-items: center; }
+    .empty-home .empty-add { margin-top: var(--space-3); }
     .link-row { text-decoration: none; }
     .link-row:hover { background: var(--color-surface-2); }
     .note { display: block; width: 100%; min-height: 120px; padding: var(--space-3) var(--space-4); border: 0; resize: vertical; background: var(--color-warn-soft); color: var(--color-text); font: 500 var(--text-md)/1.5 var(--font-body); }
     .note:focus { outline: none; }
 
-    .panel { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); overflow: hidden; min-width: 0; }
+    .panel { background: var(--color-surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); overflow: hidden; min-width: 0; }
     .panel-h { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 12px var(--space-4); border-bottom: 1px solid var(--color-line); }
     .panel-h h2 { margin: 0; display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-md); font-weight: 750; letter-spacing: 0; color: var(--color-text); }
     .count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--color-primary-soft); color: var(--color-primary); font-size: var(--text-xs); font-weight: 800; }
@@ -449,8 +492,6 @@ interface Person { name: string; department: string; when: string; photo?: strin
     .ann p { margin: 0 0 6px; font-size: var(--text-sm); line-height: 1.5; color: var(--color-text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .ann small { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-3); }
 
-    .av { width: 34px; height: 34px; flex: none; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--color-primary-soft); color: var(--color-primary); font-size: var(--text-xs); font-weight: 800; }
-    .av img { width: 100%; height: 100%; object-fit: cover; }
     .muted-ic { color: var(--color-text-3); font-size: var(--text-xl); width: 18px; height: 18px; }
 
     @media (max-width: 1000px) {
@@ -459,6 +500,7 @@ interface Person { name: string; department: string; when: string; photo?: strin
     }
     @media (max-width: 600px) {
       .home { padding: var(--space-4) var(--space-4) var(--space-6); }
+      .hello { padding: 18px 16px; }
       .hello-actions { width: 100%; }
       .size-sm { grid-column: span 12; }
     }
@@ -494,6 +536,8 @@ export class HomeComponent implements OnInit {
 
   readonly today = new Date();
   readonly greeting = this.today.getHours() < 12 ? 'Good morning' : this.today.getHours() < 17 ? 'Good afternoon' : 'Good evening';
+  /** Banner tone: sunrise in the morning, brand blue in the day, indigo in the evening. */
+  readonly daypart: 'morning' | 'day' | 'evening' = this.today.getHours() < 12 ? 'morning' : this.today.getHours() < 17 ? 'day' : 'evening';
   readonly firstName = (this.auth.currentUserValue?.name ?? '').split(' ')[0] || 'there';
   private readonly userId = this.auth.currentUserValue?.userId ?? 0;
   readonly canLogistics = this.auth.hasModulePermission('logistics');
@@ -578,7 +622,7 @@ export class HomeComponent implements OnInit {
       items.push({
         label: 'Deliveries today', icon: 'local_shipping',
         value: d ? d.total : (this.deliveriesFailed() ? '–' : null), unit: d?.total === 1 ? 'load' : 'loads',
-        note: d ? `${d.delivered} delivered so far` : undefined
+        link: { label: d ? `${d.delivered} delivered so far` : 'See loads', route: '/logistics/loads' }
       });
       items.push({
         label: 'Overdue loads', icon: 'schedule',
@@ -599,7 +643,7 @@ export class HomeComponent implements OnInit {
       label: 'Your tasks due this week', icon: 'task_alt',
       value: this.tasksLoading() ? null : week.total,
       tone: week.overdue ? 'warn' : 'default',
-      note: week.overdue ? `${week.overdue} overdue` : week.today ? `${week.today} due today` : undefined
+      action: { label: week.overdue ? `${week.overdue} overdue` : week.today ? `${week.today} due today` : 'Open tasks', run: () => this.openTodo() }
     });
     return items;
   });
@@ -982,6 +1026,14 @@ export class HomeComponent implements OnInit {
 
   pct(part: number, total: number): number {
     return total ? Math.round((part / total) * 1000) / 10 : 0;
+  }
+
+  /** "Anna", "Anna and Ben", "Anna, Ben and Cara", "Anna, Ben and 2 others" for the birthday strip. */
+  birthdayNames(): string {
+    const names = this.birthdaysToday().map(p => (p.name || '').split(' ')[0]).filter(Boolean);
+    if (names.length <= 2) return names.join(' and ');
+    if (names.length === 3) return `${names[0]}, ${names[1]} and ${names[2]}`;
+    return `${names[0]}, ${names[1]} and ${names.length - 2} others`;
   }
 
   initials(name: string): string {

@@ -19683,7 +19683,7 @@ export class LogisticsReportsDialog implements OnInit {
           <mat-icon>videocam</mat-icon>
           Live Camera Streaming
           <span class="live-badge">
-            <mat-icon class="live-dot">fiber_manual_record</mat-icon>
+            <span class="live-dot"></span>
             LIVE
           </span>
         </h2>
@@ -19763,7 +19763,7 @@ export class LogisticsReportsDialog implements OnInit {
                     {{ stream.cameraName }}
                   </span>
                   <span class="live-indicator">
-                    <mat-icon>fiber_manual_record</mat-icon>
+                    <span class="live-dot"></span>
                     LIVE
                   </span>
                 </div>
@@ -19873,12 +19873,8 @@ export class LogisticsReportsDialog implements OnInit {
       margin-left: 12px;
     }
     
-    .live-dot {
-      font-size: var(--text-xs) !important;
-      width: 12px !important;
-      height: 12px !important;
-      animation: pulse-live 1.5s infinite;
-    }
+    /* Visual refresh: global pulsing .live-dot, white on the header. */
+    .live-badge .live-dot { color: var(--color-on-primary); }
     
     @keyframes pulse-live {
       0%, 100% { opacity: 1; }
@@ -19984,12 +19980,7 @@ export class LogisticsReportsDialog implements OnInit {
       font-weight: 600;
     }
     
-    .stream-header .live-indicator mat-icon {
-      font-size: 10px;
-      width: 10px;
-      height: 10px;
-      animation: pulse-live 1.5s infinite;
-    }
+    .stream-header .live-indicator .live-dot { color: var(--color-danger); }
     
     .video-wrapper {
       position: relative;
@@ -21903,7 +21894,7 @@ export class WellyTripsheetWizardDialog {
             <mat-icon>lightbulb</mat-icon>
           </div>
           <div>
-            <h2>Welly Suggests</h2>
+            <h2>Ask Welly</h2>
             <span class="subtitle" *ngIf="!loading && suggestions">
               {{ suggestions.totalPending }} pending invoices across {{ suggestions.totalWarehouses }} warehouse(s)
             </span>
@@ -22445,7 +22436,7 @@ export class WellySuggestsDialog implements OnInit {
         <!-- ─── STEP 1: WAREHOUSE ─── -->
         <div class="ab-panel" *ngIf="!loading && !error && step === 1">
           <h3 class="ab-q">Where would you like to create tripsheets?</h3>
-          <p class="ab-hint">Pick a warehouse to see AI-grouped loads &mdash; or choose Custom / Welly Suggest. Click a card to continue.</p>
+          <p class="ab-hint">Pick a warehouse to see AI-grouped loads &mdash; or choose Custom / Ask Welly. Click a card to continue.</p>
           <div class="wh-grid">
             <div class="wh-card" *ngFor="let wh of warehouseCards"
                  [class.selected]="selectedWarehouse?.code === wh.code"
@@ -22988,7 +22979,7 @@ export class AiTripsheetBuilderDialog implements OnInit {
     { code: 'WH-WC',  name: 'Western Cape',  short: 'CPT', city: 'Cape Town', color: '#e53935', icon: 'warehouse', special: false },
     { code: 'WH-EC',  name: 'Eastern Cape',  short: 'PE',  city: 'Gqeberha', color: '#fb8c00', icon: 'warehouse', special: false },
     { code: 'CUSTOM', name: 'Custom Load',   short: 'Custom', tagline: 'Pick from every province', color: '#5e35b1', icon: 'tune', special: true },
-    { code: 'WELLY',  name: 'Welly Suggest', short: 'Welly', tagline: 'Auto-batched suggestions', color: '#ff6f00', icon: 'lightbulb', special: true }
+    { code: 'WELLY',  name: 'Ask Welly', short: 'Welly', tagline: 'Auto-batched suggestions', color: '#ff6f00', icon: 'lightbulb', special: true }
   ];
   // Province aliases for matching batches to a region card
   private regionProvinces: Record<string, string[]> = {
@@ -24288,7 +24279,7 @@ export class VehicleMaintenanceHistoryDialog {
         <div class="summary-strip">
           @if (liveStatus?.isMoving) {
             <div class="summary-chip live-chip">
-              <span class="dot"></span>
+              <span class="live-dot"></span>
               <span>LIVE · <strong>{{ liveStatus.speed | number:'1.0-0' }}</strong> km/h now</span>
             </div>
           }
@@ -24534,10 +24525,7 @@ export class VehicleMaintenanceHistoryDialog {
     /* Live "on the move now" styling */
     .top-progress { position: sticky; top: 0; z-index: 5; }
     .summary-chip.live-chip { background: var(--color-danger-soft); border-color: color-mix(in srgb, var(--color-danger) 35%, transparent); color: var(--color-danger); font-weight: 600; }
-    .summary-chip.live-chip .dot {
-      width: 9px; height: 9px; border-radius: 50%; background: var(--color-danger); display: inline-block;
-      margin-right: 2px; animation: live-blink 1.1s ease-in-out infinite;
-    }
+    .summary-chip.live-chip .live-dot { color: var(--color-danger); margin-right: 2px; }
     @keyframes live-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
     .empty-center.live h3 { color: var(--color-danger); }
     .empty-center.live .live-note { font-size: var(--text-xs); color: var(--color-text-3); max-width: 420px; }

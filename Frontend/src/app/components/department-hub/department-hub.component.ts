@@ -75,14 +75,18 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
           </div>
 
           <div class="header-stats">
-            <div class="stat-chip">
-              <mat-icon>folder</mat-icon>
-              <span>{{ folderCount }} Folders</span>
-            </div>
-            <div class="stat-chip">
-              <mat-icon>insert_drive_file</mat-icon>
-              <span>{{ fileCount }} Files</span>
-            </div>
+            @if (folderCount > 0) {
+              <div class="stat-chip">
+                <mat-icon>folder</mat-icon>
+                <span>{{ folderCount }} {{ folderCount === 1 ? 'Folder' : 'Folders' }}</span>
+              </div>
+            }
+            @if (fileCount > 0) {
+              <div class="stat-chip">
+                <mat-icon>insert_drive_file</mat-icon>
+                <span>{{ fileCount }} {{ fileCount === 1 ? 'File' : 'Files' }}</span>
+              </div>
+            }
           </div>
         </div>
 
@@ -703,8 +707,8 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     .file-icon-wrapper.pdf mat-icon { color: var(--color-danger); }
     .file-icon-wrapper.word { background: var(--color-primary-soft); }
     .file-icon-wrapper.word mat-icon { color: var(--color-primary); }
-    .file-icon-wrapper.excel { background: var(--color-ok-soft); }
-    .file-icon-wrapper.excel mat-icon { color: var(--color-ok); }
+    .file-icon-wrapper.excel, .file-icon-wrapper.csv { background: var(--color-ok-soft); }
+    .file-icon-wrapper.excel mat-icon, .file-icon-wrapper.csv mat-icon { color: var(--color-ok); }
     .file-icon-wrapper.powerpoint { background: var(--color-warn-soft); }
     .file-icon-wrapper.powerpoint mat-icon { color: var(--color-warn); }
     .file-icon-wrapper.image { background: var(--color-cat-purple-soft); }
@@ -798,7 +802,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     .col-name mat-icon.folder { color: var(--color-cat-amber); }
     .col-name mat-icon.pdf { color: var(--color-danger); }
     .col-name mat-icon.word { color: var(--color-primary); }
-    .col-name mat-icon.excel { color: var(--color-ok); }
+    .col-name mat-icon.excel, .col-name mat-icon.csv { color: var(--color-ok); }
     .col-name mat-icon.powerpoint { color: var(--color-warn); }
     .col-name mat-icon.image { color: var(--color-cat-purple); }
 

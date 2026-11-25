@@ -6,6 +6,7 @@ import { PaperlessComponent } from './components/paperless/paperless.component';
 import { Subscription, filter } from 'rxjs';
 import { AppearanceService } from './ui/appearance.service';
 import { AuthService } from './services/auth.service';
+import { moduleForUrl } from './ui/module-accent';
 
 @Component({
   selector: 'app-root',
@@ -32,7 +33,9 @@ export class AppComponent implements OnInit, OnDestroy {
       .pipe(filter(event => event instanceof NavigationEnd))
       .subscribe(() => {
         this.checkChatbotVisibility();
+        this.setModuleAccent();
       });
+    this.setModuleAccent();
     // Permissions refresh shortly after sign-in; re-evaluate so Welly appears/disappears accordingly
     this.userSubscription = this.auth.currentUser$.subscribe(() => this.checkChatbotVisibility());
   }
@@ -42,6 +45,11 @@ export class AppComponent implements OnInit, OnDestroy {
     this.userSubscription?.unsubscribe();
   }
   private userSubscription?: Subscription;
+
+  /** Visual refresh: the module's accent colour follows the route (styles/_refresh.scss). */
+  private setModuleAccent(): void {
+    document.body.dataset['module'] = moduleForUrl(this.router.url);
+  }
 
   private checkChatbotVisibility(): void {
     const currentUser = localStorage.getItem('currentUser') || localStorage.getItem('user');

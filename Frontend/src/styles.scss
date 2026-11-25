@@ -5,6 +5,7 @@
 @use 'styles/material-tokens';
 @use 'styles/shell';
 @use 'styles/dark';
+@use 'styles/refresh';
 
 /* Compact (design review D-04, Appearance > Rows): tables tighten through --row-pad-y in
    styles/_tokens.scss, and Material's fields, buttons, lists and tables step down too.

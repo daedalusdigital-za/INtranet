@@ -24,6 +24,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { AvatarComponent } from '../../ui/avatar/avatar.component';
 import { environment } from '../../../environments/environment';
 import { EmployeeDirectoryComponent } from './employee-directory.component';
 import { DailyRegisterComponent } from './daily-register.component';
@@ -86,7 +87,8 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
     NavbarComponent,
     PageHeaderComponent,
     SkeletonRowsComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    AvatarComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -194,22 +196,34 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
             </div>
 
             <!-- Holistic attendance + discipline strip -->
-            <div class="holistic-strip">
-              <div class="hs-card hs-holistic" (click)="openDailyRegister()" matTooltip="Biometric clock-ins + manual registers">
-                <div class="hs-icon"><mat-icon>groups_2</mat-icon></div>
-                <div class="hs-body">
-                  <span class="hs-value">{{ hrOverview.attendance.holisticPresent ?? hrOverview.attendance.clockedInToday }}<small>/{{ hrOverview.workforce.totalEmployees }}</small></span>
-                  <span class="hs-label">Holistic Present</span>
-                  <span class="hs-sub">{{ hrOverview.attendance.clockedInToday }} clocked in · {{ hrOverview.attendance.manualPresent ?? 0 }} on register</span>
+            <div class="holistic-strip" [class.four]="!showHolisticCard">
+              <!-- Only shown when registers add to the clock-ins; otherwise it repeats "Present Today" above -->
+              @if (showHolisticCard) {
+                <div class="hs-card hs-holistic" (click)="openDailyRegister()" matTooltip="Biometric clock-ins + manual registers">
+                  <div class="hs-icon"><mat-icon>groups_2</mat-icon></div>
+                  <div class="hs-body">
+                    <span class="hs-value">{{ hrOverview.attendance.holisticPresent ?? hrOverview.attendance.clockedInToday }}<small>/{{ hrOverview.workforce.totalEmployees }}</small></span>
+                    <span class="hs-label">Holistic Present</span>
+                    <span class="hs-sub">{{ hrOverview.attendance.clockedInToday }} clocked in · {{ hrOverview.attendance.manualPresent ?? 0 }} on register</span>
+                  </div>
                 </div>
-              </div>
+              }
               <div class="hs-card hs-registers" (click)="openDailyRegister()" matTooltip="Manual registers submitted today">
                 <div class="hs-icon"><mat-icon>fact_check</mat-icon></div>
                 <div class="hs-body">
                   <span class="hs-value">{{ hrOverview.registers?.submittedSites ?? 0 }}</span>
                   <span class="hs-label">Registers Submitted</span>
                   @if (hrOverview.registers?.missingSites?.length) {
-                    <span class="hs-sub warn">Missing: {{ hrOverview.registers?.missingSites?.join(', ') }}</span>
+                    @let missing = hrOverview.registers?.missingSites ?? [];
+                    <span class="missing-head">{{ missing.length }} site{{ missing.length === 1 ? '' : 's' }} missing</span>
+                    <div class="missing-chips" [matTooltip]="missing.join(', ')">
+                      @for (site of missing.slice(0, 8); track site) {
+                        <span class="missing-chip">{{ site }}</span>
+                      }
+                      @if (missing.length > 8) {
+                        <span class="missing-chip more">+{{ missing.length - 8 }} more</span>
+                      }
+                    </div>
                   } @else {
                     <span class="hs-sub">All sites reported</span>
                   }
@@ -275,10 +289,35 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
                 <div class="cc-panel-head">
                   <div class="cc-panel-title"><mat-icon>schedule</mat-icon><h3>Today's Attendance</h3></div>
                 </div>
-                <div class="att-mini-stats">
-                  <div class="mini-stat"><span class="ms-val ms-green">{{ hrOverview.attendance.clockedInToday }}</span><span class="ms-lbl">Clocked in</span></div>
-                  <div class="mini-stat"><span class="ms-val ms-amber">{{ hrOverview.attendance.lateToday }}</span><span class="ms-lbl">Late</span></div>
-                  <div class="mini-stat"><span class="ms-val ms-red">{{ hrOverview.attendance.notClockedIn }}</span><span class="ms-lbl">Absent</span></div>
+                <!-- Attendance donut: on time / late / absent / on leave -->
+                @let donut = attendanceDonut();
+                <div class="att-donut-row">
+                  <svg class="att-donut" viewBox="0 0 120 120" role="img"
+                       [attr.aria-label]="hrOverview.attendance.clockedInToday + ' clocked in, ' + hrOverview.attendance.lateToday + ' late, ' + hrOverview.attendance.notClockedIn + ' absent, ' + hrOverview.leave.onLeaveToday + ' on leave'">
+                    <circle class="donut-track" cx="60" cy="60" r="46" />
+                    @for (seg of donut.segments; track seg.key) {
+                      @if (seg.len > 0) {
+                        <circle [attr.class]="'donut-seg seg-' + seg.key" cx="60" cy="60" r="46" pathLength="100"
+                                [attr.stroke-dasharray]="seg.len + ' ' + (100 - seg.len)"
+                                [attr.stroke-dashoffset]="-seg.start">
+                          <title>{{ seg.label }}: {{ seg.value }}</title>
+                        </circle>
+                      }
+                    }
+                    <text x="60" y="55" class="donut-num" text-anchor="middle" dominant-baseline="central">{{ hrOverview.attendance.clockedInToday }}</text>
+                    <text x="60" y="76" class="donut-cap" text-anchor="middle" dominant-baseline="central">clocked in</text>
+                  </svg>
+                  <div class="att-legend">
+                    @for (seg of donut.segments; track seg.key) {
+                      <div class="legend-row">
+                        <span class="legend-dot" [class]="'legend-dot seg-' + seg.key"></span>
+                        <span class="legend-lbl">{{ seg.label }}</span>
+                        <span class="legend-val">{{ seg.value }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+                <div class="att-mini-stats two">
                   <div class="mini-stat"><span class="ms-val">{{ hrOverview.attendance.earliestArrival || '–' }}</span><span class="ms-lbl">Earliest</span></div>
                   <div class="mini-stat"><span class="ms-val">{{ hrOverview.attendance.averageArrival || '–' }}</span><span class="ms-lbl">Average</span></div>
                 </div>
@@ -684,6 +723,30 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
         }
       </div>
 
+      <!-- Early birds: first five clock-ins today -->
+      @if (earlyBirds.length > 0) {
+        <div class="early-birds">
+          <div class="eb-head">
+            <span class="eb-icon"><mat-icon>wb_twilight</mat-icon></span>
+            <div>
+              <h3>Early birds</h3>
+              <span class="eb-sub">First in today</span>
+            </div>
+          </div>
+          <div class="eb-list">
+            @for (e of earlyBirds; track e.employeeId; let i = $index) {
+              <div class="eb-person" [matTooltip]="e.fullName + ' · ' + formatTime(e.timeIn)">
+                <app-avatar [name]="e.fullName" [photo]="e.photoBase64 ? 'data:image/jpeg;base64,' + e.photoBase64 : null" size="40" />
+                <div class="eb-info">
+                  <span class="eb-name">{{ e.fullName }}</span>
+                  <span class="eb-time"><b>#{{ i + 1 }}</b> · {{ formatTime(e.timeIn) }}</span>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
       <!-- Department Breakdown -->
       @if (metrics && metrics.departmentBreakdown.length > 0) {
         <div class="department-section">
@@ -760,6 +823,9 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
                   <div class="employee-info">
                     <div class="name-section">
                       <h3>{{ employee.fullName }}</h3>
+                      @if (anniversaryOf(employee); as ann) {
+                        <span class="anniv-badge" [matTooltip]="ann.tip"><mat-icon>cake</mat-icon>{{ ann.years }} yr{{ ann.years === 1 ? '' : 's' }}</span>
+                      }
                       @if (employee.isLate) {
                         <mat-icon class="late-badge" matTooltip="Late by {{ employee.lateMinutes }} min">schedule</mat-icon>
                       }
@@ -1168,16 +1234,18 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
       margin-bottom: var(--space-4);
     }
 
+    .holistic-strip.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
     @media (max-width: 1300px) {
-      .holistic-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .holistic-strip, .holistic-strip.four { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
 
     @media (max-width: 900px) {
-      .holistic-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .holistic-strip, .holistic-strip.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (max-width: 480px) {
-      .holistic-strip { grid-template-columns: minmax(0, 1fr); }
+      .holistic-strip, .holistic-strip.four { grid-template-columns: minmax(0, 1fr); }
     }
 
     .kpi-card,
@@ -1311,6 +1379,34 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
       font-weight: 600;
       color: var(--color-warn);
     }
+
+    /* Registers not yet submitted: a count and wrapping warn-tinted chips */
+    .missing-head {
+      margin-top: 4px;
+      font-size: var(--text-xs);
+      font-weight: 700;
+      color: var(--color-warn);
+    }
+    .missing-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .missing-chip {
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.6;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .missing-chip.more { background: transparent; box-shadow: inset 0 0 0 1px var(--color-warn); }
 
     /* Panels */
     .cc-grid {
@@ -1479,9 +1575,74 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
       margin-bottom: var(--space-4);
     }
 
+    .att-mini-stats.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
     @media (max-width: 480px) {
       .att-mini-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .att-mini-stats.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
+
+    /* Attendance donut */
+    .att-donut-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-5);
+      margin-bottom: var(--space-4);
+      flex-wrap: wrap;
+    }
+    .att-donut { width: 128px; height: 128px; flex: 0 0 128px; }
+    .donut-track { fill: none; stroke: var(--color-surface-2); stroke-width: 14; }
+    .donut-seg {
+      fill: none; stroke-width: 14;
+      transform: rotate(-90deg); transform-origin: 60px 60px;
+      transition: stroke-dasharray var(--base) var(--ease);
+    }
+    .donut-num { font-size: 28px; font-weight: 700; fill: var(--color-text); font-variant-numeric: tabular-nums; }
+    .donut-cap { font-size: 10px; font-weight: 600; fill: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+    .seg-ontime { stroke: var(--color-ok); background: var(--color-ok); }
+    .seg-late { stroke: var(--color-warn); background: var(--color-warn); }
+    .seg-absent { stroke: var(--color-danger); background: var(--color-danger); }
+    .seg-leave { stroke: var(--color-text-3); background: var(--color-text-3); }
+    .att-legend { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 140px; }
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+    .legend-lbl { color: var(--color-text-2); flex: 1; }
+    .legend-val { font-weight: 700; color: var(--color-text); font-variant-numeric: tabular-nums; }
+
+    /* Early birds (main office view) */
+    .early-birds {
+      margin: var(--space-5) 0;
+      padding: var(--space-4) var(--space-5);
+      background: var(--color-surface);
+      border-radius: var(--radius-card, 12px);
+      box-shadow: var(--shadow-card);
+      display: flex;
+      align-items: center;
+      gap: var(--space-5);
+      flex-wrap: wrap;
+    }
+    .eb-head { display: flex; align-items: center; gap: 12px; }
+    .eb-head h3 { margin: 0; font-size: var(--text-lg); font-weight: 700; color: var(--color-text); }
+    .eb-sub { font-size: var(--text-xs); color: var(--color-text-3); }
+    .eb-icon {
+      width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+      background: var(--color-cat-amber-soft); color: var(--color-cat-amber);
+    }
+    .eb-list { display: flex; flex-wrap: wrap; gap: var(--space-4); flex: 1; }
+    .eb-person { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .eb-info { display: flex; flex-direction: column; min-width: 0; }
+    .eb-name { font-weight: 600; font-size: var(--text-sm); color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+    .eb-time { font-size: var(--text-xs); color: var(--color-text-3); font-variant-numeric: tabular-nums; }
+    .eb-time b { color: var(--accent); }
+
+    /* Work anniversary badge on employee cards */
+    .anniv-badge {
+      display: inline-flex; align-items: center; gap: 3px; flex: none;
+      padding: 1px 7px 1px 4px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent);
+      font-size: 11px; font-weight: 700; white-space: nowrap;
+    }
+    .anniv-badge mat-icon { font-size: 14px; width: 14px; height: 14px; }
 
     .mini-stat {
       display: flex;
@@ -2744,6 +2905,71 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
 export class PeopleComponent implements OnInit, OnDestroy {
   employees: Employee[] = [];
   filteredEmployees: Employee[] = [];
+
+  /** The "Holistic Present" card only adds information when registers add people on top of clock-ins. */
+  get showHolisticCard(): boolean {
+    const a = this.hrOverview?.attendance;
+    if (!a) return false;
+    return (a.holisticPresent ?? a.clockedInToday) !== a.clockedInToday;
+  }
+
+  /** Donut segments (pathLength 100) for today's attendance: on time, late, absent, on leave. */
+  attendanceDonut(): { segments: { key: string; label: string; value: number; len: number; start: number }[] } {
+    const a = this.hrOverview?.attendance;
+    const leave = this.hrOverview?.leave?.onLeaveToday ?? 0;
+    if (!a) return { segments: [] };
+    const late = Math.max(0, a.lateToday || 0);
+    const raw = [
+      { key: 'ontime', label: 'On time', value: Math.max(0, (a.clockedInToday || 0) - late) },
+      { key: 'late', label: 'Late', value: late },
+      { key: 'absent', label: 'Absent', value: Math.max(0, a.notClockedIn || 0) },
+      { key: 'leave', label: 'On leave', value: Math.max(0, leave) }
+    ];
+    const total = raw.reduce((s, r) => s + r.value, 0);
+    let start = 0;
+    const segments = raw.map(r => {
+      const len = total > 0 ? (r.value / total) * 100 : 0;
+      const seg = { ...r, len: +len.toFixed(2), start: +start.toFixed(2) };
+      start += len;
+      return seg;
+    });
+    return { segments };
+  }
+
+  /** First five clock-ins today (timeIn is "HH:mm:ss", so it sorts as text). Cached per employees array. */
+  private _ebSource: Employee[] | null = null;
+  private _earlyBirds: Employee[] = [];
+  get earlyBirds(): Employee[] {
+    if (this._ebSource !== this.employees) {
+      this._ebSource = this.employees;
+      this._earlyBirds = this.employees
+        .filter(e => !!e.timeIn)
+        .slice()
+        .sort((x, y) => (x.timeIn! < y.timeIn! ? -1 : x.timeIn! > y.timeIn! ? 1 : 0))
+        .slice(0, 5);
+    }
+    return this._earlyBirds;
+  }
+
+  /** Work anniversary today or within the next 6 days, from hireDate. */
+  anniversaryOf(e: Employee): { years: number; tip: string } | null {
+    if (!e.hireDate) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(e.hireDate);
+    const hired = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(e.hireDate);
+    if (isNaN(hired.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() + d);
+      if (day.getMonth() === hired.getMonth() && day.getDate() === hired.getDate()) {
+        const years = day.getFullYear() - hired.getFullYear();
+        if (years < 1) return null;
+        const when = d === 0 ? 'today' : 'on ' + day.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
+        return { years, tip: `${years}-year work anniversary ${when}` };
+      }
+    }
+    return null;
+  }
   metrics: AttendanceMetrics | null = null;
   weeklyAttendance: Map<string, any> = new Map();
   loading = false;

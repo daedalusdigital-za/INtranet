@@ -52,6 +52,8 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
 import { SubNavComponent } from '../../ui/sub-nav/sub-nav.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { CountUpDirective } from '../../ui/count-up.directive';
 import { formatDay, isFilterRecord, parseDay, queryText, recordFilters, toQuery } from '../../ui/sub-pages';
 import { LOGISTICS_SECTIONS, LogisticsSlug, logisticsSection } from './logistics-sections';
 import { DashboardStats, ActiveLoad, Vehicle, ImportedInvoice, MaintenanceRecord, DeliveryRequest, DeliveryRequestSummary, DeliveredWithoutPodRow } from './logistics.models';
@@ -90,6 +92,8 @@ import { OverbergTripsheetDialogComponent } from './client-bookings/overberg-tri
     SubNavComponent,
     EmptyStateComponent,
     SkeletonRowsComponent,
+    StatusChipComponent,
+    CountUpDirective,
     ControllerMonitoringComponent,
     OpenMapComponent,
     LogisticsReportsComponent,
@@ -811,15 +815,11 @@ export class LogisticsDashboardComponent implements OnInit, OnDestroy {
   private finishLoadingProgress(callback: () => void): void {
     clearInterval(this.progressInterval);
     this.loadingStage = 3;
-    this.loadingMessage = 'Almost there...';
-    const finish = setInterval(() => {
-      this.loadingProgress = Math.min(100, this.loadingProgress + 4);
-      if (this.loadingProgress >= 100) {
-        clearInterval(finish);
-        this.loadingMessage = 'Complete!';
-        setTimeout(() => callback(), 300);
-      }
-    }, 30);
+    this.loadingProgress = 100;
+    this.loadingMessage = 'Complete!';
+    // Visual refresh: the page shows skeletons now, so swap in the data as soon as it arrives
+    // (no fill-to-100% animation delay).
+    callback();
   }
 
   // Pagination handlers
@@ -2718,6 +2718,16 @@ Notes: ${record.notes || 'No notes'}
       default: 
         return 'trip-status-pending';
     }
+  }
+
+  /** Visual refresh: icon shown in a trip status pill (display only). */
+  tripStatusIcon(status: string): string {
+    const s = (status || '').toLowerCase();
+    if (/late|overdue|cancel|fail|reject/.test(s)) return 'warning';
+    if (/deliver|complet/.test(s)) return 'check_circle';
+    if (/transit|progress|active|dispatch/.test(s)) return 'local_shipping';
+    if (s === 'draft') return 'edit_note';
+    return 'schedule';
   }
 
   /** linkKey is set when the trip sheet was opened from its address (see openPendingRef). */

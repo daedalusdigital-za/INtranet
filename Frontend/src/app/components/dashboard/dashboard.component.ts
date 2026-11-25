@@ -22,6 +22,8 @@ import { ToastService } from '../../ui/toast.service';
 import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { AvatarComponent } from '../../ui/avatar/avatar.component';
 
 @Component({
   selector: 'app-dashboard',
@@ -42,19 +44,21 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     NavbarComponent,
     StatusChipComponent,
     SkeletonRowsComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    PageHeaderComponent,
+    AvatarComponent
   ],
   template: `
     <app-navbar></app-navbar>
 
     <div class="dashboard-container">
-      <div class="page-header">
-        <h1>Project Management</h1>
+      <app-page-header class="page-header" [crumbs]="['Workspace', 'Project boards']" title="Project boards"
+                       subtitle="Departments, boards and task management">
         <button mat-flat-button color="primary" (click)="openCreateBoardDialog()">
           <mat-icon>add</mat-icon>
           Create New Board
         </button>
-      </div>
+      </app-page-header>
 
       <!-- Filters and View Controls -->
       <div class="controls-bar">
@@ -92,15 +96,18 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
         </div>
 
         <div class="view-controls">
-          <mat-button-toggle-group [(value)]="currentView" (change)="changeView()">
-            <mat-button-toggle value="list" matTooltip="List View">
+          <mat-button-toggle-group [(value)]="currentView" (change)="changeView()" aria-label="Board view">
+            <mat-button-toggle value="list" matTooltip="List view" aria-label="List view">
               <mat-icon>view_list</mat-icon>
+              <span class="view-lbl">List</span>
             </mat-button-toggle>
-            <mat-button-toggle value="kanban" matTooltip="Kanban View">
+            <mat-button-toggle value="kanban" matTooltip="Kanban view" aria-label="Kanban view">
               <mat-icon>view_kanban</mat-icon>
+              <span class="view-lbl">Kanban</span>
             </mat-button-toggle>
-            <mat-button-toggle value="timeline" matTooltip="Timeline View">
+            <mat-button-toggle value="timeline" matTooltip="Timeline view" aria-label="Timeline view">
               <mat-icon>timeline</mat-icon>
+              <span class="view-lbl">Timeline</span>
             </mat-button-toggle>
           </mat-button-toggle-group>
         </div>
@@ -117,8 +124,12 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
           @if (currentView === 'list') {
             <div class="projects-list">
               @if (filteredProjects.length === 0) {
-                <app-empty-state icon="dashboard_customize" title="No boards to show"
-                                 message="No boards match the filters, or none have been created yet." />
+                <app-empty-state icon="dashboard_customize" illustration="kanban" title="No boards to show"
+                                 message="No boards match the filters, or none have been created yet.">
+                  <button mat-flat-button color="primary" (click)="openCreateBoardDialog()">
+                    <mat-icon>add</mat-icon> Create board
+                  </button>
+                </app-empty-state>
               }
               @for (project of filteredProjects; track project.id) {
                 <mat-card class="project-list-item">
@@ -155,9 +166,17 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
 
           <!-- Kanban View -->
           @if (currentView === 'kanban') {
+            @if (filteredProjects.length === 0) {
+              <app-empty-state icon="view_kanban" illustration="kanban" title="No boards to show"
+                               message="No boards match the filters, or none have been created yet.">
+                <button mat-flat-button color="primary" (click)="openCreateBoardDialog()">
+                  <mat-icon>add</mat-icon> Create board
+                </button>
+              </app-empty-state>
+            }
             <div class="kanban-board">
               @for (stage of workflowStages; track stage) {
-                <div class="kanban-column">
+                <div class="kanban-column" [style.--col]="stageColour(stage)">
                   <div class="column-header">
                     <h3>{{ stage }}</h3>
                     <span class="column-count">{{ getProjectsByWorkflow(stage).length }}</span>
@@ -177,7 +196,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
                         <div class="kanban-footer">
                           <div class="team-avatars-small">
                             @for (member of project.team.slice(0, 3); track member) {
-                              <div class="avatar-small">{{ member.charAt(0) }}</div>
+                              <app-avatar class="avatar-small" [name]="member" size="28"></app-avatar>
                             }
                           </div>
                           <button aria-label="Forward" mat-icon-button (click)="openPasswordDialog(project)">
@@ -196,8 +215,12 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
           @if (currentView === 'timeline') {
             <div class="timeline-view">
               @if (filteredProjects.length === 0) {
-                <app-empty-state icon="timeline" title="No boards to show"
-                                 message="No boards match the filters, or none have been created yet." />
+                <app-empty-state icon="timeline" illustration="kanban" title="No boards to show"
+                                 message="No boards match the filters, or none have been created yet.">
+                  <button mat-flat-button color="primary" (click)="openCreateBoardDialog()">
+                    <mat-icon>add</mat-icon> Create board
+                  </button>
+                </app-empty-state>
               }
               @for (project of filteredProjects; track project.id) {
                 <div class="timeline-item">
@@ -264,25 +287,18 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     }
 
     .page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      display: block;
       margin-bottom: 24px;
     }
 
-    .page-header h1 {
-      margin: 0;
-      color: var(--color-text);
-      font-size: var(--text-4xl);
+    .view-lbl {
+      margin-left: 6px;
+      font-size: var(--text-sm);
       font-weight: 600;
     }
 
-    .page-header button {
-      height: 48px;
-      font-size: var(--text-lg);
-      font-weight: 600;
-      border-radius: var(--radius-md);
-      padding: 0 24px;
+    @media (max-width: 600px) {
+      .view-lbl { display: none; }
     }
 
     .loading-spinner {
@@ -471,8 +487,8 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
       min-width: 320px;
       max-width: 320px;
       background: var(--color-surface-2);
-      border: 1px solid var(--color-line);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-card);
+      border-top: 4px solid var(--col, var(--accent));
       padding: 16px;
     }
 
@@ -482,7 +498,18 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
       align-items: center;
       margin-bottom: 16px;
       padding-bottom: 12px;
-      border-bottom: 2px solid var(--color-line);
+      border-bottom: 1px solid var(--color-line);
+    }
+
+    .column-header h3::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 8px;
+      border-radius: 50%;
+      background: var(--col, var(--accent));
+      vertical-align: middle;
     }
 
     .column-header h3 {
@@ -494,8 +521,8 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     }
 
     .column-count {
-      background: var(--color-line);
-      color: var(--color-text-2);
+      background: color-mix(in srgb, var(--col, var(--accent)) 16%, transparent);
+      color: var(--col, var(--accent));
       font-size: var(--text-xs);
       font-weight: 600;
       padding: 4px 8px;
@@ -509,18 +536,30 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
       gap: 12px;
     }
 
+    /* Cover strip in the column colour on top of each card */
     .kanban-card {
+      position: relative;
+      overflow: hidden;
       background: var(--color-surface);
-      border: 1px solid var(--color-line);
-      border-radius: var(--radius-control);
-      padding: 16px;
-      box-shadow: var(--shadow-sm);
+      border-radius: var(--radius-card);
+      padding: 20px 16px 16px;
+      box-shadow: var(--shadow-card);
       cursor: grab;
-      transition: box-shadow 0.2s ease;
+      transition: box-shadow var(--fast) var(--ease), transform var(--fast) var(--ease);
+    }
+
+    .kanban-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background: linear-gradient(90deg, var(--col, var(--accent)), color-mix(in srgb, var(--col, var(--accent)) 55%, transparent));
     }
 
     .kanban-card:hover {
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--shadow-hover);
     }
 
     .kanban-card:active {
@@ -584,16 +623,13 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     }
 
     .avatar-small {
-      width: 28px;
-      height: 28px;
+      margin-left: -8px;
       border-radius: 50%;
-      background: var(--color-primary-soft);
-      color: var(--color-primary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      font-size: var(--text-xs);
+      box-shadow: 0 0 0 2px var(--color-surface);
+    }
+
+    .avatar-small:first-child {
+      margin-left: 0;
     }
 
     /* Timeline View */
@@ -792,6 +828,17 @@ export class DashboardComponent implements OnInit {
   selectedStatus: string = 'all';
 
   workflowStages = ['Planning', 'In Progress', 'Testing', 'Completed'];
+
+  /** Header strip / card cover colour per kanban column. */
+  stageColour(stage: string): string {
+    switch (stage) {
+      case 'Planning': return 'var(--color-cat-teal)';
+      case 'In Progress': return 'var(--accent)';
+      case 'Testing': return 'var(--color-cat-amber)';
+      case 'Completed': return 'var(--color-ok)';
+      default: return 'var(--accent)';
+    }
+  }
 
   // Projects data
   projects: any[] = [];

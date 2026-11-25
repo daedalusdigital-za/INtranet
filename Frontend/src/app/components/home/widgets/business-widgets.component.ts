@@ -7,7 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subscription, interval } from 'rxjs';
 
 import { environment } from '../../../../environments/environment';
-import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
 import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
 import { WidgetSize } from '../../../services/home-layout.service';
 

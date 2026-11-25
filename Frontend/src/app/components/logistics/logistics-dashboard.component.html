@@ -29,37 +29,22 @@
 
       <mat-tab-nav-panel #logisticsPanel>
       @if (initialLoading()) {
-        <div class="loading-state">
-          <div class="loading-card">
-            <div class="lc-icon-wrap">
-              <mat-icon class="lc-icon pulse-icon">local_shipping</mat-icon>
-            </div>
-            <h3>Loading Logistics Dashboard</h3>
-            <p class="lc-subtitle">Fetching fleet, loads, drivers & maintenance data</p>
-            <div class="lc-progress-wrap">
-              <div class="lc-progress-track">
-                <div class="lc-progress-fill" [style.width.%]="loadingProgress"></div>
-              </div>
-              <div class="lc-progress-info">
-                <span class="lc-progress-message">{{ loadingMessage }}</span>
-                <span class="lc-progress-pct">{{ loadingProgress | number:'1.0-0' }}%</span>
-              </div>
-            </div>
-            <div class="lc-steps">
-              @for (step of loadingSteps; track step.label; let i = $index) {
-                <div class="lc-step" [class.active]="loadingStage === i" [class.done]="loadingStage > i">
-                  <div class="lc-step-dot">
-                    @if (loadingStage > i) {
-                      <mat-icon>check</mat-icon>
-                    } @else {
-                      <mat-icon>{{ step.icon }}</mat-icon>
-                    }
-                  </div>
-                  <span class="lc-step-label">{{ step.label }}</span>
+        <!-- Visual refresh: skeletons in the page layout instead of a full-screen loading card -->
+        <div class="lg-skeleton" aria-busy="true" aria-label="Loading logistics">
+          <div class="modern-stats-grid">
+            @for (k of [1, 2, 3, 4]; track k) {
+              <div class="modern-stat-card lg-sk-kpi">
+                <span class="skeleton lg-sk-icon"></span>
+                <div class="stat-content">
+                  <span class="skeleton lg-sk-num"></span>
+                  <span class="skeleton lg-sk-label"></span>
                 </div>
-              }
-            </div>
+              </div>
+            }
           </div>
+          <mat-card class="main-content modern-tabs-card">
+            <app-skeleton-rows [rows]="6" [avatar]="false"></app-skeleton-rows>
+          </mat-card>
         </div>
       } @else {
         @if (section() === 'loads') {
@@ -70,7 +55,7 @@
               <mat-icon>assignment</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value">{{ stats().activeLoads }}</span>
+              <span class="stat-value" [countUp]="stats().activeLoads"></span>
               <span class="stat-label">Active Loads</span>
               <div class="stat-progress">
                 <div class="progress-bar" [style.width.%]="stats().activeLoads > 0 ? 100 : 0"></div>
@@ -83,7 +68,7 @@
               <mat-icon>local_post_office</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value">{{ addressIssuesCount() }}</span>
+              <span class="stat-value" [countUp]="addressIssuesCount()"></span>
               <span class="stat-label">Address Issues</span>
               <div class="stat-progress warning">
                 <div class="progress-bar" [style.width.%]="addressIssuesCount() > 0 ? Math.min(addressIssuesCount() * 10, 100) : 0"></div>
@@ -96,7 +81,7 @@
               <mat-icon>local_gas_station</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value">{{ pumaOrdersCount() }}</span>
+              <span class="stat-value" [countUp]="pumaOrdersCount()"></span>
               <span class="stat-label">Puma Garage · open</span>
               <div class="stat-progress">
                 <div class="progress-bar" [style.width.%]="pumaOrdersCount() > 0 ? Math.min(pumaOrdersCount() * 10, 100) : 0"></div>
@@ -109,7 +94,7 @@
               <mat-icon>local_gas_station</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value" [class.warning-text]="tfnOrdersCount() > 5">{{ tfnOrdersCount() }}</span>
+              <span class="stat-value" [class.warning-text]="tfnOrdersCount() > 5" [countUp]="tfnOrdersCount()"></span>
               <span class="stat-label">TFN Orders</span>
               <div class="stat-progress" [class.danger]="tfnOrdersCount() > 5">
                 <div class="progress-bar" [style.width.%]="tfnOrdersCount() > 0 ? Math.min(tfnOrdersCount() * 10, 100) : 0"></div>
@@ -125,7 +110,7 @@
               <mat-icon>directions_car</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value">{{ stats().availableVehicles }}/{{ stats().totalVehicles }}</span>
+              <span class="stat-value" [countUp]="stats().availableVehicles + '/' + stats().totalVehicles"></span>
               <span class="stat-label">Available Vehicles</span>
             </div>
           </div>
@@ -135,7 +120,7 @@
               <mat-icon>person</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value">{{ stats().availableDrivers }}/{{ stats().totalDrivers }}</span>
+              <span class="stat-value" [countUp]="stats().availableDrivers + '/' + stats().totalDrivers"></span>
               <span class="stat-label">Available Drivers</span>
             </div>
           </div>
@@ -145,7 +130,7 @@
               <mat-icon>move_to_inbox</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value" [class.warning-text]="deliveryRequestsCount() > 5">{{ deliveryRequestsCount() }}</span>
+              <span class="stat-value" [class.warning-text]="deliveryRequestsCount() > 5" [countUp]="deliveryRequestsCount()"></span>
               <span class="stat-label">Incoming Requests</span>
             </div>
           </div>
@@ -155,7 +140,7 @@
               <mat-icon>local_gas_station</mat-icon>
             </div>
             <div class="stat-content">
-              <span class="stat-value">{{ tfnDepotsCount() }}</span>
+              <span class="stat-value" [countUp]="tfnDepotsCount()"></span>
               <span class="stat-label">TFN Depots</span>
             </div>
           </div>
@@ -195,7 +180,18 @@
 
                     <ng-container matColumnDef="customer">
                       <th mat-header-cell *matHeaderCellDef>Customer</th>
-                      <td mat-cell *matCellDef="let load">{{ load.customerName }}</td>
+                      <td mat-cell *matCellDef="let load">
+                        <div class="cust-cell">
+                          @if (load.customerName && load.customerName === (load.customerName | uppercase)) {
+                            <strong class="cust-name title-case">{{ load.customerName | lowercase }}</strong>
+                          } @else {
+                            <strong class="cust-name">{{ load.customerName }}</strong>
+                          }
+                          @if (load.deliveryLocation) {
+                            <span class="cust-addr" [class.title-case]="load.deliveryLocation === (load.deliveryLocation | uppercase)">{{ load.deliveryLocation === (load.deliveryLocation | uppercase) ? (load.deliveryLocation | lowercase) : load.deliveryLocation }}</span>
+                          }
+                        </div>
+                      </td>
                     </ng-container>
 
                     <ng-container matColumnDef="route">
@@ -225,13 +221,11 @@
                         @if (isLoadLive(load)) {
                           <button type="button" class="live-track-chip" (click)="trackLoad(load)"
                                   matTooltip="Click to view route & live vehicle position">
-                            <span class="live-pulse"></span>
+                            <span class="live-dot"></span>
                             LIVE · Track
                           </button>
                         } @else {
-                          <mat-chip [ngClass]="getStatusClass(load.status)">
-                            {{ load.status }}
-                          </mat-chip>
+                          <app-status-chip [status]="load.status"></app-status-chip>
                         }
                       </td>
                     </ng-container>
@@ -452,7 +446,7 @@
                                 <mat-icon>speed</mat-icon>
                                 <span class="speed-value">{{ vehicle.speed ?? 0 }} km/h</span>
                                 @if ((vehicle.speed ?? 0) > 0 || vehicle.liveStatus === 'moving') {
-                                  <span class="moving-badge">MOVING</span>
+                                  <span class="moving-badge"><span class="live-dot"></span>MOVING</span>
                                 } @else if (vehicle.liveStatus === 'idling') {
                                   <span class="idling-badge">IDLING</span>
                                 } @else if (vehicle.liveStatus === 'offline') {
@@ -497,7 +491,7 @@
                         </mat-card-content>
                         <mat-card-actions class="vehicle-card-actions">
                           @if (vehicle.province) {
-                            <span class="badge province-badge corner clickable" [matTooltip]="'Branch: ' + vehicle.province + ' — click to move'" (click)="reassignProvince(vehicle); $event.stopPropagation()">
+                            <span class="badge province-badge corner clickable" [attr.data-prov]="vehicle.province" [matTooltip]="'Branch: ' + vehicle.province + ' — click to move'" (click)="reassignProvince(vehicle); $event.stopPropagation()">
                               <mat-icon>place</mat-icon> {{ getProvinceAbbreviation(vehicle.province) }}
                             </span>
                           } @else {
@@ -534,35 +528,35 @@
                     <mat-card class="maintenance-stat-card critical" (click)="maintenanceStatusFilter = 'overdue'">
                       <mat-icon>warning</mat-icon>
                       <div class="stat-info">
-                        <span class="stat-value">{{ getMaintenanceByStatus('overdue').length }}</span>
+                        <span class="stat-value" [countUp]="getMaintenanceByStatus('overdue').length"></span>
                         <span class="stat-label">Overdue</span>
                       </div>
                     </mat-card>
                     <mat-card class="maintenance-stat-card in-progress" (click)="maintenanceStatusFilter = 'in-progress'">
                       <mat-icon>engineering</mat-icon>
                       <div class="stat-info">
-                        <span class="stat-value">{{ getMaintenanceByStatus('in-progress').length }}</span>
+                        <span class="stat-value" [countUp]="getMaintenanceByStatus('in-progress').length"></span>
                         <span class="stat-label">In Progress</span>
                       </div>
                     </mat-card>
                     <mat-card class="maintenance-stat-card scheduled" (click)="maintenanceStatusFilter = 'scheduled'">
                       <mat-icon>schedule</mat-icon>
                       <div class="stat-info">
-                        <span class="stat-value">{{ getMaintenanceByStatus('scheduled').length }}</span>
+                        <span class="stat-value" [countUp]="getMaintenanceByStatus('scheduled').length"></span>
                         <span class="stat-label">Scheduled</span>
                       </div>
                     </mat-card>
                     <mat-card class="maintenance-stat-card license" (click)="maintenanceStatusFilter = 'all'">
                       <mat-icon>badge</mat-icon>
                       <div class="stat-info">
-                        <span class="stat-value">{{ getExpiringLicenses().length }}</span>
+                        <span class="stat-value" [countUp]="getExpiringLicenses().length"></span>
                         <span class="stat-label">Licenses Expiring</span>
                       </div>
                     </mat-card>
                     <mat-card class="maintenance-stat-card completed" (click)="maintenanceStatusFilter = 'completed'">
                       <mat-icon>check_circle</mat-icon>
                       <div class="stat-info">
-                        <span class="stat-value">{{ getCompletedMaintenance().length }}</span>
+                        <span class="stat-value" [countUp]="getCompletedMaintenance().length"></span>
                         <span class="stat-label">Completed</span>
                       </div>
                     </mat-card>
@@ -1156,7 +1150,7 @@
                         <th mat-header-cell *matHeaderCellDef>Status</th>
                         <td mat-cell *matCellDef="let trip">
                           <mat-chip [ngClass]="getTripStatusClass(trip.status)">
-                            {{ trip.status }}
+                            <mat-icon class="pill-icon" aria-hidden="true">{{ tripStatusIcon(trip.status) }}</mat-icon>{{ trip.status }}
                           </mat-chip>
                         </td>
                       </ng-container>

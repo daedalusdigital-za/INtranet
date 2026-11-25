@@ -79,7 +79,7 @@ export type { WellyLane, WellyLaneItem, WellyTransferLane, WellyTransferItem };
       <h2 mat-dialog-title>
         <span class="welly-avatar" [class.thinking]="phase() === 'thinking'"><img [src]="wellyFace()" alt="Welly"></span>
         <span class="title-text">
-          Welly suggestions
+          Ask Welly
           <small>{{ phase() === 'thinking' ? 'Analysing invoices, stock and fleet…' : (stockMode ? 'What can be invoiced out of stock, and which movements would complete more' : 'What can we fulfil, and what should move') }}</small>
         </span>
         <span class="spacer"></span>

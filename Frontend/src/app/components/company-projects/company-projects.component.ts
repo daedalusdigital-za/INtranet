@@ -23,6 +23,7 @@ import { HBA1CService } from '../../services/hba1c.service';
 import { SanitaryPadsService } from '../../services/sanitary-pads.service';
 import { SchoolDeliveryService } from '../../services/school-delivery.service';
 import { environment } from '../../../environments/environment';
+import { confettiBurst } from '../../ui/confetti';
 
 interface CompanyProject {
   id: string;
@@ -33,6 +34,10 @@ interface CompanyProject {
   icon: string;
   status: 'active' | 'planning' | 'on-hold' | 'completed';
   progress: number;
+  /** What the progress % measures, shown next to the ring. */
+  progressLabel?: string;
+  /** Project colour (a CSS colour/token) for the card band and ring. */
+  color?: string;
   category: string;
   lead?: string;
   startDate?: string;
@@ -117,12 +122,18 @@ interface CompanyProject {
                     </div>
                   }
                 </div>
-                <div class="progress-section">
-                  <div class="progress-header">
-                    <span>Overall Progress</span>
-                    <span class="progress-value">{{ selectedProject.progress }}%</span>
+                <div class="progress-section ring-section" [style.--proj]="selectedProject.color || 'var(--accent)'">
+                  <svg class="progress-ring large" viewBox="0 0 120 120" role="img"
+                       [attr.aria-label]="(selectedProject.progressLabel || 'Progress') + ' ' + selectedProject.progress + '%'">
+                    <circle class="ring-track" cx="60" cy="60" r="52" />
+                    <circle class="ring-fill" cx="60" cy="60" r="52" pathLength="100"
+                            [attr.stroke-dasharray]="clampPct(selectedProject.progress) + ' 100'" />
+                    <text x="60" y="60" class="ring-pct" text-anchor="middle" dominant-baseline="central">{{ clampPct(selectedProject.progress) }}%</text>
+                  </svg>
+                  <div class="ring-caption">
+                    <span class="ring-caption-label">{{ selectedProject.progressLabel || 'Progress' }}</span>
+                    <span class="ring-caption-hint">{{ progressHint(selectedProject) }}</span>
                   </div>
-                  <mat-progress-bar mode="determinate" [value]="selectedProject.progress" [color]="selectedProject.progress >= 75 ? 'primary' : selectedProject.progress >= 40 ? 'accent' : 'warn'"></mat-progress-bar>
                 </div>
               </div>
             </div>
@@ -150,7 +161,16 @@ interface CompanyProject {
         <!-- Projects Grid -->
         <div class="projects-grid">
           @for (project of projects; track project.id) {
-            <div class="project-card" (click)="selectProject(project)">
+            <div class="project-card" (click)="selectProject(project)" [style.--proj]="project.color || 'var(--accent)'">
+              <!-- Colour band in the project's colour, with a faint pattern of its icon -->
+              <div class="card-band" aria-hidden="true">
+                <svg class="band-art" viewBox="0 0 400 72" preserveAspectRatio="xMidYMid slice">
+                  <circle cx="340" cy="10" r="46" />
+                  <circle cx="390" cy="64" r="28" />
+                  <circle cx="40" cy="80" r="34" />
+                </svg>
+                <mat-icon class="band-icon">{{ project.icon }}</mat-icon>
+              </div>
               <div class="card-content">
                 <div class="card-header">
                   <div class="card-icon">
@@ -175,12 +195,18 @@ interface CompanyProject {
                   }
                 </div>
 
-                <div class="card-progress">
-                  <div class="progress-info">
-                    <span>Progress</span>
-                    <span class="progress-pct">{{ project.progress }}%</span>
+                <div class="card-progress" [matTooltip]="progressHint(project)">
+                  <svg class="progress-ring" viewBox="0 0 120 120" role="img"
+                       [attr.aria-label]="(project.progressLabel || 'Progress') + ' ' + project.progress + '%'">
+                    <circle class="ring-track" cx="60" cy="60" r="52" />
+                    <circle class="ring-fill" cx="60" cy="60" r="52" pathLength="100"
+                            [attr.stroke-dasharray]="clampPct(project.progress) + ' 100'" />
+                    <text x="60" y="60" class="ring-pct" text-anchor="middle" dominant-baseline="central">{{ clampPct(project.progress) }}%</text>
+                  </svg>
+                  <div class="ring-caption">
+                    <span class="ring-caption-label">{{ project.progressLabel || 'Progress' }}</span>
+                    <span class="ring-caption-hint">{{ progressHint(project) }}</span>
                   </div>
-                  <mat-progress-bar mode="determinate" [value]="project.progress" [color]="project.progress >= 75 ? 'primary' : project.progress >= 40 ? 'accent' : 'warn'"></mat-progress-bar>
                 </div>
 
                 <button mat-stroked-button class="card-action-btn">
@@ -222,9 +248,9 @@ interface CompanyProject {
 
     .project-card {
       background: var(--color-surface);
-      border: 1px solid var(--color-line);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-sm);
+      border: none;
+      border-radius: var(--radius-card, 12px);
+      box-shadow: var(--shadow-card);
       overflow: hidden;
       cursor: pointer;
       transition: box-shadow 0.2s ease, border-color 0.2s ease;
@@ -233,8 +259,7 @@ interface CompanyProject {
     }
 
     .project-card:hover {
-      border-color: var(--color-line-strong);
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--shadow-hover);
     }
 
     .card-content {
@@ -247,7 +272,8 @@ interface CompanyProject {
     .card-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-end;
+      margin-top: -44px;
       margin-bottom: var(--space-4);
     }
 
@@ -258,8 +284,24 @@ interface CompanyProject {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--color-primary-soft);
-      color: var(--color-primary);
+      background: var(--color-surface);
+      color: var(--proj, var(--accent));
+      box-shadow: var(--shadow-card);
+      position: relative;
+    }
+
+    /* Colour band across the top of each project card */
+    .card-band {
+      position: relative;
+      height: 72px;
+      overflow: hidden;
+      background: linear-gradient(120deg, var(--proj, var(--accent)), color-mix(in srgb, var(--proj, var(--accent)) 55%, var(--color-surface)));
+    }
+    .band-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .band-art circle { fill: var(--color-surface); opacity: 0.14; }
+    .band-icon {
+      position: absolute; right: 18px; top: 8px;
+      font-size: 44px; width: 44px; height: 44px; color: var(--color-surface); opacity: 0.35;
     }
 
     .card-icon mat-icon {
@@ -348,7 +390,27 @@ interface CompanyProject {
     .card-progress {
       margin-bottom: 18px;
       margin-top: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
+
+    /* Circular progress rings in the project colour */
+    .progress-ring { width: 84px; height: 84px; flex: 0 0 84px; }
+    .progress-ring.large { width: 120px; height: 120px; flex-basis: 120px; }
+    .progress-ring .ring-track { fill: none; stroke: color-mix(in srgb, var(--proj, var(--accent)) 16%, var(--color-surface-2)); stroke-width: 10; }
+    .progress-ring .ring-fill {
+      fill: none; stroke: var(--proj, var(--accent)); stroke-width: 10; stroke-linecap: round;
+      transform: rotate(-90deg); transform-origin: 60px 60px;
+      transition: stroke-dasharray var(--base) var(--ease);
+    }
+    .progress-ring .ring-pct { font-size: 26px; font-weight: 700; fill: var(--color-text); font-variant-numeric: tabular-nums; }
+    .ring-caption { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .ring-caption-label {
+      font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; color: var(--color-text-2);
+    }
+    .ring-caption-hint { font-size: var(--text-sm); color: var(--color-text-3); line-height: 1.4; }
+    .ring-section { display: flex; align-items: center; gap: 20px; }
 
     .progress-info {
       display: flex;
@@ -588,6 +650,7 @@ export class CompanyProjectsComponent implements OnInit {
     this.route.queryParamMap.subscribe(params => {
       const id = params.get('project');
       this.selectedProject = id ? this.projects.find(p => p.id === id) ?? null : null;
+      this.celebrateCompleted();
     });
   }
 
@@ -613,6 +676,7 @@ export class CompanyProjectsComponent implements OnInit {
           : 'R' + revenue.toFixed(0);
 
         hba1c.progress = Math.round(completionRate);
+        this.celebrateCompleted();
         hba1c.stats = [
           { label: 'Training Sessions', value: sessions.toLocaleString() },
           { label: 'Participants', value: participants.toLocaleString() },
@@ -635,6 +699,7 @@ export class CompanyProjectsComponent implements OnInit {
         icon: 'health_and_safety',
         status: 'active',
         progress: 45,
+        color: 'var(--color-cat-pink)',
         category: 'Healthcare Stock',
         lead: 'Stock Team',
         startDate: 'March 2026',
@@ -654,6 +719,8 @@ export class CompanyProjectsComponent implements OnInit {
         icon: 'biotech',
         status: 'active',
         progress: 41,
+        progressLabel: 'Training completion',
+        color: 'var(--color-cat-teal)',
         category: 'Medical Diagnostics',
         lead: 'National Team',
         startDate: 'March 2026',
@@ -673,6 +740,7 @@ export class CompanyProjectsComponent implements OnInit {
         icon: 'volunteer_activism',
         status: 'active',
         progress: 65,
+        color: 'var(--color-cat-purple)',
         category: 'Social Impact',
         lead: 'School Delivery Team',
         startDate: 'June 2025',
@@ -709,6 +777,32 @@ export class CompanyProjectsComponent implements OnInit {
       { label: 'Schools', value: fmtCompact(totalSchools) },
       { label: 'Girls / Month', value: fmtCompact(totalGirls) }
     ];
+  }
+
+  clampPct(n: number): number {
+    return Math.max(0, Math.min(100, Math.round(n || 0)));
+  }
+
+  /** Tooltip/caption saying what the ring measures. */
+  progressHint(p: CompanyProject): string {
+    return p.id === 'hba1c'
+      ? 'Training completion rate reported by the HBA1C system'
+      : 'Overall project progress';
+  }
+
+  /** Confetti once per session per project when the overview shows one at 100%. */
+  private celebrateCompleted(): void {
+    if (this.selectedProject) return;
+    const done = this.projects.filter(p => this.clampPct(p.progress) >= 100);
+    for (const p of done) {
+      const key = 'cp-confetti-' + p.id;
+      let seen = false;
+      try { seen = sessionStorage.getItem(key) === '1'; } catch { /* storage blocked */ }
+      if (seen) continue;
+      try { sessionStorage.setItem(key, '1'); } catch { /* storage blocked */ }
+      setTimeout(() => confettiBurst(), 400);
+      break;
+    }
   }
 
   selectProject(project: CompanyProject): void {

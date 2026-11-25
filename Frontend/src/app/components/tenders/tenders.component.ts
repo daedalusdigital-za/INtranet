@@ -39,6 +39,8 @@ import { PageHeaderComponent } from '../../ui/page-header/page-header.component'
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { ChipTone, StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { confettiBurst } from '../../ui/confetti';
+import { companyLogo } from '../../core/company-logos';
 
 interface Company {
   code: string;
@@ -164,6 +166,15 @@ interface ArtworkFile {
             <div class="stat-label">Lost YTD</div>
           </div>
         </mat-card>
+        <!-- Overdue: drafts whose closing date has passed (worked out here from the loaded list) -->
+        <mat-card class="stat-card overdue" [class.has-overdue]="overdueCount > 0" (click)="filterOverdue()"
+                  matTooltip="Draft tenders whose closing date has passed">
+          <div class="stat-icon"><mat-icon>event_busy</mat-icon></div>
+          <div class="stat-content">
+            <div class="stat-value">{{ overdueCount }}</div>
+            <div class="stat-label">Overdue Drafts</div>
+          </div>
+        </mat-card>
       </div>
 
       <!-- Main Tabs -->
@@ -235,6 +246,17 @@ interface ArtworkFile {
               </div>
             </mat-card>
 
+            @if (overdueCount > 0 || showOverdueOnly) {
+              <div class="quick-filter-row">
+                <button type="button" class="quick-chip overdue" [class.on]="showOverdueOnly" (click)="showOverdueOnly ? clearFilters() : filterOverdue()">
+                  <mat-icon>event_busy</mat-icon>
+                  Overdue
+                  <span class="quick-count">{{ overdueCount }}</span>
+                  @if (showOverdueOnly) { <mat-icon class="quick-x">close</mat-icon> }
+                </button>
+              </div>
+            }
+
             <!-- Tenders Table -->
             @if (loading) {
               <mat-card class="table-card">
@@ -247,9 +269,15 @@ interface ArtworkFile {
                   <ng-container matColumnDef="companyCode">
                     <th mat-header-cell *matHeaderCellDef mat-sort-header>Company</th>
                     <td mat-cell *matCellDef="let tender">
-                      <span class="company-chip" [style.background-color]="getCompanyColor(tender.companyCode)">
-                        {{ tender.companyCode }}
-                      </span>
+                      @if (hasCompanyLogo(tender.companyCode)) {
+                        <span class="company-logo-chip" [matTooltip]="getCompanyName(tender.companyCode)">
+                          <img [src]="logoFor(tender.companyCode)" [alt]="getCompanyName(tender.companyCode)" loading="lazy">
+                        </span>
+                      } @else {
+                        <span class="company-chip" [style.background-color]="getCompanyColor(tender.companyCode)">
+                          {{ tender.companyCode }}
+                        </span>
+                      }
                     </td>
                   </ng-container>
 
@@ -266,7 +294,7 @@ interface ArtworkFile {
                     <th mat-header-cell *matHeaderCellDef mat-sort-header>Title</th>
                     <td mat-cell *matCellDef="let tender">
                       <div class="title-cell">
-                        <span class="tender-title">{{ tender.title }}</span>
+                        <span class="tender-title" [title]="tender.title">{{ tender.title }}</span>
                         <span class="tender-dept">{{ tender.issuingDepartment }}</span>
                       </div>
                     </td>
@@ -288,9 +316,18 @@ interface ArtworkFile {
                   <ng-container matColumnDef="closingDate">
                     <th mat-header-cell *matHeaderCellDef mat-sort-header>Closing</th>
                     <td mat-cell *matCellDef="let tender">
-                      <div class="closing-cell" [class.urgent]="getDaysUntilClosing(tender.closingDate) <= 7">
-                        <span class="closing-date">{{ tender.closingDate | date:'dd MMM yyyy' }}</span>
-                        <span class="days-left">{{ getDaysUntilClosing(tender.closingDate) }} days</span>
+                      @let daysLeft = getDaysUntilClosing(tender.closingDate);
+                      <div class="closing-wrap">
+                        <svg viewBox="0 0 36 36" aria-hidden="true" [attr.class]="'countdown-ring ' + ringTone(daysLeft)">
+                          <circle class="ring-track" cx="18" cy="18" r="15.9" />
+                          <circle class="ring-fill" cx="18" cy="18" r="15.9" pathLength="100"
+                                  [attr.stroke-dasharray]="ringFill(daysLeft) + ' 100'" />
+                          <text x="18" y="18" class="ring-text" text-anchor="middle" dominant-baseline="central">{{ ringLabel(daysLeft) }}</text>
+                        </svg>
+                        <div class="closing-cell" [class.urgent]="daysLeft <= 7">
+                          <span class="closing-date">{{ tender.closingDate | date:'dd MMM yyyy' }}</span>
+                          <span class="days-left">{{ daysLabel(daysLeft) }}</span>
+                        </div>
                       </div>
                     </td>
                   </ng-container>
@@ -371,7 +408,7 @@ interface ArtworkFile {
                   <tr mat-row *matRowDef="let row; columns: displayedColumns;" (click)="openTenderDetail(row)"></tr>
                   <tr class="mat-mdc-row" *matNoDataRow>
                     <td class="mat-mdc-cell" [attr.colspan]="displayedColumns.length">
-                      @if (searchTerm || selectedCompany || selectedProvince || selectedStatus || selectedDepartment) {
+                      @if (searchTerm || selectedCompany || selectedProvince || selectedStatus || selectedDepartment || showOverdueOnly) {
                         <app-empty-state icon="filter_alt_off" title="No tenders match these filters"
                                          message="Try another company, province, status or department, or clear the filters.">
                           <button mat-stroked-button (click)="clearFilters()">Clear the filters</button>
@@ -1277,7 +1314,7 @@ interface ArtworkFile {
     /* Stats Row */
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       gap: 16px;
       margin-bottom: 24px;
     }
@@ -1309,6 +1346,29 @@ interface ArtworkFile {
     .stat-card.awarded .stat-icon { color: var(--color-ok); }
     .stat-card.lost { border-left-color: var(--color-line-strong); }
     .stat-card.lost .stat-icon { color: var(--color-text-3); }
+    .stat-card.overdue { border-left-color: var(--color-line-strong); }
+    .stat-card.overdue .stat-icon { color: var(--color-text-3); }
+    .stat-card.overdue.has-overdue { border-left-color: var(--color-danger); }
+    .stat-card.overdue.has-overdue .stat-icon,
+    .stat-card.overdue.has-overdue .stat-value { color: var(--color-danger); }
+
+    /* Quick filter chip above the table (Overdue drafts) */
+    .quick-filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+    .quick-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--color-line); background: var(--color-surface);
+      color: var(--color-text-2); font: inherit; font-size: 13px; font-weight: 600;
+      transition: background var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+    }
+    .quick-chip mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .quick-chip .quick-count {
+      min-width: 20px; padding: 0 6px; border-radius: 999px; text-align: center;
+      background: var(--color-danger-soft); color: var(--color-danger); font-variant-numeric: tabular-nums;
+    }
+    .quick-chip.overdue:hover { border-color: var(--color-danger); color: var(--color-danger); }
+    .quick-chip.overdue.on { background: var(--color-danger-soft); border-color: var(--color-danger); color: var(--color-danger); }
+    .quick-chip.on .quick-count { background: var(--color-danger); color: var(--color-on-dark); }
 
     .stat-icon {
       font-size: 36px;
@@ -1437,6 +1497,14 @@ interface ArtworkFile {
       font-weight: 600;
     }
 
+    .company-logo-chip {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--color-surface); box-shadow: 0 0 0 1px var(--color-line);
+      overflow: hidden; vertical-align: middle;
+    }
+    .company-logo-chip img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
     .company-chip {
       padding: 4px 10px;
       border-radius: 8px;
@@ -1458,10 +1526,15 @@ interface ArtworkFile {
     }
     .tender-title {
       font-weight: 500;
-      max-width: 250px;
+      max-width: 280px;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.35;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
     .tender-dept {
       font-size: var(--text-xs);
@@ -1473,7 +1546,23 @@ interface ArtworkFile {
       flex-direction: column;
     }
     .closing-cell.urgent .closing-date { color: var(--color-danger); font-weight: 600; }
-    .days-left { font-size: var(--text-xs); color: var(--color-text-2); }
+    .days-left { font-size: var(--text-xs); color: var(--color-text-2); white-space: nowrap; }
+
+    /* Closing-date countdown ring: accent normally, amber inside 7 days, red at 2 days or overdue */
+    .closing-wrap { display: flex; align-items: center; gap: 10px; }
+    .countdown-ring { width: 34px; height: 34px; flex: 0 0 34px; }
+    .countdown-ring .ring-track { fill: none; stroke: var(--color-line); stroke-width: 3.2; }
+    .countdown-ring .ring-fill {
+      fill: none; stroke: var(--accent); stroke-width: 3.2; stroke-linecap: round;
+      transform: rotate(-90deg); transform-origin: 18px 18px;
+      transition: stroke-dasharray var(--base) var(--ease);
+    }
+    .countdown-ring .ring-text { font-size: 11px; font-weight: 700; fill: var(--color-text); font-variant-numeric: tabular-nums; }
+    .countdown-ring.warn .ring-fill { stroke: var(--color-warn); }
+    .countdown-ring.warn .ring-text { fill: var(--color-warn); }
+    .countdown-ring.danger .ring-fill { stroke: var(--color-danger); }
+    .countdown-ring.danger .ring-text { fill: var(--color-danger); }
+    .countdown-ring.danger .ring-track { stroke: var(--color-danger-soft); }
 
 
     .workflow-badge {
@@ -3402,6 +3491,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   applyFilters(): void {
+    this.showOverdueOnly = false;
     this.loading = true;
     this.tenderService.getTenders({
       status: this.selectedStatus || undefined,
@@ -3427,8 +3517,51 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.selectedProvince = '';
     this.selectedStatus = '';
     this.selectedDepartment = '';
+    this.showOverdueOnly = false;
     this.tendersDataSource.data = this.tenders;
   }
+
+  /** Overdue = still a Draft but the closing date has passed. Client-side only, from the loaded list. */
+  showOverdueOnly = false;
+  isOverdue(t: Tender): boolean {
+    return t.status === 'Draft' && !!t.closingDate && this.getDaysUntilClosing(t.closingDate) < 0;
+  }
+  get overdueCount(): number {
+    return this.tenders.filter(t => this.isOverdue(t)).length;
+  }
+  filterOverdue(): void {
+    this.searchTerm = '';
+    this.selectedCompany = '';
+    this.selectedProvince = '';
+    this.selectedStatus = '';
+    this.selectedDepartment = '';
+    this.showOverdueOnly = true;
+    this.selectedTab = 0;
+    this.tendersDataSource.data = this.tenders.filter(t => this.isOverdue(t));
+  }
+
+  /** Countdown ring fill (out of 100) over a 30-day window; full red ring when overdue. */
+  ringFill(days: number): number {
+    if (days < 0) return 100;
+    if (days === 0) return 0;
+    return Math.max(4, Math.min(100, Math.round((days / 30) * 100)));
+  }
+  ringTone(days: number): 'danger' | 'warn' | 'ok' {
+    return days <= 2 ? 'danger' : days <= 7 ? 'warn' : 'ok';
+  }
+  ringLabel(days: number): string {
+    return days < 0 ? '!' : days > 99 ? '99+' : String(days);
+  }
+  daysLabel(days: number): string {
+    const n = Math.abs(days);
+    const unit = n === 1 ? 'day' : 'days';
+    return days < 0 ? `${n} ${unit} overdue` : days === 0 ? 'Closes today' : `${n} ${unit} left`;
+  }
+
+  /** Round logo for companies that have one; the rest keep the coloured code chip. */
+  logoFor(code: string): string { return companyLogo(code); }
+  hasCompanyLogo(code: string): boolean { return !!code && !companyLogo(code).endsWith('/rocket-round.png'); }
+  getCompanyName(code: string): string { return this.companies.find(c => c.code === code)?.name || code; }
 
   filterByStatus(status: string | null): void {
     this.selectedStatus = status || '';
@@ -3596,6 +3729,7 @@ export class TendersComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.tenderService.updateStatus(tender.id, status).subscribe({
       next: () => {
         this.toast.done('Status updated');
+        if (status === 'Awarded' && tender.status !== 'Awarded') confettiBurst();
         this.loadData();
       },
       error: () => this.toast.error('Error updating status')

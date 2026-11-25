@@ -43,8 +43,9 @@ export class ToastService {
     const ref = this.snackBar.open(message, options.action, {
       duration: options.duration ?? defaultDuration,
       panelClass: ['app-toast', panelClass],
-      horizontalPosition: 'center',
-      verticalPosition: 'bottom'
+      // Visual refresh: slide in from the top right (styles/_refresh.scss).
+      horizontalPosition: 'right',
+      verticalPosition: 'top'
     });
     if (options.onAction) {
       ref.onAction().subscribe(() => options.onAction!());

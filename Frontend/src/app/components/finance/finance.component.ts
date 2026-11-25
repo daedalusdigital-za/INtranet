@@ -26,6 +26,8 @@ import * as XLSX from 'xlsx';
 import { FinanceService } from '../../services/finance.service';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
+import { CountUpDirective } from '../../ui/count-up.directive';
+import { companyLogo } from '../../core/company-logos';
 import { environment } from '../../../environments/environment';
 import { FinancePodsComponent } from './finance-pods.component';
 import { FinanceVaultComponent } from './finance-vault.component';
@@ -140,7 +142,8 @@ interface Overview {
     QuoteApprovalsComponent,
     FinancePacksComponent,
     FinancePaymentScheduleComponent,
-    MatMenuModule
+    MatMenuModule,
+    CountUpDirective
   ],
   templateUrl: './finance.component.html',
   styleUrls: ['./finance.component.scss']
@@ -205,6 +208,32 @@ export class FinanceComponent implements OnInit {
     const d = { payments: false, packs: false, requisitions: false, quotes: false };
     try { return { ...d, ...JSON.parse(localStorage.getItem('finance.approvals.collapsed.v2') || '{}') }; } catch { return d; }
   }
+  readonly companyLogo = companyLogo;
+
+  /** KPI cards abbreviate money ("R 41.1M", "R 812K"); tables keep the full figure. */
+  rAbbr(n: number | null | undefined): string {
+    const v = Math.round(n || 0), a = Math.abs(v);
+    if (a >= 1_000_000_000) return 'R ' + (v / 1_000_000_000).toFixed(1) + 'B';
+    if (a >= 1_000_000) return 'R ' + (v / 1_000_000).toFixed(1) + 'M';
+    if (a >= 10_000) return 'R ' + Math.round(v / 1_000) + 'K';
+    return 'R ' + v.toLocaleString('en-ZA');
+  }
+
+  /**
+   * Aging as a stacked bar, green to red: Current, 30-89, 90-119, 120+ days.
+   * d90plus includes the 120+ balances; overdue includes everything past current.
+   */
+  agingSegs(b: { total: number; current: number; overdue: number; d90plus: number; d120: number }): { cls: string; pct: number; label: string }[] {
+    const d90 = Math.max(0, (b.d90plus || 0) - (b.d120 || 0));
+    const d30 = Math.max(0, (b.overdue || 0) - Math.max(b.d90plus || 0, b.d120 || 0));
+    return [
+      { cls: 'cur', pct: this.barPct(b.current, b.total), label: 'Current' },
+      { cls: 'd30', pct: this.barPct(d30, b.total), label: '30–89 days' },
+      { cls: 'd90', pct: this.barPct(d90, b.total), label: '90–119 days' },
+      { cls: 'old', pct: this.barPct(b.d120, b.total), label: '120+ days' }
+    ];
+  }
+
   barPct(part: number, whole: number): number { return whole > 0 ? Math.max(0, Math.min(100, (part / whole) * 100)) : 0; }
 
   // ── Overview mini approval panels (own minimise state, remembered per browser) ──

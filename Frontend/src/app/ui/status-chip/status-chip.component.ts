@@ -1,4 +1,5 @@
 import { Component, Input, computed, input } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
 
 export type ChipTone = 'ok' | 'warn' | 'danger' | 'info' | 'neutral';
 
@@ -25,11 +26,13 @@ export function toneForStatus(status: string | null | undefined): ChipTone {
 @Component({
   selector: 'app-status-chip',
   standalone: true,
-  template: `<span class="chip" [class]="'chip tone-' + resolvedTone()">{{ status() }}</span>`,
+  imports: [MatIconModule],
+  template: `<span class="chip" [class]="'chip tone-' + resolvedTone()"><mat-icon aria-hidden="true">{{ icon() }}</mat-icon>{{ status() }}</span>`,
   styles: [`
     :host { display: inline-flex; }
-    .chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px 0 8px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700; white-space: nowrap; }
-    .chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .chip { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px 0 6px; border-radius: 999px; font-size: var(--text-xs); font-weight: 700; white-space: nowrap; }
+    /* Visual refresh: a shape per status (check, clock, warning, truck), so colour is never the only signal. */
+    .chip mat-icon { font-size: 15px; width: 15px; height: 15px; font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20; }
     .tone-ok { background: var(--color-ok-soft); color: var(--color-ok); }
     .tone-warn { background: var(--color-warn-soft); color: var(--color-warn); }
     .tone-danger { background: var(--color-danger-soft); color: var(--color-danger); }
@@ -41,4 +44,14 @@ export class StatusChipComponent {
   readonly status = input<string>('');
   readonly tone = input<ChipTone | undefined>(undefined);
   readonly resolvedTone = computed(() => this.tone() ?? toneForStatus(this.status()));
+  readonly icon = computed(() => {
+    const s = (this.status() ?? '').toLowerCase();
+    switch (this.resolvedTone()) {
+      case 'ok': return 'check_circle';
+      case 'warn': return 'schedule';
+      case 'danger': return 'warning';
+      case 'info': return /transit|road|loading|dispatch/.test(s) ? 'local_shipping' : 'autorenew';
+      default: return 'radio_button_unchecked';
+    }
+  });
 }

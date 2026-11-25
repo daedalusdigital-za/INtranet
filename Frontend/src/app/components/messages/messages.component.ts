@@ -30,6 +30,7 @@ import { environment } from '../../../environments/environment';
 import { PickerComponent } from '@ctrl/ngx-emoji-mart';
 import { SecureSrcDirective } from '../../directives/secure-src.directive';
 import { ConfirmService } from '../../ui/confirm.service';
+import { AvatarComponent } from '../../ui/avatar/avatar.component';
 
 @Component({
   selector: 'app-messages',
@@ -56,7 +57,8 @@ import { ConfirmService } from '../../ui/confirm.service';
     EmptyStateComponent,
     SkeletonRowsComponent,
     PickerComponent,
-    SecureSrcDirective
+    SecureSrcDirective,
+    AvatarComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -87,11 +89,11 @@ import { ConfirmService } from '../../ui/confirm.service';
               [class.unread]="conv.unreadCount > 0"
               (click)="selectConversation(conv)">
               
-              <div class="avatar" [class.online]="isUserOnline(conv)">
-                <img *ngIf="getConversationAvatar(conv)" [src]="getConversationAvatar(conv)" alt="Avatar">
-                <mat-icon *ngIf="!getConversationAvatar(conv)">
-                  {{ conv.isGroupChat ? 'group' : 'person' }}
-                </mat-icon>
+              <div class="avatar">
+                <span *ngIf="conv.isGroupChat && !getConversationAvatar(conv)" class="group-tile"><mat-icon>group</mat-icon></span>
+                <app-avatar *ngIf="!conv.isGroupChat || getConversationAvatar(conv)"
+                            [name]="getConversationName(conv)" [photo]="getConversationAvatar(conv)"
+                            [online]="isUserOnline(conv)" size="44"></app-avatar>
               </div>
               
               <div class="conversation-info">
@@ -99,8 +101,8 @@ import { ConfirmService } from '../../ui/confirm.service';
                   <span class="name">{{ getConversationName(conv) }}</span>
                   <span class="time">{{ formatTime(conv.lastMessageAt || conv.createdAt) }}</span>
                 </div>
-                <div class="last-message">
-                  {{ conv.lastMessage?.content || 'No messages yet' }}
+                <div class="last-message" [class.empty-preview]="!conv.lastMessage?.content">
+                  {{ conv.lastMessage?.content || 'Say hello 👋' }}
                 </div>
               </div>
               
@@ -145,7 +147,7 @@ import { ConfirmService } from '../../ui/confirm.service';
         <!-- Main Chat Area -->
         <div class="chat-area">
           <div *ngIf="!selectedConversation" class="no-conversation-selected">
-            <app-empty-state icon="forum"
+            <app-empty-state icon="forum" illustration="chat"
                              title="Select a conversation"
                              message="Choose a conversation from the sidebar or start a new one.">
               <button mat-flat-button color="primary" (click)="showNewConversation = true">
@@ -159,11 +161,11 @@ import { ConfirmService } from '../../ui/confirm.service';
             <!-- Chat Header -->
             <div class="chat-header">
               <div class="chat-info">
-                <div class="avatar" [class.online]="isUserOnline(selectedConversation)">
-                  <img *ngIf="getConversationAvatar(selectedConversation)" [src]="getConversationAvatar(selectedConversation)" alt="Avatar">
-                  <mat-icon *ngIf="!getConversationAvatar(selectedConversation)">
-                    {{ selectedConversation.isGroupChat ? 'group' : 'person' }}
-                  </mat-icon>
+                <div class="avatar">
+                  <span *ngIf="selectedConversation.isGroupChat && !getConversationAvatar(selectedConversation)" class="group-tile"><mat-icon>group</mat-icon></span>
+                  <app-avatar *ngIf="!selectedConversation.isGroupChat || getConversationAvatar(selectedConversation)"
+                              [name]="getConversationName(selectedConversation)" [photo]="getConversationAvatar(selectedConversation)"
+                              [online]="isUserOnline(selectedConversation)" size="44"></app-avatar>
                 </div>
                 <div class="details">
                   <h3>{{ getConversationName(selectedConversation) }}</h3>
@@ -203,10 +205,8 @@ import { ConfirmService } from '../../ui/confirm.service';
                    [class.received]="message.senderId !== currentUserId"
                    [class.deleted]="message.isDeleted">
                 
-                <div class="message-avatar" *ngIf="message.senderId !== currentUserId">
-                  <img *ngIf="message.senderProfilePicture" [src]="message.senderProfilePicture" alt="Avatar">
-                  <mat-icon *ngIf="!message.senderProfilePicture">person</mat-icon>
-                </div>
+                <app-avatar class="message-avatar" *ngIf="message.senderId !== currentUserId"
+                            [name]="message.senderFullName || message.senderName" [photo]="message.senderProfilePicture || null" size="32"></app-avatar>
                 
                 <div class="message-content">
                   <div class="message-sender" *ngIf="message.senderId !== currentUserId && selectedConversation?.isGroupChat">
@@ -565,40 +565,9 @@ import { ConfirmService } from '../../ui/confirm.service';
       }
 
       .avatar {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: var(--color-primary);
         display: flex;
-        align-items: center;
-        justify-content: center;
         margin-right: 14px;
-        overflow: hidden;
-        position: relative;
         flex-shrink: 0;
-
-        img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        mat-icon {
-          color: var(--color-on-primary);
-          font-size: var(--text-2xl);
-        }
-
-        &.online::after {
-          content: '';
-          position: absolute;
-          bottom: 2px;
-          right: 2px;
-          width: 12px;
-          height: 12px;
-          background: var(--color-ok);
-          border-radius: 50%;
-          border: 2px solid var(--color-surface);
-        }
       }
 
       .conversation-info {
@@ -653,6 +622,25 @@ import { ConfirmService } from '../../ui/confirm.service';
       }
     }
 
+    /* Group chats without a photo: accent tile with a group glyph (people get AvatarComponent). */
+    .group-tile {
+      display: inline-grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent);
+
+      mat-icon { font-size: 22px; width: 22px; height: 22px; }
+    }
+
+    .conversation-item .conversation-info .last-message.empty-preview {
+      font-style: italic;
+      color: var(--color-text-3);
+      opacity: 0.85;
+    }
+
     .sidebar-footer {
       padding: 12px 16px;
       border-top: 1px solid var(--color-line);
@@ -662,7 +650,18 @@ import { ConfirmService } from '../../ui/confirm.service';
       background: var(--color-surface-2);
 
       .select-btn {
-        color: var(--color-text-3);
+        color: var(--color-text-2);
+        font-weight: 600;
+        border: 1px solid var(--color-line);
+        border-radius: 999px;
+        padding: 0 14px;
+        background: var(--color-surface);
+
+        &:hover {
+          color: var(--color-primary);
+          border-color: var(--color-primary);
+          background: var(--color-primary-soft);
+        }
       }
 
       .delete-btn {
@@ -712,38 +711,9 @@ import { ConfirmService } from '../../ui/confirm.service';
         align-items: center;
 
         .avatar {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          background: var(--color-primary);
           display: flex;
-          align-items: center;
-          justify-content: center;
           margin-right: 14px;
-          overflow: hidden;
-          position: relative;
-
-          img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-
-          mat-icon {
-            color: var(--color-on-primary);
-          }
-
-          &.online::after {
-            content: '';
-            position: absolute;
-            bottom: 2px;
-            right: 2px;
-            width: 12px;
-            height: 12px;
-            background: var(--color-ok);
-            border-radius: 50%;
-            border: 2px solid var(--color-surface);
-          }
+          flex-shrink: 0;
         }
 
         .details {
@@ -826,8 +796,7 @@ import { ConfirmService } from '../../ui/confirm.service';
           background: var(--color-surface);
           color: var(--color-text);
           border-radius: 20px 20px 20px 6px;
-          box-shadow: var(--shadow-sm);
-          border: 1px solid var(--color-line);
+          box-shadow: var(--shadow-card);
         }
       }
 
@@ -841,28 +810,7 @@ import { ConfirmService } from '../../ui/confirm.service';
       }
 
       .message-avatar {
-        width: 34px;
-        height: 34px;
-        border-radius: 50%;
-        background: var(--color-primary);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
         flex-shrink: 0;
-
-        img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        mat-icon {
-          font-size: var(--text-xl);
-          width: 18px;
-          height: 18px;
-          color: var(--color-on-primary);
-        }
       }
 
       .message-content {

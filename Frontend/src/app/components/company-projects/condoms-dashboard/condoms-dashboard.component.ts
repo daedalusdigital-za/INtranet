@@ -898,7 +898,7 @@ interface DashboardData {
                   <tr class="empty-row">
                     <td [attr.colspan]="4 + scheduleDates.length + 1">
                       @if (scheduleGroups.length === 0) {
-                        <app-empty-state icon="inventory_2" title="No stock scheduled yet"
+                        <app-empty-state icon="inventory_2" illustration="boxes" title="No stock scheduled yet"
                                          message="Stock captured for the condoms project appears here, grouped by scent and type.">
                           <button mat-stroked-button (click)="openCaptureDialog()"><mat-icon>add_circle</mat-icon> Capture Stock</button>
                         </app-empty-state>

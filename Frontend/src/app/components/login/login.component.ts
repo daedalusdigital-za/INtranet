@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../../services/auth.service';
+import { companyLogo, COMPANY_NAMES } from '../../core/company-logos';
 
 // Sign-in page (design review D-14): Promed branding, plain wording, show-password,
 // Caps Lock warning and errors shown next to the form instead of a passing snackbar.
@@ -29,10 +30,23 @@ import { AuthService } from '../../services/auth.service';
           <h1>Sales, deliveries and stock in one place.</h1>
           <p>The intranet for everyone at Promed Technologies and its group companies.</p>
         </div>
-        <div class="companies"><span>Promed</span><span>Access Medical</span><span>Pharmatech</span><span>Sebenzani</span><span>Rocket Freight</span></div>
-        <div class="hexfield">
-          @for (h of hexes; track $index) {
-            <i [style.left.px]="h.x" [style.top.px]="h.y" [style.background]="h.c"></i>
+        <svg class="illus" viewBox="0 0 360 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="250" cy="110" r="96" fill="rgba(255,255,255,.06)"/>
+          <circle cx="250" cy="110" r="62" fill="rgba(255,255,255,.07)"/>
+          <rect x="40" y="150" width="120" height="78" rx="18" fill="rgba(60,189,233,.22)"/>
+          <rect x="70" y="40" width="64" height="64" rx="16" fill="rgba(255,255,255,.1)" transform="rotate(12 102 72)"/>
+          <g transform="translate(222 82)">
+            <rect x="18" y="0" width="20" height="56" rx="5" fill="#fff" opacity=".92"/>
+            <rect x="0" y="18" width="56" height="20" rx="5" fill="#fff" opacity=".92"/>
+          </g>
+          <path class="beat" d="M10 196 H120 l14 -30 l18 58 l16 -78 l16 50 h22 l10 -14 l10 14 H350"
+                stroke="#3cbde9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="320" cy="40" r="6" fill="#3cbde9" opacity=".7"/>
+          <circle cx="40" cy="60" r="4" fill="#fff" opacity=".4"/>
+        </svg>
+        <div class="companies">
+          @for (c of companies; track c.code) {
+            <span class="co"><img [src]="logo(c.code)" [alt]="c.name" width="28" height="28">{{ c.name }}</span>
           }
         </div>
       </section>
@@ -87,19 +101,22 @@ import { AuthService } from '../../services/auth.service';
   styles: [`
     .login { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100vh; background: var(--color-surface); }
 
-    .brand { position: relative; overflow: hidden; background: var(--nav-bg); color: var(--color-on-dark); padding: 48px 56px; display: flex; flex-direction: column; justify-content: space-between; gap: 40px; }
+    .brand { position: relative; overflow: hidden; background: linear-gradient(150deg, #262262 0%, #2167a8 58%, #6a4fc4 100%); color: #fff; padding: 48px 56px; display: flex; flex-direction: column; justify-content: space-between; gap: 32px; min-height: 100vh; box-sizing: border-box; }
     .wordmark { display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 18px; position: relative; z-index: 1; }
     .mark { position: relative; width: 31px; height: 35px; flex: none; }
     .mark i { position: absolute; width: 15px; height: 17.5px; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
-    .mark i:nth-child(1) { left: 0; top: 0; background: var(--color-focus); }
+    .mark i:nth-child(1) { left: 0; top: 0; background: #3cbde9; }
     .mark i:nth-child(2) { left: 16px; top: 0; background: #2167a8; }
-    .mark i:nth-child(3) { left: 8px; top: 14px; background: var(--color-surface); opacity: 0.9; }
+    .mark i:nth-child(3) { left: 8px; top: 14px; background: #fff; opacity: 0.9; }
     .pitch { position: relative; z-index: 1; max-width: 26rem; }
     .pitch h1 { margin: 0; font-size: 40px; line-height: 1.1; font-weight: 800; letter-spacing: -0.025em; }
-    .pitch p { margin: 14px 0 0; color: var(--nav-text-dim); font-size: 15px; }
-    .companies { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; font-weight: 600; color: var(--nav-text-dim); }
-    .hexfield { position: absolute; right: -60px; bottom: -40px; width: 520px; height: 420px; }
-    .hexfield i { position: absolute; width: 92px; height: 104px; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+    .pitch p { margin: 14px 0 0; color: rgba(255,255,255,.75); font-size: 15px; }
+    .illus { position: relative; z-index: 1; width: 100%; max-width: 420px; height: auto; align-self: center; }
+    .illus .beat { stroke-dasharray: 600; stroke-dashoffset: 600; animation: login-beat 2.4s var(--ease, ease) .3s forwards; }
+    @keyframes login-beat { to { stroke-dashoffset: 0; } }
+    .companies { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px 20px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.85); }
+    .co { display: inline-flex; align-items: center; gap: 8px; }
+    .co img { width: 28px; height: 28px; border-radius: 50%; background: #fff; object-fit: contain; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
 
     .form-side { display: grid; place-items: center; padding: 32px 24px; }
     .form { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 6px; }
@@ -114,11 +131,13 @@ import { AuthService } from '../../services/auth.service';
     .help { margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--color-line); font-size: 13px; color: var(--color-text-3); }
     .help b { color: var(--color-text-2); }
 
-    @media (max-width: 860px) {
+    @media (max-width: 900px) {
       .login { grid-template-columns: 1fr; }
-      .brand { padding: 28px 24px; gap: 18px; }
+      .brand { min-height: 0; padding: 28px 24px; gap: 18px; }
       .pitch h1 { font-size: 26px; }
-      .pitch p, .companies, .hexfield { display: none; }
+      .pitch p, .illus { display: none; }
+      .companies { gap: 8px 14px; font-size: 12px; }
+      .co img { width: 22px; height: 22px; }
     }
   `]
 })
@@ -129,15 +148,9 @@ export class LoginComponent {
   capsLock = false;
   error = '';
 
-  /** Decorative hexagon field on the brand panel, after the logo. */
-  readonly hexes = [
-    { x: 200, y: 40, c: 'rgba(60, 189, 233, .28)' }, { x: 296, y: 40, c: 'rgba(33, 103, 168, .5)' },
-    { x: 392, y: 40, c: 'rgba(255, 255, 255, .06)' }, { x: 152, y: 122, c: 'rgba(255, 255, 255, .06)' },
-    { x: 248, y: 122, c: 'rgba(60, 189, 233, .55)' }, { x: 344, y: 122, c: 'rgba(33, 103, 168, .35)' },
-    { x: 440, y: 122, c: 'rgba(60, 189, 233, .2)' }, { x: 200, y: 204, c: 'rgba(33, 103, 168, .45)' },
-    { x: 296, y: 204, c: 'rgba(255, 255, 255, .08)' }, { x: 392, y: 204, c: 'rgba(60, 189, 233, .4)' },
-    { x: 248, y: 286, c: 'rgba(60, 189, 233, .22)' }, { x: 344, y: 286, c: 'rgba(33, 103, 168, .55)' }
-  ];
+  /** Group companies shown along the bottom of the brand panel. */
+  readonly companies = (['PMT', 'ACM', 'PHT', 'SBT'] as const).map(code => ({ code, name: COMPANY_NAMES[code] }));
+  readonly logo = companyLogo;
 
   constructor(
     private fb: FormBuilder,

@@ -13,6 +13,7 @@ import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { environment } from '../../../environments/environment';
 import { ToastService } from '../../ui/toast.service';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 
 interface TodoTask {
   id: number;
@@ -55,18 +56,21 @@ interface UserBirthday {
     MatCheckboxModule,
     MatTooltipModule,
     NavbarComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    PageHeaderComponent
   ],
   template: `
     <app-navbar></app-navbar>
 
     <div class="calendar-container">
+      <app-page-header class="cal-ph" [crumbs]="['Workspace', 'Calendar']" title="Calendar" icon="calendar_month"
+                       subtitle="Public holidays, birthdays, meetings and your tasks"></app-page-header>
       <div class="calendar-header">
-        <button aria-label="Previous" mat-icon-button (click)="previousMonth()">
+        <button aria-label="Previous month" mat-icon-button (click)="previousMonth()">
           <mat-icon>chevron_left</mat-icon>
         </button>
-        <h1>{{ monthNames[currentMonth] }} {{ currentYear }}</h1>
-        <button aria-label="Next" mat-icon-button (click)="nextMonth()">
+        <h2>{{ monthNames[currentMonth] }} {{ currentYear }}</h2>
+        <button aria-label="Next month" mat-icon-button (click)="nextMonth()">
           <mat-icon>chevron_right</mat-icon>
         </button>
       </div>
@@ -92,9 +96,14 @@ interface UserBirthday {
                  (click)="openDayEvents(day)">
               <div class="day-number">{{ day.day }}</div>
               <div class="day-events">
-                @for (event of day.events; track event.id) {
-                  <div class="event-indicator" [style.background]="event.color" [title]="event.title"></div>
+                @for (event of day.events.slice(0, 3); track event.id) {
+                  <div class="ev-chip" [class.k-holiday]="eventKind(event) === 'holiday'" [class.k-birthday]="eventKind(event) === 'birthday'"
+                       [style.--c]="eventColor(event)" [title]="event.title">
+                    @if (eventKind(event) === 'birthday') { <mat-icon class="icon-filled" aria-hidden="true">cake</mat-icon> }
+                    <span>{{ event.title }}</span>
+                  </div>
                 }
+                @if (day.events.length > 3) { <div class="ev-more">+{{ day.events.length - 3 }} more</div> }
                 @for (task of day.tasks; track task.id) {
                   <div class="task-indicator" 
                        [class.completed]="task.isCompleted"
@@ -182,9 +191,9 @@ interface UserBirthday {
         </h3>
         <div class="events-list">
           @for (event of getCurrentMonthEvents(); track event.id) {
-            <mat-card class="event-card">
+            <mat-card class="event-card" [class.k-holiday]="eventKind(event) === 'holiday'" [style.--c]="eventColor(event)">
               <mat-card-header>
-                <mat-card-title>{{ event.title }}</mat-card-title>
+                <mat-card-title>@if (eventKind(event) === 'birthday') { <mat-icon class="ev-card-ic icon-filled" aria-hidden="true">cake</mat-icon> }{{ event.title }}</mat-card-title>
                 <mat-card-subtitle>{{ event.date | date:'MMM d, y' }}</mat-card-subtitle>
               </mat-card-header>
               <mat-card-content>
@@ -209,7 +218,7 @@ interface UserBirthday {
   `,
   styles: [`
     .calendar-container {
-      padding: 80px;
+      padding: 24px 24px 56px;
       min-height: calc(100vh - 64px);
       position: relative;
       background: var(--color-canvas);
@@ -220,19 +229,28 @@ interface UserBirthday {
       flex: 1;
     }
 
+    .cal-ph {
+      display: block;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
     .calendar-header {
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 32px;
-      padding: 32px 0;
+      gap: 24px;
+      padding: 16px 0 16px;
       color: var(--color-text);
     }
 
-    .calendar-header h1 {
-      font-size: 2.5rem;
-      font-weight: 600;
+    .calendar-header h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
       margin: 0;
+      min-width: 220px;
+      text-align: center;
     }
 
     .calendar-header button {
@@ -246,9 +264,9 @@ interface UserBirthday {
     }
 
     .calendar-header mat-icon {
-      font-size: var(--text-4xl);
-      width: 32px;
-      height: 32px;
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
     }
 
     .calendar-grid {
@@ -305,23 +323,19 @@ interface UserBirthday {
       z-index: 10;
     }
 
-    .calendar-day.has-events {
-      border-left: 4px solid var(--color-primary);
-    }
-
     .calendar-day.other-month {
       background: var(--color-canvas);
       opacity: 0.5;
     }
 
     .calendar-day.today {
-      background: var(--color-primary-soft);
-      border: 2px solid var(--color-primary);
+      background: var(--accent-soft);
+      box-shadow: inset 0 0 0 2px var(--accent);
     }
 
     .calendar-day.today .day-number {
-      background: var(--color-primary);
-      color: var(--color-on-primary);
+      background: var(--accent);
+      color: #fff;
       border-radius: 50%;
       width: 36px;
       height: 36px;
@@ -344,10 +358,47 @@ interface UserBirthday {
       margin-top: 8px;
     }
 
-    .event-indicator {
-      height: 6px;
-      border-radius: 3px;
-      transition: all 0.2s ease;
+    /* Event chips: colour by kind (meetings/events in the accent, birthdays pink with a cake, holidays striped). */
+    .ev-chip {
+      --c: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      min-width: 0;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border-left: 3px solid var(--c);
+      background: color-mix(in srgb, var(--c) 14%, var(--color-surface));
+      color: color-mix(in srgb, var(--c) 70%, var(--color-text));
+      font-size: var(--text-xs);
+      font-weight: 650;
+      line-height: 1.4;
+    }
+
+    .ev-chip span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ev-chip mat-icon {
+      flex: none;
+      font-size: 12px;
+      width: 12px;
+      height: 12px;
+    }
+
+    .ev-chip.k-holiday {
+      background: repeating-linear-gradient(135deg,
+        color-mix(in srgb, var(--c) 22%, var(--color-surface)) 0 5px,
+        color-mix(in srgb, var(--c) 9%, var(--color-surface)) 5px 10px);
+    }
+
+    .ev-more {
+      padding: 0 6px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-3);
     }
 
     .task-indicator {
@@ -376,10 +427,6 @@ interface UserBirthday {
     .task-indicator.pending {
       background: var(--color-warn-soft);
       color: var(--color-warn);
-    }
-
-    .calendar-day:hover .event-indicator {
-      height: 8px;
     }
 
     .section-title {
@@ -559,6 +606,21 @@ interface UserBirthday {
 
     .event-card {
       transition: all 0.3s ease;
+      border-left: 4px solid var(--c, var(--accent));
+    }
+
+    .event-card.k-holiday {
+      background-image: repeating-linear-gradient(135deg,
+        color-mix(in srgb, var(--c) 10%, transparent) 0 8px, transparent 8px 16px);
+    }
+
+    .ev-card-ic {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      margin-right: 6px;
+      vertical-align: -3px;
+      color: var(--c);
     }
 
     .event-card:hover {
@@ -569,11 +631,11 @@ interface UserBirthday {
     .event-card mat-card-title {
       font-size: 1.3rem;
       font-weight: 600;
-      color: var(--color-primary);
+      color: var(--color-text);
     }
 
     .event-card mat-card-subtitle {
-      color: var(--color-primary);
+      color: var(--color-text-2);
       font-size: 1rem;
       margin-top: 4px;
     }
@@ -590,7 +652,7 @@ interface UserBirthday {
       font-size: var(--text-2xl);
       width: 20px;
       height: 20px;
-      color: var(--color-primary);
+      color: var(--c, var(--accent));
     }
 
     .event-card p {
@@ -615,8 +677,22 @@ interface UserBirthday {
     }
 
     @media (max-width: 768px) {
-      .calendar-header h1 {
-        font-size: 1.8rem;
+      .calendar-container {
+        padding: 16px 16px 40px;
+      }
+
+      .calendar-header h2 {
+        font-size: 1.3rem;
+        min-width: 0;
+      }
+
+      .ev-chip span, .ev-chip mat-icon {
+        display: none;
+      }
+
+      .ev-chip {
+        height: 6px;
+        padding: 0;
       }
 
       .weekday {
@@ -1017,6 +1093,25 @@ export class CalendarComponent implements OnInit {
   getBirthdayDate(birthday: Date): Date {
     const d = new Date(birthday);
     return new Date(this.currentYear, d.getMonth(), d.getDate());
+  }
+
+  /** Display kind of an event, from how it was built (holidays list, birthdays 2000+, meetings 3000+). */
+  eventKind(event: any): 'holiday' | 'birthday' | 'meeting' | 'event' {
+    if (event.location === 'Public Holiday') return 'holiday';
+    if (event.id >= 2000 && event.id < 3000) return 'birthday';
+    if (event.id >= 3000) return 'meeting';
+    return 'event';
+  }
+
+  /** Chip colour: a module accent when the event names a module, category colours for holidays and birthdays, else the page accent. */
+  eventColor(event: any): string {
+    const mod = String(event.module ?? event.category ?? event.type ?? '').toLowerCase();
+    if (['home', 'docs', 'projects', 'sales', 'logistics', 'stock', 'tenders', 'people', 'finance', 'admin'].includes(mod)) return `var(--acc-${mod})`;
+    switch (this.eventKind(event)) {
+      case 'holiday': return 'var(--color-cat-amber)';
+      case 'birthday': return 'var(--color-cat-pink)';
+      default: return 'var(--accent)';
+    }
   }
 
   completeTask(task: TodoTask): void {

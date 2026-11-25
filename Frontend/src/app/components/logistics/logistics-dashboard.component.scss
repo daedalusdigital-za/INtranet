@@ -1145,15 +1145,9 @@
     }
 
     /* ── Live load indicator (scheduled for today) ─────────────── */
+    /* Visual refresh: the global .live-dot (pulsing green) draws the dot; only spacing here. */
     .live-dot {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
       margin-right: 8px;
-      border-radius: 50%;
-      background: var(--color-danger);
-      vertical-align: middle;
-      animation: livePulse 1.4s ease-in-out infinite;
     }
 
     .live-track-chip {
@@ -1175,12 +1169,9 @@
         transform: scale(1.05);
       }
 
-      .live-pulse {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--color-on-primary);
-        animation: livePulse 1.4s ease-in-out infinite;
+      .live-dot {
+        margin-right: 0;
+        color: var(--color-on-primary);
       }
     }
 
@@ -3996,4 +3987,70 @@
     .secondary-stat-card .stat-content .stat-value {
       white-space: nowrap;
       font-size: clamp(16px, calc((100cqi - 106px) / 8.5), 24px);
+    }
+
+    /* ── Visual refresh ─────────────────────────────────────────── */
+    // Loading: skeletons in the page layout (replaces the full-screen loading card).
+    .lg-skeleton .lg-sk-kpi { pointer-events: none; }
+    .lg-skeleton .lg-sk-icon { width: 56px; height: 56px; border-radius: 14px; flex: none; }
+    .lg-skeleton .lg-sk-num { display: block; width: 64px; height: 30px; border-radius: 6px; }
+    .lg-skeleton .lg-sk-label { display: block; width: 110px; height: 11px; border-radius: 4px; margin-top: 10px; }
+
+    // KPI tiles: big tabular numbers, small uppercase labels.
+    .modern-stat-card .stat-content .stat-value,
+    .secondary-stat-card .stat-content .stat-value,
+    .maintenance-stat-card .stat-value {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+    }
+    .secondary-stat-card .stat-content .stat-value {
+      font-size: clamp(16px, calc((100cqi - 106px) / 6), 32px);
+    }
+    .maintenance-stat-card .stat-value { font-size: 32px; }
+    .modern-stat-card .stat-content .stat-label,
+    .secondary-stat-card .stat-content .stat-label,
+    .maintenance-stat-card .stat-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-3);
+      opacity: 1;
+    }
+
+    // Loads table: customer name bold, delivery address on a muted second line.
+    .cust-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 4px 0; }
+    .cust-cell .cust-name { font-weight: 600; color: var(--color-text); }
+    .cust-cell .cust-addr { font-size: var(--text-xs); color: var(--color-text-3); line-height: 1.35; }
+    .cust-cell .title-case { text-transform: capitalize; }
+
+    // Trip status pills carry an icon, so colour is never the only signal.
+    .pill-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      margin-right: 4px;
+      vertical-align: -3px;
+    }
+
+    // MOVING badge gets the pulsing live dot (white on the green badge).
+    .moving-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      .live-dot { margin-right: 0; color: var(--color-on-primary); }
+    }
+
+    // Province chips: one stable soft-tinted colour per province.
+    .province-badge.corner {
+      &[data-prov="Gauteng" i], &[data-prov="GP" i] { background: var(--color-cat-purple-soft); color: var(--color-cat-purple); }
+      &[data-prov="KwaZulu-Natal" i], &[data-prov="KwaZulu Natal" i], &[data-prov="KZN" i] { background: var(--color-cat-teal-soft); color: var(--color-cat-teal); }
+      &[data-prov="Western Cape" i], &[data-prov="WC" i], &[data-prov="CPT" i] { background: var(--color-cat-pink-soft); color: var(--color-cat-pink); }
+      &[data-prov="Eastern Cape" i], &[data-prov="EC" i], &[data-prov="PE" i] { background: var(--color-cat-amber-soft); color: var(--color-cat-amber); }
+      &[data-prov="Free State" i], &[data-prov="FS" i] { background: var(--acc-sales-soft); color: var(--acc-sales); }
+      &[data-prov="Limpopo" i], &[data-prov="LP" i] { background: var(--acc-stock-soft); color: var(--acc-stock); }
+      &[data-prov="Mpumalanga" i], &[data-prov="MP" i] { background: var(--acc-home-soft); color: var(--acc-home); }
+      &[data-prov="North West" i], &[data-prov="NW" i] { background: var(--acc-tenders-soft); color: var(--acc-tenders); }
+      &[data-prov="Northern Cape" i], &[data-prov="NC" i] { background: var(--acc-finance-soft); color: var(--acc-finance); }
     }

@@ -25,6 +25,7 @@ import { ToastService } from '../../ui/toast.service';
 import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { AvatarComponent } from '../../ui/avatar/avatar.component';
 
 @Component({
   selector: 'app-board',
@@ -48,7 +49,8 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
     NavbarComponent,
     StatusChipComponent,
     EmptyStateComponent,
-    SkeletonRowsComponent
+    SkeletonRowsComponent,
+    AvatarComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -58,6 +60,11 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
         <div class="board-header">
           <div class="board-header-top">
             <div class="board-info">
+              <nav class="board-crumbs" aria-label="Breadcrumb">
+                <span>Workspace</span>
+                <mat-icon aria-hidden="true">chevron_right</mat-icon>
+                <a routerLink="/departments">Project boards</a>
+              </nav>
               <h2>{{ board.title }}</h2>
               <p class="board-description">{{ board.description }}</p>
               <div class="board-meta">
@@ -270,13 +277,7 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
             <div class="members-list">
               @for (member of board.members; track member.boardMemberId) {
                 <div class="member-item">
-                  <div class="member-avatar">
-                    @if (member.profilePictureUrl) {
-                      <img [src]="member.profilePictureUrl" [alt]="member.userName">
-                    } @else {
-                      <mat-icon>account_circle</mat-icon>
-                    }
-                  </div>
+                  <app-avatar class="member-avatar" [name]="member.userName" [photo]="member.profilePictureUrl || null" size="32"></app-avatar>
                   <div class="member-info">
                     <span class="member-name">{{ member.userName }}</span>
                     <span class="member-role" [class]="'role-' + member.role.toLowerCase()">{{ member.role }}</span>
@@ -301,8 +302,8 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
         </div>
 
         <div class="lists-container" cdkDropListGroup>
-          @for (list of board.lists; track list.listId) {
-            <div class="list-column">
+          @for (list of board.lists; track list.listId; let li = $index) {
+            <div class="list-column" [style.--col]="listColour(li)">
               <div class="list-header">
                 <h3>{{ list.title }}</h3>
                 <span class="card-count">{{ list.cards.length }}</span>
@@ -330,16 +331,21 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
                           <span>Created by: {{ card.createdByName }}</span>
                         </div>
                       }
-                      @if (card.assignedToName) {
-                        <div class="card-meta">
-                          <mat-icon>person</mat-icon>
-                          <span>Assigned to: {{ card.assignedToName }}</span>
-                        </div>
-                      }
-                      @if (card.dueDate) {
-                        <div class="card-meta">
-                          <mat-icon>event</mat-icon>
-                          <span>{{ card.dueDate | date }}</span>
+                      @if (card.assignedToName || card.dueDate) {
+                        <div class="card-people-row">
+                          @if (card.assignedToName) {
+                            <span class="card-assignee" [matTooltip]="'Assigned to ' + card.assignedToName">
+                              <app-avatar [name]="card.assignedToName" size="24"></app-avatar>
+                              <span>{{ card.assignedToName }}</span>
+                            </span>
+                          }
+                          @if (card.dueDate) {
+                            <span class="due-chip" [class]="'due-chip due-' + dueState(card.dueDate)"
+                                  [matTooltip]="dueState(card.dueDate) === 'overdue' ? 'Overdue' : dueState(card.dueDate) === 'soon' ? 'Due soon' : 'Due date'">
+                              <mat-icon>{{ dueState(card.dueDate) === 'overdue' ? 'error' : 'event' }}</mat-icon>
+                              {{ card.dueDate | date:'d MMM' }}
+                            </span>
+                          }
                         </div>
                       }
                       <div class="card-footer">
@@ -700,27 +706,33 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
     }
 
     .member-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .board-crumbs {
       display: flex;
       align-items: center;
-      justify-content: center;
-      background: var(--color-primary-soft);
+      gap: 4px;
+      margin-bottom: 4px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-3);
     }
 
-    .member-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+    .board-crumbs mat-icon {
+      font-size: var(--text-lg);
+      width: 16px;
+      height: 16px;
     }
 
-    .member-avatar mat-icon {
-      color: var(--color-primary);
-      font-size: var(--text-3xl);
-      width: 24px;
-      height: 24px;
+    .board-crumbs a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .board-crumbs a:hover {
+      color: var(--accent);
+      text-decoration: underline;
     }
 
     .member-info {
@@ -805,9 +817,12 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 2px solid var(--color-primary);
+      margin: -16px -16px 16px;
+      padding: 14px 16px 12px;
+      border-top: 4px solid var(--col, var(--accent));
+      border-bottom: 1px solid var(--color-line);
+      background: color-mix(in srgb, var(--col, var(--accent)) 8%, transparent);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     }
 
     .list-header h3 {
@@ -820,8 +835,8 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
     }
 
     .card-count {
-      background: var(--color-primary-soft);
-      color: var(--color-primary);
+      background: color-mix(in srgb, var(--col, var(--accent)) 16%, transparent);
+      color: var(--col, var(--accent));
       padding: 4px 12px;
       border-radius: 20px;
       font-size: var(--text-xs);
@@ -835,14 +850,80 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
       padding: 4px;
     }
 
+    /* Cover strip in the list colour along the top of each card */
     .card {
+      position: relative;
       margin-bottom: 12px;
+      padding-top: 6px;
       cursor: pointer;
-      transition: all 0.3s ease;
-      border-left: 4px solid var(--color-primary);
+      transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
       background: var(--color-surface);
-      box-shadow: var(--shadow-sm);
+      box-shadow: var(--shadow-card);
       overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background: linear-gradient(90deg, var(--col, var(--accent)), color-mix(in srgb, var(--col, var(--accent)) 55%, transparent));
+    }
+
+    .card-people-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 8px 0 4px;
+    }
+
+    .card-assignee {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-2);
+    }
+
+    .card-assignee > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .due-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      background: var(--color-surface-2);
+      color: var(--color-text-2);
+      white-space: nowrap;
+    }
+
+    .due-chip mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    .due-chip.due-soon {
+      background: var(--color-warn-soft);
+      color: var(--color-warn);
+    }
+
+    .due-chip.due-overdue {
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
     }
 
     .card :deep(.mat-mdc-card-header) {
@@ -863,8 +944,8 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
     }
 
     .card:hover {
-      transform: translateX(4px);
-      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-hover);
     }
 
     .card.cdk-drag-animating {
@@ -952,6 +1033,28 @@ import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.comp
   `]
 })
 export class BoardComponent implements OnInit, OnDestroy {
+  /** Column header strip / card cover colours, cycled by list position. */
+  private static readonly listPalette = ['var(--accent)', 'var(--color-cat-teal)', 'var(--color-cat-amber)',
+    'var(--color-cat-pink)', 'var(--color-cat-purple)', 'var(--acc-stock)', 'var(--acc-logistics)'];
+
+  listColour(index: number): string {
+    return BoardComponent.listPalette[index % BoardComponent.listPalette.length];
+  }
+
+  /** 'overdue' before today, 'soon' within the next 3 days, else 'ok'. */
+  dueState(due: Date | string | null | undefined): 'overdue' | 'soon' | 'ok' {
+    if (!due) return 'ok';
+    const d = new Date(due);
+    if (isNaN(d.getTime())) return 'ok';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    const days = Math.round((d.getTime() - today.getTime()) / 86400000);
+    if (days < 0) return 'overdue';
+    if (days <= 3) return 'soon';
+    return 'ok';
+  }
+
   board?: Board;
   boardId: number = 0;
   currentUser: any;

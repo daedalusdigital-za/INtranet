@@ -7,7 +7,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { Subscription, forkJoin, interval, of, catchError } from 'rxjs';
 
-import { EmptyStateComponent } from '../../shared/ui/empty-state.component';
+import { EmptyStateComponent } from '../../../ui/empty-state/empty-state.component';
 import { SkeletonRowsComponent } from '../../../ui/skeleton-rows/skeleton-rows.component';
 import { StatusChipComponent } from '../../../ui/status-chip/status-chip.component';
 import { ToastService } from '../../../ui/toast.service';

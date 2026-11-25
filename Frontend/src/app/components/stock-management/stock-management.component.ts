@@ -154,7 +154,7 @@ interface ComprehensiveAnalysisResponse {
         }
         <button mat-stroked-button class="welly-suggest-btn" (click)="openWellySuggestions()"
                 matTooltip="Welly checks open invoices against stock on hand: what can be invoiced out now, which internal movements would complete more, and inter-company transfers">
-          <mat-icon>lightbulb</mat-icon>Welly suggests
+          <mat-icon>lightbulb</mat-icon>Ask Welly
         </button>
         <app-sub-nav tabs [pages]="sections" base="/stock-management" [active]="section()" [queries]="linkQueries()"
                      [counts]="sectionCounts()" [panel]="stockPanel" label="Stock sections"></app-sub-nav>
@@ -238,7 +238,7 @@ interface ComprehensiveAnalysisResponse {
                  role="button" tabindex="0" (keydown.enter)="toggleWhFilter(warehouse.id)"
                  [matTooltip]="whFilterId === warehouse.id ? 'Click to clear filter' : 'Click to filter tabs by ' + warehouse.name">
               <div class="stk-wh-head">
-                <mat-icon class="stk-wh-ico">warehouse</mat-icon>
+                <span class="icon-tile stk-wh-ico"><mat-icon>location_on</mat-icon></span>
                 <div class="stk-wh-title">
                   <h3>{{ warehouse.name }}</h3>
                   <span>{{ warehouse.location }}</span>
@@ -252,22 +252,30 @@ interface ComprehensiveAnalysisResponse {
                 <div><b>{{ warehouse.totalItems | number }}</b><span>Items</span></div>
                 <div><b>{{ formatQty(warehouse.totalQuantityOnHand) }}</b><span>Units</span></div>
                 <div><b>{{ formatValue(warehouse.totalStockValue) }}</b><span>Value</span></div>
-                <div><b>{{ warehouse.itemsInStock | number }}<i class="out-sub">/{{ warehouse.itemsOutOfStock }}</i></b><span>In / Out</span></div>
+                <div matTooltip="Items in stock · items out of stock"><b class="inout"><i class="in-sub">in {{ warehouse.itemsInStock | number }}</i> · <i class="out-sub">out {{ warehouse.itemsOutOfStock | number }}</i></b><span>Stock status</span></div>
               </div>
               @if (warehouse.byClient && warehouse.byClient.length > 0) {
                 <div class="client-chips">
                   @for (c of warehouse.byClient.slice(0, 4); track c.client) {
                     <span class="client-chip" [matTooltip]="c.items + ' items \u00b7 ' + formatQty(c.quantityOnHand) + ' units \u00b7 ' + formatValue(c.stockValue)">
+                      @if (coLogo(c.client); as logo) { <img class="stk-co-logo" [src]="logo" alt="" width="16" height="16" decoding="async" loading="lazy" /> }
                       {{ c.client }} <b>{{ formatQty(c.quantityOnHand) }}</b>
                     </span>
                   }
                 </div>
               }
               @if (warehouse.lastCountDate) {
-                <div class="stock-asat">
-                  <mat-icon>event_available</mat-icon>
-                  Stock as at {{ warehouse.lastCountDate | date:'dd MMM yyyy' }}
-                </div>
+                @if (isStockDateStale(warehouse.lastCountDate)) {
+                  <div class="stock-asat stale" matTooltip="Stock was last counted more than 2 days ago, so quantities may be out of date">
+                    <mat-icon>schedule</mat-icon>
+                    Stock as at {{ warehouse.lastCountDate | date:'dd MMM yyyy' }}
+                  </div>
+                } @else {
+                  <div class="stock-asat">
+                    <mat-icon>event_available</mat-icon>
+                    Stock as at {{ warehouse.lastCountDate | date:'dd MMM yyyy' }}
+                  </div>
+                }
               }
             </div>
           }
@@ -326,10 +334,16 @@ interface ComprehensiveAnalysisResponse {
                         <tr>
                           <td class="ref" [class.code-inv]="invMatched(r.commodityCode)" [matTooltip]="invMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">{{ r.commodityCode }}</td>
                           <td class="desc">{{ r.commodityName }}</td>
-                          <td><span class="stk-chip">{{ r.category || '—' }}</span></td>
+                          <td><span class="stk-chip">@if (coLogo(r.category); as logo) { <img class="stk-co-logo" [src]="logo" alt="" width="16" height="16" decoding="async" loading="lazy" /> }{{ r.category || '—' }}</span></td>
                           <td>{{ r.warehouseName }}</td>
                           <td>{{ r.unitOfMeasure || 'Each' }}</td>
-                          <td class="num"><b>{{ r.quantityOnHand | number }}</b></td>
+                          <td class="num"><b>{{ r.quantityOnHand | number }}</b>
+                            @if (levelPct(r); as pct) {
+                              <div class="stk-level" [attr.data-cover]="levelTone(r)" [matTooltip]="'Reorder at ' + (r.reorderLevel | number) + (r.maximumLevel ? ' · max ' + (r.maximumLevel | number) : '')">
+                                <span [style.width.%]="pct"></span>
+                              </div>
+                            }
+                          </td>
                           <td class="num">{{ r.unitPrice ? ('R' + (r.unitPrice | number:'1.2-2')) : '—' }}</td>
                           <td class="num">{{ r.lineValue ? ('R' + (r.lineValue | number:'1.0-0')) : '—' }}</td>
                           <td><app-status-chip [status]="r.quantityOnHand > 0 ? 'In stock' : (r.quantityOnHand < 0 ? 'Negative' : 'Out of stock')"
@@ -386,7 +400,7 @@ interface ComprehensiveAnalysisResponse {
                         <td>
                           @for (c of w.byClient; track c.client) {
                             <button type="button" class="stk-chip stk-chip-btn" style="margin-right:4px;" (click)="openWarehouseSheet(w, c.client)"
-                                    [matTooltip]="'View ' + c.client + ' stock on hand at ' + w.name">{{ c.client }} {{ c.items }}</button>
+                                    [matTooltip]="'View ' + c.client + ' stock on hand at ' + w.name">@if (coLogo(c.client); as logo) { <img class="stk-co-logo" [src]="logo" alt="" width="16" height="16" decoding="async" loading="lazy" /> }{{ c.client }} {{ c.items }}</button>
                           }
                         </td>
                       </tr>
@@ -430,7 +444,7 @@ interface ComprehensiveAnalysisResponse {
                         <tr [class.stk-row-resolved]="i.status === 'Resolved' || i.status === 'Dismissed'">
                           <td>{{ i.issueDate ? (i.issueDate | date:'dd MMM') : '—' }}</td>
                           <td>{{ i.warehouseName || '—' }}</td>
-                          <td><span class="stk-chip">{{ i.company || '—' }}</span></td>
+                          <td><span class="stk-chip">@if (coLogo(i.company); as logo) { <img class="stk-co-logo" [src]="logo" alt="" width="16" height="16" decoding="async" loading="lazy" /> }{{ i.company || '—' }}</span></td>
                           <td class="ref">{{ i.itemCode || '—' }}</td>
                           <td class="desc">{{ i.itemDescription }}</td>
                           <td><b>{{ i.issueType }}</b></td>
@@ -483,7 +497,7 @@ interface ComprehensiveAnalysisResponse {
                       <tr>
                         <td class="ref" [class.code-inv]="invMatched(r.commodityCode)" [matTooltip]="invMatched(r.commodityCode) ? 'Code found on sales invoices' : ''">{{ r.commodityCode }}</td>
                         <td class="desc">{{ r.commodityName }}</td>
-                        <td><span class="stk-chip">{{ r.category || '—' }}</span></td>
+                        <td><span class="stk-chip">@if (coLogo(r.category); as logo) { <img class="stk-co-logo" [src]="logo" alt="" width="16" height="16" decoding="async" loading="lazy" /> }{{ r.category || '—' }}</span></td>
                         <td>{{ r.warehouseName }}</td>
                         <td class="num"><b>{{ r.quantityOnHand | number }}</b></td>
                         <td><app-status-chip [status]="excMode === 'out' ? 'Out of stock' : (excMode === 'neg' ? 'Negative stock' : 'No sales price')"
@@ -529,7 +543,7 @@ interface ComprehensiveAnalysisResponse {
                 <span class="stk-spacer"></span>
                 <button mat-icon-button (click)="loadLedger()" matTooltip="Reload movements" aria-label="Reload movements"><mat-icon>refresh</mat-icon></button>
                 <button mat-icon-button (click)="exportMovements()" matTooltip="Export this view to Excel" aria-label="Export this view to Excel"><mat-icon>file_download</mat-icon></button>
-                <button mat-stroked-button class="welly-suggest-btn" (click)="openWellySuggestions()" matTooltip="Which transfers between warehouses would complete open invoices"><mat-icon>lightbulb</mat-icon> Welly suggests</button>
+                <button mat-stroked-button class="welly-suggest-btn" (click)="openWellySuggestions()" matTooltip="Which transfers between warehouses would complete open invoices"><mat-icon>lightbulb</mat-icon> Ask Welly</button>
                 <button mat-flat-button color="primary" [matMenuTriggerFor]="recordMenu"><mat-icon>add</mat-icon> Record a movement</button>
                 <mat-menu #recordMenu="matMenu" class="mv-menu">
                   <button mat-menu-item (click)="openManualMovement('Receive')"><mat-icon>south_west</mat-icon>
@@ -1276,6 +1290,16 @@ interface ComprehensiveAnalysisResponse {
       font-size: var(--text-xs); color: var(--color-text-3); position: relative; z-index: 1;
     }
     .stock-asat mat-icon { font-size: var(--text-md); width: 14px; height: 14px; }
+    .stock-asat.stale {
+      display: inline-flex; padding: 3px 10px; border-radius: 999px; font-weight: 600;
+      background: var(--color-warn-soft); color: var(--color-warn);
+    }
+    .stk-co-logo { width: 16px; height: 16px; border-radius: 50%; object-fit: contain; flex-shrink: 0; vertical-align: -4px; margin-right: 4px; }
+    .client-chip .stk-co-logo { margin-right: 0; }
+    .stk-level { height: 4px; width: 64px; margin: 4px 0 0 auto; border-radius: 999px; background: var(--color-surface-2); overflow: hidden; }
+    .stk-level span { display: block; height: 100%; border-radius: inherit; background: var(--color-ok); transition: width var(--base, 250ms) var(--ease, ease); }
+    .stk-level[data-cover="warn"] span { background: var(--color-warn); }
+    .stk-level[data-cover="danger"] span { background: var(--color-danger); }
 
     /* ═══ Dashboard redesign ═══ */
     .stk-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 18px; }
@@ -1310,7 +1334,7 @@ interface ComprehensiveAnalysisResponse {
     .stk-wh-card:hover { box-shadow: var(--shadow-md); }
     .stk-wh-card.active { border-color: var(--color-primary); background: var(--color-primary-soft); }
     .stk-wh-head { display: flex; align-items: center; gap: 10px; }
-    .stk-wh-ico { color: var(--color-primary); }
+    .stk-wh-ico { flex-shrink: 0; }
     .stk-wh-title { flex: 1; min-width: 0; }
     .stk-wh-title h3 { margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .stk-wh-title span { font-size: var(--text-xs); color: var(--color-text-3); }
@@ -1319,7 +1343,9 @@ interface ComprehensiveAnalysisResponse {
     .stk-wh-stats > div { text-align: center; background: var(--color-canvas); border-radius: var(--radius-control); padding: 6px 2px; }
     .stk-wh-card.active .stk-wh-stats > div { background: var(--color-surface); }
     .stk-wh-stats b { display: block; font-size: var(--text-sm); color: var(--color-text); }
-    .stk-wh-stats b .out-sub { font-style: normal; font-size: var(--text-xs); color: var(--color-danger); font-weight: 600; }
+    .stk-wh-stats b.inout { font-size: var(--text-xs); color: var(--color-text-3); white-space: nowrap; }
+    .stk-wh-stats b .in-sub { font-style: normal; color: var(--color-ok); font-weight: 600; }
+    .stk-wh-stats b .out-sub { font-style: normal; color: var(--color-danger); font-weight: 600; }
     .stk-wh-stats span { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
 
     .stk-tabs { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 30px; }
@@ -1470,6 +1496,32 @@ export class StockManagementComponent implements OnInit, DoCheck, OnDestroy {
     /** Internal holding "company" for write-offs: damaged, expired, short-dated and repack stock */
     { key: 'DAMAGED-EXPIRED', shortName: 'Damaged / Expired', color: 'var(--color-danger, #c62828)', logo: '' }
   ];
+
+  /** Round logo for a stock company key (PROMED, ACCESS...) or '' when there is none, for the small company chips. */
+  coLogo(key: string | null | undefined): string {
+    const k = (key ?? '').trim().toUpperCase();
+    return k ? (this.stockCompanies.find(c => c.key === k)?.logo ?? '') : '';
+  }
+
+  /** True when the stock count date is more than 2 days old. */
+  isStockDateStale(date: string | null | undefined): boolean {
+    if (!date) return false;
+    const t = new Date(date).getTime();
+    return isFinite(t) && Date.now() - t > 2 * 86400000;
+  }
+
+  /** Fill % for the per-item stock-level bar; 0 (no bar) when the item has no reorder/max level set. */
+  levelPct(r: WarehouseInventory): number {
+    const ref = r.maximumLevel > 0 ? r.maximumLevel : (r.reorderLevel > 0 ? r.reorderLevel * 2 : 0);
+    if (!ref) return 0;
+    return Math.max(4, Math.min(100, ((r.quantityOnHand || 0) / ref) * 100));
+  }
+
+  /** Cover tone for the stock-level bar: out/negative = danger, at or under reorder level = warn, else ok. */
+  levelTone(r: WarehouseInventory): 'ok' | 'warn' | 'danger' {
+    if ((r.quantityOnHand || 0) <= 0) return 'danger';
+    return r.reorderLevel > 0 && r.quantityOnHand <= r.reorderLevel ? 'warn' : 'ok';
+  }
 
   /** Inventory scoped to the selected warehouse + company filters */
   get invScoped(): any[] {

@@ -16,11 +16,22 @@
   <div class="chat-header">
     <div class="chat-header-left">
       <div class="chat-avatar">
-        <mat-icon aria-hidden="true">support_agent</mat-icon>
+        <app-welly-mascot
+          [size]="40"
+          [compact]="true"
+          [followMouse]="false"
+          [mood]="mascotMood"
+          [gesture]="wellyGesture"
+          title="Welly">
+        </app-welly-mascot>
       </div>
       <div class="chat-header-info">
-        <h3>Welly - IT Support</h3>
-        <span class="status-online">● Online</span>
+        <h3 title="Welly – your assistant">Welly</h3>
+        @if (isServiceAvailable) {
+          <span class="status-online"><span class="live-dot" aria-hidden="true"></span>Online</span>
+        } @else {
+          <span class="status-online offline">Basic answers only</span>
+        }
       </div>
     </div>
     <div class="chat-header-actions">
@@ -139,7 +150,7 @@
           type="text"
           [(ngModel)]="userInput"
           (keypress)="handleKeyPress($event)"
-          placeholder="Type your message or attach a PDF..."
+          placeholder="Message Welly…"
           class="chat-input-field"
           aria-label="Message Welly"
         />

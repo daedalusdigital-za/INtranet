@@ -46,6 +46,7 @@ import { ToastService } from '../../ui/toast.service';
 import { PageHeaderComponent } from '../../ui/page-header/page-header.component';
 import { SubNavComponent } from '../../ui/sub-nav/sub-nav.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
+import { CountUpDirective } from '../../ui/count-up.directive';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { ChipTone, StatusChipComponent } from '../../ui/status-chip/status-chip.component';
 import { formatDay, isFilterRecord, parseDay, queryText, recordFilters, toQuery } from '../../ui/sub-pages';
@@ -99,7 +100,8 @@ import { BackOrderStockDialog } from './back-order-stock-dialog.component';
     SubNavComponent,
     SkeletonRowsComponent,
     EmptyStateComponent,
-    StatusChipComponent
+    StatusChipComponent,
+    CountUpDirective
   ],
   templateUrl: './sales-dashboard.component.html',
   styleUrls: ['./sales-dashboard.component.scss']
@@ -2268,6 +2270,13 @@ export class SalesDashboardComponent implements OnInit, DoCheck, OnDestroy {
       incomingOrders: emails.length,
       processingOrders: emails.filter(e => !e.isRead).length
     });
+  }
+
+  /** Display-only: ALL-CAPS names ("OK MINIMARK (PTY) LTD") read as title case ("OK Minimark (Pty) Ltd"); mixed-case names are left alone. */
+  titleCaseName(name: string | null | undefined): string {
+    const v = (name ?? '').trim();
+    if (!v || v !== v.toUpperCase() || !/[A-Z]/.test(v)) return v;
+    return v.toLowerCase().replace(/[a-z0-9']+/g, w => w.length <= 2 && !/^(of|de|en|la|le)$/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1));
   }
 
   formatCurrency(value: number): string {

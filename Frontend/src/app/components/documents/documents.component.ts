@@ -36,7 +36,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
 
     <div class="documents-container">
       <app-page-header class="header-section" [crumbs]="['Workspace', 'Documents']" title="Documents"
-                       [subtitle]="departments.length + ' department libraries, ' + (totalDocuments | number) + ' documents'">
+                       [subtitle]="departments.length + ' department libraries' + (totalDocuments > 0 ? ', ' + (totalDocuments | number) + ' documents' : '')">
         <div class="search-box">
           <mat-icon aria-hidden="true">search</mat-icon>
           <input type="text"
@@ -78,20 +78,23 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
           </div>
           @for (dept of filteredDepartments; track dept.name) {
             <div class="department-card" 
-                 [class.loading]="dept.documentCount === -1"
+                 [class.loading]="dept.documentCount === -1 && !countsSettled"
+                 [style.--dept]="deptAccent(dept.name)"
+                 [style.--dept-soft]="deptAccent(dept.name, true)"
                  (click)="openPasswordDialog(dept)"
                  [matTooltip]="'Access ' + dept.name + ' Hub'">
-              
+
               <div class="card-content">
                 <div class="icon-container" [attr.data-dept]="dept.name.toLowerCase()">
                   <mat-icon>{{ dept.icon }}</mat-icon>
                 </div>
-                
+
                 <h3>{{ dept.name }}</h3>
-                
+
                 <div class="document-count">
                   @if (dept.documentCount === -1) {
-                    <div class="skeleton loading-skeleton"></div>
+                    <!-- Real loading skeleton; once the counts request has settled an unknown count shows nothing. -->
+                    @if (!countsSettled) { <div class="skeleton loading-skeleton"></div> }
                   } @else {
                     <mat-icon>description</mat-icon>
                     <span>{{ dept.documentCount }} Documents</span>
@@ -194,18 +197,17 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
     .department-card {
       position: relative;
       background: var(--color-surface);
-      border: 1px solid var(--color-line);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card);
       overflow: hidden;
       cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-      box-shadow: var(--shadow-sm);
+      transition: transform var(--base) var(--ease), box-shadow var(--base) var(--ease);
+      box-shadow: var(--shadow-card);
+      animation: refresh-rise-in var(--base) var(--ease) both;
     }
 
     .department-card:hover {
       transform: translateY(-4px);
-      border-color: var(--color-primary);
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--shadow-hover);
     }
 
     .card-content {
@@ -223,7 +225,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
       align-items: center;
       justify-content: center;
       border-radius: var(--radius-lg);
-      background: var(--color-primary-soft);
+      background: var(--dept-soft, var(--accent-soft));
       transition: transform 0.2s ease;
     }
 
@@ -238,7 +240,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
       font-size: var(--text-4xl);
       width: 32px;
       height: 32px;
-      color: var(--color-primary);
+      color: var(--dept, var(--accent));
     }
 
     .department-card h3 {
@@ -290,7 +292,7 @@ import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component'
       left: 0;
       right: 0;
       height: 4px;
-      background: var(--color-primary);
+      background: var(--dept, var(--accent));
       transform: scaleX(0);
       transition: transform 0.3s;
     }
@@ -317,7 +319,20 @@ export class DocumentsComponent implements OnInit {
   filteredDepartments: DepartmentInfo[] = [];
   searchQuery = '';
   totalDocuments = 0;
-  
+  /** True once the counts request has answered (or failed), so leftover skeletons stop showing. */
+  countsSettled = false;
+
+  /** Colour per department, stable by name, cycled through the module/category accents. */
+  private static readonly deptPalette = ['acc-docs', 'acc-projects', 'acc-sales', 'acc-logistics', 'acc-stock', 'acc-tenders',
+    'acc-people', 'acc-finance', 'color-cat-purple', 'color-cat-teal', 'color-cat-pink', 'color-cat-amber'];
+
+  deptAccent(name: string, soft = false): string {
+    let h = 0;
+    for (const ch of (name ?? '').toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const token = DocumentsComponent.deptPalette[h % DocumentsComponent.deptPalette.length];
+    return `var(--${token}${soft ? '-soft' : ''})`;
+  }
+
   // Static department list for instant display
   private static readonly staticDepartments: DepartmentInfo[] = [
     { name: 'IT', icon: 'computer', documentCount: -1 },
@@ -384,6 +399,7 @@ export class DocumentsComponent implements OnInit {
         });
         this.filterDepartments();
         this.calculateTotalDocuments();
+        this.countsSettled = true;
       },
       error: (error) => {
         console.error('Error loading departments:', error);
@@ -391,6 +407,7 @@ export class DocumentsComponent implements OnInit {
         this.departments = this.departments.map(d => ({ ...d, documentCount: d.documentCount === -1 ? 0 : d.documentCount }));
         this.filteredDepartments = [...this.departments];
         this.calculateTotalDocuments();
+        this.countsSettled = true;
       }
     });
   }

@@ -13,6 +13,9 @@ export type WellyFace =
 /** External mood the host (chatbot) can push. 'idle' hands control back to the mascot. */
 export type WellyMood = 'idle' | 'thinking' | 'happy' | 'angry' | 'error' | 'updating';
 
+/** One-off body gesture the host can trigger on top of the face (CSS animation + overlay). */
+export type WellyGesture = 'none' | 'wave' | 'celebrate';
+
 const ALL_FACES: WellyFace[] = [
   'default', 'default2', 'defaulteyesclosed',
   'lookingtopleft', 'lookingtopright', 'lookingdirectlyabove',
@@ -49,6 +52,10 @@ export class WellyMascotComponent implements OnInit, OnDestroy, OnChanges {
   @Input() title = 'Chat with Welly';
   /** Follow the cursor. Falls back to the focused element when the mouse is idle. */
   @Input() followMouse = true;
+  /** One-off gesture: 'wave' (chat opened) or 'celebrate' (action succeeded). Host resets it to 'none'. */
+  @Input() gesture: WellyGesture = 'none';
+  /** Small inline use (e.g. chat header avatar): no outward pulse rings. */
+  @Input() compact = false;
 
   @Output() clicked = new EventEmitter<void>();
 
@@ -93,6 +100,7 @@ export class WellyMascotComponent implements OnInit, OnDestroy, OnChanges {
 
   ngOnChanges(ch: SimpleChanges): void {
     if (ch['mood']) this.applyFace();
+    if (ch['gesture'] && this.gesture !== 'none') this.react('happy', 1600);
   }
 
   ngOnDestroy(): void {

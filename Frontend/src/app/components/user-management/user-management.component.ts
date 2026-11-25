@@ -18,12 +18,14 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { NavbarComponent } from '../shared/navbar/navbar.component';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 import { StatusChipComponent } from '../../ui/status-chip/status-chip.component';
+import { AvatarComponent } from '../../ui/avatar/avatar.component';
 import { ToastService } from '../../ui/toast.service';
 import { ConfirmService } from '../../ui/confirm.service';
 import { SecureSrcDirective } from '../../directives/secure-src.directive';
@@ -104,7 +106,9 @@ interface Permission {
     SkeletonRowsComponent,
     EmptyStateComponent,
     StatusChipComponent,
-    SecureSrcDirective
+    SecureSrcDirective,
+    MatDividerModule,
+    AvatarComponent
   ],
   template: `
     <app-navbar></app-navbar>
@@ -256,9 +260,7 @@ interface Permission {
                   <tr [class.inactive-row]="!user.isActive" [class]="'tier-row-' + tierOf(user)">
                     <td>
                       <div class="user-cell">
-                        <div class="avatar" [class.has-picture]="user.hasProfilePicture">
-                          {{ getInitials(user) }}
-                        </div>
+                        <app-avatar [name]="(user.name || '') + ' ' + (user.surname || '')" size="34"></app-avatar>
                         <div class="user-info">
                           <span class="user-name">
                             {{ user.name }} {{ user.surname }}
@@ -300,23 +302,18 @@ interface Permission {
                     <td>{{ formatDate(user.lastLoginAt) }}</td>
                     <td>
                       <div class="action-buttons">
-                        <button aria-label="Edit User" mat-icon-button matTooltip="Edit User" (click)="openEditDialog(user)">
-                          <mat-icon>edit</mat-icon>
+                        <button mat-icon-button [matMenuTriggerFor]="userMenu" matTooltip="Actions"
+                                [attr.aria-label]="'Actions for ' + user.name + ' ' + user.surname">
+                          <mat-icon>more_vert</mat-icon>
                         </button>
-                        <button aria-label="Reset Password" mat-icon-button matTooltip="Reset Password" (click)="openResetPasswordDialog(user)">
-                          <mat-icon>lock_reset</mat-icon>
-                        </button>
-                        <button aria-label="Email a reset link" mat-icon-button matTooltip="Email a reset link so they choose their own password"
-                                [disabled]="!user.isActive || sendingResetLinkFor === user.userId" (click)="sendResetLink(user)">
-                          <mat-icon>forward_to_inbox</mat-icon>
-                        </button>
-                        <button [attr.aria-label]="user.isActive ? 'Deactivate' : 'Activate'" mat-icon-button [matTooltip]="user.isActive ? 'Deactivate' : 'Activate'" 
-                                (click)="toggleUserStatus(user)">
-                          <mat-icon>{{ user.isActive ? 'block' : 'check_circle' }}</mat-icon>
-                        </button>
-                        <button aria-label="Delete User" mat-icon-button matTooltip="Delete User" color="warn" (click)="confirmDelete(user)">
-                          <mat-icon>delete</mat-icon>
-                        </button>
+                        <mat-menu #userMenu="matMenu" xPosition="before">
+                          <button mat-menu-item (click)="openEditDialog(user)"><mat-icon>edit</mat-icon><span>Edit user</span></button>
+                          <button mat-menu-item (click)="openResetPasswordDialog(user)"><mat-icon>lock_reset</mat-icon><span>Reset password</span></button>
+                          <button mat-menu-item [disabled]="!user.isActive || sendingResetLinkFor === user.userId" (click)="sendResetLink(user)"><mat-icon>forward_to_inbox</mat-icon><span>Email a reset link</span></button>
+                          <button mat-menu-item (click)="toggleUserStatus(user)"><mat-icon>{{ user.isActive ? 'block' : 'check_circle' }}</mat-icon><span>{{ user.isActive ? 'Deactivate' : 'Activate' }}</span></button>
+                          <mat-divider></mat-divider>
+                          <button mat-menu-item class="menu-danger" (click)="confirmDelete(user)"><mat-icon>delete</mat-icon><span>Delete user</span></button>
+                        </mat-menu>
                       </div>
                     </td>
                   </tr>
@@ -537,9 +534,10 @@ interface Permission {
     }
     .role-chip mat-icon { font-size: 14px; width: 14px; height: 14px; }
 
-    .role-chip.role-super-admin {
-      background: #1f2937;
-      color: #fbbf24;
+    .role-chip.role-super-admin,
+    .role-chip.role-superadmin {
+      background: var(--acc-finance-soft);
+      color: var(--acc-finance);
     }
 
     .role-chip.role-director {
@@ -583,35 +581,24 @@ interface Permission {
     tr.tier-row-executive td:first-child { border-left: 3px solid #6d28d9; }
     tr.tier-row-managers td:first-child { border-left: 3px solid #2563eb; }
 
-    .role-chip.role-admin {
-      background: var(--color-cat-amber-soft);
-      color: var(--color-cat-amber);
-    }
-
+    .role-chip.role-admin,
     .role-chip.role-manager {
-      background: var(--color-primary-soft);
-      color: var(--color-primary);
+      background: var(--acc-projects-soft);
+      color: var(--acc-projects);
     }
 
     .role-chip.role-employee {
-      background: var(--color-cat-teal-soft);
-      color: var(--color-cat-teal);
-    }
-
-    .role-chip.role-hr {
-      background: var(--color-cat-pink-soft);
-      color: var(--color-cat-pink);
-    }
-
-    .role-chip.role-it-support {
-      background: var(--color-cat-purple-soft);
-      color: var(--color-cat-purple);
+      background: var(--acc-admin-soft);
+      color: var(--acc-admin);
     }
 
     .action-buttons {
       display: flex;
-      gap: 4px;
+      justify-content: flex-end;
     }
+
+    .users-table td { padding-top: 6px; padding-bottom: 6px; }
+    .menu-danger, .menu-danger mat-icon { color: var(--color-danger) !important; }
 
     .action-buttons button {
       width: 36px;

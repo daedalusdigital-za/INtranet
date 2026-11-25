@@ -277,10 +277,11 @@
               <!-- recipient avatars summary -->
               @if (d.recipients.length) {
                 <div class="pl-recip-strip">
+                  <!-- stacked signer avatars; the ring colour still shows each signer's state -->
                   @for (r of d.recipients; track r.id) {
-                    <span class="pl-avatar" [style.background]="recipStateColour(r.state)"
+                    <span class="pl-stack-av" [style.--ring]="recipStateColour(r.state)"
                           [title]="r.name + ' · ' + roleLabel(r.role) + ' · ' + r.state">
-                      {{ r.name.charAt(0).toUpperCase() }}
+                      <app-avatar [name]="r.name" size="24"></app-avatar>
                     </span>
                   }
                 </div>
@@ -292,6 +293,26 @@
               <span class="material-icons">{{ isExpanded(d.id) ? 'expand_less' : 'expand_more' }}</span>
             </button>
           </div>
+
+          <!-- Status tracker: Draft → Sent → Signed → Done, from the document's status -->
+          @if (stepIndex(d.status) >= 0) {
+            <ol class="pl-tracker" [class.pl-tracker--done]="d.status === 'completed'"
+                [attr.aria-label]="'Progress: ' + statusLabel(d.status)">
+              @for (step of trackerSteps; track step; let i = $index) {
+                <li class="pl-tracker__step"
+                    [class.is-filled]="i <= stepIndex(d.status)"
+                    [class.is-current]="i === stepIndex(d.status)"
+                    [style.--i]="i">
+                  <span class="pl-tracker__dot">
+                    @if (i < stepIndex(d.status) || d.status === 'completed') {
+                      <span class="material-icons">check</span>
+                    }
+                  </span>
+                  <span class="pl-tracker__lbl">{{ step }}</span>
+                </li>
+              }
+            </ol>
+          }
 
           <!-- Quick actions -->
           <div class="pl-doc__actions">
@@ -500,7 +521,7 @@
           }
         </div>
       } @empty {
-        <app-empty-state compact icon="folder_open" title="No documents yet" message="Upload a file above to get started."></app-empty-state>
+        <app-empty-state icon="folder_open" illustration="docs" title="No documents yet" message="Upload a file above to get started."></app-empty-state>
       }
     </div>
   </div>
@@ -829,7 +850,7 @@
         </div>
       }
       } @else {
-      <app-empty-state icon="description" title="No document open" message="Open a document from the Paperless controller to view, annotate and sign it."></app-empty-state>
+      <app-empty-state icon="description" illustration="docs" title="No document open" message="Open a document from the Paperless controller to view, annotate and sign it."></app-empty-state>
       }
     }
   </div>

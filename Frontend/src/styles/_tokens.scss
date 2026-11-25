@@ -102,6 +102,33 @@
   // Table rows: comfortable by default, compact when the person chooses it (D-04)
   --row-pad-y: 10px;
 
+  // ---- Visual refresh (Nov 2026): one accent per module, softer depth, motion ----
+  // Each module page sets data-module on <body>; [data-module] rules below map it to
+  // --accent / --accent-soft, used by page-header icon tiles, KPI top borders, active tabs
+  // and charts. Green, amber and red stay status-only.
+  --acc-home: #2563eb;      --acc-home-soft: #eff4ff;
+  --acc-docs: #0d9488;      --acc-docs-soft: #e6f7f5;
+  --acc-projects: #7c3aed;  --acc-projects-soft: #f3eeff;
+  --acc-sales: #059669;     --acc-sales-soft: #e7f8f1;
+  --acc-logistics: #ea580c; --acc-logistics-soft: #fff1e8;
+  --acc-stock: #0891b2;     --acc-stock-soft: #e6f7fb;
+  --acc-tenders: #4f46e5;   --acc-tenders-soft: #eeeeff;
+  --acc-people: #db2777;    --acc-people-soft: #fdeef5;
+  --acc-finance: #ca8a04;   --acc-finance-soft: #fef8e6;
+  --acc-admin: #475569;     --acc-admin-soft: #f1f4f7;
+  --accent: var(--color-primary);
+  --accent-soft: var(--color-primary-soft);
+
+  --page-bg: #f6f8fc;
+  --sidebar-top: #1e1b4b;
+  --sidebar-bottom: #2e2a6b;
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px rgba(16, 24, 40, 0.04);
+  --shadow-hover: 0 4px 8px rgba(16, 24, 40, 0.08), 0 12px 24px rgba(16, 24, 40, 0.06);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --fast: 150ms;
+  --base: 250ms;
+
   // ---- Legacy names, kept so existing component styles follow the new palette ----
   --brand-50: #eef4fb;
   --brand-100: #dbe8f6;
@@ -165,6 +192,21 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.4);
+  --acc-home: #7aa2f7;      --acc-home-soft: #1a2647;
+  --acc-docs: #4fd1c5;      --acc-docs-soft: #10302d;
+  --acc-projects: #b39cf6;  --acc-projects-soft: #2a2152;
+  --acc-sales: #4ade9e;     --acc-sales-soft: #10322a;
+  --acc-logistics: #fb923c; --acc-logistics-soft: #3a2010;
+  --acc-stock: #4cc9e4;     --acc-stock-soft: #0f2f3a;
+  --acc-tenders: #8f8bf5;   --acc-tenders-soft: #24234f;
+  --acc-people: #f472b6;    --acc-people-soft: #3a1830;
+  --acc-finance: #eab308;   --acc-finance-soft: #352a0c;
+  --acc-admin: #a3b1c6;     --acc-admin-soft: #232a3a;
+  --page-bg: #0e0f22;
+  --sidebar-top: #0a0b1c;
+  --sidebar-bottom: #15163a;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.35), 0 12px 24px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
 }
 

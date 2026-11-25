@@ -6,7 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { Subscription } from 'rxjs';
 import { ChatService, ActionResult, ChatStreamEvent } from '../../services/chat.service';
-import { WellyMascotComponent, WellyMood } from './welly-mascot/welly-mascot.component';
+import { WellyMascotComponent, WellyMood, WellyGesture } from './welly-mascot/welly-mascot.component';
 
 interface ChatMessage {
   text: string;
@@ -53,6 +53,9 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   /** Unread Welly replies while the window is closed → badge + stronger pulse. */
   unreadReplies = 0;
   private mascotTimer?: any;
+  /** One-off gesture for the header mascot: waves when the chat opens, celebrates a successful action. */
+  wellyGesture: WellyGesture = 'none';
+  private gestureTimer?: any;
 
   isOpen = false;
   isMinimized = false;
@@ -146,6 +149,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     document.body.classList.remove('has-welly');
     clearTimeout(this.silenceTimer);
     clearTimeout(this.mascotTimer);
+    clearTimeout(this.gestureTimer);
     this.stopListening();
     this.stopSpeaking();
   }
@@ -173,6 +177,12 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     }
   }
 
+  private playGesture(g: WellyGesture, ms = 1800): void {
+    clearTimeout(this.gestureTimer);
+    this.wellyGesture = g;
+    this.gestureTimer = setTimeout(() => { this.wellyGesture = 'none'; }, ms);
+  }
+
   /** Click on the mascot: open the chat (and clear unread). */
   onMascotClick(): void {
     this.unreadReplies = 0;
@@ -185,6 +195,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     }
     this.isOpen = !this.isOpen;
     if (this.isOpen) {
+      this.playGesture('wave');
       this.unreadReplies = 0;
       if (!this.isServiceAvailable) this.checkServiceHealth();
     }
@@ -359,6 +370,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       isAction: !isDataAction,
       actionSuccess: isDataAction ? undefined : action.success
     });
+    if (!isDataAction && action.success) this.playGesture('celebrate', 1200);
     this.saveMessages();
     this.scrollToBottom();
   }

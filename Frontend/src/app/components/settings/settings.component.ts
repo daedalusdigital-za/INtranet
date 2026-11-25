@@ -36,6 +36,7 @@ import { SalesImportDialogComponent, SalesImportDialogData, SalesImportDialogRes
 import { ConfirmService } from '../../ui/confirm.service';
 import { SkeletonRowsComponent } from '../../ui/skeleton-rows/skeleton-rows.component';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
+import { AvatarComponent } from '../../ui/avatar/avatar.component';
 import { environment } from '../../../environments/environment';
 import { SecureSrcDirective } from '../../directives/secure-src.directive';
 import { SignatureDialogComponent } from '../shared/signature-dialog/signature-dialog.component';
@@ -80,6 +81,7 @@ import * as XLSX from 'xlsx';
     PageHeaderComponent,
     SkeletonRowsComponent,
     EmptyStateComponent,
+    AvatarComponent,
     SecureSrcDirective,
     PodUploaderComponent,
     CreditorAdminComponent,
@@ -104,12 +106,12 @@ import * as XLSX from 'xlsx';
           </div>
           <nav aria-label="Settings sections">
             @for (g of navGroups(); track g.label) {
-              <div class="st-group">
+              <div class="st-group" [style.--grp]="groupAccent(g.label)" [style.--grp-soft]="groupAccent(g.label, true)">
                 <h2 class="st-group-label">{{ g.label }}</h2>
                 @for (s of g.sections; track s.slug) {
                   <a class="st-link" [routerLink]="['/settings', s.slug]" [class.active]="section() === s.slug"
                      [attr.aria-current]="section() === s.slug ? 'page' : null" [title]="s.hint">
-                    <mat-icon aria-hidden="true">{{ s.icon }}</mat-icon>
+                    <span class="st-tile" aria-hidden="true"><mat-icon>{{ s.icon }}</mat-icon></span>
                     <span class="st-link-label">{{ s.label }}</span>
                     @if (sectionCount(s.slug)) { <span class="st-count">{{ sectionCount(s.slug) }}</span> }
                   </a>
@@ -136,7 +138,7 @@ import * as XLSX from 'xlsx';
 
         <main class="st-panel">
           @if (currentSection(); as cur) {
-            <header class="st-panel-head">
+            <header class="st-panel-head" [style.--grp]="groupAccent(cur.group)" [style.--grp-soft]="groupAccent(cur.group, true)">
               <mat-icon aria-hidden="true">{{ cur.icon }}</mat-icon>
               <div>
                 <h2>{{ cur.label }}</h2>
@@ -416,9 +418,7 @@ import * as XLSX from 'xlsx';
                   <ng-container matColumnDef="avatar">
                     <th mat-header-cell *matHeaderCellDef></th>
                     <td mat-cell *matCellDef="let user">
-                      <div class="user-avatar" [style.background]="userService.getRoleColor(user.role) + '22'" [style.color]="userService.getRoleColor(user.role)">
-                        <mat-icon>{{ userService.getRoleIcon(user.role) }}</mat-icon>
-                      </div>
+                      <app-avatar [name]="(user.name || '') + ' ' + (user.surname || '')" size="34"></app-avatar>
                     </td>
                   </ng-container>
 
@@ -435,9 +435,9 @@ import * as XLSX from 'xlsx';
                   <ng-container matColumnDef="role">
                     <th mat-header-cell *matHeaderCellDef>Role</th>
                     <td mat-cell *matCellDef="let user">
-                      <mat-chip class="role-chip" [class.exec]="userTierOf(user) === 'executive'" [style.background]="userService.getRoleColor(user.role) + '22'" [style.color]="userService.getRoleColor(user.role)" [style.border-color]="userService.getRoleColor(user.role)">
-                        <mat-icon>{{ userService.getRoleIcon(user.role) }}</mat-icon> {{ user.role }}
-                      </mat-chip>
+                      <span [class]="'role-badge ' + roleTone(user.role)">
+                        <mat-icon>{{ userService.getRoleIcon(user.role) }}</mat-icon>{{ user.role }}
+                      </span>
                     </td>
                   </ng-container>
 
@@ -482,23 +482,19 @@ import * as XLSX from 'xlsx';
                   </ng-container>
 
                   <ng-container matColumnDef="actions">
-                    <th mat-header-cell *matHeaderCellDef>Actions</th>
-                    <td mat-cell *matCellDef="let user">
-                      <button aria-label="Edit" mat-icon-button matTooltip="Edit" (click)="editUser(user)">
-                        <mat-icon>edit</mat-icon>
+                    <th mat-header-cell *matHeaderCellDef><span class="cdk-visually-hidden">Actions</span></th>
+                    <td mat-cell *matCellDef="let user" class="user-actions-cell">
+                      <button mat-icon-button [matMenuTriggerFor]="userMenu" [attr.aria-label]="'Actions for ' + user.name + ' ' + user.surname" matTooltip="Actions">
+                        <mat-icon>more_vert</mat-icon>
                       </button>
-                      <button aria-label="Toggle Status" mat-icon-button matTooltip="Toggle Status" (click)="toggleUserStatus(user)">
-                        <mat-icon>{{ user.isActive ? 'block' : 'check_circle' }}</mat-icon>
-                      </button>
-                      <button aria-label="Reset Password" mat-icon-button matTooltip="Reset Password" (click)="openResetPasswordDialog(user)">
-                        <mat-icon>lock_reset</mat-icon>
-                      </button>
-                      <button aria-label="Delete (deactivate if linked)" mat-icon-button matTooltip="Delete (deactivate if linked)" color="warn" (click)="deleteUser(user)">
-                        <mat-icon>delete</mat-icon>
-                      </button>
-                      <button aria-label="Permanent delete (remove completely)" mat-icon-button matTooltip="Permanent delete (remove completely)" color="warn" (click)="deleteUser(user, true)">
-                        <mat-icon>delete_forever</mat-icon>
-                      </button>
+                      <mat-menu #userMenu="matMenu" xPosition="before">
+                        <button mat-menu-item (click)="editUser(user)"><mat-icon>edit</mat-icon><span>Edit</span></button>
+                        <button mat-menu-item (click)="openResetPasswordDialog(user)"><mat-icon>lock_reset</mat-icon><span>Reset password</span></button>
+                        <button mat-menu-item (click)="toggleUserStatus(user)"><mat-icon>{{ user.isActive ? 'block' : 'check_circle' }}</mat-icon><span>{{ user.isActive ? 'Suspend' : 'Reactivate' }}</span></button>
+                        <mat-divider></mat-divider>
+                        <button mat-menu-item class="menu-danger" (click)="deleteUser(user)"><mat-icon>delete</mat-icon><span>Delete (deactivate if linked)</span></button>
+                        <button mat-menu-item class="menu-danger" (click)="deleteUser(user, true)"><mat-icon>delete_forever</mat-icon><span>Delete permanently</span></button>
+                      </mat-menu>
                     </td>
                   </ng-container>
 
@@ -2076,7 +2072,18 @@ import * as XLSX from 'xlsx';
     .st-link:hover { background: var(--color-surface-2); color: var(--color-text); }
     .st-link:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
     .st-link.active { background: var(--color-primary-soft); color: var(--color-primary); }
-    .st-link mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; }
+    .st-tile {
+      flex: none;
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--grp-soft, var(--color-primary-soft));
+      color: var(--grp, var(--color-primary));
+    }
+    .st-tile mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .st-link.active .st-tile { background: var(--grp, var(--color-primary)); color: var(--color-surface); }
     .st-link-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .st-count {
@@ -2122,8 +2129,8 @@ import * as XLSX from 'xlsx';
       box-sizing: border-box;
       font-size: 20px;
       border-radius: var(--radius-md);
-      background: var(--color-primary-soft);
-      color: var(--color-primary);
+      background: var(--grp-soft, var(--color-primary-soft));
+      color: var(--grp, var(--color-primary));
     }
 
     .st-panel-head h2 { margin: 0; font-size: var(--text-xl); font-weight: 700; color: var(--color-text); }
@@ -2171,9 +2178,19 @@ import * as XLSX from 'xlsx';
     .tier-tab.tier-admins.active { background: linear-gradient(135deg, #7f1d1d, #dc2626); border-color: #dc2626; }
     .users-toolbar { flex-wrap: wrap; }
     .users-toolbar .filter-field { width: 190px; }
-    .role-chip { border: 1px solid transparent; font-weight: 600; }
-    .role-chip mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; vertical-align: middle; }
-    .role-chip.exec { box-shadow: 0 0 0 2px rgba(109,40,217,.18); }
+    .role-badge {
+      display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 7px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; white-space: nowrap;
+      background: var(--color-surface-2); color: var(--color-text-2);
+    }
+    .role-badge mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    .role-badge.tone-gold { background: var(--acc-finance-soft); color: var(--acc-finance); }
+    .role-badge.tone-violet { background: var(--acc-projects-soft); color: var(--acc-projects); }
+    .role-badge.tone-slate { background: var(--acc-admin-soft); color: var(--acc-admin); }
+    .users-table td.mat-mdc-cell { padding-top: 6px; padding-bottom: 6px; }
+    .users-table tr.mat-mdc-row { height: 52px; }
+    .user-actions-cell { width: 48px; text-align: right; }
+    .menu-danger, .menu-danger mat-icon { color: var(--color-danger) !important; }
     .co-chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 200px; }
     .sig-cell { display: flex; align-items: center; gap: 4px; }
     .sig-thumb { height: 34px; max-width: 120px; object-fit: contain; background: #fff; border: 1px solid var(--color-line, #e5e7eb); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
@@ -2330,10 +2347,11 @@ import * as XLSX from 'xlsx';
     .user-name {
       display: flex;
       flex-direction: column;
+      line-height: 1.3;
     }
 
     .user-name small {
-      color: var(--color-text-2);
+      color: var(--color-text-3);
     }
 
     .status-indicator {
@@ -3862,6 +3880,27 @@ export class SettingsComponent implements OnInit, OnDestroy {
   openCashflowPack(batchId: number): void { if (batchId) this.router.navigate(['/finance'], { queryParams: { side: 'creditors', tab: 'creditors', batch: batchId } }); }
   private readonly route = inject(ActivatedRoute);
   private readonly subscriptions = new Subscription();
+
+  /** Stable accent per settings group, so each group's icon tiles share a colour. */
+  groupAccent(group: string, soft = false): string {
+    const map: Record<string, string> = { 'People & access': 'people', 'Content': 'docs', 'Operations data': 'logistics', 'System': 'admin' };
+    let key = map[group];
+    if (!key) {
+      const cycle = ['projects', 'stock', 'sales', 'tenders'];
+      let h = 0; for (const ch of group) h = (h * 31 + ch.charCodeAt(0)) % 997;
+      key = cycle[h % cycle.length];
+    }
+    return `var(--acc-${key}${soft ? '-soft' : ''})`;
+  }
+
+  /** Role badge colour: SuperAdmin gold, Admin/Manager violet, Employee slate, everyone else neutral. */
+  roleTone(role: string | null | undefined): string {
+    const r = (role || '').replace(/\s+/g, '').toLowerCase();
+    if (r === 'superadmin') return 'tone-gold';
+    if (r === 'admin' || r === 'manager') return 'tone-violet';
+    if (r === 'employee') return 'tone-slate';
+    return 'tone-neutral';
+  }
 
   /** A number after a section's name, as the Announcements tab had. Zero shows nothing. */
   sectionCount(slug: SettingsSlug): number {

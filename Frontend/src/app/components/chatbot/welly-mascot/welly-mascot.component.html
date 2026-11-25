@@ -5,6 +5,9 @@
         [class.hover]="hovering"
         [class.pressed]="pressed"
         [class.busy]="mood === 'thinking' || mood === 'updating'"
+        [class.compact]="compact"
+        [class.g-wave]="gesture === 'wave'"
+        [class.g-celebrate]="gesture === 'celebrate'"
         [style.--wm-size.px]="size"
         [attr.title]="title"
         [attr.aria-label]="title"
@@ -35,6 +38,11 @@
          loading="eager" />
     <span class="wm-shine"></span>
   </span>
+
+  <!-- Expressions layered over the PNG faces: wave hand, thinking dots, celebration sparkles -->
+  <span class="wm-hand" *ngIf="gesture === 'wave'" aria-hidden="true">👋</span>
+  <span class="wm-think" *ngIf="mood === 'thinking'" aria-hidden="true"><i></i><i></i><i></i></span>
+  <span class="wm-sparkles" *ngIf="gesture === 'celebrate'" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
 
   <span class="wm-badge" *ngIf="badge !== null && badge !== undefined && badge !== ''">{{ badge }}</span>
 </button>
