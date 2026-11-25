@@ -105,6 +105,7 @@ type Filter = 'toLoad' | 'loaded' | 'pop' | 'overdue' | 'progress' | null;
                       <button type="button" class="btn ghost sm" (click)="save(api.documentsZipUrl(b.id), 'Documents-' + b.batchNumber + '.zip')" [disabled]="busy()">⬇ All documents (ZIP)</button>
                       <button type="button" class="btn ghost sm" (click)="save(api.signedPackUrl(b.id), 'Signed-pack-' + b.batchNumber + '.pdf')" [disabled]="busy()">⬇ Signed pack (PDF)</button>
                       <button type="button" class="btn ghost sm" (click)="save(api.schedulePdfUrl(b.id), 'Payment-schedule-' + b.batchNumber + '.pdf')" [disabled]="busy()">⬇ Payment schedule</button>
+                      <button type="button" class="btn ghost sm" (click)="save(api.approvalSheetUrl(b.id), 'Approval-sheet-' + b.batchNumber + '.pdf')" [disabled]="busy()">⬇ Approval sheet</button>
                     </div>
                     @for (i of b.items; track i.id) {
                       <div class="ln">

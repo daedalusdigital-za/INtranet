@@ -259,8 +259,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
           }
           @if (b.can.bankFile) { <button mat-stroked-button (click)="bankFile()"><mat-icon>download</mat-icon> Download bank file</button> }
           @if (b.items.length) { <button mat-stroked-button (click)="printSchedule()" [disabled]="busy()" matTooltip="Printable A4 landscape list of every payment with bank details, amounts and signature lines"><mat-icon>print</mat-icon> Print schedule</button> }
+          @if (b.items.length && b.status !== 'Draft') { <button mat-stroked-button (click)="printApprovalSheet()" [disabled]="busy()" matTooltip="Only the payment pack approval sheet (schedule + signatures so far), without the documents — opens to print or download"><mat-icon>fact_check</mat-icon> Print approval sheet</button> }
           @if (b.lockedAt) { <button mat-stroked-button (click)="downloadSignedPack()" matTooltip="Approval sheet + every PDF in the pack, each stamped with the three signatures"><mat-icon>workspace_premium</mat-icon> Signed pack (PDF)</button> }
-          @else if (b.status !== 'Draft') { <button mat-button (click)="downloadApprovalSheet()" matTooltip="Schedule + signatures captured so far"><mat-icon>picture_as_pdf</mat-icon> Approval sheet</button> }
           @if (b.can.markLoaded) { <button mat-flat-button color="primary" (click)="setStatus('LoadedOnBank')"><mat-icon>account_balance</mat-icon> Loaded on bank</button> }
           @if (b.can.markPaid) { <button mat-flat-button color="primary" (click)="setStatus('Paid')"><mat-icon>price_check</mat-icon> Mark as paid</button> }
           @if (b.can.close) { <button mat-flat-button color="primary" (click)="setStatus('Closed')" [disabled]="missingPop(b) > 0 || openPrepayCount(b) > 0"><mat-icon>inventory</mat-icon> Close batch</button> }
@@ -1181,7 +1181,15 @@ export class FinanceCreditorsComponent implements OnInit {
     if (this.sigMode() === 'draw' && this.drew && this.sigpad) return { signatureImageBase64: this.sigpad.nativeElement.toDataURL('image/png'), useSavedSignature: false };
     return { useSavedSignature: true };
   }
-  downloadApprovalSheet(): void { const b = this.batch()!; this.api.approvalSheet(b.id).subscribe({ next: blob => this.saveBlob(blob, `Approval-sheet-${b.batchNumber}.pdf`), error: e => this.fail(e, "Couldn't build the approval sheet.") }); }
+  /** Just the approval sheet (no documents) in a new tab to print or save; downloads it if pop-ups are blocked. */
+  printApprovalSheet(): void {
+    const b = this.batch()!; this.busy.set(true);
+    const w = window.open('', '_blank'); // open now, while the click still counts, so pop-up blockers allow it
+    this.api.approvalSheet(b.id).subscribe({
+      next: blob => { this.busy.set(false); const url = URL.createObjectURL(blob); if (w) { w.location.href = url; setTimeout(() => URL.revokeObjectURL(url), 60_000); } else this.saveBlob(blob, `Approval-sheet-${b.batchNumber}.pdf`); },
+      error: e => { w?.close(); this.fail(e, "Couldn't build the approval sheet."); }
+    });
+  }
   printSchedule(): void {
     const b = this.batch()!; this.busy.set(true);
     this.api.schedulePdf(b.id).subscribe({

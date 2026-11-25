@@ -197,6 +197,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
                   <button mat-stroked-button [disabled]="dlBusy() === b.id" (click)="download(b, 'zip')"><mat-icon>folder_zip</mat-icon> All documents (ZIP)</button>
                   <button mat-stroked-button [disabled]="dlBusy() === b.id" (click)="download(b, 'signed')"><mat-icon>workspace_premium</mat-icon> Signed pack (PDF)</button>
                   <button mat-stroked-button [disabled]="dlBusy() === b.id" (click)="download(b, 'schedule')"><mat-icon>list_alt</mat-icon> Payment schedule (PDF)</button>
+                  <button mat-stroked-button [disabled]="dlBusy() === b.id" (click)="download(b, 'sheet')" matTooltip="Only the payment pack approval sheet, without the documents"><mat-icon>fact_check</mat-icon> Approval sheet (PDF)</button>
                   @if (dlBusy() === b.id) { <mat-spinner diameter="18"></mat-spinner> }
                 </div>
                 <table class="items">
