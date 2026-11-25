@@ -484,8 +484,8 @@ interface DialogData {
 
               <mat-form-field appearance="outline">
                 <mat-label>Estimated Value (ZAR)</mat-label>
+                <span matTextPrefix>R&nbsp;</span>
                 <input matInput type="number" formControlName="estimatedValue">
-                <span matPrefix>R&nbsp;</span>
               </mat-form-field>
 
               <mat-divider class="full-width"></mat-divider>
@@ -655,7 +655,7 @@ interface DialogData {
       }
 
       <mat-dialog-actions align="end">
-        <button mat-button (click)="dialogRef.close()">Close</button>
+        <button mat-button (click)="dialogRef.close()">{{ data.mode === 'view' ? 'Close' : 'Cancel' }}</button>
         @if (data.mode === 'view') {
           <button mat-raised-button color="primary" (click)="switchToEdit()">
             <mat-icon>edit</mat-icon> Edit

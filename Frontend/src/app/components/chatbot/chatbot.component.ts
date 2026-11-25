@@ -1,8 +1,9 @@
-import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { Subscription } from 'rxjs';
 import { ChatService, ActionResult, ChatStreamEvent } from '../../services/chat.service';
 import { WellyMascotComponent, WellyMood } from './welly-mascot/welly-mascot.component';
@@ -104,9 +105,26 @@ export class ChatbotComponent implements OnInit, OnDestroy {
   private streamEventSubscription?: Subscription;
   private readonly STORAGE_KEY = 'welly_chat_messages';
 
+  /**
+   * True while any Material dialog is open: the floating mascot (and its badge) is hidden so it
+   * never sits on top of dialog buttons. The chat window itself is a plain fixed panel, not a
+   * MatDialog, so it never counts here. Child MatDialog instances share the root's list, so
+   * openDialogs covers every dialog in the app.
+   */
+  private readonly dialog = inject(MatDialog);
+  readonly dialogOpen = signal(false);
+  private dialogSubscriptions: Subscription[] = [];
+
   constructor(private chatService: ChatService) {}
 
   ngOnInit(): void {
+    // Hide the mascot while a dialog is open; reserve room for it at the bottom of the page.
+    this.dialogOpen.set(this.dialog.openDialogs.length > 0);
+    this.dialogSubscriptions.push(
+      this.dialog.afterOpened.subscribe(() => this.dialogOpen.set(true)),
+      this.dialog.afterAllClosed.subscribe(() => this.dialogOpen.set(this.dialog.openDialogs.length > 0))
+    );
+    document.body.classList.add('has-welly');
     // Check if AI service is available
     this.checkServiceHealth();
     // Set up voice capabilities
@@ -124,6 +142,8 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.chatSubscription?.unsubscribe();
     this.actionSubscription?.unsubscribe();
     this.streamEventSubscription?.unsubscribe();
+    this.dialogSubscriptions.forEach(s => s.unsubscribe());
+    document.body.classList.remove('has-welly');
     clearTimeout(this.silenceTimer);
     clearTimeout(this.mascotTimer);
     this.stopListening();
@@ -134,7 +154,8 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.chatService.checkHealth().subscribe(available => {
       this.isServiceAvailable = available;
       if (!available) {
-        this.addBotMessage('AI is currently offline — using basic responses.');
+        // Status note, not a reply: don't light up the unread badge for it
+        this.addBotMessage('AI is currently offline — using basic responses.', false);
         this.setMascotMood('error', 2500);
       }
     });
@@ -287,7 +308,8 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.addBotMessage(response);
   }
 
-  private addBotMessage(text: string): void {
+  /** countAsUnread: false for the greeting / status notes, so the badge only counts real replies. */
+  private addBotMessage(text: string, countAsUnread = true): void {
     this.messages.push({
       text,
       isUser: false,
@@ -295,7 +317,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     });
     this.saveMessages();
     this.speak(text);
-    if (!this.isOpen && this.messages.length > 1) this.unreadReplies++;
+    if (countAsUnread && !this.isOpen) this.unreadReplies++;
   }
 
   private handleActionResult(action: ActionResult): void {
@@ -355,7 +377,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
       }
     } catch { }
     // First visit — show welcome
-    this.addBotMessage('Hi there! I\'m Welly, your IT assistant. How can I help?');
+    this.addBotMessage('Hi there! I\'m Welly, your IT assistant. How can I help?', false);
   }
 
   private saveMessages(): void {

@@ -84,8 +84,11 @@
         <h2><mat-icon>notifications_active</mat-icon> Needs attention</h2>
         @if (debtorsAttentionCount > 0) { <span class="ov-count">{{ debtorsAttentionCount }}</span> } @else { <span class="ov-count ok">All clear</span> }
       </header>
+      @if (debtorsAttentionCount === 0 && !ov.remittances.lastScanError) {
+        <div class="ov-empty"><mat-icon>task_alt</mat-icon><p>Nothing needs attention right now.</p></div>
+      }
       <ul class="attn-list">
-        <li class="attn" [class.zero]="ov.remittances.new === 0" (click)="goTab('remittances')">
+        <li class="attn" [class.zero]="ov.remittances.new === 0 && !ov.remittances.lastScanError" (click)="goTab('remittances')">
           <mat-icon>payments</mat-icon>
           <div class="attn-text"><b>{{ ov.remittances.new }}</b> new remittance{{ ov.remittances.new === 1 ? '' : 's' }} to allocate
             <small>@if (ov.remittances.lastScanError) { <span class="bad">Last mailbox scan failed</span> } @else if (ov.remittances.lastScanAt) { mailbox checked {{ ov.remittances.lastScanAt | date:'d MMM HH:mm' }} } @else { mailbox not scanned yet }</small></div>

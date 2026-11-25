@@ -983,7 +983,8 @@
   .chev { color: var(--color-text-3); }
   &:hover { border-color: var(--color-line); background: var(--color-surface); }
   &.danger { background: var(--color-danger-soft); > mat-icon:first-child { color: var(--color-danger); } }
-  &.zero { opacity:.55; > mat-icon:first-child { color: var(--color-ok); } &:hover { opacity:.85; } } }
+  /* Rows with nothing to do are hidden; the header shows "All clear" instead */
+  &.zero { display:none; } }
 
 .co-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
 .co { padding:10px 12px; border-radius: var(--radius-md); background: var(--color-surface-2); cursor:pointer; border:1px solid transparent; transition: border-color .15s;

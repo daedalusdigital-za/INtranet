@@ -217,7 +217,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
               <mat-form-field appearance="outline">
                 <mat-label>Amount</mat-label>
                 <input matInput type="number" [(ngModel)]="amount" placeholder="0.00">
-                <span matPrefix>R&nbsp;</span>
+                <span matTextPrefix>R&nbsp;</span>
               </mat-form-field>
               <mat-form-field appearance="outline">
                 <mat-label>Reference</mat-label>

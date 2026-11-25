@@ -1125,7 +1125,7 @@ export class UserManagementComponent implements OnInit {
         </mat-form-field>
 
         @if (data.mode === 'create') {
-          <mat-form-field appearance="outline" class="full-width">
+          <mat-form-field appearance="outline" class="full-width password-field" subscriptSizing="fixed">
             <mat-label>Password</mat-label>
             <input matInput formControlName="password" type="password" required>
             @if (form.get('password')?.hasError('required')) {
@@ -1302,6 +1302,11 @@ export class UserManagementComponent implements OnInit {
 
     mat-form-field {
       margin-bottom: 8px;
+    }
+
+    /* Hint sits under the password field; keep the next row at least 8px clear of it */
+    .password-field {
+      margin-bottom: 16px;
     }
 
     .form-error-summary {

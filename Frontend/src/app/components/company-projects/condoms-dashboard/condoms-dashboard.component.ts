@@ -106,7 +106,7 @@ interface DashboardData {
           </button>
           <div class="date-pill">
             <mat-icon>date_range</mat-icon>
-            March 2026
+            {{ periodLabel }}
           </div>
         </div>
       </div>
@@ -714,7 +714,10 @@ interface DashboardData {
             </div>
           </div>
 
-          @if (scentPodView === 'grid') {
+          @if (!dashboard?.scentBreakdown?.length) {
+            <app-empty-state compact icon="palette" title="No scent data for this period"
+                             message="Captured stock is broken down by scent here."></app-empty-state>
+          } @else if (scentPodView === 'grid') {
             <div class="scent-cards-row">
               @for (sb of dashboard?.scentBreakdown || []; track sb.scent) {
                 <div class="scent-card" [style.border-left-color]="getScentColor(sb.scent)">
@@ -1872,6 +1875,16 @@ export class CondomsDashboardComponent implements OnInit {
   ];
 
   dashboard: DashboardData | null = null;
+
+  /** Period the dashboard covers: the schedule's own date range, or the current month when nothing is captured yet. */
+  get periodLabel(): string {
+    const fmt = (d: Date) => d.toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
+    const range = this.dashboard?.hasData ? this.dashboard.summary?.dateRange : null;
+    if (!range?.from || !range?.to) return fmt(new Date());
+    const from = fmt(new Date(range.from));
+    const to = fmt(new Date(range.to));
+    return from === to ? from : `${from} – ${to}`;
+  }
   scheduleGroups: ScentGroup[] = [];
   filteredGroups: ScentGroup[] = [];
   scheduleDates: string[] = [];

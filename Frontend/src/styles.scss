@@ -269,6 +269,16 @@ mat-toolbar mat-icon {
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35) !important;
 }
 
+/* Welly mascot is fixed bottom-right (84px, 18px from the edge). ChatbotComponent adds
+   `has-welly` to <body> while it is shown; reserve its height + 24px at the bottom of the page
+   so the last table rows, row actions and pagination can scroll clear of it. Dialogs live in
+   the CDK overlay, outside app-root, so they get no extra padding. border-box keeps short
+   pages at exactly 100vh (no stray scrollbar). */
+body.has-welly app-root {
+  box-sizing: border-box;
+  padding-bottom: calc(84px + 24px);
+}
+
 /* Hide Welly chatbot when artwork viewer is open */
 body.artwork-viewer-open app-chatbot {
   display: none !important;

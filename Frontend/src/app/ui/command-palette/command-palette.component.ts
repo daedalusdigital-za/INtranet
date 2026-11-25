@@ -25,7 +25,7 @@ interface PaletteRow {
 }
 
 /**
- * One search for the whole intranet, opened with Ctrl K (design review D-06).
+ * One search for the whole intranet, opened with Ctrl K, or ⌘K on a Mac (design review D-06).
  * Finds pages and tools, people to message, and looks up invoices, items and
  * barcodes in Paperless. A barcode scanner types into the box and presses Enter.
  */

@@ -1631,7 +1631,7 @@ import * as XLSX from 'xlsx';
               </mat-form-field>
 
               @if (!editingUser) {
-                <mat-form-field appearance="outline" class="full-width">
+                <mat-form-field appearance="outline" class="full-width password-field" subscriptSizing="fixed">
                   <mat-label>Password</mat-label>
                   <input matInput formControlName="password" type="password" required>
                   <mat-hint>Minimum 8 characters</mat-hint>
@@ -1962,13 +1962,13 @@ import * as XLSX from 'xlsx';
               <mat-form-field appearance="outline">
                 <mat-label>Book Value (R)</mat-label>
                 <input matInput type="number" min="0" step="0.01" [(ngModel)]="assetForm.value" placeholder="0.00">
-                <span matPrefix>R&nbsp;</span>
+                <span matTextPrefix>R&nbsp;</span>
               </mat-form-field>
             </div>
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Market Value (R)</mat-label>
               <input matInput type="number" min="0" step="0.01" [(ngModel)]="assetForm.marketValue" placeholder="0.00">
-              <span matPrefix>R&nbsp;</span>
+              <span matTextPrefix>R&nbsp;</span>
             </mat-form-field>
           </div>
           <div class="dialog-actions">
@@ -2672,6 +2672,11 @@ import * as XLSX from 'xlsx';
 
     .form-row mat-form-field {
       flex: 1;
+    }
+
+    /* Keep the password hint clear of the Role/Department row below it */
+    .password-field {
+      margin-bottom: 8px;
     }
 
     /* Form Section Styles */

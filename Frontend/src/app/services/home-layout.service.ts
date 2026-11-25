@@ -96,7 +96,7 @@ export interface ShortcutOption { label: string; icon: string; target: string; p
 
 export const SHORTCUT_OPTIONS: ShortcutOption[] = [
   { label: 'Apply for leave', icon: 'event_available', target: 'action:leave', group: 'Actions' },
-  { label: 'Add a task', icon: 'add_task', target: 'action:todo', group: 'Actions' },
+  { label: 'My tasks', icon: 'add_task', target: 'action:todo', group: 'Actions' },
   { label: 'Company news', icon: 'campaign', target: '/welcome', group: 'Pages' },
   { label: 'Calendar', icon: 'calendar_month', target: '/calendar', group: 'Pages' },
   { label: 'My profile', icon: 'person', target: '/profile', group: 'Pages' },
@@ -144,7 +144,7 @@ export class HomeLayoutService {
     widgets.push({ id: 'around', type: 'around', size: 'md' });
     const shortcuts: HomeShortcut[] = [
       { id: 's-leave', label: 'Apply for leave', icon: 'event_available', target: 'action:leave' },
-      { id: 's-todo', label: 'Add a task', icon: 'add_task', target: 'action:todo' },
+      { id: 's-todo', label: 'My tasks', icon: 'add_task', target: 'action:todo' },
       { id: 's-news', label: 'Company news', icon: 'campaign', target: '/welcome' },
     ];
     return { version: 1, widgets, shortcuts };
@@ -193,7 +193,10 @@ export class HomeLayoutService {
     const shortcuts = (l.shortcuts ?? []).filter(s => {
       const opt = SHORTCUT_OPTIONS.find(o => o.target === s.target);
       return s.flowId || !opt || this.can(opt.permission);
-    });
+    }).map(s =>
+      // Saved layouts store the label: carry the old default name over to the new one (custom names are left alone).
+      s.target === 'action:todo' && s.label === 'Add a task' ? { ...s, label: 'My tasks' } : s
+    );
     return { version: 1, widgets, shortcuts };
   }
 

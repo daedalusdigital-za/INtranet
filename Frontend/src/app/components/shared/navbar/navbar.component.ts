@@ -76,7 +76,8 @@ interface NavGroup {
   ],
   template: `
     <a class="skip-link" href="#" (click)="skipToContent($event)">Skip to main content</a>
-    <aside class="sb" [class.sb-collapsed]="collapsed" [class.sb-open]="mobileOpen" aria-label="Main navigation">
+    <aside class="sb" [class.sb-collapsed]="collapsed" [class.sb-open]="mobileOpen" aria-label="Main navigation"
+           [class.sb-drawer-open]="paperlessRightOnly()" [class.sb-paperless-open]="paperless.isOpen('right')">
       <a class="sb-brand" routerLink="/dashboard" (click)="mobileOpen = false">
         <span class="sb-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="sb-brand-text">Promed Intranet<small>Promed Technologies</small></span>
@@ -91,10 +92,19 @@ interface NavGroup {
                       [matTooltip]="collapsed ? item.label : ''" matTooltipPosition="right">
                 <mat-icon>{{ item.icon }}</mat-icon><span class="sb-label">{{ item.label }}</span>
               </button>
+            } @else if (item.route === '/finance') {
+              <!-- Finance opens on Debtors when ?side= is absent, so its active state is worked out here
+                   rather than by routerLinkActive (which would light Finance, not Debtors). -->
+              <a class="sb-item" [class.sb-sub]="item.sub" [routerLink]="item.route" [queryParams]="item.query ?? null"
+                 [class.active]="financeNavActive(item)" [attr.aria-current]="financeNavActive(item) ? 'page' : null"
+                 (click)="onNavClick()" [matTooltip]="collapsed ? item.label : ''" matTooltipPosition="right">
+                @if (!item.sub) { <mat-icon>{{ item.icon }}</mat-icon> }
+                <span class="sb-label">{{ item.label }}</span>
+              </a>
             } @else {
               <a class="sb-item" [class.sb-sub]="item.sub" [routerLink]="item.route" [queryParams]="item.query ?? null"
                  routerLinkActive="active" [routerLinkActiveOptions]="item.query ? queryMatch : item.exact ? exactMatch : subsetMatch"
-                 (click)="mobileOpen = false" [matTooltip]="collapsed ? item.label : ''" matTooltipPosition="right">
+                 (click)="onNavClick()" [matTooltip]="collapsed ? item.label : ''" matTooltipPosition="right">
                 @if (!item.sub) { <mat-icon>{{ item.icon }}</mat-icon> }
                 <span class="sb-label">{{ item.label }}</span>
                 @if (item.badge === 'messages' && unreadMessagesCount > 0) {
@@ -107,7 +117,7 @@ interface NavGroup {
       </nav>
       <div class="sb-foot">
         @if (isAdmin()) {
-          <a class="sb-item" routerLink="/settings" routerLinkActive="active" (click)="mobileOpen = false"
+          <a class="sb-item" routerLink="/settings" routerLinkActive="active" (click)="onNavClick()"
              [matTooltip]="collapsed ? 'Admin settings' : ''" matTooltipPosition="right">
             <mat-icon>settings</mat-icon><span class="sb-label">Admin settings</span>
           </a>
@@ -126,12 +136,12 @@ interface NavGroup {
       <button mat-icon-button class="tb-menu" (click)="mobileOpen = !mobileOpen" aria-label="Open the navigation">
         <mat-icon>menu</mat-icon>
       </button>
-      <!-- One search for pages, tools, people and Paperless lookups (Ctrl K) -->
+      <!-- One search for pages, tools, people and Paperless lookups (Ctrl K, or ⌘K on a Mac) -->
       <button type="button" class="tb-search" [class.busy]="paperless.searching()" (click)="paletteOpen = true"
-              aria-label="Search the intranet (Ctrl K)">
+              [attr.aria-label]="'Search the intranet (' + searchShortcut + ')'" [attr.aria-keyshortcuts]="isMac ? 'Meta+K' : 'Control+K'">
         <mat-icon>search</mat-icon>
         <span class="tb-search-text">Search pages, people, invoices or barcodes</span>
-        <kbd>Ctrl K</kbd>
+        <kbd>{{ searchShortcut }}</kbd>
       </button>
       <span class="tb-spacer"></span>
 
@@ -162,7 +172,7 @@ interface NavGroup {
         <button mat-menu-item (click)="openBooksDialog()"><mat-icon>menu_book</mat-icon><span class="sm-text">Books<small>Each department's books</small></span></button>
         <button mat-menu-item routerLink="/archives"><mat-icon>inventory</mat-icon><span class="sm-text">Email archives<small>Search old company mailboxes</small></span></button>
         <div class="sm-label">This computer</div>
-        <button mat-menu-item (click)="downloadNotifier()"><mat-icon>desktop_windows</mat-icon><span class="sm-text">Desktop notifier<small>Alerts on your Windows desktop</small></span></button>
+        <button mat-menu-item (click)="downloadNotifier()"><mat-icon>desktop_windows</mat-icon><span class="sm-text">Desktop notifier<small>{{ notifierHint }}</small></span></button>
       </mat-menu>
 
       @if (hasPermission('messaging')) {
@@ -323,7 +333,8 @@ interface NavGroup {
       </div>
 
       <!-- User Menu -->
-      <button mat-icon-button [matMenuTriggerFor]="menu" class="profile-trigger">
+      <button mat-icon-button [matMenuTriggerFor]="menu" class="profile-trigger" type="button"
+              aria-label="Your account: profile, settings and sign out" matTooltip="Your account">
         <div class="profile-avatar-btn">
           {{ currentUser?.name?.charAt(0) || 'U' }}{{ currentUser?.surname?.charAt(0) || '' }}
         </div>
@@ -548,6 +559,16 @@ interface NavGroup {
     }
     .sb-item.sb-sub.active { color: var(--color-on-dark); }
     .sb-item.sb-sub.active::before { width: 2px; background: var(--color-focus); }
+    /* While the Paperless drawer is open, Paperless is the lit item, not the page underneath. */
+    .sb.sb-paperless-open a.sb-item.active { background: transparent; color: var(--nav-text); }
+    .sb.sb-paperless-open a.sb-item.active:hover { background: var(--nav-hover); color: var(--color-on-dark); }
+    .sb.sb-paperless-open a.sb-item.active mat-icon { color: var(--nav-text-dim); }
+    .sb.sb-paperless-open a.sb-item.sb-sub.active { color: var(--nav-text-dim); }
+    .sb.sb-paperless-open a.sb-item.sb-sub.active::before { width: 1px; background: rgba(255, 255, 255, 0.14); }
+    /* The Paperless backdrop (z-index 10000) would otherwise swallow the first sidebar click, so
+       the sidebar sits above it while only the right-hand drawer is open; a click then closes the
+       drawer and navigates in one go (see onNavClick). */
+    .sb.sb-drawer-open { z-index: 10001; }
     .sb-foot {
       border-top: 1px solid rgba(255, 255, 255, 0.1);
       padding-top: 8px;
@@ -822,8 +843,21 @@ export class NavbarComponent implements OnInit, OnDestroy {
   notificationsLoading: boolean = false;
   respondingTo: string | null = null;
 
-  /** Ctrl K command search (design review D-06). */
+  /** Ctrl K (⌘K on a Mac) command search (design review D-06). */
   paletteOpen = false;
+
+  /** Platform, for the shortcut hint and the Windows-only notifier's wording. */
+  readonly isMac = NavbarComponent.detectPlatform(/mac|iphone|ipad|ipod/i);
+  readonly isWindows = NavbarComponent.detectPlatform(/windows|win32|win64/i);
+  readonly searchShortcut = this.isMac ? '⌘K' : 'Ctrl K';
+  readonly notifierHint = this.isWindows ? 'Alerts on your Windows PC' : 'Windows only — alerts on your PC';
+
+  private static detectPlatform(pattern: RegExp): boolean {
+    if (typeof navigator === 'undefined') return false;
+    const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+    const platform = nav.userAgentData?.platform || nav.platform || '';
+    return pattern.test(platform) || pattern.test(nav.userAgent || '');
+  }
 
   /** Sidebar state. See readCollapsed for the default; mobileOpen is the phone drawer. */
   collapsed = NavbarComponent.readCollapsed();
@@ -876,6 +910,32 @@ export class NavbarComponent implements OnInit, OnDestroy {
     return this.navGroups
       .map(g => ({ ...g, items: g.items.filter(i => (!i.perm || this.hasPermission(i.perm)) && this.passesGate(i)) }))
       .filter(g => g.items.length > 0);
+  }
+
+  /**
+   * /finance opens on Debtors when ?side= is absent, so Debtors is lit for no side or
+   * side=debtors, Creditors for side=creditors. Finance is only the parent: it's lit just
+   * for a side neither sub-item covers.
+   */
+  financeNavActive(item: NavItem): boolean {
+    const tree = this.router.parseUrl(this.router.url);
+    const path = '/' + (tree.root.children['primary']?.segments.map(s => s.path).join('/') ?? '');
+    if (path !== '/finance') return false;
+    const side = tree.queryParams['side'] || 'debtors';
+    const want = item.query?.['side'];
+    if (want) return side === want;
+    return side !== 'debtors' && side !== 'creditors';
+  }
+
+  /** A sidebar link closes the phone drawer and the Paperless drawer, so one click navigates. */
+  onNavClick(): void {
+    this.mobileOpen = false;
+    if (this.paperless.isOpen('right')) this.paperless.close('right');
+  }
+
+  /** Only the right-hand Paperless drawer is open (the left viewer covers the sidebar's side). */
+  paperlessRightOnly(): boolean {
+    return this.paperless.isOpen('right') && !this.paperless.isOpen('left');
   }
 
   private passesGate(i: NavItem): boolean {
@@ -1024,7 +1084,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
       { group: 'Tools', label: 'PDF tools', icon: 'picture_as_pdf', hint: 'Merge, split and compress PDFs', keywords: 'i hate pdf merge split', run: () => this.openIHatePdfDialog() },
       { group: 'Tools', label: 'Books', icon: 'menu_book', hint: "Each department's books", run: () => this.openBooksDialog() },
       { group: 'Tools', label: 'Email archives', icon: 'inventory', hint: 'Search old company mailboxes', keywords: 'pst mail', run: () => this.router.navigate(['/archives']) },
-      { group: 'Tools', label: 'Desktop notifier', icon: 'desktop_windows', hint: 'Alerts on your Windows desktop', keywords: 'download tray', run: () => this.downloadNotifier() },
+      { group: 'Tools', label: 'Desktop notifier', icon: 'desktop_windows', hint: this.notifierHint, keywords: 'download tray', run: () => this.downloadNotifier() },
     ];
     const account: PaletteCommand[] = [
       { group: 'Account', label: 'Profile and password', icon: 'person', run: () => this.goToProfile() },

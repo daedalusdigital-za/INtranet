@@ -1,10 +1,10 @@
 <!-- Floating Welly mascot (replaces the old chat FAB) -->
-<div class="chat-fab chat-fab--mascot" *ngIf="!isOpen">
+<div class="chat-fab chat-fab--mascot" *ngIf="!isOpen && !dialogOpen()">
   <app-welly-mascot
     [size]="84"
     [mood]="mascotMood"
     [attention]="unreadReplies > 0"
-    [badge]="unreadReplies > 0 ? unreadReplies : (messages.length === 1 ? 1 : null)"
+    [badge]="unreadReplies > 0 ? unreadReplies : null"
     title="Chat with Welly"
     (clicked)="onMascotClick()">
   </app-welly-mascot>

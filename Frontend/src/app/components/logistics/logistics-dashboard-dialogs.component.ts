@@ -16305,7 +16305,7 @@ export class ImportTripsheetDialog {
           <mat-form-field appearance="outline">
             <mat-label>Estimated Cost (R)</mat-label>
             <input matInput type="number" [(ngModel)]="formData.estimatedCost" name="estimatedCost" placeholder="0.00">
-            <span matPrefix>R&nbsp;</span>
+            <span matTextPrefix>R&nbsp;</span>
           </mat-form-field>
 
           <mat-form-field appearance="outline">

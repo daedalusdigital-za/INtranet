@@ -249,11 +249,11 @@ interface IncompleteRecord { empId: string; name: string; department: string; jo
                   <div class="cc-panel-title"><mat-icon>notifications_active</mat-icon><h3>HR Attention Centre</h3></div>
                   <button aria-label="Refresh" mat-icon-button (click)="loadHrOverview()" matTooltip="Refresh"><mat-icon>refresh</mat-icon></button>
                 </div>
-                @if (hrOverview.attention.length === 0) {
+                @if (hrAttention.length === 0) {
                   <app-empty-state [compact]="true" icon="task_alt" title="All clear" message="Nothing needs attention right now."></app-empty-state>
                 } @else {
                   <div class="attention-list">
-                    @for (item of hrOverview.attention; track item.type) {
+                    @for (item of hrAttention; track item.type) {
                       <div class="attention-item sev-{{item.severity}}" (click)="onAttentionAction(item.action)">
                         <div class="att-icon"><mat-icon>{{ item.icon }}</mat-icon></div>
                         <div class="att-body">
@@ -2821,6 +2821,8 @@ export class PeopleComponent implements OnInit, OnDestroy {
 
   // HR Command Centre dashboard
   hrOverview: HrOverview | null = null;
+  /** Attention items with something to act on (a 0 count is just noise). */
+  get hrAttention(): HrAttentionItem[] { return (this.hrOverview?.attention ?? []).filter(a => a.count > 0); }
   hrLoading = false;
   showRecordsPanel = false;
   recordsLoading = false;
