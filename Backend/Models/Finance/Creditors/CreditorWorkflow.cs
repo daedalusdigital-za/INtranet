@@ -238,13 +238,15 @@ public static class CreditorDocRules
             new Rule(CreditorDocTypes.TaxInvoice, false, AfterDelivery: true), new Rule(CreditorDocTypes.SupplierRecon, false, AfterDelivery: true), new Rule(CreditorDocTypes.Grv, false, AfterDelivery: true),
             Sage,
         },
-        // Intercompany: no tax invoice or written instruction — the recon, statement and supplier recon carry the pack.
+        // Intercompany: the supplier recon, supplier statement and Sage aged payables are required for every payment.
+        // Everything else (tax invoice, GRV, bank letter, pack-level creditors recon) is optional.
         [CreditorPaymentTypes.Intercompany] = new[]
         {
-            new Rule(CreditorDocTypes.CreditorsRecon, true),
-            new Rule(CreditorDocTypes.SupplierStatement, true),
             new Rule(CreditorDocTypes.SupplierRecon, true),
-            new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false), Sage,
+            new Rule(CreditorDocTypes.SupplierStatement, true),
+            new Rule(CreditorDocTypes.SageAgedPayables, true),
+            new Rule(CreditorDocTypes.TaxInvoice, false), new Rule(CreditorDocTypes.Grv, false), new Rule(CreditorDocTypes.BankLetter, false),
+            new Rule(CreditorDocTypes.CreditorsRecon, false),
         },
         [CreditorPaymentTypes.Utility] = new[]
         {

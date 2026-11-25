@@ -1452,7 +1452,7 @@ export class FinanceCreditorsComponent implements OnInit {
   }
   reconSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SupplierRecon' && !r.afterDelivery); }
   needsRecon(): boolean { return this.reconSlot() && !!(this.pendingInvoiceFile || this.pendingLink); }
-  sageSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SageAgedPayables' && r.withRecon); }
+  sageSlot(): boolean { const pt = this.batch()?.paymentType ?? ''; return (this.meta()?.rules[pt] ?? []).some(r => r.docType === 'SageAgedPayables' && (r.withRecon || r.required)); }
   needsSage(): boolean { return this.sageSlot() && !!this.pendingReconFile && !this.pendingSageFile; }
   sageChosen(e: Event): void { const inp = e.target as HTMLInputElement; const f = inp.files?.[0]; inp.value = ''; if (!f) return; if (!/\.pdf$/i.test(f.name)) { this.toast.warn('Sage aged payables must be a PDF.'); return; } this.pendingSageFile = f; }
   isSheetSlot(t: string) { return ['SupplierRecon', 'CreditorsRecon', 'PaymentSchedule'].includes(t); }
