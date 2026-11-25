@@ -58,7 +58,7 @@ namespace ProjectTracker.API.Authorization
             new[] { "SHK", "SHAKAHOLDINGS", "SHAKA" },
             new[] { "NAT", "NEWAGETECHNOLOGIES", "NEWAGE" },
             new[] { "PUM", "PUMA" },
-            new[] { "OKM", "OKMINIMART", "OKMINI" },
+            new[] { "OKM", "OKMINIMARK", "OKMINI" },
             new[] { "LIA", "LIAMED" },
         };
 

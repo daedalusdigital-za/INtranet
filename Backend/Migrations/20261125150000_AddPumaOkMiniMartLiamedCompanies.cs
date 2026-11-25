@@ -7,7 +7,7 @@ using ProjectTracker.API.Data;
 namespace ProjectTracker.API.Migrations
 {
     /// <summary>
-    /// Three new companies Finance makes payments for: Puma (PUM), OK Mini Mart (OKM) and Liamed (LIA).
+    /// Three new companies Finance makes payments for: Puma (PUM), OK MiniMark (OKM) and Liamed (LIA).
     /// Each gets an operating company (staff assignment / ring-fencing) and a paying company
     /// (creditor packs), which also lists it in Admin settings › Company branding for logo uploads.
     /// Approvers (accountant, director) are set afterwards in Finance › Creditors admin.
@@ -22,7 +22,7 @@ namespace ProjectTracker.API.Migrations
 IF NOT EXISTS (SELECT 1 FROM OperatingCompanies WHERE Code='PUM')
     INSERT INTO OperatingCompanies (Name, Code, IsActive, CreatedAt) VALUES ('Puma','PUM',1,SYSUTCDATETIME());
 IF NOT EXISTS (SELECT 1 FROM OperatingCompanies WHERE Code='OKM')
-    INSERT INTO OperatingCompanies (Name, Code, IsActive, CreatedAt) VALUES ('OK Mini Mart','OKM',1,SYSUTCDATETIME());
+    INSERT INTO OperatingCompanies (Name, Code, IsActive, CreatedAt) VALUES ('OK MiniMark','OKM',1,SYSUTCDATETIME());
 IF NOT EXISTS (SELECT 1 FROM OperatingCompanies WHERE Code='LIA')
     INSERT INTO OperatingCompanies (Name, Code, IsActive, CreatedAt) VALUES ('Liamed','LIA',1,SYSUTCDATETIME());
 
@@ -32,7 +32,7 @@ IF NOT EXISTS (SELECT 1 FROM CreditorCompanies WHERE Code='PUM')
     VALUES ('PUM','Puma',1,@sort+1,(SELECT OperatingCompanyId FROM OperatingCompanies WHERE Code='PUM'));
 IF NOT EXISTS (SELECT 1 FROM CreditorCompanies WHERE Code='OKM')
     INSERT INTO CreditorCompanies (Code, Name, IsActive, SortOrder, OperatingCompanyId)
-    VALUES ('OKM','OK Mini Mart',1,@sort+2,(SELECT OperatingCompanyId FROM OperatingCompanies WHERE Code='OKM'));
+    VALUES ('OKM','OK MiniMark',1,@sort+2,(SELECT OperatingCompanyId FROM OperatingCompanies WHERE Code='OKM'));
 IF NOT EXISTS (SELECT 1 FROM CreditorCompanies WHERE Code='LIA')
     INSERT INTO CreditorCompanies (Code, Name, IsActive, SortOrder, OperatingCompanyId)
     VALUES ('LIA','Liamed',1,@sort+3,(SELECT OperatingCompanyId FROM OperatingCompanies WHERE Code='LIA'));
