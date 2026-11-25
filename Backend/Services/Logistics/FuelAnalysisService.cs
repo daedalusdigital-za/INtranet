@@ -12,6 +12,7 @@ namespace ProjectTracker.API.Services.Logistics
     {
         Task<FuelAnalysisResult> AnalyzeVehicleAsync(int vehicleId, int days, CancellationToken ct = default);
         Task<List<FuelAnalysisResult>> AnalyzeFleetAsync(int days, CancellationToken ct = default);
+        Task<List<UnmatchedFuelRegistration>> UnmatchedFuelAsync(int days, CancellationToken ct = default);
     }
 
     public class FuelAnalysisService : IFuelAnalysisService
@@ -27,10 +28,21 @@ namespace ProjectTracker.API.Services.Logistics
 
         public async Task<List<FuelAnalysisResult>> AnalyzeFleetAsync(int days, CancellationToken ct = default)
         {
-            var vehicleIds = await _context.Vehicles
-                .Where(v => v.CarTrackId != null || v.CarTrackName != null || v.IsLinkedToTfn)
-                .Select(v => v.Id)
+            if (days < 1) days = 30;
+            var since = DateTime.UtcNow.Date.AddDays(-days + 1);
+            // Tracked vehicles, plus any vehicle that has fuel booked to it in the window
+            // (a new truck on a temporary plate is often in TFN before it is in CarTrack).
+            var fuelled = _context.FuelTransactions
+                .Where(f => f.VehicleId != null && f.TransactionDate >= since)
+                .Select(f => f.VehicleId!.Value);
+            var vehicleRows = await _context.Vehicles
+                .Where(v => v.CarTrackId != null || v.CarTrackName != null || v.IsLinkedToTfn || fuelled.Contains(v.Id))
+                .Select(v => new { v.Id, v.RegistrationNumber })
                 .ToListAsync(ct);
+            var vehicleIds = vehicleRows
+                .Where(v => !VehicleRegistry.IsPlaceholder(v.RegistrationNumber))
+                .Select(v => v.Id)
+                .ToList();
 
             var results = new List<FuelAnalysisResult>();
             foreach (var id in vehicleIds)
@@ -49,12 +61,16 @@ namespace ProjectTracker.API.Services.Logistics
             if (days < 1) days = 30;
             var since = DateTime.UtcNow.Date.AddDays(-days + 1);
 
-            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == vehicleId, ct);
+            var vehicle = await _context.Vehicles.Include(v => v.VehicleType).FirstOrDefaultAsync(v => v.Id == vehicleId, ct);
             if (vehicle == null)
                 return new FuelAnalysisResult { VehicleId = vehicleId, RiskLevel = "unknown" };
 
             var reg = vehicle.RegistrationNumber;
-            var normReg = Normalize(reg);
+            // Plate key, not the raw text: "EMX047ZN - NEW - VUSI" must still match fuel booked to EMX047ZN.
+            var normReg = VehicleRegistry.PlateKey(reg);
+            var carTrackKey = VehicleRegistry.PlateKey(vehicle.CarTrackName);
+            var typeName = vehicle.VehicleType?.Name;
+            var isTrailer = VehicleRegistry.IsTrailerType(typeName);
 
             // Tank capacity: prefer explicit TankSize, fall back to FuelCapacity
             var tankSize = (double?)(vehicle.TankSize ?? vehicle.FuelCapacity) ?? 0;
@@ -69,7 +85,11 @@ namespace ProjectTracker.API.Services.Logistics
                 .ToListAsync(ct);
 
             var movements = movementRows
-                .Where(m => Normalize(m.RegistrationNumber) == normReg)
+                .Where(m =>
+                {
+                    var k = VehicleRegistry.PlateKey(m.RegistrationNumber);
+                    return k == normReg || (carTrackKey.Length >= 4 && k == carTrackKey);
+                })
                 .Select(m => new { m.MovementDate, m.TripDistance })
                 .ToList();
 
@@ -82,13 +102,27 @@ namespace ProjectTracker.API.Services.Logistics
             // --- Fuel fills over the window (normalized reg match) ---
             var allFuel = await _context.FuelTransactions
                 .Where(f => f.TransactionDate >= since)
-                .Select(f => new { f.RegistrationNumber, f.TransactionDate, f.LitresUsed, f.AmountSpent, f.DepotName })
+                .Select(f => new { f.Id, f.VehicleId, f.RegistrationNumber, f.TransactionDate, f.LitresUsed, f.AmountSpent, f.DepotName, f.Source })
                 .ToListAsync(ct);
 
+            // A row belongs to this vehicle when it is linked to it, or (unlinked) its plate matches.
             var fuel = allFuel
-                .Where(f => Normalize(f.RegistrationNumber) == normReg)
+                .Where(f => f.VehicleId == vehicleId
+                         || (f.VehicleId == null && VehicleRegistry.PlateKey(f.RegistrationNumber) == normReg))
                 .OrderBy(f => f.TransactionDate)
                 .ToList();
+
+            // Fleet price per litre over the same window: the yardstick for "implausible R/L".
+            var fleetRpl = allFuel
+                .Where(f => f.LitresUsed > 0 && f.AmountSpent > 0)
+                .Select(f => (double)(f.AmountSpent / f.LitresUsed))
+                .OrderBy(x => x)
+                .ToList();
+            double fleetMedianRpl = fleetRpl.Count >= 5 ? fleetRpl[fleetRpl.Count / 2] : 0;
+
+            // Trip sheets (Loads) in the window. Only warehouse delivery routes are captured there.
+            var tripSheetCount = await _context.Loads
+                .CountAsync(l => l.VehicleId == vehicleId && l.CreatedAt >= since, ct);
 
             var totalLitres = fuel.Sum(f => (double)f.LitresUsed);
             var totalAmount = fuel.Sum(f => (double)f.AmountSpent);
@@ -105,8 +139,15 @@ namespace ProjectTracker.API.Services.Logistics
                 TotalDistanceKm = Math.Round(totalDistanceKm, 1),
                 TotalLitres = Math.Round(totalLitres, 1),
                 TotalAmount = Math.Round(totalAmount, 2),
-                FillCount = fuel.Count
+                FillCount = fuel.Count,
+                VehicleType = typeName,
+                IsTrailer = isTrailer,
+                TripSheetCount = tripSheetCount,
+                FleetMedianPricePerLitre = Math.Round(fleetMedianRpl, 2)
             };
+            var priced = fuel.Where(f => f.LitresUsed > 0 && f.AmountSpent > 0).ToList();
+            if (priced.Count > 0)
+                result.PricePerLitre = Math.Round((double)(priced.Sum(f => f.AmountSpent) / priced.Sum(f => f.LitresUsed)), 2);
 
             if (totalLitres > 0 && totalDistanceKm > 0)
                 result.ActualKmPerLitre = Math.Round(totalDistanceKm / totalLitres, 2);
@@ -170,6 +211,7 @@ namespace ProjectTracker.API.Services.Logistics
 
             // ---- Per-fill breakdown + per-leg flags ----
             var fills = new List<FuelFillBreakdown>();
+            var dataChecks = new List<FuelFinding>();
             double legOverWeight = 0;
             int measurableLegs = 0, overFuelLegs = 0;
 
@@ -208,11 +250,36 @@ namespace ProjectTracker.API.Services.Logistics
                     }
                 }
 
-                // Physical impossibility always flags, regardless of movement data.
+                // Physical impossibility always flags, regardless of movement data. It is far more often
+                // a capture error (ordered litres, wrong vehicle, two vehicles on one slip) than a loss,
+                // so it asks for the slip rather than scoring as theft.
+                bool needsSlip = false;
                 if (tankSize > 0 && litres > tankSize * 1.05)
                 {
-                    flag = $"Fill of {litres:0} L exceeds the {tankSize:0} L tank";
+                    flag = $"Fill of {litres:0} L exceeds the {tankSize:0} L tank: check the fuel slip";
                     flagSeverity = "high";
+                    needsSlip = true;
+                }
+
+                // Price sanity: R0, or far from what the rest of the fleet paid in the same window.
+                double? rpl = litres > 0 ? (double)f.AmountSpent / litres : null;
+                string? priceFlag = null;
+                if (litres > 0 && f.AmountSpent <= 0)
+                    priceFlag = "no rand amount captured for this fill";
+                else if (rpl.HasValue && fleetMedianRpl > 0 && (rpl < fleetMedianRpl * 0.7 || rpl > fleetMedianRpl * 1.3))
+                    priceFlag = $"R{rpl:0.00}/L against the fleet's R{fleetMedianRpl:0.00}/L, so litres or rand were captured wrong, or the fill is on the wrong vehicle";
+                if (priceFlag != null)
+                {
+                    needsSlip = true;
+                    flag ??= char.ToUpper(priceFlag[0]) + priceFlag[1..];
+                    var src = f.Source ?? "import";
+                    dataChecks.Add(new FuelFinding
+                    {
+                        Code = "PRICE_IMPLAUSIBLE",
+                        Severity = "medium",
+                        Message = $"{f.TransactionDate:yyyy-MM-dd} {src} fill of {litres:0.#} L for R{f.AmountSpent:0.00}: {priceFlag}. Check the slip.",
+                        Date = f.TransactionDate
+                    });
                 }
 
                 fills.Add(new FuelFillBreakdown
@@ -227,23 +294,39 @@ namespace ProjectTracker.API.Services.Logistics
                     FillVsTankPercent = tankSize > 0 ? (int)Math.Round(litres / tankSize * 100.0) : (int?)null,
                     Flag = flag,
                     Severity = flag != null ? flagSeverity : null,
-                    HasMovementData = i > 0 && legs[i - 1].HasMovement
+                    HasMovementData = i > 0 && legs[i - 1].HasMovement,
+                    PricePerLitre = rpl.HasValue ? Math.Round(rpl.Value, 2) : null,
+                    Source = f.Source,
+                    NeedsSlip = needsSlip
                 });
             }
             result.Fills = fills;
 
             // ---- Roll leg findings up into headline findings ----
 
-            // A) Any single fill exceeding the tank (siphoning / shared card / bad capture).
+            // A) Any single fill exceeding the tank. Needs the slip before it means anything: usually the
+            //    litres ordered rather than filled, two vehicles on one slip, or the wrong vehicle.
             foreach (var bad in fills.Where(x => x.FillVsTankPercent.HasValue && x.FillVsTankPercent.Value > 105))
             {
-                findings.Add(new FuelFinding
+                var src = bad.Source ?? "import";
+                dataChecks.Add(new FuelFinding
                 {
                     Code = "FILL_EXCEEDS_TANK",
                     Severity = "high",
-                    Weight = 40,
-                    Message = $"Fill of {bad.Litres:0} L on {bad.Date:yyyy-MM-dd} exceeds the {tankSize:0} L tank — possible siphoning or a shared fuel card.",
+                    Message = $"Fill of {bad.Litres:0} L on {bad.Date:yyyy-MM-dd} ({src}) is more than the {tankSize:0} L tank. Check the fuel slip: it may be the litres ordered, two vehicles on one slip, or the wrong vehicle.",
                     Date = bad.Date
+                });
+            }
+
+            // Fuel on a trailer: trailers have no tank. Either the vehicle type is wrong (a horse saved as a
+            // trailer) or the fuel card is on the trailer's registration while the horse fills up.
+            if (isTrailer && fuel.Count > 0)
+            {
+                dataChecks.Insert(0, new FuelFinding
+                {
+                    Code = "FUEL_ON_TRAILER",
+                    Severity = "high",
+                    Message = $"{fuel.Count} fill(s), {totalLitres:0} L booked to a vehicle typed '{typeName}'. Trailers have no fuel tank: fix the vehicle type if this is a horse, or move the fuel card to the horse that pulls it. Not scored as fuel loss."
                 });
             }
 
@@ -285,17 +368,63 @@ namespace ProjectTracker.API.Services.Logistics
             else if (baselineFromSelf)
                 result.Notes.Add("Using a self-learned economy baseline (no AverageFuelConsumption on file). Set the vehicle's expected km/L for sharper results.");
 
+            // Trip sheets only cover warehouse delivery routes (Loads). Long-haul / horse work is not
+            // captured there, so "no trip sheets" is a scope gap, not unexplained fuel.
+            if (fuel.Count > 0 && tripSheetCount == 0)
+                result.Notes.Add("No trip sheets for this vehicle in the window. Trip sheets only cover warehouse delivery routes, so long-haul and horse/trailer work never appears there; distance here comes from CarTrack. No trip sheets is not evidence of missing fuel.");
+
+            // Trailer fuel is a linking error: don't let it read as theft.
+            if (isTrailer) findings.Clear();
+
             result.Findings = findings;
+            result.DataChecks = dataChecks;
             result.RiskScore = (int)Math.Min(100, Math.Round(findings.Sum(f => f.Weight)));
             result.RiskLevel = result.RiskScore >= 60 ? "high"
                 : result.RiskScore >= 30 ? "watch"
+                : dataChecks.Count > 0 ? "check"
                 : "ok";
 
             return result;
         }
 
-        private static string Normalize(string? reg) =>
-            (reg ?? "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
+        /// <summary>
+        /// Fuel registrations in the window that match no fleet vehicle (new trucks on temporary plates,
+        /// typos). Their fuel is invisible to the per-vehicle analysis, so list them for someone to link.
+        /// </summary>
+        public async Task<List<UnmatchedFuelRegistration>> UnmatchedFuelAsync(int days, CancellationToken ct = default)
+        {
+            if (days < 1) days = 30;
+            var since = DateTime.UtcNow.Date.AddDays(-days + 1);
+            var index = await VehicleRegistry.BuildIndexAsync(_context, ct);
+            var rows = await _context.FuelTransactions
+                .Where(f => f.VehicleId == null && f.TransactionDate >= since)
+                .Select(f => new { f.RegistrationNumber, f.LitresUsed, f.AmountSpent, f.TransactionDate, f.Source })
+                .ToListAsync(ct);
+            return rows
+                .Where(r => VehicleRegistry.Resolve(index, r.RegistrationNumber) == null)
+                .GroupBy(r => VehicleRegistry.PlateKey(r.RegistrationNumber))
+                .Select(g => new UnmatchedFuelRegistration
+                {
+                    Registration = g.First().RegistrationNumber,
+                    Fills = g.Count(),
+                    Litres = Math.Round((double)g.Sum(x => x.LitresUsed), 1),
+                    Amount = Math.Round((double)g.Sum(x => x.AmountSpent), 2),
+                    LastFill = g.Max(x => x.TransactionDate),
+                    Sources = string.Join(", ", g.Select(x => x.Source ?? "import").Distinct())
+                })
+                .OrderByDescending(x => x.Amount)
+                .ToList();
+        }
+    }
+
+    public class UnmatchedFuelRegistration
+    {
+        public string Registration { get; set; } = string.Empty;
+        public int Fills { get; set; }
+        public double Litres { get; set; }
+        public double Amount { get; set; }
+        public DateTime LastFill { get; set; }
+        public string Sources { get; set; } = string.Empty;
     }
 
     public class FuelAnalysisResult
@@ -318,8 +447,15 @@ namespace ProjectTracker.API.Services.Logistics
         public int FillCount { get; set; }
 
         public int RiskScore { get; set; }
-        public string RiskLevel { get; set; } = "ok"; // ok | watch | high | unknown
+        public string RiskLevel { get; set; } = "ok"; // ok | check | watch | high | unknown
         public List<FuelFinding> Findings { get; set; } = new();
+        /// <summary>Data problems (trailer fuel, implausible R/L, fills above tank) that need a person and a slip, not a theft score.</summary>
+        public List<FuelFinding> DataChecks { get; set; } = new();
+        public string? VehicleType { get; set; }
+        public bool IsTrailer { get; set; }
+        public int TripSheetCount { get; set; }
+        public double? PricePerLitre { get; set; }
+        public double FleetMedianPricePerLitre { get; set; }
         public List<FuelFillBreakdown> Fills { get; set; } = new();
         public List<string> Notes { get; set; } = new();
     }
@@ -337,6 +473,9 @@ namespace ProjectTracker.API.Services.Logistics
         public string? Flag { get; set; }
         public string? Severity { get; set; }
         public bool HasMovementData { get; set; }
+        public double? PricePerLitre { get; set; }
+        public string? Source { get; set; }
+        public bool NeedsSlip { get; set; }
     }
 
     public class FuelFinding

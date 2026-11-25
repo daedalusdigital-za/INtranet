@@ -733,8 +733,11 @@ namespace ProjectTracker.API.Controllers.Logistics
             var key = "PUMA:" + order.OrderNumber;
             var existing = await _context.FuelTransactions.FirstOrDefaultAsync(f => f.TfnTransactionId == key);
 
-            // Not enough to be a real fill-up → make sure any stale mirror is removed.
-            if (!order.Date.HasValue || (!order.LitersFilled.HasValue && !order.Value.HasValue))
+            // Not a confirmed fill-up → make sure any stale mirror is removed. Until the slip value is
+            // captured, LitersFilled is the litres *ordered* in the WhatsApp message (often the full tank,
+            // e.g. "LITRES: 300" for a 190 L tank), not what went in. Mirroring it showed fills above tank
+            // size and R0 fills that dragged the vehicle's R/L down. Both litres and rand must be captured.
+            if (!order.Date.HasValue || !(order.LitersFilled > 0) || !(order.Value > 0))
             {
                 if (existing != null) _context.FuelTransactions.Remove(existing);
                 return;

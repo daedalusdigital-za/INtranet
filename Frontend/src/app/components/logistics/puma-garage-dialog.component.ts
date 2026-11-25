@@ -8,6 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ToastService } from '../../ui/toast.service';
+import { ConfirmService } from '../../ui/confirm.service';
 import { EmptyStateComponent } from '../../ui/empty-state/empty-state.component';
 
 interface PumaOrder {
@@ -410,7 +411,8 @@ export class PumaGarageDialog {
     @Inject(MAT_DIALOG_DATA) public data: { orders: PumaOrder[]; apiUrl: string },
     private dialogRef: MatDialogRef<PumaGarageDialog>,
     private http: HttpClient,
-    private toast: ToastService
+    private toast: ToastService,
+    private confirm: ConfirmService
   ) {
     this.apiUrl = data.apiUrl;
     this.orders = [...(data.orders || [])];
@@ -541,10 +543,26 @@ export class PumaGarageDialog {
     });
   }
 
-  doClose(o: PumaOrder): void {
+  async doClose(o: PumaOrder): Promise<void> {
     if (!o.id || !o.hasSlip) { this.toast.error('Upload the slip photo first.'); return; }
+    // The litres on an open order are what was ordered, not what went in. Fuel history and the
+    // fuel analysis only count the order once the slip's litres and rand are captured here.
+    const slip = await this.confirm.askForm({
+      title: `Close order ${o.orderNumber}`,
+      message: 'Enter the litres and total from the slip photo. Ordered litres are not used for fuel history.',
+      fields: [
+        { key: 'litres', label: 'Litres on the slip', type: 'number', required: true, min: 0.01, value: null,
+          hint: o.litersFilled != null ? `Ordered: ${o.litersFilled} L` : undefined },
+        { key: 'value', label: 'Total on the slip (R)', type: 'number', required: true, min: 0.01, value: o.value ?? null }
+      ],
+      confirmText: 'Close order'
+    });
+    if (!slip) return;
+    const litres = Number(slip['litres']);
+    const value = Number(slip['value']);
+    if (!(litres > 0) || !(value > 0)) { this.toast.error('Litres and total must both be more than zero.'); return; }
     this.closingId = o.id;
-    this.http.post<PumaOrder>(`${this.base()}/${o.id}/close`, {}).subscribe({
+    this.http.post<PumaOrder>(`${this.base()}/${o.id}/close`, { litersFilled: litres, value }).subscribe({
       next: (updated) => {
         this.closingId = null;
         Object.assign(o, updated);

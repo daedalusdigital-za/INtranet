@@ -468,13 +468,17 @@ namespace ProjectTracker.API.Controllers.Logistics
             try
             {
                 var results = await _fuelAnalysis.AnalyzeFleetAsync(days, HttpContext.RequestAborted);
+                var unmatched = await _fuelAnalysis.UnmatchedFuelAsync(days, HttpContext.RequestAborted);
                 return Ok(new
                 {
                     days,
                     generatedAtUtc = DateTime.UtcNow,
                     highRisk = results.Count(r => r.RiskLevel == "high"),
                     watch = results.Count(r => r.RiskLevel == "watch"),
-                    vehicles = results
+                    dataChecks = results.Count(r => r.DataChecks.Count > 0),
+                    vehicles = results,
+                    // Fuel whose registration matches no fleet vehicle: not in any vehicle's numbers above.
+                    unmatchedFuel = unmatched
                 });
             }
             catch (Exception ex)
@@ -521,18 +525,18 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 // Title
                 ws.Cell(1, 1).Value = "ROCKET FREIGHT - FLAGGED FUEL HEALTH REPORT";
-                ws.Range(1, 1, 1, 7).Merge().Style
+                ws.Range(1, 1, 1, 9).Merge().Style
                     .Font.SetBold().Font.SetFontSize(14)
                     .Fill.SetBackgroundColor(XLColor.FromHtml("#ef4444"))
                     .Font.SetFontColor(XLColor.White)
                     .Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
 
                 ws.Cell(2, 1).Value = $"Generated: {DateTime.Now:dd MMM yyyy HH:mm} | Analysis period: {days} days";
-                ws.Range(2, 1, 2, 7).Merge().Style.Font.SetItalic().Font.SetFontSize(11);
+                ws.Range(2, 1, 2, 9).Merge().Style.Font.SetItalic().Font.SetFontSize(11);
 
                 // Headers
                 int headerRow = 4;
-                var headers = new[] { "Registration", "Make/Model", "Risk Level", "Risk Score", "Total Fills", "Total Litres", "Key Findings" };
+                var headers = new[] { "Registration", "Make/Model", "Risk Level", "Risk Score", "Total Fills", "Total Litres", "Key Findings", "Data checks (need a slip / a person)", "Trip sheets" };
                 for (int c = 0; c < headers.Length; c++)
                 {
                     var cell = ws.Cell(headerRow, c + 1);
@@ -545,7 +549,7 @@ namespace ProjectTracker.API.Controllers.Logistics
 
                 // Get flagged vehicles
                 var results = await _fuelAnalysis.AnalyzeFleetAsync(days, HttpContext.RequestAborted);
-                var flagged = results.Where(r => r.RiskLevel == "high" || r.RiskLevel == "watch").ToList();
+                var flagged = results.Where(r => r.RiskLevel == "high" || r.RiskLevel == "watch" || r.DataChecks.Count > 0).ToList();
 
                 int row = headerRow + 1;
                 foreach (var vehicle in flagged)
@@ -557,6 +561,9 @@ namespace ProjectTracker.API.Controllers.Logistics
                     ws.Cell(row, 5).Value = vehicle.FillCount;
                     ws.Cell(row, 6).Value = vehicle.TotalLitres;
                     ws.Cell(row, 7).Value = string.Join("; ", vehicle.Findings.Take(3).Select(f => f.Message));
+                    ws.Cell(row, 8).Value = string.Join("; ", vehicle.DataChecks.Take(4).Select(f => f.Message));
+                    // Trip sheets cover warehouse delivery routes only; 0 is not evidence of missing fuel.
+                    ws.Cell(row, 9).Value = vehicle.TripSheetCount == 0 ? "0 (not on delivery routes)" : vehicle.TripSheetCount.ToString();
 
                     // Risk color
                     if (vehicle.RiskLevel == "high")
@@ -571,9 +578,33 @@ namespace ProjectTracker.API.Controllers.Logistics
                     row++;
                 }
 
+                // Fuel on registrations that match no fleet vehicle.
+                var unmatched = await _fuelAnalysis.UnmatchedFuelAsync(days, HttpContext.RequestAborted);
+                if (unmatched.Count > 0)
+                {
+                    row += 2;
+                    ws.Cell(row, 1).Value = "Fuel on registrations not on the fleet list (link or add the vehicle)";
+                    ws.Cell(row, 1).Style.Font.SetBold();
+                    row++;
+                    foreach (var u in unmatched)
+                    {
+                        ws.Cell(row, 1).Value = u.Registration;
+                        ws.Cell(row, 5).Value = u.Fills;
+                        ws.Cell(row, 6).Value = u.Litres;
+                        ws.Cell(row, 7).Value = $"R{u.Amount:N2}, last fill {u.LastFill:dd MMM yyyy} ({u.Sources})";
+                        row++;
+                    }
+                }
+
                 // Auto-fit columns
-                for (int c = 1; c <= 7; c++)
+                for (int c = 1; c <= 9; c++)
                     ws.Column(c).AdjustToContents();
+                ws.Column(7).Width = Math.Min(ws.Column(7).Width, 80);
+                ws.Column(8).Width = Math.Min(ws.Column(8).Width, 80);
+
+                // Written after the auto-fit so the long note doesn't widen column A.
+                ws.Cell(row + 2, 1).Value = "Trip sheets only cover warehouse delivery routes. Long-haul and horse/trailer work is not captured there, so a vehicle with no trip sheets is not evidence of missing fuel.";
+                ws.Cell(row + 2, 1).Style.Font.SetItalic();
 
                 using var ms = new MemoryStream();
                 wb.SaveAs(ms);
@@ -1081,9 +1112,12 @@ namespace ProjectTracker.API.Controllers.Logistics
         [HttpPost("vehicles")]
         public async Task<ActionResult<VehicleDto>> CreateVehicle(CreateVehicleDto dto)
         {
+            var regError = await ValidateRegistrationAsync(dto.RegistrationNumber, null);
+            if (regError != null) return BadRequest(new { message = regError });
+
             var vehicle = new Vehicle
             {
-                RegistrationNumber = dto.RegistrationNumber,
+                RegistrationNumber = dto.RegistrationNumber.Trim().ToUpperInvariant(),
                 VinNumber = dto.VinNumber,
                 Make = dto.Make,
                 Model = dto.Model,
@@ -1095,6 +1129,10 @@ namespace ProjectTracker.API.Controllers.Logistics
                 CarTrackName = dto.CarTrackName,
                 FuelCapacity = dto.FuelCapacity,
                 CurrentOdometer = dto.CurrentOdometer,
+                // The add form sends these; they used to be dropped, so new vehicles had no tank size.
+                TankSize = dto.TankSize,
+                FuelType = dto.FuelType,
+                Province = NormalizeProvince(dto.Province),
                 Status = "Available"
             };
 
@@ -1111,7 +1149,12 @@ namespace ProjectTracker.API.Controllers.Logistics
             if (vehicle == null)
                 return NotFound();
 
-            if (dto.RegistrationNumber != null) vehicle.RegistrationNumber = dto.RegistrationNumber;
+            if (dto.RegistrationNumber != null && dto.RegistrationNumber.Trim() != vehicle.RegistrationNumber)
+            {
+                var regError = await ValidateRegistrationAsync(dto.RegistrationNumber, id);
+                if (regError != null) return BadRequest(new { message = regError });
+                vehicle.RegistrationNumber = dto.RegistrationNumber.Trim().ToUpperInvariant();
+            }
             if (dto.VinNumber != null) vehicle.VinNumber = dto.VinNumber;
             if (dto.Make != null) vehicle.Make = dto.Make;
             if (dto.Model != null) vehicle.Model = dto.Model;
@@ -1135,6 +1178,30 @@ namespace ProjectTracker.API.Controllers.Logistics
 
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        /// <summary>
+        /// Registration must be a plate: fuel cards, Puma slips and CarTrack are matched to vehicles by it.
+        /// Stand-ins ("ALL"), notes after the plate ("EMX047ZN - NEW - VUSI") and duplicates all broke that
+        /// matching, so fuel landed on no vehicle or on the wrong one.
+        /// </summary>
+        private async Task<string?> ValidateRegistrationAsync(string? registration, int? selfId)
+        {
+            var reg = (registration ?? "").Trim();
+            if (reg.Length == 0) return "Registration is required.";
+            if (ProjectTracker.API.Services.Logistics.VehicleRegistry.IsPlaceholder(reg))
+                return $"'{reg}' is not a registration. Only real vehicles go on the fleet list, because fuel and trips are matched to them by plate.";
+            var key = ProjectTracker.API.Services.Logistics.VehicleRegistry.PlateKey(reg);
+            var norm = ProjectTracker.API.Services.Logistics.VehicleRegistry.Normalize(reg);
+            if (key != norm)
+                return $"Enter only the plate ('{key}') as the registration. Put notes such as the driver or 'new' in another field.";
+            if (norm.Length > 10)
+                return "That is too long for a number plate. Enter only the plate.";
+            var others = await _context.Vehicles.Where(v => selfId == null || v.Id != selfId)
+                .Select(v => v.RegistrationNumber).ToListAsync();
+            var dup = others.FirstOrDefault(r => ProjectTracker.API.Services.Logistics.VehicleRegistry.PlateKey(r) == key);
+            if (dup != null) return $"{key} is already on the fleet list ('{dup}').";
+            return null;
         }
 
         /// <summary>Full province names are stored; the branch codes people type (GP / KZN / CPT / PE / EC) map onto them.</summary>

@@ -64,6 +64,9 @@ namespace ProjectTracker.API.DTOs.Logistics
         public string? CarTrackName { get; set; }
         public decimal? FuelCapacity { get; set; }
         public decimal? CurrentOdometer { get; set; }
+        public decimal? TankSize { get; set; }
+        public string? FuelType { get; set; }
+        public string? Province { get; set; }
     }
 
     public class UpdateVehicleDto

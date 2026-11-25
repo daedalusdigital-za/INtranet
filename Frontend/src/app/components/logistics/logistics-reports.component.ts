@@ -189,6 +189,26 @@ interface Incident {
               </button>
             </div>
 
+            <p class="scope-note"><mat-icon>info</mat-icon>
+              "Data check" cards are capture or linking problems (fuel on a trailer, a price per litre far from the fleet's, a fill above the tank) and need the fuel slip, not a theft finding.
+              Trip sheets only cover warehouse delivery routes, so a long-haul vehicle with no trip sheets is not evidence of missing fuel.
+            </p>
+            @if (!fuelAnalysisLoading() && unmatchedFuel().length) {
+              <div class="unmatched">
+                <h4><mat-icon>link_off</mat-icon> Fuel on registrations not on the fleet list ({{ unmatchedFuel().length }})</h4>
+                <p>This fuel isn't counted on any vehicle above. Add the vehicle, or correct its registration on the fleet list (new trucks often fuel on a temporary plate).</p>
+                @for (u of unmatchedFuel(); track u.registration) {
+                  <div class="um-row">
+                    <span class="ref">{{ u.registration }}</span>
+                    <span>{{ u.fills }} fill(s)</span>
+                    <span>{{ u.litres | number:'1.0-0' }} L</span>
+                    <span>R{{ u.amount | number:'1.0-0' }}</span>
+                    <span class="muted">last {{ u.lastFill | date:'dd MMM' }} · {{ u.sources }}</span>
+                  </div>
+                }
+              </div>
+            }
+
             @if (fuelAnalysisLoading()) {
               <app-skeleton-rows [rows]="4" [avatar]="false"></app-skeleton-rows>
             } @else if (!flaggedFuelVehicles() || flaggedFuelVehicles().length === 0) {
@@ -236,6 +256,24 @@ interface Incident {
 
                     @if (vehicle._expanded) {
                       <div class="fuel-detail" (click)="$event.stopPropagation()">
+                        @if (vehicle._dataChecks?.length) {
+                          <div class="detail-block">
+                            <h4><mat-icon>fact_check</mat-icon> Data checks: need the fuel slip ({{ vehicle._dataChecks.length }})</h4>
+                            @for (f of vehicle._dataChecks; track $index) {
+                              <div class="finding" [class]="severityClass(f.severity)">
+                                <span class="sev-dot"></span>
+                                <div class="finding-body">
+                                  <span class="finding-msg">{{ f.message }}</span>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
+                        @if (vehicle.notes?.length) {
+                          <div class="detail-block">
+                            @for (n of vehicle.notes; track $index) { <p class="note-line">{{ n }}</p> }
+                          </div>
+                        }
                         @if (vehicle._findings?.length) {
                           <div class="detail-block">
                             <h4><mat-icon>report_problem</mat-icon> Findings ({{ vehicle._findings.length }})</h4>
@@ -255,13 +293,14 @@ interface Incident {
                             <h4><mat-icon>local_gas_station</mat-icon> Fill Breakdown ({{ vehicle._fills.length }})</h4>
                             <div class="fills-table">
                               <div class="fill-row head">
-                                <span>Date</span><span>Litres</span><span>Amount</span><span>Km</span><span>Tank %</span><span>Flag</span>
+                                <span>Date</span><span>Litres</span><span>Amount</span><span>R/L</span><span>Km</span><span>Tank %</span><span>Flag</span>
                               </div>
                               @for (fill of vehicle._fills; track $index) {
                                 <div class="fill-row" [class.flagged]="fill.flag">
                                   <span>{{ fill.date | date:'dd MMM' }}</span>
                                   <span>{{ fill.litres | number:'1.0-0' }}L</span>
                                   <span>R{{ fill.amount | number:'1.0-0' }}</span>
+                                  <span>{{ fill.pricePerLitre != null ? (fill.pricePerLitre | number:'1.2-2') : '—' }}</span>
                                   <span>{{ fill.kmSinceLastFill ? (fill.kmSinceLastFill | number:'1.0-0') : '—' }}</span>
                                   <span>{{ fill.fillVsTankPercent != null ? fill.fillVsTankPercent + '%' : '—' }}</span>
                                   <span class="fill-flag" [matTooltip]="fill.flag || ''">
@@ -378,13 +417,24 @@ interface Incident {
     .finding-msg { font-size:var(--text-sm); color:var(--color-text-2); }
     .finding-date { font-size:var(--text-xs); color:var(--color-text-3); }
     .fills-table { display:flex; flex-direction:column; font-size:var(--text-xs); border:1px solid var(--color-line); border-radius:6px; overflow:hidden; font-variant-numeric:tabular-nums; }
-    .fill-row { display:grid; grid-template-columns:1fr 0.8fr 0.9fr 0.7fr 0.7fr 0.5fr; gap:6px; padding:7px 10px; align-items:center; border-bottom:1px solid var(--color-surface-2); color:var(--color-text); }
+    .fill-row { display:grid; grid-template-columns:1fr 0.8fr 0.9fr 0.7fr 0.7fr 0.7fr 0.5fr; gap:6px; padding:7px 10px; align-items:center; border-bottom:1px solid var(--color-surface-2); color:var(--color-text); }
     .fill-row.head { background:var(--color-surface-2); font-weight:700; color:var(--color-text-2); font-size:var(--text-xs); }
     .fill-row.flagged { background:var(--color-warn-soft); }
     .fill-row:last-child { border-bottom:none; }
     .fill-flag { display:flex; justify-content:center; }
     .fill-flag mat-icon { font-size:var(--text-lg); width:16px; height:16px; color:var(--color-ok); }
     .fill-flag mat-icon.flag-on { color:var(--color-warn); }
+    .scope-note { display:flex; gap:8px; align-items:flex-start; margin:0; font-size:var(--text-xs); color:var(--color-text-3); }
+    .scope-note mat-icon { font-size:var(--text-lg); width:16px; height:16px; flex-shrink:0; color:var(--color-info); }
+    .unmatched { padding:12px 14px; border:1px solid var(--color-line); border-left:4px solid var(--color-warn); border-radius:8px; background:var(--color-surface); }
+    .unmatched h4 { display:flex; align-items:center; gap:6px; margin:0 0 4px; font-size:var(--text-sm); color:var(--color-text); }
+    .unmatched h4 mat-icon { font-size:var(--text-xl); width:18px; height:18px; color:var(--color-warn); }
+    .unmatched p { margin:0 0 8px; font-size:var(--text-xs); color:var(--color-text-3); }
+    .um-row { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:var(--text-xs); padding:4px 0; border-top:1px solid var(--color-surface-2); font-variant-numeric:tabular-nums; color:var(--color-text); }
+    .um-row .ref { font-weight:700; min-width:90px; }
+    .um-row .muted { color:var(--color-text-3); }
+    .note-line { margin:0 0 6px; font-size:var(--text-xs); color:var(--color-text-3); }
+    .fuel-card.risk-check { border-left:4px solid var(--color-info); }
     .detail-empty { font-size:var(--text-xs); color:var(--color-text-3); padding:10px; text-align:center; }
   `]
 })
@@ -402,6 +452,7 @@ export class LogisticsReportsComponent implements OnInit {
   fuelAnalysisDays = 30;
   fuelAnalysisLoading = signal(false);
   flaggedFuelVehicles = signal<any[]>([]);
+  unmatchedFuel = signal<any[]>([]);
 
   visibleIncidents = computed(() => {
     const f = this.typeFilter();
@@ -476,9 +527,10 @@ export class LogisticsReportsComponent implements OnInit {
       .subscribe({
         next: (res) => {
           const flagged = (res.vehicles || [])
-            .filter((v: any) => v.riskLevel === 'high' || v.riskLevel === 'watch')
+            .filter((v: any) => v.riskLevel === 'high' || v.riskLevel === 'watch' || (v.dataChecks || []).length > 0)
             .map((v: any) => {
               const findings = v.findings || [];
+              const dataChecks = v.dataChecks || [];
               const fills = v.fills || [];
               const flaggedFills = fills.filter((f: any) => f.flag || (f.severity && f.severity !== 'ok')).length;
               // Sort findings by severity so the worst reason surfaces
@@ -490,10 +542,11 @@ export class LogisticsReportsComponent implements OnInit {
                 registrationNumber: v.registration || v.registrationNumber || 'Unknown',
                 flaggedFills,
                 findingsCount: findings.length,
-                anomalyReason: topFinding?.message || (findings.length ? `${findings.length} finding(s)` : 'Consumption outside expected range'),
+                anomalyReason: topFinding?.message || dataChecks[0]?.message || (findings.length ? `${findings.length} finding(s)` : 'Consumption outside expected range'),
                 actualKmPerLitre: v.actualKmPerLitre,
                 expectedKmPerLitre: v.expectedKmPerLitre,
                 _findings: findings,
+                _dataChecks: dataChecks,
                 _fills: fills,
                 _expanded: false
               };
@@ -501,11 +554,13 @@ export class LogisticsReportsComponent implements OnInit {
           // Worst risk first
           flagged.sort((a: any, b: any) => (b.riskScore || 0) - (a.riskScore || 0));
           this.flaggedFuelVehicles.set(flagged);
+          this.unmatchedFuel.set(res.unmatchedFuel || []);
           this.fuelAnalysisLoading.set(false);
         },
         error: (err) => {
           console.error('Failed to load fuel analysis:', err);
           this.flaggedFuelVehicles.set([]);
+          this.unmatchedFuel.set([]);
           this.fuelAnalysisLoading.set(false);
         }
       });
@@ -546,10 +601,10 @@ export class LogisticsReportsComponent implements OnInit {
   }
 
   riskLabel(level: string): string {
-    return level === 'high' ? 'High risk' : level === 'watch' ? 'Watch' : (level || '');
+    return level === 'high' ? 'High risk' : level === 'watch' ? 'Watch' : level === 'check' ? 'Data check' : (level || '');
   }
 
   riskTone(level: string): ChipTone {
-    return level === 'high' ? 'danger' : level === 'watch' ? 'warn' : level === 'normal' ? 'ok' : 'neutral';
+    return level === 'high' ? 'danger' : level === 'watch' ? 'warn' : level === 'check' ? 'info' : level === 'normal' ? 'ok' : 'neutral';
   }
 }

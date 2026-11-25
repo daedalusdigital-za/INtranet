@@ -3,6 +3,7 @@ using ProjectTracker.API.Data;
 using ProjectTracker.API.Models.Logistics;
 using ProjectTracker.API.Models.Logistics.TFN;
 using ProjectTracker.API.Services.TFN.Clients;
+using ProjectTracker.API.Services.Logistics;
 
 namespace ProjectTracker.API.Services.TFN
 {
@@ -44,6 +45,41 @@ namespace ProjectTracker.API.Services.TFN
         }
 
         /// <summary>
+        /// Find the fleet vehicle for a TFN registration. Uses the shared plate key so spacing, dashes and
+        /// notes typed into the fleet record ("EMX047ZN - NEW - VUSI") don't leave fuel on no vehicle.
+        /// </summary>
+        private Dictionary<string, int>? _regIndex;
+        private async Task<Vehicle?> FindVehicleAsync(string? reg)
+        {
+            if (string.IsNullOrWhiteSpace(reg)) return null;
+            _regIndex ??= await VehicleRegistry.BuildIndexAsync(_context);
+            var id = VehicleRegistry.Resolve(_regIndex, reg);
+            return id.HasValue ? await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == id.Value) : null;
+        }
+
+        /// <summary>
+        /// Link fuel rows that were stored before their vehicle existed (or under a differently spelt
+        /// registration). Only fills empty links; never moves a row that is already on a vehicle.
+        /// </summary>
+        public async Task<int> RelinkUnmatchedFuelAsync()
+        {
+            _regIndex = await VehicleRegistry.BuildIndexAsync(_context);
+            var orphans = await _context.FuelTransactions.Where(f => f.VehicleId == null).ToListAsync();
+            int linked = 0;
+            foreach (var f in orphans)
+            {
+                var id = VehicleRegistry.Resolve(_regIndex, f.RegistrationNumber);
+                if (id.HasValue) { f.VehicleId = id; linked++; }
+            }
+            if (linked > 0)
+            {
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Fuel history: linked {Count} unmatched fuel rows to fleet vehicles", linked);
+            }
+            return linked;
+        }
+
+        /// <summary>
         /// Sync all TFN data
         /// </summary>
         public async Task<TfnSyncResult> SyncAllAsync()
@@ -65,6 +101,8 @@ namespace ProjectTracker.API.Services.TFN
                 // Persist completed-order fuel fills into FuelTransactions so Fuel
                 // History accumulates permanently (TFN only keeps a 14-day window).
                 result.FuelHistoryResult = await SyncFuelHistoryFromOrdersAsync();
+                try { await RelinkUnmatchedFuelAsync(); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Relinking unmatched fuel rows failed"); }
 
                 // Roll up any per-step errors into the aggregate result so a failing
                 // step (e.g. orders) doesn't silently succeed at the top level.
@@ -141,7 +179,9 @@ namespace ProjectTracker.API.Services.TFN
 
                     // Find our Vehicle by normalized registration
                     var vehicle = allVehicles.FirstOrDefault(v => 
-                        (v.RegistrationNumber?.Replace("-", "").Replace(" ", "").ToUpper() ?? "") == tfnRegNormalized);
+                        (v.RegistrationNumber?.Replace("-", "").Replace(" ", "").ToUpper() ?? "") == tfnRegNormalized)
+                        ?? allVehicles.FirstOrDefault(v => !VehicleRegistry.IsPlaceholder(v.RegistrationNumber)
+                            && VehicleRegistry.PlateKey(v.RegistrationNumber) == VehicleRegistry.PlateKey(tfnVehicle.Registration));
 
                     if (vehicle == null)
                     {
@@ -357,8 +397,7 @@ namespace ProjectTracker.API.Services.TFN
                         Vehicle? vehicle = null;
                         if (!string.IsNullOrEmpty(vehicleReg))
                         {
-                            vehicle = await _context.Vehicles
-                                .FirstOrDefaultAsync(v => v.RegistrationNumber == vehicleReg);
+                            vehicle = await FindVehicleAsync(vehicleReg);
                         }
                         
                         // Find driver by cell number if available
@@ -496,8 +535,7 @@ namespace ProjectTracker.API.Services.TFN
                     Vehicle? vehicle = null;
                     if (!string.IsNullOrEmpty(reg))
                     {
-                        vehicle = await _context.Vehicles
-                            .FirstOrDefaultAsync(v => v.RegistrationNumber == reg);
+                        vehicle = await FindVehicleAsync(reg);
                     }
 
                     var allocatedLitres = detail.UtilisedOrders?.Sum(u => u.AllocatedLitres) ?? 0;
@@ -577,8 +615,7 @@ namespace ProjectTracker.API.Services.TFN
                     if (transaction == null)
                     {
                         // Find linked entities
-                        var vehicle = await _context.Vehicles
-                            .FirstOrDefaultAsync(v => v.RegistrationNumber == tfnTrans.VehicleRegistration);
+                        var vehicle = await FindVehicleAsync(tfnTrans.VehicleRegistration);
                         
                         var driver = await _context.Drivers
                             .FirstOrDefaultAsync(d => d.LicenseNumber == tfnTrans.DriverCode);
