@@ -148,6 +148,7 @@ interface LoadRow {
     </div>
   `,
   styles: [`
+    :host { display: block; height: 100%; padding: 24px; box-sizing: border-box; }
     .ob-dialog { display: flex; flex-direction: column; height: 100%; max-height: 90vh; }
     .ob-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: var(--color-primary); color: var(--color-on-primary); margin: -24px -24px 0; }
     .ob-header h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--text-xl); }

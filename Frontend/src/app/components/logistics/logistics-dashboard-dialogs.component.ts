@@ -2998,7 +2998,7 @@ export class FleetMapDialogComponent implements AfterViewInit, OnDestroy {
       padding: 16px 24px;
       background: var(--color-primary);
       color: var(--color-on-primary);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
     }
 
     .dialog-header h2 {
@@ -4499,7 +4499,7 @@ export class TripSheetPreviewDialog implements OnInit {
     .export-scope-dialog { min-width: 360px; }
     .dialog-header {
       display: flex; align-items: center; gap: 12px;
-      padding: 16px 24px; margin: -24px -24px 0 -24px;
+      padding: 16px 24px; margin: 0;
       background: var(--color-primary); color: var(--color-on-primary); border-radius: 4px 4px 0 0;
     }
     .dialog-header h2 { margin: 0; font-size: var(--text-xl); }
@@ -4613,7 +4613,7 @@ export class MaintenanceExportScopeDialog {
       align-items: center;
       gap: 12px;
       padding: 16px 24px;
-      margin: -24px -24px 0 -24px;
+      margin: 0;
       border-radius: 4px 4px 0 0;
     }
     .dialog-header.success {
@@ -5319,7 +5319,7 @@ export class SuggestedTripsDialog implements OnInit {
       display: flex; justify-content: space-between; align-items: center;
       padding: 20px 32px;
       background: var(--color-surface); color: var(--color-text);
-      border-bottom: 1px solid var(--color-line); margin: -24px -24px 0 -24px;
+      border-bottom: 1px solid var(--color-line); margin: 0;
     }
     .header-left { display: flex; align-items: center; gap: 16px; }
     .header-icon-wrap {
@@ -5334,7 +5334,7 @@ export class SuggestedTripsDialog implements OnInit {
 
     /* ── Summary Strip ──────────────────────────────────────── */
     .summary-strip {
-      display: flex; gap: 0; padding: 0; margin: 0 -24px;
+      display: flex; gap: 0; padding: 0; margin: 0;
       background: var(--color-surface-2); border-bottom: 1px solid var(--color-line);
     }
     .summary-stat {
@@ -5357,7 +5357,7 @@ export class SuggestedTripsDialog implements OnInit {
     .summary-label { font-size: var(--text-xs); color: var(--color-text-3); text-transform: uppercase; letter-spacing: 0.5px; }
 
     /* ── Content ────────────────────────────────────────────── */
-    .dialog-content { padding: 20px 8px; max-height: 60vh; overflow-y: auto; overflow-x: hidden; }
+    .dialog-content { padding: 20px 24px; max-height: 60vh; overflow-y: auto; overflow-x: hidden; }
 
     /* ── Toolbar ────────────────────────────────────────────── */
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 20px; }
@@ -5797,7 +5797,7 @@ export class TfnOrdersListDialog {
       padding: 20px 32px;
       background: var(--color-primary);
       color: var(--color-on-primary);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
     }
     .dialog-header h2 {
       margin: 0;
@@ -5811,7 +5811,7 @@ export class TfnOrdersListDialog {
       color: var(--color-on-primary);
     }
     .dialog-content {
-      padding: 28px 8px;
+      padding: 28px 24px;
       overflow-x: hidden;
     }
     .order-header {
@@ -6429,7 +6429,7 @@ export class TfnOrderDetailsDialog {
       padding: 20px 32px;
       background: var(--color-primary);
       color: var(--color-on-primary);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
     }
     .dialog-header h2 {
       margin: 0;
@@ -7843,7 +7843,7 @@ export class AddressIssuesDialog {
       padding: 16px 24px;
       background: var(--color-primary);
       color: var(--color-on-primary);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
       gap: 16px;
     }
     .dialog-header h2 {
@@ -7871,7 +7871,7 @@ export class AddressIssuesDialog {
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding: 16px 0;
+      padding: 16px 24px;
       overflow: hidden;
     }
     .controls-bar {
@@ -9766,7 +9766,7 @@ export class AddDeliveryNoteDialog {
       padding: 16px 24px;
       background: var(--color-primary);
       color: var(--color-on-primary);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
       gap: 16px;
     }
     .dialog-header h2 {
@@ -14068,7 +14068,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       border-bottom: 1px solid var(--color-line);
       background: var(--color-primary);
       color: var(--color-on-primary);
-      margin: -24px -24px 0;
+      margin: 0;
     }
     .dialog-header h2 {
       margin: 0;
@@ -14081,7 +14081,7 @@ export class CreateTripsheetDialog implements AfterViewInit, OnDestroy {
       color: var(--color-on-primary);
     }
     .dialog-content {
-      padding: 32px 8px;
+      padding: 32px 24px;
     }
     .subtitle {
       text-align: center;
@@ -14415,7 +14415,7 @@ export class TripsheetTypeDialog {
       border-bottom: 1px solid var(--color-line);
       background: var(--color-primary);
       color: var(--color-on-primary);
-      margin: -24px -24px 0;
+      margin: 0;
     }
     .dialog-header h2 {
       margin: 0;
@@ -14526,7 +14526,7 @@ export class TripsheetTypeDialog {
       gap: 12px;
       padding: 16px 24px;
       border-top: 1px solid var(--color-line);
-      margin: 0 -24px -24px;
+      margin: 0;
       background: var(--color-canvas);
     }
     .inline-spinner {
@@ -15004,7 +15004,7 @@ export class ManualTripsheetDialog {
       border-bottom: 1px solid var(--color-line);
       background: var(--color-primary);
       color: var(--color-on-primary);
-      margin: -24px -24px 0;
+      margin: 0;
     }
     .dialog-header h2 {
       margin: 0;
@@ -15146,7 +15146,7 @@ export class ManualTripsheetDialog {
       gap: 12px;
       padding: 16px 24px;
       border-top: 1px solid var(--color-line);
-      margin: 0 -24px -24px;
+      margin: 0;
       background: var(--color-canvas);
     }
     .inline-spinner {
@@ -19848,7 +19848,7 @@ export class LogisticsReportsDialog implements OnInit {
       padding: 20px 32px;
       background: linear-gradient(135deg, #ff416c, #ff4b2b);
       color: var(--color-on-primary);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
     }
     
     .dialog-header h2 {
@@ -21387,7 +21387,7 @@ export class VehicleStatusDialog {
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 24px;
       background: linear-gradient(135deg, #00bcd4, #0097a7);
-      color: var(--color-on-primary); margin: -24px -24px 0;
+      color: var(--color-on-primary); margin: 0;
     }
     .header-left { display: flex; align-items: center; gap: 14px; }
     .welly-avatar {
@@ -22096,7 +22096,7 @@ export class WellyTripsheetWizardDialog {
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 24px; border-bottom: 1px solid var(--color-line);
       background: linear-gradient(135deg, #ff6f00, var(--color-warn)); color: var(--color-on-primary);
-      margin: -24px -24px 0;
+      margin: 0;
     }
     .header-left { display: flex; align-items: center; gap: 14px; }
     .welly-avatar {
@@ -22193,7 +22193,7 @@ export class WellyTripsheetWizardDialog {
     .dialog-actions {
       display: flex; justify-content: flex-end; align-items: center; gap: 12px;
       padding: 12px 24px; border-top: 1px solid var(--color-line); background: var(--color-canvas);
-      margin: 0 -24px -24px;
+      margin: 0;
     }
     .selection-info { flex: 1; font-size: var(--text-sm); color: var(--color-text-2); }
   `]
@@ -22735,7 +22735,7 @@ export class WellySuggestsDialog implements OnInit {
     .ai-builder { display: flex; flex-direction: column; height: 100%; }
     .ab-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 24px; margin: -24px -24px 0;
+      padding: 16px 24px; margin: 0;
       background: linear-gradient(135deg, #6a11cb, #2575fc); color: #fff;
     }
     .ab-header-left { display: flex; align-items: center; gap: 14px; }
@@ -22895,7 +22895,7 @@ export class WellySuggestsDialog implements OnInit {
     .cust-table .cc { color: var(--color-text-3); font-size: var(--text-xs); }
 
     .ab-footer { display: flex; align-items: center; gap: 12px; padding: 12px 24px;
-      border-top: 1px solid var(--color-line); background: var(--color-canvas); margin: 0 -24px -24px; }
+      border-top: 1px solid var(--color-line); background: var(--color-canvas); margin: 0; }
     .ab-spacer { flex: 1; }
     .foot-info { font-size: var(--text-sm); color: var(--color-text-2); }
     .ab-footer mat-spinner { display: inline-block; margin-right: 6px; }
@@ -26064,7 +26064,7 @@ export class BarcodeLookupDialog {
     .email-recipients-dialog { min-width: 480px; }
     .dialog-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 24px; margin: -24px -24px 0 -24px;
+      padding: 16px 24px; margin: 0;
       background: var(--color-primary); color: var(--color-on-primary);
     }
     .dialog-header h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: var(--text-xl); }

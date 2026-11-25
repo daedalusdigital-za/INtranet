@@ -1240,7 +1240,7 @@ export class CalendarComponent implements OnInit {
       background: var(--color-surface);
       color: var(--color-text);
       border-bottom: 1px solid var(--color-line);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
       border-radius: 12px 12px 0 0;
       position: relative;
       overflow: hidden;
@@ -1470,7 +1470,7 @@ export class CalendarComponent implements OnInit {
     mat-dialog-actions {
       padding: 24px 32px;
       background: var(--color-surface);
-      margin: 0 -24px -24px -24px;
+      margin: 0;
       display: flex;
       justify-content: center;
       border-top: 1px solid var(--color-line);

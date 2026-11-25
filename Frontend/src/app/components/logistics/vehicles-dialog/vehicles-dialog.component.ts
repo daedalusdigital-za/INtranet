@@ -425,7 +425,7 @@ interface VehicleType {
       background: var(--color-surface);
       color: var(--color-text);
       border-bottom: 1px solid var(--color-line);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
 
       h2 {
         margin: 0;

@@ -3609,6 +3609,7 @@ const SITE_PASSWORD_DIALOG_STYLES = `
     padding: var(--space-6);
     color: var(--color-text);
     min-width: 360px;
+    box-sizing: border-box;
   }
 
   .dialog-header {

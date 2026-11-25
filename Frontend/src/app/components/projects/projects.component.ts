@@ -1741,7 +1741,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       border-bottom: 1px solid var(--color-line);
       background: var(--color-surface);
       color: var(--color-text);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
     }
 
     .dialog-header h2 {

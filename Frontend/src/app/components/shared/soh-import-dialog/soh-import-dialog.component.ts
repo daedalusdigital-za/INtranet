@@ -398,7 +398,6 @@ export interface SohImportDialogResult {
       margin: 0;
       padding: 16px 24px;
       border-bottom: 1px solid var(--color-line);
-      margin: -24px -24px 0;
 
       mat-icon {
         font-size: 28px;

@@ -433,7 +433,7 @@ interface User {
   styles: [`
     .todo-dialog {
       width: 100%;
-      min-width: 1100px;
+      min-width: min(1100px, 100%);
       max-width: 100%;
       max-height: 85vh;
       display: flex;

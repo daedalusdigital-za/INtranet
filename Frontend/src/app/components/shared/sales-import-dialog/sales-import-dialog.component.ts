@@ -458,7 +458,7 @@ export interface SalesImportDialogResult {
   `,
   styles: [`
     .sales-import-dialog {
-      min-width: 900px;
+      min-width: min(900px, 100%);
       max-width: 1200px;
       width: 95vw;
     }
@@ -470,7 +470,6 @@ export interface SalesImportDialogResult {
       margin: 0;
       padding: 16px 24px;
       border-bottom: 1px solid var(--color-line);
-      margin: -24px -24px 0;
 
       mat-icon {
         font-size: 28px;

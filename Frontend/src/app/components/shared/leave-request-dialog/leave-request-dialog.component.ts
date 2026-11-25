@@ -128,6 +128,7 @@ import { StatusChipComponent } from '../../../ui/status-chip/status-chip.compone
     </div>
   `,
   styles: [`
+    :host { display: block; padding: 24px; box-sizing: border-box; }
     .leave-request-dialog {
       width: 100%;
     }

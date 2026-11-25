@@ -170,6 +170,7 @@ import { ToastService } from '../../../ui/toast.service';
     </div>
   `,
   styles: [`
+    :host { display: block; padding: 24px; box-sizing: border-box; }
     .meeting-request-dialog {
       width: 100%;
     }
