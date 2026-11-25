@@ -57,6 +57,9 @@ namespace ProjectTracker.API.Authorization
             new[] { "SEY", "SHARPEYE", "SHARPEYESECURITY" },
             new[] { "SHK", "SHAKAHOLDINGS", "SHAKA" },
             new[] { "NAT", "NEWAGETECHNOLOGIES", "NEWAGE" },
+            new[] { "PUM", "PUMA" },
+            new[] { "OKM", "OKMINIMART", "OKMINI" },
+            new[] { "LIA", "LIAMED" },
         };
 
         public static string Normalize(string? s) => new string((s ?? "").Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();

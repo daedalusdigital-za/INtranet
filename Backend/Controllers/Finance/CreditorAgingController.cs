@@ -496,6 +496,9 @@ public class CreditorAgingController : ControllerBase
         if (r.Contains("SHARP")) return "SEY";
         if (r.Contains("SHAKA")) return "SHK";
         if (r.Contains("NEW AGE")) return "NAT";
+        if (r.Contains("PUMA")) return "PUM";
+        if (r.Contains("OK MINI")) return "OKM";
+        if (r.Contains("LIAMED")) return "LIA";
         return companies.FirstOrDefault(c => r.Contains(c.Name.ToUpperInvariant()) || r.Contains(c.Code))?.Code;
     }
 
