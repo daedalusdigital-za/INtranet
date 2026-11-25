@@ -286,14 +286,27 @@ public static class CreditorDocRules
     public static Rule[] For(string paymentType) => Matrix.TryGetValue(paymentType, out var r) ? r : Array.Empty<Rule>();
 
     /// <summary>
+    /// Per-company exceptions: (company code, payment type) → document types that are optional there even though the matrix requires them.
+    /// Pharmatech (PHC) prepayments: the supplier recon is optional when closing — tax invoice + GRV still close it.
+    /// </summary>
+    private static readonly Dictionary<(string Company, string PaymentType), HashSet<string>> OptionalFor = new()
+    {
+        [("PHC", CreditorPaymentTypes.Prepayment)] = new() { CreditorDocTypes.SupplierRecon },
+    };
+
+    public static bool IsOptionalFor(string? companyCode, string paymentType, string docType) =>
+        companyCode != null && OptionalFor.TryGetValue((companyCode.ToUpperInvariant(), paymentType), out var s) && s.Contains(docType);
+
+    /// <summary>
     /// Document types that must be present (or marked N/A) for a given payment, taking the
     /// per-item flags into account. Batch-level types are evaluated once per batch.
     /// </summary>
-    public static IEnumerable<string> RequiredForItem(string paymentType, bool stockReturned, bool closingPrepayment, bool hasRecon = false)
+    public static IEnumerable<string> RequiredForItem(string paymentType, bool stockReturned, bool closingPrepayment, bool hasRecon = false, string? companyCode = null)
     {
         foreach (var r in For(paymentType))
         {
             if (CreditorDocTypes.IsBatchLevel(r.DocType)) continue;
+            if (IsOptionalFor(companyCode, paymentType, r.DocType)) continue;
             if (r.Required) yield return r.DocType;
             else if (r.IfReturned && stockReturned) yield return r.DocType;
             else if (r.AfterDelivery && closingPrepayment) yield return r.DocType;
@@ -308,12 +321,15 @@ public static class CreditorDocRules
     /// Optional-but-wanted documents for a payment: shown as slots and raise a warning when missing, never block.
     /// Excludes anything that is currently required for the item.
     /// </summary>
-    public static IEnumerable<string> RecommendedForItem(string paymentType, bool stockReturned, bool closingPrepayment, bool hasRecon = false, string? payoutMethod = null)
+    public static IEnumerable<string> RecommendedForItem(string paymentType, bool stockReturned, bool closingPrepayment, bool hasRecon = false, string? payoutMethod = null, string? companyCode = null)
     {
-        var req = RequiredForItem(paymentType, stockReturned, closingPrepayment, hasRecon).ToHashSet();
+        var req = RequiredForItem(paymentType, stockReturned, closingPrepayment, hasRecon, companyCode).ToHashSet();
         foreach (var r in For(paymentType))
         {
-            if (CreditorDocTypes.IsBatchLevel(r.DocType) || r.Required || req.Contains(r.DocType)) continue;
+            if (CreditorDocTypes.IsBatchLevel(r.DocType) || req.Contains(r.DocType)) continue;
+            // A company exception turns a required / after-delivery document into an optional slot, shown when it would otherwise have been asked for.
+            if (IsOptionalFor(companyCode, paymentType, r.DocType)) { if (r.Required || (r.AfterDelivery && closingPrepayment)) yield return r.DocType; continue; }
+            if (r.Required) continue;
             if (r.DocType == CreditorDocTypes.BankStatement && payoutMethod == StaffPayoutMethods.EWallet) continue; // no bank account on an eWallet payout
             if (r.AfterDelivery || r.IfReturned) continue; // become required later / conditionally — not "recommended now"
             yield return r.DocType;

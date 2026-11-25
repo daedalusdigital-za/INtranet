@@ -344,13 +344,13 @@ public class CreditorChecksService
 
         bool HasRecon(PaymentBatchItem it) => docs.Any(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.SupplierRecon && d.StoragePath != null);
         foreach (var it in items)
-            foreach (var dt in CreditorDocRules.RequiredForItem(batch.PaymentType, it.StockReturned, closingPrepayment, HasRecon(it)))
+            foreach (var dt in CreditorDocRules.RequiredForItem(batch.PaymentType, it.StockReturned, closingPrepayment, HasRecon(it), batch.CompanyCode))
                 if (!docs.Any(d => d.DocType == dt && d.ItemId == it.Id && (d.IsNotApplicable || d.StoragePath != null)))
                     Add("C1", "Required document missing", "FAIL", dt == CreditorDocTypes.SageAgedPayables ? $"Sage aged payables (PDF) must accompany the recon for {it.SupplierName}." : $"{Label(dt)} is missing for {it.SupplierName}.", it, dt);
 
         // C1a — recommended documents (quote, PO, GRV, proof of work, bank letter…): not blocking, but the approvers should know
         foreach (var it in items)
-            foreach (var dt in CreditorDocRules.RecommendedForItem(batch.PaymentType, it.StockReturned, closingPrepayment, HasRecon(it), it.PayoutMethod))
+            foreach (var dt in CreditorDocRules.RecommendedForItem(batch.PaymentType, it.StockReturned, closingPrepayment, HasRecon(it), it.PayoutMethod, batch.CompanyCode))
                 if (!docs.Any(d => d.DocType == dt && d.ItemId == it.Id && (d.IsNotApplicable || d.StoragePath != null)))
                     Add("C1a", "Supporting document not attached", "REVIEW",
                         dt == CreditorDocTypes.BankLetter
@@ -364,7 +364,8 @@ public class CreditorChecksService
         {
             var hasInv = docs.Any(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.TaxInvoice && d.StoragePath != null);
             var hasRecon = docs.Any(d => d.ItemId == it.Id && d.DocType == CreditorDocTypes.SupplierRecon && (d.StoragePath != null || d.IsNotApplicable));
-            if (hasInv && !hasRecon && CreditorDocRules.For(batch.PaymentType).Any(r => r.DocType == CreditorDocTypes.SupplierRecon))
+            if (hasInv && !hasRecon && CreditorDocRules.For(batch.PaymentType).Any(r => r.DocType == CreditorDocTypes.SupplierRecon)
+                && !CreditorDocRules.IsOptionalFor(batch.CompanyCode, batch.PaymentType, CreditorDocTypes.SupplierRecon))
                 Add("C1c", "Invoice without recon", "FAIL", $"A tax invoice is attached for {it.SupplierName} but no supplier recon (Excel or PDF) — every invoice must come with its recon.", it, CreditorDocTypes.SupplierRecon);
         }
 

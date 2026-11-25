@@ -2190,8 +2190,8 @@ public class CreditorPacksController : ControllerBase
         bool Filled(string dt, int? itemId) => b.Documents.Any(d => d.DocType == dt && d.ItemId == itemId && (d.IsNotApplicable || d.StoragePath != null));
         var batchReq = CreditorDocRules.RequiredForBatch(b.PaymentType).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, null) }).ToList();
         bool HasRecon(int itemId) => b.Documents.Any(d => d.ItemId == itemId && d.DocType == CreditorDocTypes.SupplierRecon && d.StoragePath != null);
-        var itemReq = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RequiredForItem(b.PaymentType, i.StockReturned, closing, HasRecon(i.Id)).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
-        var itemRec = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RecommendedForItem(b.PaymentType, i.StockReturned, closing, HasRecon(i.Id), i.PayoutMethod).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
+        var itemReq = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RequiredForItem(b.PaymentType, i.StockReturned, closing, HasRecon(i.Id), b.CompanyCode).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
+        var itemRec = b.Items.ToDictionary(i => i.Id, i => CreditorDocRules.RecommendedForItem(b.PaymentType, i.StockReturned, closing, HasRecon(i.Id), i.PayoutMethod, b.CompanyCode).Select(dt => new { docType = dt, title = CreditorChecksService.Label(dt), filled = Filled(dt, i.Id) }).ToList());
         var allFilled = batchReq.All(r => r.filled) && itemReq.Values.All(l => l.All(r => r.filled)) && b.Items.Count > 0;
 
         var canPrepare = await CanPrepareAsync(b);
