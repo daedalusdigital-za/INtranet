@@ -37,6 +37,7 @@ import { FinanceRemittancesComponent } from './finance-remittances.component';
 import { FinanceCreditNotesComponent } from './finance-credit-notes.component';
 import { FinanceAlertsComponent } from './finance-alerts.component';
 import { FinanceBookkeepingComponent } from './finance-bookkeeping.component';
+import { QuoteApprovalsComponent } from './quote-approvals.component';
 import { FinancePacksComponent } from './finance-packs.component';
 import { TenderService } from '../../services/tender.service';
 import { CreditorPacksService, BatchRow, CreditorMeta } from '../../services/creditor-packs.service';
@@ -136,6 +137,7 @@ interface Overview {
     FinanceCreditNotesComponent,
     FinanceAlertsComponent,
     FinanceBookkeepingComponent,
+    QuoteApprovalsComponent,
     FinancePacksComponent,
     FinancePaymentScheduleComponent,
     MatMenuModule
@@ -215,8 +217,8 @@ export class FinanceComponent implements OnInit {
     const d = { payments: false, quotes: false, requisitions: false };
     try { return { ...d, ...JSON.parse(localStorage.getItem('finance.overview.collapsed.v1') || '{}') }; } catch { return d; }
   }
-  /** Pending quotes regardless of the Approvals tab's current filter. */
-  get ovPendingQuotes(): any[] { return this.quoteRequests.filter(q => (q.status || '') === 'Pending'); }
+  /** Quotation requests waiting for the signed-in user. */
+  get ovPendingQuotes(): any[] { return this.quoteRequests; }
   get ovRequestedReqs(): any[] { return this.requisitions.filter(r => (r.financeStatus || '') === 'Requested'); }
 
   get approvalsBadge(): number {
@@ -263,8 +265,7 @@ export class FinanceComponent implements OnInit {
   // Quotation requests (replaced stationery requests)
   quoteRequests: any[] = [];
   quotesLoading = false;
-  quoteFilter = 'Pending';
-  quoteCounts = { pending: 0, approved: 0, declined: 0, total: 0 };
+  quoteCounts: { pending: number; open?: number; approved: number; declined: number; total: number } = { pending: 0, open: 0, approved: 0, declined: 0, total: 0 };
 
   // Payment packs waiting for the signed-in accountant (prepared & checked by the clerks)
   packMeta: CreditorMeta | null = null;
@@ -701,44 +702,22 @@ export class FinanceComponent implements OnInit {
 
   // ─── Quotation Requests ───
 
+  /** Counters: "pending" here means waiting for the signed-in user (creditors / accountant / director step). */
   loadQuoteCounts(): void {
     this.http.get<any>(`${environment.apiUrl}/quotation-requests/counts`).subscribe({
-      next: c => this.quoteCounts = c,
+      next: c => this.quoteCounts = { ...c, pending: c?.forMe ?? 0, declined: (c?.declined ?? 0) + (c?.rejected ?? 0) },
       error: () => {}
     });
   }
 
-  setQuoteFilter(f: string): void {
-    this.quoteFilter = f;
-    this.loadQuoteRequests();
-  }
-
+  /** The overview's mini panel: quotation requests waiting for the signed-in user. The Approvals tab has its own list (app-quote-approvals). */
   loadQuoteRequests(): void {
     this.quotesLoading = true;
-    const q = this.quoteFilter !== 'all' ? `?status=${this.quoteFilter}` : '';
-    this.http.get<any[]>(`${environment.apiUrl}/quotation-requests${q}`).subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/quotation-requests?status=forme`).subscribe({
       next: r => { this.quoteRequests = r; this.quotesLoading = false; },
       error: () => { this.quotesLoading = false; }
     });
   }
-
-  reviewQuote(req: any, status: 'Approved' | 'Declined' | 'Pending'): void {
-    let notes: string | null = null;
-    if (status === 'Declined') { notes = window.prompt(`Why is "${req.subject}" declined? (the requester will see this)`); if (!notes) return; }
-    else if (status === 'Approved') { notes = window.prompt('Note for the requester / clerk (optional — e.g. which quote to take):', '') ; if (notes === null) return; }
-    this.http.put<any>(`${environment.apiUrl}/quotation-requests/${req.id}/review`, { status, notes: notes || null }).subscribe({
-      next: r => {
-        Object.assign(req, r);
-        this.loadQuoteCounts();
-        if (this.quoteFilter !== 'all' && this.quoteFilter !== status) this.quoteRequests = this.quoteRequests.filter(x => x.id !== req.id);
-        this.toast.done(status === 'Pending' ? 'Moved back to pending' : `Quotation request ${status.toLowerCase()}`);
-      },
-      error: e => this.toast.error(e?.error?.message || "Couldn't update the quotation request. Try again.")
-    });
-  }
-
-  quoteFileUrl(req: any, fileId: number): string { return `${environment.apiUrl}/quotation-requests/${req.id}/files/${fileId}`; }
-  openQuoteFile(req: any, fileId: number): void { this.fetchFile(this.quoteFileUrl(req, fileId), true); }
 
   spInitials(name: string): string {
     if (!name) return '?';

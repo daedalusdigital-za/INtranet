@@ -259,6 +259,97 @@ tr.rej td{{color:#9ca3af;text-decoration:line-through}} tr.tot td{{font-weight:b
 </body></html>";
     }
 
+    // ───────────────────────── quote approval sheet ─────────────────────────
+
+    /// <summary>
+    /// Quote approval sheet (A4): the request, who asked, the quotes side by side with the chosen one marked,
+    /// and the preparer / accountant / director signatures — same look as the payment pack approval sheet.
+    /// </summary>
+    public async Task<byte[]> QuoteApprovalSheetAsync(ProjectTracker.API.Models.QuotationRequest q)
+    {
+        var sigs = await _db.ElectronicSignatures.AsNoTracking()
+            .Where(s => s.EntityType == "QuotationRequest" && s.EntityId == q.Id)
+            .OrderByDescending(s => s.SignedAtUtc).ToListAsync();
+        ElectronicSignature? Latest(string ctx) => sigs.FirstOrDefault(s => s.Context == ctx);
+        var slots = new List<Slot>
+        {
+            new("Accepted & prepared by (Creditors)", "QuotePreparer", Latest("QuotePreparer")),
+            new("Approved by (Accountant)", "QuoteAccountant", Latest("QuoteAccountant")),
+            new(q.Status == ProjectTracker.API.Models.QuoteFlow.Rejected ? "Rejected by (Director)" : "Quote selected by (Director)", "QuoteDirector", Latest("QuoteDirector")),
+        };
+        var company = q.CompanyCode != null
+            ? await _db.CreditorCompanies.AsNoTracking().Where(c => c.Code == q.CompanyCode).Select(c => c.Name).FirstOrDefaultAsync() ?? q.Company ?? q.CompanyCode
+            : q.Company ?? "Company not set";
+        var html = QuoteSheetHtml(q, company, slots);
+        using var ms = new MemoryStream();
+        using (var writer = new PdfWriter(ms))
+        using (var pdf = new PdfDocument(writer))
+        {
+            pdf.SetDefaultPageSize(PageSize.A4);
+            HtmlConverter.ConvertToPdf(html, pdf, new ConverterProperties());
+        }
+        return ms.ToArray();
+    }
+
+    private static string QuoteSheetHtml(ProjectTracker.API.Models.QuotationRequest q, string company, List<Slot> slots)
+    {
+        var quotes = q.Files.OrderBy(f => f.QuoteNumber == 0 ? int.MaxValue : f.QuoteNumber).ThenBy(f => f.Id).ToList();
+        var approved = q.Status == ProjectTracker.API.Models.QuoteFlow.Approved;
+        var rejected = q.Status == ProjectTracker.API.Models.QuoteFlow.Rejected;
+        string Row(ProjectTracker.API.Models.QuotationRequestFile f, int n)
+        {
+            var chosen = approved && f.Id == q.SelectedFileId;
+            var dec = chosen ? "<b style='color:#15803d'>SELECTED</b>" : rejected ? "<b style='color:#b91c1c'>Rejected</b>" : approved ? "Not selected" : "Pending";
+            return $"<tr class='{(chosen ? "sel" : approved || rejected ? "off" : "")}'><td>{(f.QuoteNumber > 0 ? f.QuoteNumber : n)}</td><td>{E(f.Supplier ?? "—")}</td><td>{E(f.FileName)}</td><td class='r'>{(f.Amount is decimal a ? a.ToString("N2") : "—")}</td><td class='dec'>{dec}</td></tr>";
+        }
+        string Slot(Slot s)
+        {
+            if (s.Sig == null) return $@"<div class='sig empty'><div class='t'>{E(s.Title)}</div><div class='img'><span>Not yet signed</span></div><div class='n'>&nbsp;</div><div class='d'>&nbsp;</div></div>";
+            var img = s.Sig.SignatureImage != null ? $"<img src='data:{E(s.Sig.SignatureImageMimeType ?? "image/png")};base64,{Convert.ToBase64String(s.Sig.SignatureImage)}'/>" : "<span class='typed'>" + E(s.Sig.SignerName) + "</span>";
+            return $@"<div class='sig'><div class='t'>{E(s.Title)}</div><div class='img'>{img}</div><div class='n'>{E(s.Sig.SignerName)}</div>
+<div class='d'>{s.Sig.SignedAtUtc.ToLocalTime():dd MMM yyyy HH:mm} · {E(s.Sig.Method)} · {E(s.Sig.Action)}{(string.IsNullOrWhiteSpace(s.Sig.Comment) ? "" : "<br/>“" + E(s.Sig.Comment) + "”")}</div>
+<div class='h'>Signature #{s.Sig.Id} · hash {E((s.Sig.PayloadHash ?? "")[..Math.Min(16, (s.Sig.PayloadHash ?? "").Length)])}…</div></div>";
+        }
+        var sel = quotes.FirstOrDefault(f => f.Id == q.SelectedFileId);
+        var outcome = approved && sel != null
+            ? $"<div class='okbox'><h3>Quote approved: {E(sel.Supplier ?? sel.FileName)}{(sel.Amount is decimal a ? " · R " + a.ToString("N2") : "")}</h3>Selected by {E(q.DirectorName)} on {q.DirectorDecidedAt?.ToLocalTime():dd MMM yyyy HH:mm}.{(string.IsNullOrWhiteSpace(q.DirectorComment) ? "" : "<br/>“" + E(q.DirectorComment) + "”")}</div>"
+            : rejected
+            ? $"<div class='rejbox'><h3>All quotes rejected</h3>Rejected by {E(q.DirectorName)} on {q.DirectorDecidedAt?.ToLocalTime():dd MMM yyyy HH:mm}.<br/>Reason: {(string.IsNullOrWhiteSpace(q.DirectorComment) ? "<em>No reason given</em>" : E(q.DirectorComment))}</div>"
+            : "<div class='lock open'>No final decision yet. Signatures marked “Not yet signed” are still outstanding.</div>";
+
+        return $@"<!doctype html><html><head><meta charset='utf-8'/><style>
+body{{font-family:Helvetica,Arial,sans-serif;font-size:10.5px;color:#111827;margin:0;padding:18px 22px}}
+h1{{font-size:18px;margin:0 0 2px;color:#4f46e5}} .sub{{color:#6b7280;margin:0 0 14px}}
+.meta{{display:table;width:100%;border-collapse:collapse;margin-bottom:12px}} .meta div{{display:table-row}} .meta span{{display:table-cell;padding:3px 10px 3px 0;color:#6b7280;width:130px}} .meta b{{display:table-cell;padding:3px 0}}
+table.items{{width:100%;border-collapse:collapse;margin:8px 0 14px}} table.items th{{text-align:left;background:#eef2ff;color:#3730a3;padding:5px 6px;font-size:9.5px;border-bottom:1px solid #c7d2fe}} table.items td{{padding:5px 6px;border-bottom:1px solid #e5e7eb;vertical-align:top}} td.r,th.r{{text-align:right}}
+tr.sel td{{background:#f0fdf4;font-weight:bold}} tr.off td{{color:#9ca3af}} td.dec{{font-size:9.5px}}
+.sigs{{display:table;width:100%;border-spacing:8px 0;margin:6px -8px 10px}} .sig{{display:table-cell;width:33%;border:1px solid #c7d2fe;border-radius:8px;padding:8px 10px;vertical-align:top}} .sig.empty{{border-style:dashed;color:#9ca3af}}
+.sig .t{{font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:#4f46e5;font-weight:bold}} .sig .img{{height:58px;margin:6px 0;display:flex;align-items:center}} .sig .img img{{max-height:56px;max-width:100%}} .sig .img span{{color:#9ca3af;font-style:italic}} .typed{{font-family:'Brush Script MT',cursive;font-size:20px;color:#1f2937}}
+.sig .n{{font-weight:bold;font-size:11px}} .sig .d{{color:#4b5563;font-size:9px}} .sig .h{{color:#9ca3af;font-size:7.5px;margin-top:4px;font-family:monospace}}
+.lock{{border-radius:8px;padding:8px 10px;margin:8px 0}} .lock.open{{background:#fffbeb;border:1px solid #fde68a;color:#92400e}}
+.okbox{{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:8px;padding:8px 10px;margin:8px 0}} .okbox h3{{margin:0 0 4px;font-size:12px;color:#15803d}}
+.rejbox{{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:8px 10px;margin:8px 0}} .rejbox h3{{margin:0 0 4px;font-size:12px;color:#b91c1c}}
+.det{{white-space:pre-wrap;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;margin:0 0 10px}}
+.foot{{margin-top:14px;color:#9ca3af;font-size:8px;border-top:1px solid #e5e7eb;padding-top:6px}}
+</style></head><body>
+<h1>Quote approval sheet</h1><p class='sub'>{E(company)} · Quotation request Q-{q.Id:0000}</p>
+<div class='meta'>
+<div><span>For</span><b>{E(q.Subject)}</b></div>
+<div><span>Requested by</span><b>{E(q.RequestedBy)}{(string.IsNullOrWhiteSpace(q.Department) ? "" : " · " + E(q.Department))} · {q.SubmittedAt.ToLocalTime():dd MMM yyyy HH:mm}</b></div>
+<div><span>Status</span><b>{E(ProjectTracker.API.Models.QuoteFlow.Title(q.Status))}</b></div>
+<div><span>Priority</span><b>{E(q.Priority)}{(q.EstimatedAmount is decimal est ? " · estimated R " + est.ToString("N2") : "")}</b></div>
+{(string.IsNullOrWhiteSpace(q.PreparedByName) ? "" : $"<div><span>Prepared by</span><b>{E(q.PreparedByName)}{(q.PreparedAt != null ? " · " + q.PreparedAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "")}</b></div>")}
+{(string.IsNullOrWhiteSpace(q.FewerQuotesReason) ? "" : $"<div><span>Fewer than 3 quotes</span><b>{E(q.FewerQuotesReason)}</b></div>")}
+</div>
+{(string.IsNullOrWhiteSpace(q.Details) ? "" : $"<div class='det'>{E(q.Details)}</div>")}
+<table class='items'><thead><tr><th>#</th><th>Supplier</th><th>Quote document</th><th class='r'>Amount (R)</th><th>Decision</th></tr></thead>
+<tbody>{string.Concat(quotes.Select((f, n) => Row(f, n + 1)))}</tbody></table>
+{outcome}
+<div class='sigs'>{string.Concat(slots.Select(Slot))}</div>
+<div class='foot'>Generated by the intranet on {DateTime.Now:dd MMM yyyy HH:mm}. Each signature is recorded with the signer's identity, time, IP address and a SHA-256 hash of the request at the moment of signing; any later change would break the hash.</div>
+</body></html>";
+    }
+
     private record MovedOut(string SupplierName, string? InvoiceNumbers, decimal Amount, string? Question, string? AskedBy, string NewBatchNumber);
 
     private static string ApprovalSheetHtml(PaymentBatch b, string company, List<Slot> slots, List<MovedOut>? movedOut = null)

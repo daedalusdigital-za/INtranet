@@ -44,7 +44,7 @@ import { ToastService } from '../../../ui/toast.service';
             <mat-icon class="option-icon" style="color:var(--color-ok)">payments</mat-icon>
             <div class="option-text">
               <span class="option-name">Payment</span>
-              <span class="option-desc">Pay an invoice or submit a 3-quote comparison for approval</span>
+              <span class="option-desc">Pay a supplier invoice</span>
             </div>
             <mat-icon class="arrow-icon">chevron_right</mat-icon>
           </div>
@@ -53,7 +53,7 @@ import { ToastService } from '../../../ui/toast.service';
             <mat-icon class="option-icon" style="color:var(--color-primary)">request_quote</mat-icon>
             <div class="option-text">
               <span class="option-name">Quotations</span>
-              <span class="option-desc">Request or submit supplier quotations</span>
+              <span class="option-desc">Three quotes for something you need — a director picks one</span>
             </div>
             <mat-icon class="arrow-icon">chevron_right</mat-icon>
           </div>
@@ -100,7 +100,7 @@ export class FinanceMenuComponent {
   openQuotations(): void {
     this.dialogRef.close();
     this.dialog.open(QuotationRequestDialogComponent, {
-      width: '640px', maxHeight: '92vh', autoFocus: false, panelClass: 'no-scroll-dialog'
+      width: '680px', maxHeight: '92vh', autoFocus: false, panelClass: 'no-scroll-dialog'
     });
   }
 
@@ -149,7 +149,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
             <div class="type-card" [class.selected]="payType === 'quotes'" (click)="setType('quotes')">
               <mat-icon>format_list_numbered</mat-icon>
               <span class="t-name">Three Quotes</span>
-              <span class="t-desc">Upload 3 quotes for comparison</span>
+              <span class="t-desc">3 quotes → a director picks one</span>
             </div>
           </div>
         </div>
@@ -381,6 +381,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
 })
 export class PaymentRequestDialogComponent {
   private dialogRef = inject(MatDialogRef<PaymentRequestDialogComponent>);
+  private dialog = inject(MatDialog);
   private toast = inject(ToastService);
   private paperlessSvc = inject(PaperlessService);
 
@@ -405,6 +406,12 @@ export class PaymentRequestDialogComponent {
   private quoteInputEl: HTMLInputElement | null = null;
 
   setType(t: 'invoice' | 'quotes'): void {
+    // Three quotes go through the quotation approval flow (Creditors → accountant → director picks one).
+    if (t === 'quotes') {
+      this.dialogRef.close();
+      this.dialog.open(QuotationRequestDialogComponent, { width: '680px', maxHeight: '92vh', autoFocus: false, panelClass: 'no-scroll-dialog' });
+      return;
+    }
     this.payType = t;
   }
 
@@ -519,17 +526,18 @@ export class PaymentRequestDialogComponent {
 }
 
 /**
- * Quotation request. Ask suppliers for quotes (describe the requirement) and,
- * optionally, upload any quotes already received and route them through a
- * paperless approval workflow.
+ * Quotation request. The requester says what is needed and attaches (normally) three quotes, each with the supplier
+ * and amount. It then goes Creditors → accountant → director, who picks one quote (or rejects all); the requester is
+ * e-mailed the outcome with the signed quote approval sheet.
  */
+interface QuoteSlot { file: File | null; supplier: string; amount: number | null; }
+
 @Component({
   selector: 'app-quotation-request-dialog',
   standalone: true,
   imports: [
     CommonModule, FormsModule, MatDialogModule, MatIconModule, MatButtonModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressSpinnerModule,
-    MatSlideToggleModule, MatChipsModule
+    MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressSpinnerModule
   ],
   template: `
     <div class="quote-dialog">
@@ -543,14 +551,14 @@ export class PaymentRequestDialogComponent {
 
       <div class="dialog-content">
         <mat-form-field appearance="outline" class="full-width">
-          <mat-label>What do you need quoted?</mat-label>
-          <input matInput [(ngModel)]="subject" placeholder="e.g. 5 x office chairs">
+          <mat-label>What do you need?</mat-label>
+          <input matInput [(ngModel)]="subject" placeholder="e.g. 5 x office chairs for the Durban office">
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Details / specifications</mat-label>
+          <mat-label>What are the quotes for? (details / specifications)</mat-label>
           <textarea matInput rows="3" [(ngModel)]="details"
-                    placeholder="Describe the goods/services, quantity, deadline…"></textarea>
+                    placeholder="What it is, quantity, why it's needed, deadline…"></textarea>
         </mat-form-field>
 
         <div class="row3">
@@ -564,10 +572,10 @@ export class PaymentRequestDialogComponent {
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Paying company (optional)</mat-label>
-            <mat-select [(ngModel)]="company">
-              <mat-option [value]="''">Not sure</mat-option>
-              @for (c of companies; track c) { <mat-option [value]="c">{{ c }}</mat-option> }
+            <mat-label>Paying company</mat-label>
+            <mat-select [(ngModel)]="companyCode">
+              <mat-option [value]="''">Not sure — Creditors will choose</mat-option>
+              @for (c of companies; track c.code) { <mat-option [value]="c.code">{{ c.name }}</mat-option> }
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline">
@@ -575,87 +583,43 @@ export class PaymentRequestDialogComponent {
             <input matInput type="number" min="0" step="0.01" [(ngModel)]="estimatedAmount">
           </mat-form-field>
         </div>
-        <p class="route-note"><mat-icon inline>info</mat-icon> Goes to <b>Finance › Approvals › Quotation requests</b>. You'll see the outcome under your requests.</p>
 
-        <div class="uploaded">
-          <div class="up-head">
-            <span>Attach quotes already received (optional)</span>
-            <button mat-stroked-button type="button" (click)="fileInput.click()">
-              <mat-icon>upload_file</mat-icon> Add quote
-            </button>
-            <input #fileInput type="file" hidden multiple
-                   accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx"
-                   (change)="onPicked($event)">
-          </div>
-          @if (files.length > 0) {
-            <div class="chips">
-              @for (f of files; track f.name; let i = $index) {
-                <div class="file-chip">
-                  <mat-icon>description</mat-icon>
-                  <span class="fname">{{ f.name }}</span>
-                  <button aria-label="Close" mat-icon-button (click)="remove(i)"><mat-icon>close</mat-icon></button>
+        <div class="quotes">
+          <div class="q-head"><b>The three quotes</b><span>Attach each quote with the supplier and the quoted amount.</span></div>
+          @for (s of slots; track $index; let i = $index) {
+            <div class="q-slot" [class.filled]="!!s.file">
+              <span class="q-n">{{ i + 1 }}</span>
+              <div class="q-body">
+                <div class="q-file">
+                  @if (s.file) {
+                    <mat-icon>description</mat-icon><span class="fname" [title]="s.file.name">{{ s.file.name }}</span>
+                    <button mat-icon-button aria-label="Remove quote" (click)="clear(i)"><mat-icon>close</mat-icon></button>
+                  } @else {
+                    <button mat-stroked-button type="button" (click)="pick(i)"><mat-icon>upload_file</mat-icon> Attach quote {{ i + 1 }}</button>
+                  }
                 </div>
-              }
+                <div class="q-fields">
+                  <input class="in" type="text" [(ngModel)]="s.supplier" placeholder="Supplier" aria-label="Supplier">
+                  <input class="in amt" type="number" min="0" step="0.01" [(ngModel)]="s.amount" placeholder="Amount (R)" aria-label="Amount">
+                </div>
+              </div>
             </div>
+          }
+          <input #fileInput type="file" hidden accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx" (change)="onPicked($event)">
+          @if (attached() < 3) {
+            <mat-form-field appearance="outline" class="full-width reason">
+              <mat-label>Why fewer than three quotes?</mat-label>
+              <input matInput [(ngModel)]="fewerReason" placeholder="e.g. Only one supplier stocks this — or: please source quotes for me">
+            </mat-form-field>
           }
         </div>
 
-        @if (files.length > 0) {
-          <div class="paperless-step">
-            <div class="pl-toggle-row">
-              <div class="pl-toggle-text">
-                <span class="pl-title"><mat-icon>fact_check</mat-icon> Make this a paperless workflow?</span>
-                <span class="pl-sub">Route the quotes to signers &amp; approvers for sign-off.</span>
-              </div>
-              <mat-slide-toggle color="primary" [(ngModel)]="paperless"></mat-slide-toggle>
-            </div>
-
-            @if (paperless) {
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Add signers &amp; approvers</mat-label>
-                <input matInput [(ngModel)]="userQuery" (ngModelChange)="onSearch($event)"
-                       placeholder="Search people by name or email…">
-                <mat-icon matPrefix>person_search</mat-icon>
-                @if (searching) { <mat-spinner matSuffix diameter="18"></mat-spinner> }
-              </mat-form-field>
-
-              @if (results.length > 0) {
-                <div class="results">
-                  @for (u of results; track u.id) {
-                    <div class="result-row">
-                      <div class="r-info">
-                        <span class="r-name">{{ u.name }}</span>
-                        <span class="r-email">{{ u.email }}</span>
-                      </div>
-                      <div class="r-actions">
-                        <button mat-stroked-button (click)="addUser(u, 'signer')"><mat-icon>draw</mat-icon> Signer</button>
-                        <button mat-stroked-button color="primary" (click)="addUser(u, 'approver')"><mat-icon>verified</mat-icon> Approver</button>
-                      </div>
-                    </div>
-                  }
-                </div>
-              }
-
-              @if (picked.length > 0) {
-                <mat-chip-set>
-                  @for (p of picked; track p.id + p.role) {
-                    <mat-chip (removed)="removeUser(p)">
-                      <mat-icon>{{ p.role === 'signer' ? 'draw' : 'verified' }}</mat-icon>
-                      {{ p.name }} · {{ p.role }}
-                      <button aria-label="Close" matChipRemove><mat-icon>cancel</mat-icon></button>
-                    </mat-chip>
-                  }
-                </mat-chip-set>
-              }
-            }
-          </div>
-        }
+        <p class="route-note"><mat-icon inline>info</mat-icon> Goes to <b>Creditors</b>, then the <b>accountant</b>, then a <b>director</b> who chooses one quote. You'll get an e-mail with the outcome and the signed approval sheet.</p>
       </div>
 
       <div class="dialog-actions">
         <button mat-button type="button" (click)="close()">Cancel</button>
-        <button mat-raised-button color="primary" (click)="submit()"
-                [disabled]="submitting || !subject || (paperless && picked.length === 0)">
+        <button mat-raised-button color="primary" (click)="submit()" [disabled]="submitting || !canSubmit()">
           @if (submitting) {
             <mat-spinner diameter="20"></mat-spinner>
           } @else {
@@ -678,134 +642,86 @@ export class PaymentRequestDialogComponent {
     .dialog-content { padding: 22px 2px 8px; }
     .full-width { width: 100%; }
     .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } @media (max-width: 640px) { .row3 { grid-template-columns: 1fr; } }
-    .route-note { display: flex; align-items: center; gap: 6px; margin: -4px 0 12px; font-size: var(--text-xs); color: var(--color-text-2); }
-    .uploaded { margin-bottom: 14px; }
-    .up-head { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 10px; color: var(--color-text-2); font-size: var(--text-md); }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-    .file-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px;
-      background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 20px; }
-    .file-chip .fname { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); }
-    .file-chip mat-icon { color: var(--color-primary); }
-    .file-chip button { width: 28px; height: 28px; line-height: 28px; }
-    .paperless-step { padding: 14px; background: var(--color-primary-soft); border: 1px solid var(--color-line); border-radius: var(--radius-md); margin-top: 8px; }
-    .pl-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .pl-toggle-text { display: flex; flex-direction: column; }
-    .pl-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--color-primary); }
-    .pl-sub { font-size: var(--text-xs); color: var(--color-text-2); margin-top: 2px; }
-    .results { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-md); overflow: hidden; margin: 12px 0; }
-    .result-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--color-line); }
-    .result-row:last-child { border-bottom: none; }
-    .r-info { display: flex; flex-direction: column; }
-    .r-name { font-weight: 600; color: var(--color-text); font-size: var(--text-md); }
-    .r-email { font-size: var(--text-xs); color: var(--color-text-3); }
-    .r-actions { display: flex; gap: 8px; }
+    .quotes { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 10px; }
+    .q-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; span { font-size: var(--text-xs); color: var(--color-text-3); } }
+    .q-slot { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px dashed var(--color-line-strong); border-radius: var(--radius-md); background: var(--color-surface);
+      &.filled { border-style: solid; border-color: var(--color-primary); background: var(--color-primary-soft); } }
+    .q-n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: var(--text-sm); background: var(--color-surface-3); color: var(--color-text-2); margin-top: 4px; }
+    .q-slot.filled .q-n { background: var(--color-primary); color: var(--color-on-primary, #fff); }
+    .q-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .q-file { display: flex; align-items: center; gap: 6px; min-height: 36px; mat-icon { color: var(--color-primary); }
+      .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 600; } }
+    .q-fields { display: grid; grid-template-columns: 1fr 150px; gap: 8px; } @media (max-width: 520px) { .q-fields { grid-template-columns: 1fr; } }
+    .in { height: 36px; padding: 0 10px; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control, 6px); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); min-width: 0; }
+    .reason { margin-top: 6px; }
+    .route-note { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0 4px; font-size: var(--text-xs); color: var(--color-text-2); mat-icon { flex: none; margin-top: 1px; } }
     .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 14px; border-top: 1px solid var(--color-line); }
     .dialog-actions button { display: flex; align-items: center; gap: 8px; }
   `]
 })
-export class QuotationRequestDialogComponent {
+export class QuotationRequestDialogComponent implements OnInit {
   private dialogRef = inject(MatDialogRef<QuotationRequestDialogComponent>);
   private toast = inject(ToastService);
-  private paperlessSvc = inject(PaperlessService);
   private http = inject(HttpClient);
 
   subject = '';
   details = '';
   priority: 'Low' | 'Normal' | 'High' | 'Urgent' = 'Normal';
-  company = '';
+  companyCode = '';
+  companies: { code: string; name: string }[] = [];
   estimatedAmount: number | null = null;
-  readonly companies = ['Promed Technologies', 'Access Medical', 'Promed Pharmatech', 'Sebenzani Trading', 'SA Wellness', 'KOG', 'Rocket Freight'];
-  files: File[] = [];
-
-  paperless = false;
-  userQuery = '';
-  results: PaperlessUser[] = [];
-  searching = false;
-  picked: PickedUser[] = [];
+  slots: QuoteSlot[] = [0, 1, 2].map(() => ({ file: null, supplier: '', amount: null }));
+  fewerReason = '';
   submitting = false;
-  private searchTimer: any;
+  private pickSlot = 0;
 
+  ngOnInit(): void {
+    this.http.get<{ code: string; name: string }[]>(`${environment.apiUrl}/quotation-requests/companies`).subscribe({ next: c => this.companies = c ?? [], error: () => this.companies = [] });
+  }
+
+  attached(): number { return this.slots.filter(s => !!s.file).length; }
+  canSubmit(): boolean { return !!this.subject.trim() && (this.attached() >= 3 || !!this.fewerReason.trim()); }
+
+  pick(i: number): void {
+    this.pickSlot = i;
+    (document.querySelector('.quote-dialog input[type=file]') as HTMLInputElement | null)?.click();
+  }
   onPicked(ev: Event): void {
     const input = ev.target as HTMLInputElement;
-    if (input.files) this.files.push(...Array.from(input.files));
+    const f = input.files?.[0];
+    if (f) {
+      const s = this.slots[this.pickSlot];
+      s.file = f;
+      // A sensible default supplier name from the file name ("Acme quote 1234.pdf" → "Acme quote 1234").
+      if (!s.supplier) s.supplier = f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim().slice(0, 60);
+    }
     input.value = '';
   }
-
-  remove(i: number): void { this.files.splice(i, 1); }
-
-  onSearch(q: string): void {
-    if (this.searchTimer) clearTimeout(this.searchTimer);
-    const term = (q || '').trim();
-    if (term.length < 2) { this.results = []; return; }
-    this.searching = true;
-    this.searchTimer = setTimeout(() => {
-      this.paperlessSvc.searchUsers(term).subscribe({
-        next: (list) => {
-          const takenIds = new Set(this.picked.map(p => p.id));
-          this.results = (list || []).filter(u => !takenIds.has(u.id)).slice(0, 8);
-          this.searching = false;
-        },
-        error: () => { this.results = []; this.searching = false; }
-      });
-    }, 300);
-  }
-
-  addUser(u: PaperlessUser, role: RecipientRole): void {
-    if (this.picked.some(p => p.id === u.id && p.role === role)) return;
-    this.picked.push({ id: u.id, name: u.name, email: u.email, role });
-    this.results = this.results.filter(r => r.id !== u.id);
-    this.userQuery = '';
-  }
-
-  removeUser(p: PickedUser): void {
-    this.picked = this.picked.filter(x => !(x.id === p.id && x.role === p.role));
-  }
+  clear(i: number): void { this.slots[i] = { file: null, supplier: '', amount: null }; }
 
   async submit(): Promise<void> {
-    if (!this.subject) return;
-    if (this.paperless && this.picked.length === 0) {
-      this.toast.warn('Add at least one signer or approver for the workflow.');
-      return;
-    }
+    if (!this.canSubmit() || this.submitting) return;
     this.submitting = true;
-
     try {
-      let paperlessId: string | null = null;
-      if (this.files.length > 0 && this.paperless) {
-        const primary = await this.paperlessSvc.uploadPrimary(this.files[0], 'ThreeQuote' as any);
-        if (primary) {
-          paperlessId = primary.id;
-          for (let i = 1; i < this.files.length; i++) {
-            await this.paperlessSvc.addStackItem(primary.id, 'Invoice', this.files[i], 'ThreeQuote' as any);
-          }
-          const signers = this.picked.filter(p => p.role === 'signer');
-          const approvers = this.picked.filter(p => p.role === 'approver');
-          for (const s of signers) this.paperlessSvc.addRecipient(primary.id, s.name, 'signer', s.email);
-          for (const a of approvers) this.paperlessSvc.addRecipient(primary.id, a.name, 'approver', a.email);
-          this.paperlessSvc.sendForSignature(primary.id);
-        }
-      }
-
-      // The request itself always goes to Finance › Approvals, with the quotes attached.
       const fd = new FormData();
       fd.append('subject', this.subject.trim());
       if (this.details) fd.append('details', this.details.trim());
       fd.append('priority', this.priority);
-      if (this.company) fd.append('company', this.company);
+      if (this.companyCode) fd.append('companyCode', this.companyCode);
       if (this.estimatedAmount != null && this.estimatedAmount !== ('' as any)) fd.append('estimatedAmount', String(this.estimatedAmount));
-      if (paperlessId && /^\d+$/.test(String(paperlessId))) fd.append('paperlessDocumentId', String(paperlessId));
-      for (const f of this.files) fd.append('files', f, f.name);
+      if (this.attached() < 3 && this.fewerReason.trim()) fd.append('fewerQuotesReason', this.fewerReason.trim());
+      for (const s of this.slots.filter(x => !!x.file)) {
+        fd.append('files', s.file!, s.file!.name);
+        fd.append('suppliers', s.supplier.trim());
+        fd.append('amounts', s.amount != null && (s.amount as any) !== '' ? String(s.amount) : '');
+      }
       await firstValueFrom(this.http.post(`${environment.apiUrl}/quotation-requests`, fd));
-
-      this.toast.done(
-        this.paperless && paperlessId
-          ? `Quotation request sent to Finance and routed to ${this.picked.length} recipient(s) for sign-off.`
-          : 'Quotation request sent to Finance for approval.');
+      this.toast.done('Quotation request sent to Creditors. You\'ll get an e-mail with the outcome.');
       this.submitting = false;
       this.dialogRef.close(true);
-    } catch {
+    } catch (e: any) {
       this.submitting = false;
-      this.toast.error('Could not submit the quotation request. Please try again.');
+      this.toast.error(e?.error?.message || 'Could not submit the quotation request. Please try again.');
     }
   }
 

@@ -365,7 +365,7 @@ namespace ProjectTracker.API.Data
                 e.Property(x => x.EstimatedAmount).HasPrecision(18, 2);
                 e.HasMany(x => x.Files).WithOne(f => f.Request).HasForeignKey(f => f.QuotationRequestId).OnDelete(DeleteBehavior.Cascade);
             });
-            modelBuilder.Entity<QuotationRequestFile>(e => e.HasIndex(x => x.QuotationRequestId));
+            modelBuilder.Entity<QuotationRequestFile>(e => { e.HasIndex(x => x.QuotationRequestId); e.Property(x => x.Amount).HasPrecision(18, 2); });
 
             // Cortex
             modelBuilder.Entity<Models.Cortex.CortexNode>(e =>
