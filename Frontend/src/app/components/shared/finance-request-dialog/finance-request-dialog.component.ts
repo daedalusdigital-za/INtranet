@@ -66,7 +66,7 @@ import { ToastService } from '../../../ui/toast.service';
     .dialog-header {
       display: flex; align-items: center; justify-content: center; gap: 12px;
       padding: 18px 24px; background: var(--color-surface); border-bottom: 1px solid var(--color-line);
-      color: var(--color-text); margin: -24px -24px 0 -24px; position: relative;
+      color: var(--color-text); margin: 0; position: relative;
     }
     .header-icon { font-size: var(--text-3xl); width: 30px; height: 30px; color: var(--color-primary); }
     .dialog-header h2 { margin: 0; font-size: var(--text-2xl); text-align: center; }
@@ -310,6 +310,7 @@ interface PickedUser { id: number; name: string; email: string; role: RecipientR
     </div>
   `,
   styles: [`
+    :host { display: block; padding: 24px; box-sizing: border-box; }
     .pay-dialog { width: 100%; color: var(--color-text); }
     .dialog-header {
       display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -616,7 +617,7 @@ export const QUOTE_DIALOG_CONFIG = { width: '880px', maxWidth: '95vw', maxHeight
           }
         </div>
 
-        <p class="route-note"><mat-icon inline>info</mat-icon> Goes to <b>Creditors</b>, then the <b>accountant</b>, then a <b>director</b> who chooses one quote. You'll get an e-mail with the outcome and the signed approval sheet.</p>
+        <p class="route-note"><mat-icon inline>info</mat-icon><span>Goes to <b>Creditors</b>, then the <b>accountant</b>, then a <b>director</b> who chooses one quote. You'll get an e-mail with the outcome and the signed approval sheet.</span></p>
       </div>
 
       <div class="dialog-actions">
@@ -632,6 +633,7 @@ export const QUOTE_DIALOG_CONFIG = { width: '880px', maxWidth: '95vw', maxHeight
     </div>
   `,
   styles: [`
+    :host { display: block; padding: 24px; box-sizing: border-box; }
     .quote-dialog { width: 100%; color: var(--color-text); display: flex; flex-direction: column; max-height: calc(94vh - 48px); }
     .dialog-header {
       display: flex; align-items: center; justify-content: center; gap: 12px;

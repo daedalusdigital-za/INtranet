@@ -80,7 +80,7 @@ interface RequestCategory {
       background: var(--color-surface);
       color: var(--color-text);
       border-bottom: 1px solid var(--color-line);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
       position: relative;
     }
 
@@ -208,7 +208,7 @@ export class RequestDialogComponent {
     switch (category.type) {
       case 'finance':
         this.dialog.open(FinanceMenuComponent, {
-          width: '480px',
+          width: '600px', maxWidth: '95vw',
           autoFocus: false,
           panelClass: 'no-scroll-dialog'
         });
@@ -223,7 +223,7 @@ export class RequestDialogComponent {
         break;
       case 'hr':
         this.dialog.open(HRRequestMenuComponent, {
-          width: '440px',
+          width: '600px', maxWidth: '95vw',
           autoFocus: false,
           panelClass: 'no-scroll-dialog'
         });
@@ -302,7 +302,7 @@ export class RequestDialogComponent {
       background: var(--color-surface);
       color: var(--color-text);
       border-bottom: 1px solid var(--color-line);
-      margin: -24px -24px 0 -24px;
+      margin: 0;
       position: relative;
     }
 
@@ -590,6 +590,7 @@ interface UserOption {
     </div>
   `,
   styles: [`
+    :host { display: block; padding: 24px; box-sizing: border-box; }
     .meeting-dialog {
       width: 100%;
       color: var(--color-text);
@@ -1090,6 +1091,7 @@ interface BookDepartment {
     </div>
   `,
   styles: [`
+    :host { display: block; padding: 24px; box-sizing: border-box; }
     .finance-dialog {
       width: 100%;
     }
@@ -1613,6 +1615,7 @@ export class FinanceInquiryDialogComponent implements OnInit {
     </div>
   `,
   styles: [`
+    :host { display: block; padding: 24px; box-sizing: border-box; }
     .stat-dialog { min-width: 520px; }
     .stat-header { display:flex; align-items:center; gap:12px; padding:18px 24px; background:var(--color-surface); color:var(--color-text); border-bottom:1px solid var(--color-line); margin:-24px -24px 0; position:relative; }
     .stat-hicon { font-size:var(--text-3xl); width:30px; height:30px; color:var(--color-primary); }

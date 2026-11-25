@@ -1362,7 +1362,7 @@ export class NavbarComponent implements OnInit, OnDestroy {
 
   openRequestDialog(): void {
     this.dialog.open(RequestDialogComponent, {
-      width: '550px',
+      width: '720px',
       maxWidth: '95vw',
       panelClass: 'centered-dialog'
     });
