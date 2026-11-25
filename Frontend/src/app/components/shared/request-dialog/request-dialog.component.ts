@@ -17,7 +17,7 @@ import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormControl } 
 import { LeaveRequestDialogComponent } from '../leave-request-dialog/leave-request-dialog.component';
 import { PayslipRequestDialogComponent } from '../payslip-request-dialog/payslip-request-dialog.component';
 import { PrivateMeetingRequestDialogComponent } from '../private-meeting-request-dialog/private-meeting-request-dialog.component';
-import { FinanceMenuComponent, QuotationRequestDialogComponent } from '../finance-request-dialog/finance-request-dialog.component';
+import { FinanceMenuComponent, QuotationRequestDialogComponent, QUOTE_DIALOG_CONFIG } from '../finance-request-dialog/finance-request-dialog.component';
 import { Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -230,11 +230,7 @@ export class RequestDialogComponent {
         break;
       case 'stationery':
         // Stationery / equipment is now a quotation request, approved on Finance › Approvals.
-        this.dialog.open(QuotationRequestDialogComponent, {
-          width: '640px', maxHeight: '92vh',
-          autoFocus: false,
-          panelClass: 'no-scroll-dialog'
-        });
+        this.dialog.open(QuotationRequestDialogComponent, QUOTE_DIALOG_CONFIG);
         break;
     }
   }

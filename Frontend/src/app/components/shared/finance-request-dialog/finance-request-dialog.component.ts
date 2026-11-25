@@ -99,9 +99,7 @@ export class FinanceMenuComponent {
 
   openQuotations(): void {
     this.dialogRef.close();
-    this.dialog.open(QuotationRequestDialogComponent, {
-      width: '680px', maxHeight: '92vh', autoFocus: false, panelClass: 'no-scroll-dialog'
-    });
+    this.dialog.open(QuotationRequestDialogComponent, QUOTE_DIALOG_CONFIG);
   }
 
   close(): void { this.dialogRef.close(); }
@@ -409,7 +407,7 @@ export class PaymentRequestDialogComponent {
     // Three quotes go through the quotation approval flow (Creditors → accountant → director picks one).
     if (t === 'quotes') {
       this.dialogRef.close();
-      this.dialog.open(QuotationRequestDialogComponent, { width: '680px', maxHeight: '92vh', autoFocus: false, panelClass: 'no-scroll-dialog' });
+      this.dialog.open(QuotationRequestDialogComponent, QUOTE_DIALOG_CONFIG);
       return;
     }
     this.payType = t;
@@ -532,6 +530,9 @@ export class PaymentRequestDialogComponent {
  */
 interface QuoteSlot { file: File | null; supplier: string; amount: number | null; }
 
+/** Size for the quotation request dialog: wide enough for each quote on one line; the body scrolls inside the viewport. */
+export const QUOTE_DIALOG_CONFIG = { width: '880px', maxWidth: '95vw', maxHeight: '94vh', autoFocus: false };
+
 @Component({
   selector: 'app-quotation-request-dialog',
   standalone: true,
@@ -557,7 +558,7 @@ interface QuoteSlot { file: File | null; supplier: string; amount: number | null
 
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>What are the quotes for? (details / specifications)</mat-label>
-          <textarea matInput rows="3" [(ngModel)]="details"
+          <textarea matInput rows="2" [(ngModel)]="details"
                     placeholder="What it is, quantity, why it's needed, deadline…"></textarea>
         </mat-form-field>
 
@@ -579,8 +580,9 @@ interface QuoteSlot { file: File | null; supplier: string; amount: number | null
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Estimated value (R, optional)</mat-label>
+            <mat-label>Estimated value (R)</mat-label>
             <input matInput type="number" min="0" step="0.01" [(ngModel)]="estimatedAmount">
+            <mat-hint>Optional</mat-hint>
           </mat-form-field>
         </div>
 
@@ -630,32 +632,33 @@ interface QuoteSlot { file: File | null; supplier: string; amount: number | null
     </div>
   `,
   styles: [`
-    .quote-dialog { width: 100%; color: var(--color-text); }
+    .quote-dialog { width: 100%; color: var(--color-text); display: flex; flex-direction: column; max-height: calc(94vh - 48px); }
     .dialog-header {
       display: flex; align-items: center; justify-content: center; gap: 12px;
       padding: 18px 24px; background: var(--color-surface); border-bottom: 1px solid var(--color-line);
-      color: var(--color-text); margin: -24px -24px 0 -24px; position: relative;
+      color: var(--color-text); margin: -24px -24px 0 -24px; position: relative; flex: none;
     }
     .header-icon { font-size: var(--text-3xl); width: 30px; height: 30px; color: var(--color-primary); }
     .dialog-header h2 { margin: 0; font-size: var(--text-2xl); }
     .close-btn { color: var(--color-text-2); position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
-    .dialog-content { padding: 22px 2px 8px; }
+    .dialog-content { padding: 20px 4px 8px; flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -4px; }
     .full-width { width: 100%; }
-    .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } @media (max-width: 640px) { .row3 { grid-template-columns: 1fr; } }
+    .row3 { display: grid; grid-template-columns: 140px minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; } @media (max-width: 700px) { .row3 { grid-template-columns: 1fr; } }
     .quotes { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 10px; }
     .q-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; span { font-size: var(--text-xs); color: var(--color-text-3); } }
-    .q-slot { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px dashed var(--color-line-strong); border-radius: var(--radius-md); background: var(--color-surface);
+    .q-slot { display: flex; gap: 12px; align-items: center; padding: 8px 12px; border: 1px dashed var(--color-line-strong); border-radius: var(--radius-md); background: var(--color-surface);
       &.filled { border-style: solid; border-color: var(--color-primary); background: var(--color-primary-soft); } }
-    .q-n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: var(--text-sm); background: var(--color-surface-3); color: var(--color-text-2); margin-top: 4px; }
+    .q-n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: var(--text-sm); background: var(--color-surface-3); color: var(--color-text-2); }
     .q-slot.filled .q-n { background: var(--color-primary); color: var(--color-on-primary, #fff); }
-    .q-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .q-body { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 10px; align-items: center; }
+    @media (max-width: 760px) { .q-body { grid-template-columns: 1fr; gap: 8px; } }
     .q-file { display: flex; align-items: center; gap: 6px; min-height: 36px; mat-icon { color: var(--color-primary); }
       .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 600; } }
-    .q-fields { display: grid; grid-template-columns: 1fr 150px; gap: 8px; } @media (max-width: 520px) { .q-fields { grid-template-columns: 1fr; } }
+    .q-fields { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 8px; } @media (max-width: 480px) { .q-fields { grid-template-columns: 1fr; } }
     .in { height: 36px; padding: 0 10px; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control, 6px); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--text-sm); min-width: 0; }
     .reason { margin-top: 6px; }
     .route-note { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0 4px; font-size: var(--text-xs); color: var(--color-text-2); mat-icon { flex: none; margin-top: 1px; } }
-    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 14px; border-top: 1px solid var(--color-line); }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 14px; border-top: 1px solid var(--color-line); flex: none; }
     .dialog-actions button { display: flex; align-items: center; gap: 8px; }
   `]
 })
