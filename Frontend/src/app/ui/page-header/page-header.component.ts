@@ -9,6 +9,15 @@ const MODULE_ICONS: Record<ModuleKey, string> = {
   stock: 'inventory_2', tenders: 'gavel', people: 'groups', finance: 'account_balance', admin: 'settings',
 };
 
+/** Pages that share a module colour but have their own icon (e.g. Messages is in the Home group). */
+const PAGE_ICONS: Record<string, string> = {
+  '/messages': 'forum', '/calendar': 'calendar_month', '/emails': 'mail', '/profile': 'person',
+  '/paperless': 'draw', '/departments': 'view_kanban', '/board': 'view_kanban', '/company-projects': 'workspaces',
+  '/customers': 'storefront', '/warehouse-3d': 'warehouse', '/asset-register': 'inventory', '/directors': 'workspace_premium',
+  '/treasury': 'savings', '/management': 'insights', '/flows': 'account_tree', '/support-ticket': 'support_agent',
+  '/user-management': 'manage_accounts', '/documents': 'folder_open', '/docs': 'description', '/archives': 'archive',
+};
+
 /**
  * Compact page header (design review D-08): breadcrumb, title, one line of context,
  * and actions on the right. Visual refresh: the title sits beside an icon tile in the
@@ -74,5 +83,10 @@ export class PageHeaderComponent {
   /** Material icon for the accent tile; defaults to the module's icon. Pass '' for none. */
   @Input() icon: string | null = null;
 
-  get tileIcon(): string { return this.icon ?? MODULE_ICONS[moduleForUrl(this.router.url)]; }
+  get tileIcon(): string {
+    if (this.icon != null) return this.icon;
+    const path = this.router.url.split(/[?#]/)[0].toLowerCase();
+    const page = Object.keys(PAGE_ICONS).find(p => path === p || path.startsWith(p + '/'));
+    return page ? PAGE_ICONS[page] : MODULE_ICONS[moduleForUrl(this.router.url)];
+  }
 }

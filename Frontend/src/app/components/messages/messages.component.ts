@@ -64,7 +64,7 @@ import { AvatarComponent } from '../../ui/avatar/avatar.component';
     <app-navbar></app-navbar>
     
     <div class="messages-page">
-      <app-page-header [crumbs]="['Workspace', 'Messages']" title="Messages"></app-page-header>
+      <app-page-header [crumbs]="['Workspace', 'Messages']" title="Messages" icon="forum"></app-page-header>
 
       <div class="messages-container">
         <!-- Sidebar - Conversations List -->

@@ -4054,3 +4054,7 @@
       &[data-prov="North West" i], &[data-prov="NW" i] { background: var(--acc-tenders-soft); color: var(--acc-tenders); }
       &[data-prov="Northern Cape" i], &[data-prov="NC" i] { background: var(--acc-finance-soft); color: var(--acc-finance); }
     }
+
+/* Load numbers stay on one line (the live dot sits before the number). */
+.mat-column-loadNumber { white-space: nowrap; }
+.mat-column-loadNumber .live-dot { margin-right: 6px; }

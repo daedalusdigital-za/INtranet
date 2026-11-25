@@ -1306,9 +1306,15 @@ export class TodoDialogComponent implements OnInit {
     }
   }
 
+  /** Overdue only once the due day has passed: a task due today is not overdue yet. */
   isOverdue(task: TodoTask): boolean {
-    if (task.isCompleted) return false;
-    return new Date(task.dueDate) < new Date();
+    if (task.isCompleted || !task.dueDate) return false;
+    const due = new Date(task.dueDate);
+    if (isNaN(due.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+    return due < today;
   }
 
   createTask(): void {
