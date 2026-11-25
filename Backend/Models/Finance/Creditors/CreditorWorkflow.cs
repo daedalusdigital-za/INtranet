@@ -290,10 +290,12 @@ public static class CreditorDocRules
     /// <summary>
     /// Per-company exceptions: (company code, payment type) → document types that are optional there even though the matrix requires them.
     /// Pharmatech (PHC) prepayments: the supplier recon is optional when closing — tax invoice + GRV still close it.
+    /// Pharmatech (PHC) utilities: the supplier statement is optional (still shown as a slot, warns when missing).
     /// </summary>
     private static readonly Dictionary<(string Company, string PaymentType), HashSet<string>> OptionalFor = new()
     {
         [("PHC", CreditorPaymentTypes.Prepayment)] = new() { CreditorDocTypes.SupplierRecon },
+        [("PHC", CreditorPaymentTypes.Utility)] = new() { CreditorDocTypes.SupplierStatement },
     };
 
     public static bool IsOptionalFor(string? companyCode, string paymentType, string docType) =>
