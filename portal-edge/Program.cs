@@ -89,6 +89,21 @@ var routes = new[]
         RateLimiterPolicy = "portal",
         Match = new Yarp.ReverseProxy.Configuration.RouteMatch { Path = "/api/finance/creditors/{**rest}" }
     },
+    // Quotation requests: directors choose a quote off-site (on-prem ExecAuth.Allows limits it to reading + the director decision).
+    new Yarp.ReverseProxy.Configuration.RouteConfig
+    {
+        RouteId = "exec-quotes-list",
+        ClusterId = "intranet",
+        RateLimiterPolicy = "portal",
+        Match = new Yarp.ReverseProxy.Configuration.RouteMatch { Path = "/api/quotation-requests", Methods = new[] { "GET", "OPTIONS" } }
+    },
+    new Yarp.ReverseProxy.Configuration.RouteConfig
+    {
+        RouteId = "exec-quotes",
+        ClusterId = "intranet",
+        RateLimiterPolicy = "portal",
+        Match = new Yarp.ReverseProxy.Configuration.RouteMatch { Path = "/api/quotation-requests/{**rest}" }
+    },
     new Yarp.ReverseProxy.Configuration.RouteConfig
     {
         RouteId = "exec-signature",

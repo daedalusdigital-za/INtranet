@@ -110,7 +110,7 @@ export class App {
   showOverview = computed(() => !['accountant', 'clerk', 'creditor clerk', 'debtor clerk'].includes((this.auth.user()?.role ?? '').trim().toLowerCase()));
   initials = computed(() => (this.auth.user()?.name ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]!.toUpperCase()).join('') || '•');
 
-  /** Packs waiting for you + director queries to answer — the red count on Sign. Refreshed on navigation, at most once a minute. */
+  /** Packs waiting for you + director queries to answer + quotes to choose — the red count on Sign. Refreshed on navigation, at most once a minute. */
   waiting = signal(0);
   private lastCount = 0;
   constructor() {
@@ -119,9 +119,11 @@ export class App {
       if (!this.auth.signedIn()) { this.waiting.set(0); this.lastCount = 0; return; }
       if (Date.now() - this.lastCount < 60_000) return;
       this.lastCount = Date.now();
-      let packs = 0, qs = 0;
-      this.api.inbox().subscribe({ next: r => { packs = r.length; this.waiting.set(packs + qs); }, error: () => { } });
-      this.api.queries().subscribe({ next: q => { qs = q.filter(x => x.state === 'Open').length; this.waiting.set(packs + qs); }, error: () => { } });
+      let packs = 0, qs = 0, quotes = 0;
+      const sum = () => this.waiting.set(packs + qs + quotes);
+      this.api.inbox().subscribe({ next: r => { packs = r.length; sum(); }, error: () => { } });
+      this.api.queries().subscribe({ next: q => { qs = q.filter(x => x.state === 'Open').length; sum(); }, error: () => { } });
+      this.api.quotesForMe().subscribe({ next: q => { quotes = q.filter(x => x.can?.director).length; sum(); }, error: () => { } });
     });
   }
   signOut() { this.auth.clear(); this.router.navigate(['/login']); }

@@ -43,6 +43,23 @@ namespace ProjectTracker.API.Services.Finance
             if (p.StartsWith("/api/exec/", StringComparison.OrdinalIgnoreCase)) return true;
             if (p.Equals("/health", StringComparison.OrdinalIgnoreCase)) return get;
             if (p.Equals("/api/users/me/signature", StringComparison.OrdinalIgnoreCase)) return get;
+
+            // Quotation requests: directors choose a quote (or reject all) off-site. Read the request, its quotes and the
+            // approval sheet; the only write is the director decision. Creditors / accountant steps stay on the intranet.
+            const string qr = "/api/quotation-requests";
+            if (p.Equals(qr, StringComparison.OrdinalIgnoreCase)) return get;
+            if (p.StartsWith(qr + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                var qs = p[(qr.Length + 1)..].Split('/', StringSplitOptions.RemoveEmptyEntries);
+                if (qs.Length == 1 && qs[0] == "counts") return get;
+                if (qs.Length == 0 || !int.TryParse(qs[0], out _)) return false;
+                if (qs.Length == 1) return get;
+                if (qs.Length == 2 && qs[1] == "approval-sheet.pdf") return get;
+                if (qs.Length == 2 && qs[1] == "director") return post;
+                if (qs.Length == 3 && qs[1] == "files" && int.TryParse(qs[2], out _)) return get;
+                return false;
+            }
+
             const string cr = "/api/finance/creditors";
             if (!p.StartsWith(cr, StringComparison.OrdinalIgnoreCase)) return false;
             var rest = p[cr.Length..];

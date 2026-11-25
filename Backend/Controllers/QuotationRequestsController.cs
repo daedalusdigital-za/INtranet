@@ -24,7 +24,8 @@ namespace ProjectTracker.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/quotation-requests")]
-    [Authorize]
+    // Exec tokens (directors off-site) are accepted only on the paths ExecAuth.Allows lists: reading and the director decision.
+    [Authorize(AuthenticationSchemes = "Bearer," + ExecAuth.Scheme)]
     public class QuotationRequestsController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
@@ -704,6 +705,8 @@ namespace ProjectTracker.API.Controllers
         private async Task EmailStepAsync(IEnumerable<Approver> people, QuotationRequest q, string ask, string step, string? approvedBy = null, string? note = null)
         {
             var link = $"{IntranetUrl()}/finance?tab=approvals&section=quotes&quote={q.Id}";
+            // Directors can decide off-site on the exec portal.
+            var execLink = q.Status == QuoteFlow.WithDirector && ExecAuth.PublicUrl(_cfg) is { } pub ? $"{pub}/quote/{q.Id}" : null;
             var subject = $"[Intranet] Quotation request Q-{q.Id:0000} — {q.Company} · {q.Subject} — please {ask}";
             foreach (var p in people.Where(p => !string.IsNullOrWhiteSpace(p.Email)))
             {
@@ -716,7 +719,8 @@ namespace ProjectTracker.API.Controllers
     {(string.IsNullOrWhiteSpace(q.FewerQuotesReason) ? "" : $"<p style='margin:0 0 12px;color:#92400e'>Fewer than three quotes: {H(q.FewerQuotesReason)}</p>")}
     {(string.IsNullOrWhiteSpace(note) ? "" : $"<p style='margin:0 0 12px'><b>Note:</b> {H(note)}</p>")}
     <a href='{link}' style='display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600'>Open it on the intranet</a>
-    <p style='margin:18px 0 0;font-size:12px;color:#6b7280'>Sent automatically by the intranet. If the button doesn't work, copy this link: {link}</p>";
+    {(execLink != null ? $"<a href='{execLink}' style='display:inline-block;margin-left:8px;background:#fff;color:#4f46e5;border:1px solid #4f46e5;text-decoration:none;padding:9px 18px;border-radius:8px;font-weight:600'>Decide off-site (phone / home)</a>" : "")}
+    <p style='margin:18px 0 0;font-size:12px;color:#6b7280'>Sent automatically by the intranet. If the button doesn't work, copy this link: {link}{(execLink != null ? $" — or, away from the office: {execLink}" : "")}</p>";
                 await SendAsync(new[] { p.Email! }, subject, Shell("#4f46e5", "Quotation request awaiting you", H(step), body));
             }
         }

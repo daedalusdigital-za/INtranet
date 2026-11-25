@@ -112,10 +112,11 @@ Same edge, same tunnel, a second Static Web App:
 
 ```
  exec-portal/  →  SWA swa-rocket-exec   https://white-dune-07275ec1e.3.azurestaticapps.net   (Free)
-      └─▶ app-rocket-portal-edge  routes /api/exec/auth/*, /api/finance/creditors/*, GET /api/users/me/signature
+      └─▶ app-rocket-portal-edge  routes /api/exec/auth/*, /api/finance/creditors/*, /api/quotation-requests[/*], GET /api/users/me/signature
                  └─▶ on-prem API — Security/PortalEdge.cs + Services/Finance/ExecAuth.Allows narrow this to:
                      POST exec/auth/login|verify · GET creditors/meta|inbox · GET batches/{id} (+review-pack.pdf, approval-sheet.pdf,
                      documents/{d}/file) · POST batches/{id}/items/{i}/decision · POST batches/{id}/sign · POST batches/{id}/accountant
+                     GET quotation-requests (+/counts, /{id}, /{id}/files/{f}, /{id}/approval-sheet.pdf) · POST quotation-requests/{id}/director
 ```
 
 Sign-in: intranet e-mail + password **and** a 6-digit code e-mailed to that address (`Exec:RequireCode`, default on).

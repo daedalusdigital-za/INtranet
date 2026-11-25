@@ -143,4 +143,27 @@ export class Api {
   itemReviewUrl(id: number, itemId: number) { return `${this.cr}/batches/${id}/items/${itemId}/review.pdf`; }
   fileUrl(id: number, docId: number) { return `${this.cr}/batches/${id}/documents/${docId}/file`; }
   signatureUrl() { return `${this.base}/api/users/me/signature`; }
+
+  // ─── Quotation requests: the director chooses one quote (or rejects all) ───
+  private qr = `${this.base}/api/quotation-requests`;
+  /** Requests waiting for the signed-in user (only the director step can be acted on here). */
+  quotesForMe() { return this.http.get<QuoteReq[]>(`${this.qr}?status=forme`); }
+  quote(id: number) { return this.http.get<QuoteReq>(`${this.qr}/${id}`); }
+  quoteFileUrl(id: number, fileId: number) { return `${this.qr}/${id}/files/${fileId}`; }
+  quoteSheetUrl(id: number) { return `${this.qr}/${id}/approval-sheet.pdf`; }
+  quoteDirector(id: number, body: { decision: 'select' | 'reject'; fileId?: number | null; comment?: string; signatureImageBase64?: string; useSavedSignature: boolean }) {
+    return this.http.post<QuoteReq>(`${this.qr}/${id}/director`, body);
+  }
+}
+
+export interface QuoteFile { id: number; fileName: string; contentType: string; size: number; quoteNumber: number; supplier?: string | null; amount?: number | null; }
+export interface QuoteReq {
+  id: number; number: string; requestedBy: string; department?: string; company?: string; companyCode?: string | null;
+  subject: string; details?: string; priority: string; estimatedAmount?: number | null; fewerQuotesReason?: string | null;
+  status: string; statusTitle: string; submittedAt: string; preparedByName?: string | null; preparedAt?: string | null;
+  accountantName?: string | null; accountantApprovedAt?: string | null; accountantComment?: string | null;
+  directorName?: string | null; directorDecidedAt?: string | null; directorComment?: string | null; selectedFileId?: number | null;
+  history: { at: string; by: string; action: string; note?: string | null }[];
+  files: QuoteFile[];
+  can?: { director: boolean } | null;
 }
