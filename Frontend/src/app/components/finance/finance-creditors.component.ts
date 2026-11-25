@@ -904,6 +904,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
         .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; b { display: flex; align-items: center; gap: var(--space-2); } small { color: var(--color-text-3); font-size: var(--text-sm); em { color: var(--color-warn); font-style: normal; font-weight: 600; } } .bad { color: var(--color-danger); display: flex; align-items: center; gap: 4px; mat-icon { font-size: 16px; width: 16px; height: 16px; } } .note { font-style: italic; } }
         .amt { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: var(--text-lg); } .go { color: var(--color-text-3); } }
       @media (max-width: 640px) { .cr-inbox-row { flex-wrap: wrap; .amt { width: 100%; order: 3; } .go { display: none; } } } }
+    .cr-seg button.attn:not(.on) { border-color: var(--color-warn); }
     .cr-seg button.attn b { background: var(--color-warn); color: var(--color-on-warn, #fff); }
     .cr-queries { display: flex; flex-direction: column; gap: var(--space-3); .lead { margin: 0; color: var(--color-text-3); font-size: var(--text-sm); } }
     .cq { border: 1px solid var(--color-warn); border-left-width: 4px; border-radius: var(--radius-md); background: var(--color-surface); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2);
@@ -951,9 +952,13 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
       .tick { position: absolute; top: 6px; right: 6px; color: var(--color-primary); font-size: 18px; width: 18px; height: 18px; background: var(--color-surface); border-radius: 50%; }
       &:hover { border-color: var(--color-primary); } &.on { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-soft); background: var(--color-primary-soft); } }
     .cocell { display: flex; align-items: center; gap: 8px; }
-    .cr-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); overflow: hidden;
-      button { font: inherit; font-size: var(--text-sm); height: 38px; padding: 0 12px; border: 0; border-right: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-text-2); cursor: pointer; b { margin-left: 4px; font-size: var(--text-xs); background: var(--color-surface-3); padding: 1px 6px; border-radius: 999px; }
-        &:last-child { border-right: 0; } &.on { background: var(--color-primary-soft); color: var(--color-primary); font-weight: 600; b { background: var(--color-primary); color: var(--color-on-primary); } } } }
+    .cr-seg { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 100%;
+      button { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: var(--text-md, 15px); font-weight: 600; min-height: 46px; padding: 0 16px; border: 1.5px solid var(--color-line-strong); border-radius: 999px; background: var(--color-surface); color: var(--color-text); cursor: pointer; box-shadow: 0 1px 2px rgba(15, 23, 42, .06); transition: background .12s, border-color .12s, box-shadow .12s, transform .12s;
+        b { min-width: 26px; text-align: center; font-size: var(--text-sm); font-weight: 700; background: var(--color-surface-3); color: var(--color-text); padding: 2px 8px; border-radius: 999px; }
+        &:hover { border-color: var(--color-primary); color: var(--color-primary); transform: translateY(-1px); box-shadow: 0 3px 8px rgba(15, 23, 42, .10); }
+        &:focus-visible { outline: 3px solid var(--color-primary-soft); outline-offset: 2px; }
+        &.on { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary, #fff); box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 35%, transparent); b { background: rgba(255, 255, 255, .25); color: var(--color-on-primary, #fff); } } }
+      @media (max-width: 640px) { button { flex: 1 1 calc(50% - 8px); justify-content: space-between; min-height: 48px; } } }
 
     .cr-card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-lg); padding: var(--space-4); margin-bottom: var(--space-4);
       header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; h3 { margin: 0; font-size: var(--text-md); display: flex; align-items: center; gap: 6px; mat-icon { color: var(--color-primary); } .cnt { font-size: var(--text-xs); background: var(--color-surface-3); padding: 1px 8px; border-radius: 999px; } } small { color: var(--color-text-3); flex: 1; } }
