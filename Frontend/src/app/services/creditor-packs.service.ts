@@ -91,7 +91,7 @@ export interface BatchDetail {
   items: BatchItem[]; batchDocuments: BatchDoc[]; requiredBatchDocs: RequiredDoc[]; readyToSubmit: boolean;
   events: { id: number; at: string; userName?: string; action: string; fromStatus?: string; toStatus?: string; comment?: string }[];
   signatures: { id: number; context: string; signerName: string; signerRole?: string; action: string; comment?: string; method: string; signedAtUtc: string; payloadHash?: string; hasImage: boolean }[];
-  can: { edit: boolean; delete: boolean; submit: boolean; reopen: boolean; accountant: boolean; direct: boolean; sign: boolean; bankFile: boolean; markLoaded: boolean; markPaid: boolean; close: boolean; uploadAfterLock: boolean; rerunChecks: boolean; directorConflict?: string | null };
+  can: { edit: boolean; delete: boolean; submit: boolean; reopen: boolean; accountant: boolean; reassign?: boolean; recall?: boolean; direct: boolean; sign: boolean; bankFile: boolean; markLoaded: boolean; markPaid: boolean; close: boolean; uploadAfterLock: boolean; rerunChecks: boolean; directorConflict?: string | null };
 }
 export interface InboxRow {
   id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string; batchDate: string; status: string; statusTitle: string;
@@ -207,6 +207,10 @@ export class CreditorPacksService {
   /** Staff payments: generate the requisition PDF from the form and attach it to the payment (replaces an earlier one). */
   fillRequisition(id: number, itemId: number, form: RequisitionFormInput) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/items/${itemId}/requisition`, form); }
 
+  /** Move a pack still waiting for the accountant to different accountant(s). */
+  reassignAccountant(id: number, approverUserIds: number[], note?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/reassign-accountant`, { approverUserIds, note: note || null }); }
+  /** Pull a pack still waiting for the accountant back to Draft. */
+  recall(id: number, reason?: string) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/recall`, { reason: reason || null }); }
   submit(id: number, approverUserIds?: number[], sig?: SignaturePayload) { return this.http.post<BatchDetail>(`${this.base}/batches/${id}/submit`, { approverUserIds: approverUserIds ?? null, ...(sig ?? {}) }); }
   /** Signed approval sheet (schedule + signatures captured so far). */
   approvalSheet(id: number) { return this.http.get(`${this.base}/batches/${id}/approval-sheet.pdf`, { responseType: 'blob' }); }

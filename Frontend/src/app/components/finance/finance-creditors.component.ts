@@ -252,6 +252,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <button mat-flat-button color="primary" (click)="openSend('approve')" [disabled]="busy() || accSendBackCount(b) === accLiveCount(b)" [matTooltip]="accSendBackCount(b) === accLiveCount(b) ? 'Every payment is marked Send back — use Send back for the whole pack' : ''"><mat-icon>task_alt</mat-icon> @if (accSendBackCount(b)) { Approve {{ accLiveCount(b) - accSendBackCount(b) }} &amp; send back {{ accSendBackCount(b) }} } @else { Approve &amp; send to director }</button>
             <button mat-stroked-button (click)="accountant('query')" [disabled]="busy()"><mat-icon>reply</mat-icon> Send back</button>
           }
+          @if (b.can.reassign) { <button mat-flat-button color="primary" (click)="openSend('reassign')" [disabled]="busy()" matTooltip="The accountant you picked isn't available? Send the pack to another accountant — no need to resubmit or sign again"><mat-icon>swap_horiz</mat-icon> Change accountant</button> }
+          @if (b.can.recall) { <button mat-stroked-button (click)="recall()" [disabled]="busy()" matTooltip="Pull the pack back to draft to make changes, then submit it again"><mat-icon>undo</mat-icon> Recall to draft</button> }
           @if (b.can.direct) {
             <button mat-stroked-button (click)="previewPack()" matTooltip="Read the whole pack — schedule, recons, invoices — before deciding"><mat-icon>menu_book</mat-icon> Review the pack</button>
             @if (pendingCount(b) > 0) { <button mat-stroked-button (click)="decideAll('Approved')" [disabled]="busy()"><mat-icon>done_all</mat-icon> Approve all {{ pendingCount(b) }} pending</button> }
@@ -272,27 +274,36 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 
     @if (sendOpen(); as mode) {
       <div class="cr-card cr-sign cr-send">
-        <h3><mat-icon>{{ mode === 'submit' ? 'send' : 'task_alt' }}</mat-icon> {{ mode === 'submit' ? 'Send this pack for approval' : 'Approve and send for signature' }}</h3>
+        <h3><mat-icon>{{ mode === 'submit' ? 'send' : mode === 'reassign' ? 'swap_horiz' : 'task_alt' }}</mat-icon> {{ mode === 'submit' ? 'Send this pack for approval' : mode === 'reassign' ? 'Send this pack to a different accountant' : 'Approve and send for signature' }}</h3>
         <p class="muted">
           @if (mode === 'submit') { The pack has been prepared and checked. Choose which accountant(s) must check and approve it — each one gets an intranet notification and an email. }
+          @else if (mode === 'reassign') { It's with {{ b.requestedApproverNames || 'the company accountants' }} now. Pick who should approve it instead — they get a notification and an email, and the pack stays ready for approval (no need to resubmit or sign again). }
           @else { Choose which director(s) must sign this pack — each one gets an intranet notification and an email. }
         </p>
         @if (!sendOptions()) { <div class="cr-state"><mat-spinner diameter="24"></mat-spinner></div> }
         @else {
-          @let opts = mode === 'submit' ? sendOptions()!.accountants : sendOptions()!.directors;
-          @let fallback = mode === 'submit' ? sendOptions()!.accountantsFallback : sendOptions()!.directorsFallback;
-          @if (fallback) { <p class="hint warn"><mat-icon>warning</mat-icon> <span>No {{ mode === 'submit' ? 'accountant' : 'director' }} is assigned to {{ b.companyName }} under Settings › Users, so everyone with that role is offered.</span></p> }
-          @if (!opts.length) { <p class="hint warn"><mat-icon>person_off</mat-icon> <span>Nobody is available to {{ mode === 'submit' ? 'approve' : 'sign' }} this pack. Ask an admin to give someone the {{ mode === 'submit' ? 'Accountant' : 'Director' }} role and this company.</span></p> }
+          @let toAcc = mode !== 'approve';
+          @let opts = toAcc ? sendOptions()!.accountants : sendOptions()!.directors;
+          @let fallback = toAcc ? sendOptions()!.accountantsFallback : sendOptions()!.directorsFallback;
+          @if (fallback) { <p class="hint warn"><mat-icon>warning</mat-icon> <span>No {{ toAcc ? 'accountant' : 'director' }} is assigned to {{ b.companyName }} under Settings › Users, so everyone with that role is offered.</span></p> }
+          @if (!opts.length) { <p class="hint warn"><mat-icon>person_off</mat-icon> <span>Nobody is available to {{ toAcc ? 'approve' : 'sign' }} this pack. Ask an admin to give someone the {{ toAcc ? 'Accountant' : 'Director' }} role and this company.</span></p> }
           <div class="send-list">
             @for (p of opts; track p.userId) {
               <label class="send-row" [class.on]="sendPick.has(p.userId)">
                 <input type="checkbox" [checked]="sendPick.has(p.userId)" (change)="togglePick(p.userId)">
                 <span class="av">{{ initials(p.name) }}</span>
-                <span class="who"><b>{{ p.name }}</b><small>{{ p.role }}@if (p.email) { <span class="em">{{ p.email }}</span> }</small></span>
+                <span class="who"><b>{{ p.name }}@if (mode === 'reassign' && (b.requestedApproverIds ?? []).includes(p.userId)) { <span class="cur"> · has it now</span> }</b><small>{{ p.role }}@if (p.email) { <span class="em">{{ p.email }}</span> }</small></span>
               </label>
             }
           </div>
           @if (mode === 'approve') { <label>Note for the director (optional) <input type="text" [(ngModel)]="sendNote" placeholder="e.g. All recons agree, two new suppliers verified"></label> }
+          @if (mode === 'reassign') {
+            <label>Note for the accountant (optional) <input type="text" [(ngModel)]="sendNote" placeholder="e.g. Colleen is off today and these must be paid today"></label>
+            <div class="actions">
+              <button mat-button (click)="sendOpen.set(null)">Cancel</button>
+              <button mat-flat-button color="primary" [disabled]="busy() || sendPick.size === 0" (click)="reassign()"><mat-icon>swap_horiz</mat-icon> Send to {{ sendPick.size === 1 ? pickedName(opts) : sendPick.size + ' people' }}</button>
+            </div>
+          } @else {
           <ng-container *ngTemplateOutlet="sigBlock; context: { $implicit: mode === 'submit' ? 'Sign as the preparer — confirms the pack was prepared and checked' : 'Sign as the accountant — your signature goes on the pack' }"></ng-container>
           <div class="actions">
             <button mat-button (click)="sendOpen.set(null)">Cancel</button>
@@ -300,6 +311,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
               <mat-icon>draw</mat-icon> {{ mode === 'submit' ? 'Sign & send to ' : 'Sign, approve & send to ' }}{{ sendPick.size === 1 ? '1 person' : sendPick.size + ' people' }}
             </button>
           </div>
+          }
         }
       </div>
     }
@@ -1020,6 +1032,7 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
 
     .cr-send { .muted { color: var(--color-text-2); font-size: var(--text-sm); margin: 0 0 var(--space-3); }
       .send-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; margin: 0 0 var(--space-3); }
+      .send-row .cur { font-weight: 500; font-size: var(--text-xs); color: var(--color-warn); }
       .send-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); cursor: pointer; background: var(--color-surface); margin: 0; min-width: 0; overflow: hidden;
         &.on { border-color: var(--color-primary); background: var(--color-primary-soft); }
         input { width: 16px; height: 16px; margin: 0; flex: 0 0 auto; }
@@ -1167,7 +1180,7 @@ export class FinanceCreditorsComponent implements OnInit {
   showPaidHistory(supplierName: string): void { this.view.set('board'); this.batch.set(null); this.historySupplier.set(supplierName); this.historyQuery.set(''); this.historyOpen.set(true); }
   signOpen = signal(false);
   /** "Send to" picker: 'submit' (preparer → accountants) or 'approve' (accountant → directors). */
-  sendOpen = signal<'submit' | 'approve' | null>(null);
+  sendOpen = signal<'submit' | 'approve' | 'reassign' | null>(null);
   sendOptions = signal<BatchApprovers | null>(null);
   sendPick = new Set<number>();
   sendNote = '';
@@ -1485,7 +1498,9 @@ export class FinanceCreditorsComponent implements OnInit {
       case 'QueriedByDirector': return { icon: 'reply', tone: 'bad', title: `Sent back by ${b.directorName || 'the director'}`, body: (b.returnReason ? b.returnReason + ' — ' : '') + 'Answer each query below (or on the Queried payments tab). Once all are answered the pack goes straight back to the director.' };
       case 'AwaitingAccountant': return b.can.accountant
         ? { icon: 'fact_check', tone: 'warn', title: 'Your approval is needed', body: `Check the schedule against the recon and the supporting documents. You can approve or send back each payment below: when you sign, approved payments go to ${dir} and sent-back ones return to the preparer with your reason. Or send the whole pack back with a note.` }
-        : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${acc} to approve`, body: 'Nothing for you to do here right now.' };
+        : { icon: 'hourglass_top', tone: 'warn', title: `Waiting for ${acc} to approve`, body: b.can.reassign
+            ? 'If they are not available, use Change accountant to send it to someone who is, or Recall to draft to make changes first.'
+            : 'Nothing for you to do here right now.' };
       case 'AwaitingDirector':
         if (b.can.directorConflict) return { icon: 'block', tone: 'warn', title: 'Another director must sign this one', body: b.can.directorConflict };
         return b.can.direct
@@ -1501,7 +1516,7 @@ export class FinanceCreditorsComponent implements OnInit {
     }
   }
   eventText(e: { action: string; toStatus?: string; fromStatus?: string }): string {
-    const m: Record<string, string> = { Created: 'created the batch', ItemAdded: 'added a payment', ItemUpdated: 'edited a payment', ItemRemoved: 'removed a payment', DocumentUploaded: 'attached a document', DocumentReplaced: 'replaced a document', DocumentRemoved: 'removed a document', DocumentNA: 'marked a document N/A', Submitted: e.toStatus === 'ChecksFailed' ? 'submitted — checks failed' : 'submitted to the accountant', ChecksRun: 'ran the checks', AccountantApproved: 'approved as accountant', AccountantQueried: 'sent it back', ItemDecision: 'decided on a payment', DirectorSigned: 'signed the batch', DirectorQueried: 'sent it back with queries', DirectorRejected: 'rejected the batch', BankFileExported: 'downloaded the bank file', StatusChanged: `moved it to ${this.statusTitle(e.toStatus || '')}`, Reopened: 'reopened it as a draft', PrepaymentClosed: 'closed a prepayment' };
+    const m: Record<string, string> = { Created: 'created the batch', ItemAdded: 'added a payment', ItemUpdated: 'edited a payment', ItemRemoved: 'removed a payment', DocumentUploaded: 'attached a document', DocumentReplaced: 'replaced a document', DocumentRemoved: 'removed a document', DocumentNA: 'marked a document N/A', Submitted: e.toStatus === 'ChecksFailed' ? 'submitted — checks failed' : 'submitted to the accountant', ChecksRun: 'ran the checks', AccountantApproved: 'approved as accountant', AccountantQueried: 'sent it back', ItemDecision: 'decided on a payment', DirectorSigned: 'signed the batch', DirectorQueried: 'sent it back with queries', DirectorRejected: 'rejected the batch', BankFileExported: 'downloaded the bank file', StatusChanged: `moved it to ${this.statusTitle(e.toStatus || '')}`, Reopened: 'reopened it as a draft', AccountantChanged: 'changed the accountant', Recalled: 'recalled it to draft', PrepaymentClosed: 'closed a prepayment' };
     return m[e.action] ?? (e.toStatus ? `${e.action} → ${this.statusTitle(e.toStatus)}` : e.action);
   }
 
@@ -1569,10 +1584,11 @@ export class FinanceCreditorsComponent implements OnInit {
     this.busy.set(true);
     this.api.delete(b.id).subscribe({ next: () => { this.busy.set(false); this.toast.done(`${b.batchNumber} deleted`); this.back(); }, error: e => this.fail(e, "Couldn't delete.") });
   }
-  openSend(mode: 'submit' | 'approve'): void {
+  openSend(mode: 'submit' | 'approve' | 'reassign'): void {
     const b = this.batch()!; this.sendOpen.set(mode); this.sendOptions.set(null); this.sendPick = new Set(); this.sendNote = ''; this.signOpen.set(false); this.resetSig();
     this.api.batchApprovers(b.id).subscribe({
-      next: o => { this.sendOptions.set(o); for (const p of (mode === 'submit' ? o.accountants : o.directors)) this.sendPick.add(p.userId); },
+      // Changing accountant: nobody pre-ticked — the point is to choose someone else.
+      next: o => { this.sendOptions.set(o); if (mode !== 'reassign') for (const p of (mode === 'submit' ? o.accountants : o.directors)) this.sendPick.add(p.userId); },
       error: e => { this.sendOpen.set(null); this.fail(e, "Couldn't load the approvers."); }
     });
   }
@@ -1582,6 +1598,21 @@ export class FinanceCreditorsComponent implements OnInit {
   submit(): void {
     const b = this.batch()!; const ids = [...this.sendPick]; this.busy.set(true);
     this.api.submit(b.id, ids.length ? ids : undefined, this.sigPayload()).subscribe({ next: r => { this.sendOpen.set(null); this.apply(r, r.status === 'ChecksFailed' ? 'Checks found problems — see the red items' : `Signed and sent to ${r.requestedApproverNames || 'the accountant'} — they've been notified and emailed`); }, error: e => this.fail(e, "Couldn't submit.") });
+  }
+  pickedName(opts: { userId: number; name: string }[]): string { const id = [...this.sendPick][0]; return opts.find(p => p.userId === id)?.name ?? '1 person'; }
+  reassign(): void {
+    const b = this.batch()!; const ids = [...this.sendPick]; this.busy.set(true);
+    this.api.reassignAccountant(b.id, ids, this.sendNote.trim() || undefined).subscribe({
+      next: r => { this.sendOpen.set(null); this.apply(r, `Moved to ${r.requestedApproverNames || 'the new accountant'} — they've been notified and emailed`); },
+      error: e => this.fail(e, "Couldn't change the accountant.")
+    });
+  }
+  recall(): void {
+    const b = this.batch()!;
+    const reason = prompt(`Recall ${b.batchNumber} to draft?\n\nIt leaves ${b.requestedApproverNames || 'the accountant'}'s queue so you can change it. When you submit again the checks re-run and you sign again.\n\nReason (optional):`, '');
+    if (reason === null) return;
+    this.busy.set(true);
+    this.api.recall(b.id, reason.trim() || undefined).subscribe({ next: r => this.apply(r, 'Recalled to draft — make your changes and submit again'), error: e => this.fail(e, "Couldn't recall the pack.") });
   }
   rerun(): void { const b = this.batch()!; this.busy.set(true); this.api.rerunChecks(b.id).subscribe({ next: r => this.apply(r, `Checks: ${r.checksStatus}`), error: e => this.fail(e, "Couldn't run the checks.") }); }
   accountant(d: 'approve' | 'query'): void {

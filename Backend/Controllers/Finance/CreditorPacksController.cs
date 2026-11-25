@@ -1176,6 +1176,83 @@ public class CreditorPacksController : ControllerBase
         return Ok(await DetailAsync(id));
     }
 
+    public record ReassignDto(int[]? ApproverUserIds, string? Note);
+    public record RecallDto(string? Reason);
+
+    /// <summary>Accountants the pack is currently with: the ones the preparer picked, or every company accountant if none were picked.</summary>
+    private async Task<List<Approver>> CurrentAccountantsAsync(PaymentBatch b)
+    {
+        var (candidates, _) = await CandidateApproversAsync(b.CompanyCode, CreditorWorkflow.RoleAccountant);
+        var req = b.RequestedApproverIdList;
+        return req.Count == 0 ? candidates.Where(a => a.UserId != b.PreparedByUserId).ToList() : candidates.Where(a => req.Contains(a.UserId)).ToList();
+    }
+
+    /// <summary>Undecided per-payment marks the previous accountant saved but never signed — the next accountant decides afresh.</summary>
+    private static void ClearAccountantMarks(PaymentBatch b)
+    {
+        foreach (var it in b.Items.Where(i => i.DecisionStatus != "SentBack")) { it.AccountantDecision = null; it.AccountantDecisionComment = null; it.AccountantDecidedAt = null; }
+    }
+
+    /// <summary>
+    /// Preparer moves a pack that is still waiting for the accountant to a different accountant (e.g. the one picked is away today).
+    /// The pack stays "Awaiting company accountant": no re-check, no new preparer signature.
+    /// </summary>
+    [HttpPost("batches/{id:int}/reassign-accountant")]
+    public async Task<IActionResult> ReassignAccountant(int id, [FromBody] ReassignDto dto)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (b.Status != CreditorWorkflow.AwaitingAccountant) return Conflict(new { message = "Only a pack that is still waiting for the accountant can be moved to another accountant." });
+        if (!await CanPrepareAsync(b)) return Forbid();
+
+        var (candidates, _) = await CandidateApproversAsync(b.CompanyCode, CreditorWorkflow.RoleAccountant);
+        var wanted = (dto.ApproverUserIds ?? Array.Empty<int>()).Distinct().Where(i => i != b.PreparedByUserId && i != UserId).ToList();
+        if (wanted.Count == 0) return BadRequest(new { message = "Pick the accountant to send the pack to." });
+        var chosen = candidates.Where(a => wanted.Contains(a.UserId)).ToList();
+        if (chosen.Count != wanted.Count) return BadRequest(new { message = "One of the people you picked isn't an accountant for this company." });
+
+        var previous = await CurrentAccountantsAsync(b);
+        var prevNames = b.RequestedApproverNames ?? (previous.Count > 0 ? string.Join(", ", previous.Select(a => a.Name)) : "the company accountants");
+        b.RequestedApproverIds = string.Join(",", chosen.Select(a => a.UserId));
+        b.RequestedApproverNames = string.Join(", ", chosen.Select(a => a.Name));
+        ClearAccountantMarks(b);
+        var note = string.IsNullOrWhiteSpace(dto.Note) ? null : Trunc(dto.Note.Trim(), 500);
+        b.Events.Add(Ev("AccountantChanged", null, null, $"Moved from {prevNames} to {b.RequestedApproverNames}" + (note != null ? $" — {note}" : "")));
+        b.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await NotifyAsync(chosen.Select(a => (int?)a.UserId), "Payment pack awaiting your approval", $"{b.BatchNumber} · {b.CompanyCode} · R{b.TotalAmount:N2} · {CreditorChecksService.Label(b.PaymentType)} · moved to you by {UserName}" + (note != null ? $": {note}" : ""), b.Id);
+        await EmailApproversAsync(chosen, b, "check and approve", "Accountant approval");
+        var dropped = previous.Where(p => !chosen.Any(c => c.UserId == p.UserId)).Select(p => (int?)p.UserId).ToList();
+        if (dropped.Count > 0) await NotifyAsync(dropped, "Payment pack moved to another accountant", $"{b.BatchNumber} was moved to {b.RequestedApproverNames} by {UserName}. Nothing more for you to do on it.", b.Id);
+        return Ok(await DetailAsync(id));
+    }
+
+    /// <summary>
+    /// Preparer pulls a pack that is still waiting for the accountant back to Draft to change it.
+    /// Sending it again re-runs the checks and the preparer signs again.
+    /// </summary>
+    [HttpPost("batches/{id:int}/recall")]
+    public async Task<IActionResult> Recall(int id, [FromBody] RecallDto? dto = null)
+    {
+        var b = await Load(id); if (b == null) return NotFound();
+        if (b.Status != CreditorWorkflow.AwaitingAccountant) return Conflict(new { message = "Only a pack that is still waiting for the accountant can be recalled. Once the accountant has approved it, ask them or the director to send it back." });
+        if (!await CanPrepareAsync(b)) return Forbid();
+
+        var previous = await CurrentAccountantsAsync(b);
+        var from = b.Status;
+        var reason = string.IsNullOrWhiteSpace(dto?.Reason) ? null : Trunc(dto!.Reason!.Trim(), 500);
+        b.Status = CreditorWorkflow.Draft;
+        b.RequestedApproverIds = null; b.RequestedApproverNames = null;
+        b.ReturnReason = null;
+        ClearAccountantMarks(b);
+        b.Events.Add(Ev("Recalled", from, b.Status, "Recalled by the preparer" + (reason != null ? $" — {reason}" : "")));
+        b.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        if (previous.Count > 0) await NotifyAsync(previous.Select(a => (int?)a.UserId), "Payment pack recalled", $"{UserName} recalled {b.BatchNumber} to make changes. Nothing for you to do on it for now.", b.Id);
+        return Ok(await DetailAsync(id));
+    }
+
     [HttpPost("batches/{id:int}/checks")]
     public async Task<IActionResult> RerunChecks(int id)
     {
@@ -2168,6 +2245,8 @@ public class CreditorPacksController : ControllerBase
                 submit = editable && canPrepare && allFilled,
                 reopen = canPrepare && b.Status is CreditorWorkflow.ChecksFailed or CreditorWorkflow.QueriedByAccountant or CreditorWorkflow.QueriedByDirector or CreditorWorkflow.Rejected,
                 accountant = b.Status == CreditorWorkflow.AwaitingAccountant && isAcc && (b.PreparedByUserId != UserId || IsSystemAdmin),
+                reassign = b.Status == CreditorWorkflow.AwaitingAccountant && canPrepare,
+                recall = b.Status == CreditorWorkflow.AwaitingAccountant && canPrepare,
                 direct = b.Status == CreditorWorkflow.AwaitingDirector && isDir && DirectorConflict(b) == null,
                 sign = b.Status == CreditorWorkflow.AwaitingDirector && isDir && DirectorConflict(b) == null && b.AccountantApprovedAt != null && b.Items.All(i => i.DecisionStatus != "Pending"),
                 directorConflict = b.Status == CreditorWorkflow.AwaitingDirector && isDir ? DirectorConflict(b) : null,
