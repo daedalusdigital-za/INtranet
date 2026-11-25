@@ -11,7 +11,7 @@ namespace ProjectTracker.API.Authorization
     ///   Director        → cred.director (sign & release packs), exec.dashboard, cred.readonly
     ///   Treasurer       → cred.bank (bank loading, mark paid, cashflow), exec.dashboard, cred.readonly
     ///   Accountant      → cred.accountant (approve packs), cred.readonly
-    ///   Manager (Finance dept) → cred.accountant, cred.readonly
+    ///   Manager (Finance dept) → cred.readonly only (approving needs the Accountant role or an explicit cred.accountant tick)
     ///   Creditor Clerk  → cred.clerk (prepare & submit packs), cred.readonly
     ///   Debtor Clerk    → debt.clerk (debtors aging uploads, credit notes, collections)
     /// Admin / Super Admin get everything.
@@ -54,7 +54,9 @@ namespace ProjectTracker.API.Authorization
                 case "accountant":
                     yield return "cred.accountant"; yield return "cred.readonly"; break;
                 case "manager":
-                    if (finance) { yield return "cred.accountant"; yield return "cred.readonly"; }
+                    // View only. Approving packs is for accountants: a Finance manager (e.g. the Debtors manager)
+                    // only approves if "cred.accountant" is ticked on them under Admin › Users.
+                    if (finance) yield return "cred.readonly";
                     break;
                 case "creditor clerk":
                     yield return "cred.clerk"; yield return "cred.readonly"; break;

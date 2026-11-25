@@ -6,7 +6,7 @@ namespace ProjectTracker.API.Authorization
 {
     /// <summary>
     /// Who approves / signs a paying company's payment packs. Derived from what is already kept under
-    /// Admin › Users: the person's job role (Accountant, Finance Manager, Director, Treasurer) and the
+    /// Admin › Users: the person's job role (Accountant, Director, Treasurer — or the matching permission ticked on the person) and the
     /// companies they are assigned to (StaffOperatingCompanies → CreditorCompanies.OperatingCompanyId).
     /// The explicit pins on CreditorCompanies (AccountantUserId …) are an optional override: when set,
     /// only those people count for that step.

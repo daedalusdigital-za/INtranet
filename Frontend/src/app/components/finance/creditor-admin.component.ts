@@ -15,7 +15,7 @@ interface Person { id: number; name: string; email: string; role: string; title?
  * Settings › Payment approvers.
  *
  * Who may do what in the supplier-payment process comes from the person's job role (Settings › Users):
- *   Creditor Clerk → prepares packs · Accountant / Finance Manager → approves · Director → signs · Treasurer → pays.
+ *   Creditor Clerk → prepares packs · Accountant → approves · Director → signs · Treasurer → pays.
  * This screen only sets, per paying company, WHICH accountant must approve its packs and WHICH director signs them.
  */
 @Component({
@@ -30,7 +30,7 @@ interface Person { id: number; name: string; email: string; role: string; title?
 } @else {
   <p class="lead">
     Who approves, signs, pays and prepares a company's payment packs is worked out automatically from <a routerLink="/settings/users">Settings › Users</a>:
-    the person's <b>job role</b> (Accountant / Finance Manager → approves · Director → signs · Treasurer → pays · Creditor Clerk → prepares) and the <b>companies</b> assigned to them.
+    the person's <b>job role</b> (Accountant → approves · Director → signs · Treasurer → pays · Creditor Clerk → prepares) and the <b>companies</b> assigned to them.
     Nothing has to be set here — only use <i>Override</i> if a specific company must be approved by one particular person regardless of the Users setup.
   </p>
 
@@ -185,7 +185,7 @@ export class CreditorAdminComponent implements OnInit {
 
   private has(p: Person, perm: string): boolean { return (p.effective ?? []).includes(perm) || (p.effective ?? []).includes('*'); }
   private isSysAdmin(p: Person): boolean { return p.role === 'Admin' || p.role === 'Super Admin'; }
-  /** People who may approve packs: Accountant / Finance Manager by job role, or explicitly granted. Admins listed last as a fallback. */
+  /** People who may approve packs: Accountant job role, or cred.accountant ticked on the person. Admins listed last as a fallback. */
   accountants = computed(() => this.rank(this.people().filter(p => this.has(p, 'cred.accountant'))));
   directors = computed(() => this.rank(this.people().filter(p => this.has(p, 'cred.director'))));
   private rank(list: Person[]): Person[] { return [...list].sort((a, b) => (this.isSysAdmin(a) ? 1 : 0) - (this.isSysAdmin(b) ? 1 : 0) || a.name.localeCompare(b.name)); }

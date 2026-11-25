@@ -67,7 +67,7 @@ public class CreditorPacksController : ControllerBase
     private bool IsSystemAdmin => UserRole is "Admin" or "Super Admin";
 
     private HashSet<string>? _perms;
-    // Explicit ticks ∪ what the job role implies (Director → sign, Treasurer → bank, Accountant / Finance Manager → approve, Creditor Clerk → prepare)
+    // Explicit ticks ∪ what the job role implies (Director → sign, Treasurer → bank, Accountant → approve, Creditor Clerk → prepare)
     private async Task<HashSet<string>> PermsAsync() => _perms ??= await FinanceAuthority.EffectiveAsync(_db, User);
 
     private async Task<bool> HasAsync(string role) => IsSystemAdmin || (await PermsAsync()).Contains(role) || (await PermsAsync()).Contains("*");

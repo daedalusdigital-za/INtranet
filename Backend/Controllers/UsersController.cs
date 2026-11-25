@@ -1035,7 +1035,7 @@ namespace ProjectTracker.API.Controllers
                 new PermissionDto { Key = "req.duran_approval", Name = "Requisitions: Duran approval", Category = "Finance › Requisitions" },
                 new PermissionDto { Key = "req.nash_payment", Name = "Requisitions: Nash payment", Category = "Finance › Requisitions" },
                 new PermissionDto { Key = "cred.clerk", Name = "Creditor clerk: prepare & submit payment packs, create batches", Category = "Finance › Creditors" },
-                new PermissionDto { Key = "cred.accountant", Name = "Accountant: approve payment packs (also implied for Accountants & Finance managers)", Category = "Finance › Creditors" },
+                new PermissionDto { Key = "cred.accountant", Name = "Accountant: approve payment packs (automatic for the Accountant job role; tick it for anyone else, e.g. a Finance manager)", Category = "Finance › Creditors" },
                 new PermissionDto { Key = "debt.clerk", Name = "Debtor clerk: upload debtors aging, credit notes, record collections", Category = "Finance › Debtors" },
                 new PermissionDto { Key = "cred.director", Name = "Director: sign & release payment packs, executive view", Category = "Executive" },
                 new PermissionDto { Key = "cred.bank", Name = "Treasurer: bank loading, mark paid, edit cashflow", Category = "Executive" },
