@@ -31,6 +31,8 @@ import { FlowWidgetEditorDialogComponent } from './flow-widget-editor-dialog.com
 import { FlowCortexComponent } from './flow-cortex.component';
 import { HomeLayoutService, HomeWidget, WidgetType } from '../../services/home-layout.service';
 import { AuthService } from '../../services/auth.service';
+import { RecordedTask, TaskRecorderService } from '../../services/task-recorder.service';
+import { RecordingReviewDialogComponent } from '../task-recorder/recording-review-dialog.component';
 
 @Component({
   selector: 'app-flows',
@@ -70,6 +72,7 @@ export class FlowsComponent implements OnInit, OnDestroy {
   get selectedTab() { return this.tab(); }
   set selectedTab(i: number) {
     this.tab.set(i);
+    if (i === this.TAB.ai) this.loadRecordings();
     if (i === this.TAB.human) setTimeout(() => { this.opsCanvas?.ensurePositions(); this.opsCanvas?.fit(); }, 30);
   }
   includeDoneTasks = false;
@@ -131,6 +134,23 @@ export class FlowsComponent implements OnInit, OnDestroy {
   /** AI flows: flows with at least one step handed to Welly (step config has a welly block). */
   aiFlows = computed(() => this.flows().filter(f => this.wellySteps(f).length));
   wellySkills = computed(() => this.catalog()?.wellySkills ?? []);
+  recorder = inject(TaskRecorderService);
+  
+  recordings = signal<RecordedTask[]>([]);
+  askedFor(t: RecordedTask) { return [...new Set(t.steps.filter(s => s.input).map(s => s.input!.label))]; }
+  loadRecordings() { this.recorder.list().subscribe({ next: r => this.recordings.set(r), error: () => this.recordings.set([]) }); }
+  recordTask() { this.recorder.start(); this.toast.info('Recording. Do the task as you normally would, then click Stop and save.'); }
+  runRecording(t: RecordedTask) {
+    this.recorder.startRun(t);
+  }
+  editRecording(t: RecordedTask) {
+    this.dialog.open(RecordingReviewDialogComponent, { data: { task: t }, width: '760px', maxWidth: '96vw', maxHeight: '92vh', autoFocus: false })
+      .afterClosed().subscribe(r => { if (r) this.loadRecordings(); });
+  }
+  async deleteRecording(t: RecordedTask) {
+    if (!(await this.confirm.ask({ title: `Delete “${t.name}”?`, message: 'People can no longer run it with Welly.', confirmText: 'Delete', danger: true }))) return;
+    this.recorder.remove(t.id).subscribe({ next: () => { this.toast.done('Deleted'); this.loadRecordings(); }, error: e => this.toast.error(e?.error?.message || 'Could not delete it') });
+  }
   wellySteps(f: FlowDefinition) { return (f.graph?.steps ?? []).filter(s => !!s.config?.['welly']?.skill); }
   wellySkillTitle(key: string) { return this.wellySkills().find(k => k.key === key)?.title ?? key; }
   flowsByLevel = computed(() => [1, 2, 3].map(l => ({ level: l, items: this.processFlows().filter(f => f.level === l) })).filter(g => g.items.length));

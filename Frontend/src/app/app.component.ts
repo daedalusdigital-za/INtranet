@@ -3,6 +3,7 @@ import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ChatbotComponent } from './components/chatbot/chatbot.component';
 import { PaperlessComponent } from './components/paperless/paperless.component';
+import { TaskRecorderBarComponent } from './components/task-recorder/task-recorder-bar.component';
 import { Subscription, filter } from 'rxjs';
 import { AppearanceService } from './ui/appearance.service';
 import { AuthService } from './services/auth.service';
@@ -11,7 +12,7 @@ import { moduleForUrl } from './ui/module-accent';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, ChatbotComponent, PaperlessComponent, CommonModule],
+  imports: [RouterOutlet, ChatbotComponent, PaperlessComponent, TaskRecorderBarComponent, CommonModule],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })

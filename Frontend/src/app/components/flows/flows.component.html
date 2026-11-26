@@ -552,15 +552,41 @@
               </div>
             }
 
-            <h3 class="fl-level-head"><mat-icon>radio_button_checked</mat-icon>Task recorder<small>Coming next</small></h3>
-            <div class="fl-ai-next">
-              <mat-icon>videocam</mat-icon>
-              <div>
-                <b>Show Welly once, and it learns the task</b>
-                <p>Record yourself doing a task in the intranet. Welly writes down the steps, asks what each one is for, and turns it into a step it can prepare for you.
-                  This isn't built yet. It comes after the Invoice to payment trial.</p>
+            <h3 class="fl-level-head"><mat-icon>radio_button_checked</mat-icon>Task recorder<small>Show Welly once, then it walks anyone through it</small>
+              <span class="spacer"></span>
+              <button mat-flat-button color="warn" (click)="recordTask()" [disabled]="recorder.recording()"><mat-icon>fiber_manual_record</mat-icon>Record a task</button>
+            </h3>
+            @if (recordings().length) {
+              <div class="fl-ai-recs">
+                @for (t of recordings(); track t.id) {
+                  <div class="fl-ai-rec">
+                    <div class="h">
+                      <mat-icon>{{ t.visibility === 'shared' ? 'group' : 'person' }}</mat-icon>
+                      <div class="t"><b>{{ t.name }}</b><small>{{ t.steps.length }} steps · {{ t.createdByName || 'Someone' }} · {{ t.runCount }} run{{ t.runCount === 1 ? '' : 's' }}</small></div>
+                    </div>
+                    @if (t.description) { <p>{{ t.description }}</p> }
+                    @if (askedFor(t).length) { <p class="asks"><mat-icon>help_outline</mat-icon>Asks for: {{ askedFor(t).join(', ') }}</p> }
+                    <div class="fl-def-foot">
+                      <span class="spacer"></span>
+                      @if (t.canEdit) {
+                        <button mat-icon-button (click)="editRecording(t)" matTooltip="Edit steps" aria-label="Edit steps"><mat-icon>edit</mat-icon></button>
+                        <button mat-icon-button (click)="deleteRecording(t)" matTooltip="Delete" aria-label="Delete"><mat-icon>delete_outline</mat-icon></button>
+                      }
+                      <button mat-flat-button color="primary" (click)="runRecording(t)" [disabled]="recorder.recording()"><mat-icon>smart_toy</mat-icon>Run with Welly</button>
+                    </div>
+                  </div>
+                }
               </div>
-            </div>
+            } @else {
+              <div class="fl-ai-next">
+                <mat-icon>videocam</mat-icon>
+                <div>
+                  <b>Show Welly once, and it learns the task</b>
+                  <p>Click <b>Record a task</b>, then do the task as you normally would. Welly notes each page, click and value. Passwords and PINs are never saved.
+                    Then name it and tick the values that change each time. Anyone you share it with can click <b>Run with Welly</b>: Welly highlights each step and does it when they click <b>Do it</b>.</p>
+                </div>
+              </div>
+            }
           </section>
         }
 
