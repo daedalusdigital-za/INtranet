@@ -42,6 +42,11 @@ export interface RunnerState {
   message?: string;
   states: RunStepState[];
   busy: boolean;
+  /** Autoplay: Welly moves its cursor and does every step itself, stopping only where it has to. */
+  auto: boolean;
+  paused: boolean;
+  /** Seconds left before a save / send / delete click, so there's a moment to pause it. */
+  countdown: number | null;
 }
 
 const INTERACTIVE = 'button, a[href], a[routerlink], [role=button], [role=tab], [role=menuitem], [role=option], [role=combobox], [role=switch], [role=link], mat-option, mat-select, input, textarea, select, [data-welly]';
@@ -72,6 +77,10 @@ export class TaskRecorderService {
   // ── Running ──
   readonly run = signal<RunnerState | null>(null);
   readonly highlight = signal<DOMRect | null>(null);
+  /** Welly's on-screen cursor while it plays a task. */
+  readonly cursor = signal<{ x: number; y: number; click: boolean } | null>(null);
+  private manualEl: Element | null = null;
+  private manualListener: (() => void) | null = null;
   private foundEl: Element | null = null;
   private findToken = 0;
   readonly currentStep = computed(() => { const r = this.run(); return r && r.phase === 'step' ? r.task.steps[r.index] ?? null : null; });
@@ -278,7 +287,7 @@ export class TaskRecorderService {
     let runId: number | null = null;
     try { runId = (await firstValueFrom(this.http.post<{ id: number }>(`${this.base}/${task.id}/runs`, {}))).id; } catch { }
     const needs = task.steps.some(s => s.input);
-    this.run.set({ task, runId, index: 0, phase: needs ? 'inputs' : 'step', inputs: {}, find: 'searching', states: task.steps.map(() => 'pending'), busy: false });
+    this.run.set({ task, runId, index: 0, phase: needs ? 'inputs' : 'step', inputs: {}, find: 'searching', states: task.steps.map(() => 'pending'), busy: false, auto: true, paused: false, countdown: null });
     if (!needs) this.locate();
   }
   /** Values asked for up front (one per input key). */
@@ -306,24 +315,102 @@ export class TaskRecorderService {
     const step = r.task.steps[r.index]; if (!step) return;
     const token = ++this.findToken;
     this.foundEl = null; this.highlight.set(null);
+    this.clearManual();
     if (step.kind === 'navigate') {
       if (this.samePage(step.url!)) { this.mark('skipped'); return; }
       this.patch({ find: 'found', message: undefined });
+      this.autoNext(token);
       return;
     }
     if (step.target?.type === 'file' || (step.sensitive && !this.valueFor(step))) {
-      this.patch({ find: 'manual', message: step.target?.type === 'file' ? 'Welly can’t pick files. Choose it yourself, then click Done.' : 'Welly never types passwords or PINs. Type it yourself, then click Done.' });
-      this.highlightEl(this.find(step.target!));
+      const isFile = step.target?.type === 'file';
+      this.patch({ find: 'manual', message: isFile
+        ? 'The browser only lets you pick a file from your computer. Choose it and I’ll carry on by myself.'
+        : 'I never type passwords or PINs. Type it in and I’ll carry on by myself.' });
+      let el: Element | null = null;
+      for (let i = 0; i < 12 && !el; i++) { el = this.find(step.target!); if (!el) await new Promise(res => setTimeout(res, 250)); if (token !== this.findToken) return; }
+      // File inputs are usually hidden behind an Upload button: point at that.
+      const shown = el && !this.visible(el) ? el.closest('label, button, [role=button], .upload, mat-form-field') ?? el.parentElement : el;
+      this.highlightEl(shown);
+      if (el) this.watchManual(el);
+      if (shown) this.moveCursorTo(shown);
       return;
     }
     this.patch({ find: 'searching', message: undefined });
     for (let i = 0; i < 16; i++) {
       if (token !== this.findToken) return;
       const el = this.find(step.target!);
-      if (el) { this.highlightEl(el); this.patch({ find: 'found' }); return; }
+      if (el) { this.highlightEl(el); this.patch({ find: 'found' }); this.autoNext(token); return; }
       await new Promise(res => setTimeout(res, 250));
     }
-    if (token === this.findToken) this.patch({ find: 'missing', message: `I can’t find this on the page. Do it yourself, then click Done.` });
+    if (token === this.findToken) this.patch({ find: 'missing', message: `I can’t find this on the page. Do it yourself, then click Done and I’ll carry on.` });
+  }
+
+  private sleep(ms: number) { return new Promise(res => setTimeout(res, ms)); }
+
+  /** Autoplay: glide the cursor to the control, click, move on. Save / send / delete clicks get a 3-second countdown. */
+  private async autoNext(token: number) {
+    const live = () => { const r = this.run(); return !!r && r.auto && !r.paused && r.phase === 'step' && token === this.findToken; };
+    if (!live()) return;
+    const step = this.currentStep(); if (!step) return;
+    if (step.kind !== 'navigate') {
+      await this.sleep(380); // let the scroll settle
+      if (!live() || !this.foundEl) return;
+      this.moveCursorTo(this.foundEl);
+      await this.sleep(700);
+      if (!live()) return;
+      if (this.risky()) {
+        for (let n = 3; n > 0; n--) {
+          this.patch({ countdown: n });
+          await this.sleep(1000);
+          if (!live()) { this.patch({ countdown: null }); return; }
+        }
+        this.patch({ countdown: null });
+      }
+      this.cursor.update(c => c ? { ...c, click: true } : c);
+      await this.sleep(160);
+      this.cursor.update(c => c ? { ...c, click: false } : c);
+      if (!live()) return;
+    } else {
+      await this.sleep(300);
+      if (!live()) return;
+    }
+    await this.doStep();
+  }
+
+  private moveCursorTo(el: Element) {
+    const r = el.getBoundingClientRect();
+    if (!this.cursor()) this.cursor.set({ x: window.innerWidth / 2, y: window.innerHeight - 120, click: false });
+    // Next frame, so the first move animates from the start point.
+    requestAnimationFrame(() => this.cursor.set({ x: r.left + Math.min(r.width / 2, 40), y: r.top + r.height / 2, click: false }));
+  }
+
+  /** File and password steps: carry on as soon as the person has done it. */
+  private watchManual(el: Element) {
+    const input = (el.matches('input, textarea') ? el : el.querySelector('input, textarea')) as HTMLInputElement | null;
+    if (!input) return;
+    const handler = () => {
+      if (input.type !== 'file' && !input.value) return;
+      if (input.type === 'file' && !(input.files && input.files.length)) return;
+      this.clearManual();
+      if (this.run()?.find === 'manual') this.mark('person');
+    };
+    input.addEventListener('change', handler);
+    this.manualEl = input; this.manualListener = handler;
+  }
+  private clearManual() {
+    if (this.manualEl && this.manualListener) this.manualEl.removeEventListener('change', this.manualListener);
+    this.manualEl = null; this.manualListener = null;
+  }
+
+  pause() { this.findToken++; this.patch({ paused: true, countdown: null }); this.locateQuiet(); }
+  resume() { this.patch({ paused: false, auto: true }); this.locate(); }
+  /** Step by step: the person clicks Do it for each step (the old way). */
+  setAuto(on: boolean) { this.findToken++; this.patch({ auto: on, paused: false, countdown: null }); this.locate(); }
+  /** Re-find and highlight without acting (used when paused). */
+  private async locateQuiet() {
+    const step = this.currentStep(); if (!step || step.kind === 'navigate' || !step.target) return;
+    const el = this.find(step.target); if (el) { this.highlightEl(el); this.patch({ find: 'found' }); }
   }
 
   private samePage(url: string) {
@@ -416,7 +503,15 @@ export class TaskRecorderService {
         if (!input) return false;
         input.focus();
         const proto = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(input, value);
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')!.set!;
+        const delay = value.length ? Math.min(35, 900 / value.length) : 0;
+        if (delay >= 8 && value.length <= 120) {
+          for (let i = 1; i <= value.length; i++) {
+            setter.call(input, value.slice(0, i));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            await this.sleep(delay);
+          }
+        } else setter.call(input, value);
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
         input.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -451,6 +546,7 @@ export class TaskRecorderService {
     const next = r.index + 1;
     this.foundEl = null; this.highlight.set(null);
     if (next >= r.task.steps.length) {
+      this.cursor.set(null);
       this.run.set({ ...r, states, phase: 'done', index: next });
       this.finish('completed');
       return;
@@ -465,7 +561,7 @@ export class TaskRecorderService {
     if (r.phase !== 'done') this.finish('stopped', reason);
     this.closeRun();
   }
-  closeRun() { this.findToken++; this.run.set(null); this.foundEl = null; this.highlight.set(null); }
+  closeRun() { this.findToken++; this.clearManual(); this.run.set(null); this.foundEl = null; this.highlight.set(null); this.cursor.set(null); }
 
   private finish(outcome: 'completed' | 'stopped', reason?: string) {
     const r = this.run(); if (!r?.runId) return;

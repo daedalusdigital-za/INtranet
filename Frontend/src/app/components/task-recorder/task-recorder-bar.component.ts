@@ -23,6 +23,13 @@ import { RecordingReviewDialogComponent } from './recording-review-dialog.compon
       <div class="tr-ring" data-recorder-ui [style.top.px]="h.top - 5" [style.left.px]="h.left - 5" [style.width.px]="h.width + 10" [style.height.px]="h.height + 10"></div>
     }
 
+    @if (rec.cursor(); as c) {
+      <div class="tr-cursor" data-recorder-ui [class.click]="c.click" [style.transform]="'translate(' + c.x + 'px,' + c.y + 'px)'" aria-hidden="true">
+        <svg width="22" height="26" viewBox="0 0 22 26"><path d="M2 2 L2 21 L7.5 16 L11 24 L14.5 22.5 L11 15 L18.5 15 Z" fill="#db2777" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <span>Welly</span>
+      </div>
+    }
+
     @if (rec.recording()) {
       <div class="tr-bar rec" data-recorder-ui role="status">
         <span class="dot" [class.paused]="rec.paused()"></span>
@@ -49,7 +56,10 @@ import { RecordingReviewDialogComponent } from './recording-review-dialog.compon
         <img class="face" [src]="r.find === 'missing' || r.find === 'manual' ? '/welly/thinking.png' : '/welly/happy.png'" alt="" />
         <div class="tr-main">
           <div class="tr-title"><b>{{ r.task.name }}</b>
-            @if (r.phase === 'step') { <span class="count">Step {{ r.index + 1 }} of {{ r.task.steps.length }}</span> }
+            @if (r.phase === 'step') {
+              <span class="count">Step {{ r.index + 1 }} of {{ r.task.steps.length }}</span>
+              <button class="mode" type="button" (click)="rec.setAuto(!r.auto)" [matTooltip]="r.auto ? 'Switch to clicking Do it for each step' : 'Let Welly do every step by itself'">{{ r.auto ? 'Autoplay' : 'Step by step' }}</button>
+            }
           </div>
 
           @switch (r.phase) {
@@ -68,11 +78,19 @@ import { RecordingReviewDialogComponent } from './recording-review-dialog.compon
             @case ('step') {
               @if (rec.currentStep(); as s) {
                 <p class="tr-say">{{ say(s) }}</p>
-                @if (rec.risky() && r.find === 'found') { <p class="tr-warn"><mat-icon>warning_amber</mat-icon>This one saves, sends or deletes something. Check before you click Do it.</p> }
+                @if (r.countdown) { <p class="tr-warn"><mat-icon>warning_amber</mat-icon>This one saves, sends or deletes something. Doing it in {{ r.countdown }}… Pause if it's wrong.</p> }
+                @else if (rec.risky() && r.find === 'found' && (!r.auto || r.paused)) { <p class="tr-warn"><mat-icon>warning_amber</mat-icon>This one saves, sends or deletes something. Check before you click Do it.</p> }
                 @if (r.message) { <p class="tr-msg">{{ r.message }}</p> }
                 <div class="tr-actions">
                   <button mat-button (click)="rec.stopRun()">Stop</button>
+                  @if (r.auto && !r.paused) { <button mat-button (click)="rec.pause()"><mat-icon>pause</mat-icon>Pause</button> }
                   <span class="spacer"></span>
+                  @if (r.auto && !r.paused && (r.find === 'found' || r.find === 'searching')) {
+                    <span class="tr-muted">{{ r.find === 'searching' ? 'Looking for it…' : 'Welly is doing it…' }}</span>
+                  } @else if (r.auto && !r.paused && r.find === 'manual') {
+                    <button mat-stroked-button (click)="rec.personDid()">Done</button>
+                  } @else {
+                  @if (r.paused) { <button mat-stroked-button (click)="rec.resume()"><mat-icon>play_arrow</mat-icon>Carry on by itself</button> }
                   @switch (r.find) {
                     @case ('searching') { <span class="tr-muted">Looking for it…</span><button mat-stroked-button (click)="rec.personDid()">I did it</button> }
                     @case ('found') {
@@ -83,6 +101,7 @@ import { RecordingReviewDialogComponent } from './recording-review-dialog.compon
                       @if (r.find === 'missing') { <button mat-button (click)="rec.retry()">Look again</button> }
                       <button mat-flat-button color="primary" (click)="rec.personDid()"><mat-icon>check</mat-icon>Done</button>
                     }
+                  }
                   }
                 </div>
               }
@@ -98,6 +117,13 @@ import { RecordingReviewDialogComponent } from './recording-review-dialog.compon
   `,
   styles: [`
     :host { position: fixed; inset: auto 0 0 0; z-index: 1100; pointer-events: none; }
+    .tr-cursor { position: fixed; left: 0; top: 0; z-index: 1101; pointer-events: none; transition: transform .65s cubic-bezier(.2,.8,.2,1); display: flex; align-items: flex-start; gap: 2px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,.25));
+      span { margin-top: 18px; font-size: 11px; font-weight: 700; color: #fff; background: #db2777; padding: 1px 6px; border-radius: 999px; }
+      svg { transition: transform .12s ease; transform-origin: 2px 2px; } }
+    .tr-cursor.click svg { transform: scale(.82); }
+    .mode { margin-left: auto; font: inherit; font-size: 11.5px; font-weight: 600; border: 1px solid var(--color-line); border-radius: 999px; padding: 1px 9px; background: var(--color-surface-2); color: var(--color-text-2); cursor: pointer; }
+    @media (prefers-reduced-motion: reduce) { .tr-cursor { transition: none; } }
     .tr-ring { position: fixed; border: 3px solid #db2777; border-radius: 10px; box-shadow: 0 0 0 4px rgba(219,39,119,.18); pointer-events: none; z-index: 1099; transition: all .2s ease; }
     .tr-bar { pointer-events: auto; position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; width: min(640px, calc(100vw - 32px));
       background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-line); border-radius: 14px;
