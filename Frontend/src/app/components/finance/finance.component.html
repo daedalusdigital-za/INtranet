@@ -268,7 +268,7 @@
               @for (b of packsForMe.slice(0, 3); track b.id) {
                 <button class="sp-item sp-pending mini-row" (click)="openPack(b.id)">
                   <div class="sp-avatar">{{ b.companyCode }}</div>
-                  <div class="sp-info"><div class="sp-name">{{ b.batchNumber }} <span class="sp-dept">{{ packCompanyName(b.companyCode) }}</span></div><div class="sp-items-text">{{ b.items }} payment{{ b.items === 1 ? '' : 's' }} · {{ b.totalAmount | currency:'ZAR':'R':'1.0-0' }} · by {{ b.preparedByName || '—' }}</div></div>
+                  <div class="sp-info"><div class="sp-name">{{ packSuppliersLabel(b.suppliers) }} <span class="sp-dept">{{ b.batchNumber }} · {{ packCompanyName(b.companyCode) }}</span></div><div class="sp-items-text">{{ b.items }} payment{{ b.items === 1 ? '' : 's' }} · {{ b.totalAmount | currency:'ZAR':'R':'1.0-0' }} · by {{ b.preparedByName || '—' }}</div></div>
                   <mat-icon class="mini-go">chevron_right</mat-icon>
                 </button>
               }
@@ -423,7 +423,7 @@
             <div class="sp-item sp-pending">
               <div class="sp-avatar">{{ b.companyCode }}</div>
               <div class="sp-info">
-                <div class="sp-name">{{ b.batchNumber }} <span class="sp-dept">{{ packCompanyName(b.companyCode) }}</span></div>
+                <div class="sp-name">{{ packSuppliersLabel(b.suppliers) }} <span class="sp-dept">{{ b.batchNumber }} · {{ packCompanyName(b.companyCode) }}</span></div>
                 <div class="sp-items-text"><mat-icon>payments</mat-icon> {{ b.items }} payment{{ b.items === 1 ? '' : 's' }} · {{ b.totalAmount | currency:'ZAR':'R':'1.2-2' }} · {{ b.documents }} document{{ b.documents === 1 ? '' : 's' }}</div>
                 <div class="sp-meta">
                   <span class="sp-priority" [class]="'prio-' + (b.checksStatus === 'REVIEW' ? 'high' : 'normal')">Checks: {{ b.checksStatus || 'n/a' }}</span>

@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Api, Executive } from '../core/api';
+import { Api, Executive, suppliersLabel } from '../core/api';
 
 /** Director overview — the same figures as the intranet Directors › Overview, laid out for a phone. Read-only. */
 @Component({
@@ -42,8 +42,8 @@ import { Api, Executive } from '../core/api';
         <div class="list">
           @for (a of d.awaiting; track a.id) {
             <a class="card row" [routerLink]="['/pack', a.id]">
-              <div><div class="co">{{ a.companyName }} <span class="pill neutral">{{ a.paymentTypeTitle }}</span></div>
-                <div class="muted sm">{{ a.batchNumber }} · {{ a.items }} payment{{ a.items === 1 ? '' : 's' }}@if (a.waitingDays) { · waiting {{ a.waitingDays }} day{{ a.waitingDays === 1 ? '' : 's' }} }</div>
+              <div><div class="co">{{ supOf(a) || a.companyName }} <span class="pill neutral">{{ a.paymentTypeTitle }}</span></div>
+                <div class="muted sm">@if (supOf(a)) { {{ a.companyName }} · }{{ a.batchNumber }} · {{ a.items }} payment{{ a.items === 1 ? '' : 's' }}@if (a.waitingDays) { · waiting {{ a.waitingDays }} day{{ a.waitingDays === 1 ? '' : 's' }} }</div>
                 @if (a.forMe) { <span class="pill ok">For you</span> }</div>
               <div class="amt big2">{{ a.totalAmount | currency:'ZAR':'R ':'1.0-0' }}</div>
             </a>
@@ -132,6 +132,7 @@ import { Api, Executive } from '../core/api';
 })
 export class OverviewPage implements OnInit {
   private api = inject(Api);
+  supOf = (a: Executive['awaiting'][number]) => suppliersLabel(a.supplierNames);
   d = signal<Executive | null>(null); loading = signal(true); error = signal(''); forbidden = signal(false);
   ngOnInit() { this.load(); }
   load() {

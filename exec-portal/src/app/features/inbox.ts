@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Api, InboxRow, QueryRow, QuoteReq } from '../core/api';
+import { Api, InboxRow, QueryRow, QuoteReq, suppliersLabel } from '../core/api';
 import { AuthStore } from '../core/auth';
 
 @Component({
@@ -54,8 +54,8 @@ import { AuthStore } from '../core/auth';
         @for (r of rows(); track r.id) {
           <a class="card row" [class.acc]="r.role !== 'director'" [routerLink]="['/pack', r.id]">
             <div class="l">
-              <div class="co">{{ r.companyName }} <span class="pill neutral">{{ r.paymentTypeTitle }}</span></div>
-              <div class="bn">{{ r.batchNumber }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }} · prepared by {{ r.preparedByName }}</div>
+              <div class="co">{{ sup(r.suppliers) || r.companyName }} <span class="pill neutral">{{ r.paymentTypeTitle }}</span></div>
+              <div class="bn">@if (sup(r.suppliers)) { {{ r.companyName }} · }{{ r.batchNumber }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }} · prepared by {{ r.preparedByName }}</div>
               @if (r.notes) { <div class="muted nt">“{{ r.notes }}”</div> }
               <div class="ask">
                 @if (r.role === 'director') { <span class="pill ok">Sign as director</span> @if (r.pendingItems) { <span class="muted">{{ r.pendingItems }} to review</span> } }
@@ -85,6 +85,7 @@ import { AuthStore } from '../core/auth';
 })
 export class InboxPage implements OnInit {
   private api = inject(Api); auth = inject(AuthStore);
+  sup = (names?: string[]) => suppliersLabel(names);
   rows = signal<InboxRow[]>([]); loading = signal(true); error = signal('');
   openQueries = signal<QueryRow[]>([]);
   quotes = signal<QuoteReq[]>([]);

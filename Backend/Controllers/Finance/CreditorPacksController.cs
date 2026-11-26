@@ -298,7 +298,9 @@ public class CreditorPacksController : ControllerBase
             b.PreparedByUserId, b.PreparedByName, b.CreatedAt, b.SubmittedAt, b.UpdatedAt, b.ChecksStatus, b.AccountantName, b.AccountantApprovedAt, b.DirectorName, b.DirectorSignedAt,
             b.PaidAt, b.ClosedAt, b.ReturnReason, b.ScheduledPayDate, openPrepayments = b.Items.Count(i => i.PrepaymentOpen),
             approvedItems = b.Items.Count(i => i.DecisionStatus == "Approved"), queriedItems = b.Items.Count(i => i.DecisionStatus == "Queried"), rejectedItems = b.Items.Count(i => i.DecisionStatus == "Rejected"),
-            complianceKinds = b.Items.Where(i => i.ComplianceKind != null).Select(i => i.ComplianceKind).Distinct().ToList()
+            complianceKinds = b.Items.Where(i => i.ComplianceKind != null).Select(i => i.ComplianceKind).Distinct().ToList(),
+            // Who is being paid, biggest payment first: people ask about "the payment to X", not the batch number.
+            suppliers = b.Items.OrderByDescending(i => i.Amount).Select(i => i.SupplierName).ToList()
         }).ToListAsync();
         return Ok(rows);
     }
@@ -326,7 +328,8 @@ public class CreditorPacksController : ControllerBase
             items = b.Items.Count, pendingItems = b.Items.Count(i => i.DecisionStatus == "Pending"),
             b.PreparedByUserId, b.PreparedByName, b.SubmittedAt, b.AccountantUserId, b.AccountantName, b.AccountantApprovedAt, b.AccountantComment,
             b.RequestedApproverIds, b.RequestedDirectorIds, b.UpdatedAt,
-            complianceKinds = b.Items.Where(i => i.ComplianceKind != null).Select(i => i.ComplianceKind).Distinct().ToList()
+            complianceKinds = b.Items.Where(i => i.ComplianceKind != null).Select(i => i.ComplianceKind).Distinct().ToList(),
+            suppliers = b.Items.OrderByDescending(i => i.Amount).Select(i => i.SupplierName).ToList()
         }).ToListAsync();
         var companies = await _db.CreditorCompanies.AsNoTracking().ToDictionaryAsync(x => x.Code, x => x);
         var list = new List<object>();
@@ -356,7 +359,8 @@ public class CreditorPacksController : ControllerBase
             {
                 r.Id, r.BatchNumber, r.CompanyCode, companyName = c?.Name ?? r.CompanyCode, r.PaymentType, paymentTypeTitle = CreditorPaymentTypes.All.Where(p => p.Key == r.PaymentType).Select(p => p.Title).FirstOrDefault() ?? r.PaymentType,
                 r.BatchDate, r.Status, statusTitle = CreditorWorkflow.Title(r.Status), r.TotalAmount, r.Notes, r.items, r.pendingItems,
-                r.PreparedByName, r.AccountantName, r.AccountantComment, waitingSince, role, blocked, r.complianceKinds
+                r.PreparedByName, r.AccountantName, r.AccountantComment, waitingSince, role, blocked, r.complianceKinds,
+                suppliers = r.suppliers.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
             });
         }
         return Ok(list);
@@ -2088,7 +2092,8 @@ public class CreditorPacksController : ControllerBase
                 b.TotalAmount, items = b.Items.Count, decided = b.Items.Count(i => i.DecisionStatus != "Pending"),
                 b.PreparedByName, b.SubmittedAt, b.AccountantName, b.AccountantApprovedAt, b.ChecksStatus, forMe,
                 waitingDays = b.AccountantApprovedAt != null ? (int)(now - b.AccountantApprovedAt.Value).TotalDays : 0,
-                suppliers = b.Items.OrderByDescending(i => i.Amount).Take(4).Select(i => new { i.SupplierName, i.Amount })
+                suppliers = b.Items.OrderByDescending(i => i.Amount).Take(4).Select(i => new { i.SupplierName, i.Amount }),
+                supplierNames = b.Items.OrderByDescending(i => i.Amount).Select(i => (i.SupplierName ?? "").Trim()).Where(n => n != "").Distinct(StringComparer.OrdinalIgnoreCase).ToList()
             };
         }).ToList();
 

@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { BatchRow, complianceKindsLabel } from '../../services/creditor-packs.service';
+import { BatchRow, complianceKindsLabel, packSuppliers, packSuppliersLabel } from '../../services/creditor-packs.service';
 
 export interface CompanyBatchesData {
   code: string; name: string; logo: string | null; monogram: string; hue: number;
@@ -25,10 +25,11 @@ export interface CompanyBatchesData {
     </header>
     <div class="body">
       <table>
-        <thead><tr><th>Batch</th><th>Payment type</th><th class="num">Amount</th><th>Stage</th><th>Waiting on</th><th></th></tr></thead>
+        <thead><tr><th>Supplier</th><th>Batch</th><th>Payment type</th><th class="num">Amount</th><th>Stage</th><th>Waiting on</th><th></th></tr></thead>
         <tbody>
           @for (r of d.rows; track r.id) {
             <tr (click)="ref.close(r.id)" [class.back]="d.isSentBack(r.status)">
+              <td class="sup" [title]="supTip(r)"><b>{{ supLabel(r) }}</b></td>
               <td><span class="ref">{{ r.batchNumber }}</span><br><small>{{ r.batchDate | date:'dd MMM yyyy' }} · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}</small></td>
               <td>{{ d.typeTitle(r.paymentType) }}@if (r.complianceKinds?.length) { <small> · {{ kinds(r) }}</small> }</td>
               <td class="num">R {{ r.totalAmount | number:'1.2-2' }}</td>
@@ -57,7 +58,7 @@ export interface CompanyBatchesData {
       th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-3); padding: 10px 16px; background: var(--color-surface-2); border-bottom: 1px solid var(--color-line); position: sticky; top: 0; }
       td { padding: 10px 16px; border-bottom: 1px solid var(--color-line); font-size: var(--text-sm); vertical-align: top; small { color: var(--color-text-3); } }
       tbody tr { cursor: pointer; &:hover td { background: var(--color-surface-2); } &.back td:first-child { box-shadow: inset 3px 0 0 var(--color-danger); } }
-      .ref { font-family: var(--font-mono); font-weight: 600; } .num { text-align: right; font-family: var(--font-mono); white-space: nowrap; } .who { color: var(--color-text-2); } .go { color: var(--color-text-3); text-align: right; }
+      .ref { font-family: var(--font-mono); font-weight: 600; } .sup { max-width: 240px; b { font-weight: 600; } } .num { text-align: right; font-family: var(--font-mono); white-space: nowrap; } .who { color: var(--color-text-2); } .go { color: var(--color-text-3); text-align: right; }
       .reason { font-size: var(--text-xs); color: var(--color-danger); margin-top: 2px; max-width: 300px; &.warn { color: var(--color-warn); } } }
     .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: var(--text-xs); font-weight: 600; background: var(--color-surface-3); color: var(--color-text-2);
       &.ok { background: var(--color-ok-soft); color: var(--color-ok); } &.warn { background: var(--color-warn-soft); color: var(--color-warn); } &.bad { background: var(--color-danger-soft); color: var(--color-danger); } &.info { background: var(--color-primary-soft); color: var(--color-primary); } }
@@ -67,9 +68,11 @@ export class CompanyBatchesDialogComponent {
   d = inject<CompanyBatchesData>(MAT_DIALOG_DATA);
   ref = inject<MatDialogRef<CompanyBatchesDialogComponent, number | undefined>>(MatDialogRef);
   kinds(r: BatchRow) { return complianceKindsLabel(r.complianceKinds); }
+  supLabel(r: BatchRow) { return packSuppliersLabel(r.suppliers); }
+  supTip(r: BatchRow) { return packSuppliers(r.suppliers).join(', '); }
   get openCount() { return this.d.rows.filter(r => r.status !== 'Closed').length; }
   get openAmount() { return this.d.rows.filter(r => r.status !== 'Closed').reduce((s, r) => s + (r.totalAmount || 0), 0); }
   static open(dialog: MatDialog, data: CompanyBatchesData) {
-    return dialog.open<CompanyBatchesDialogComponent, CompanyBatchesData, number | undefined>(CompanyBatchesDialogComponent, { width: 'min(960px, 94vw)', maxWidth: '94vw', data, autoFocus: false });
+    return dialog.open<CompanyBatchesDialogComponent, CompanyBatchesData, number | undefined>(CompanyBatchesDialogComponent, { width: 'min(1120px, 96vw)', maxWidth: '96vw', data, autoFocus: false });
   }
 }

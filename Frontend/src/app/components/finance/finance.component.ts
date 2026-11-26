@@ -42,7 +42,7 @@ import { FinanceBookkeepingComponent } from './finance-bookkeeping.component';
 import { QuoteApprovalsComponent } from './quote-approvals.component';
 import { FinancePacksComponent } from './finance-packs.component';
 import { TenderService } from '../../services/tender.service';
-import { CreditorPacksService, BatchRow, CreditorMeta } from '../../services/creditor-packs.service';
+import { CreditorPacksService, BatchRow, CreditorMeta, packSuppliersLabel } from '../../services/creditor-packs.service';
 
 /**
  * Finance is split in two, like Company projects: Debtors (money owed to us) and Creditors (money we owe).
@@ -769,6 +769,7 @@ export class FinanceComponent implements OnInit {
   /** Awaiting-accountant packs that belong to someone else's company (shown greyed, for context). */
   get packsForOthers(): BatchRow[] { const mine = new Set(this.packsForMe.map(b => b.id)); return this.packsAwaiting.filter(b => !mine.has(b.id)); }
   get packsForMeTotal(): number { return this.packsForMe.reduce((s, b) => s + (b.totalAmount || 0), 0); }
+  packSuppliersLabel = packSuppliersLabel;
   packCompanyName(code: string): string { return this.packMeta?.companies.find(c => c.code === code)?.name ?? code; }
   packAccountantName(code: string): string { const c = this.packMeta?.companies.find(x => x.code === code); return c?.accountantName || c?.backupApproverName || 'any accountant'; }
 
@@ -786,7 +787,7 @@ export class FinanceComponent implements OnInit {
       this.goTab('creditors'); this.router.navigate([], { queryParams: { tab: 'creditors', batch: b.id }, queryParamsHandling: 'merge' });
       return;
     }
-    const note = window.prompt(`Approve ${b.batchNumber} (${this.packCompanyName(b.companyCode)} · R ${Math.round(b.totalAmount).toLocaleString('en-ZA')}) with your saved signature and send it to the director?\n\nOptional note:`, '');
+    const note = window.prompt(`Approve ${b.batchNumber} — ${packSuppliersLabel(b.suppliers)} (${this.packCompanyName(b.companyCode)} · R ${Math.round(b.totalAmount).toLocaleString('en-ZA')}) with your saved signature and send it to the director?\n\nOptional note:`, '');
     if (note === null) return;
     this.packBusyId = b.id;
     this.packs.accountant(b.id, 'approve', note || undefined, undefined, { useSavedSignature: true }).subscribe({

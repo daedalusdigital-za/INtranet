@@ -20,7 +20,7 @@ import { environment } from '../../../environments/environment';
 import { companyWideLogo, companyMonogram, companyHue } from '../../core/company-logos';
 import { ToastService } from '../../ui/toast.service';
 import { Observable } from 'rxjs';
-import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow, QueryRow, RequisitionFormInput, COMPLIANCE_KINDS, complianceKindsLabel } from '../../services/creditor-packs.service';
+import { CreditorPacksService, CreditorMeta, BatchRow, BatchDetail, BatchItem, BatchDoc, ItemInput, CreditorAlert, RequiredDoc, CheckFinding, SupplierHit, BooksInvoiceHit, GeneratedSchedule, BatchApprovers, InboxRow, QueryRow, RequisitionFormInput, COMPLIANCE_KINDS, complianceKindsLabel, packSuppliersLabel } from '../../services/creditor-packs.service';
 
 type View = 'board' | 'batch';
 interface NextStep { icon: string; tone: 'info' | 'warn' | 'ok' | 'bad' | 'muted'; title: string; body: string; }
@@ -60,8 +60,8 @@ const EMPTY_ITEM: ItemInput = { supplierName: '', supplierVatNumber: '', invoice
             <button type="button" class="cr-inbox-row" [class.blocked]="r.blocked" (click)="open(r.id)">
               <ng-container *ngTemplateOutlet="coMark; context: { $implicit: r.companyCode }"></ng-container>
               <span class="who">
-                <b>{{ r.batchNumber }} <span [class]="'badge ' + badge(r.status)">{{ r.role === 'director' ? 'Sign' : 'Approve' }}</span></b>
-                <small>{{ r.companyName }} · {{ r.paymentTypeTitle }}@if (r.complianceKinds?.length) { ({{ kindsLabel(r.complianceKinds) }}) } · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.role === 'director' && r.pendingItems) { · <em>{{ r.pendingItems }} still to decide</em> }</small>
+                <b>{{ supLabel(r.suppliers) }} <span [class]="'badge ' + badge(r.status)">{{ r.role === 'director' ? 'Sign' : 'Approve' }}</span></b>
+                <small><span class="bn">{{ r.batchNumber }}</span> · {{ r.companyName }} · {{ r.paymentTypeTitle }}@if (r.complianceKinds?.length) { ({{ kindsLabel(r.complianceKinds) }}) } · {{ r.items }} payment{{ r.items === 1 ? '' : 's' }}@if (r.role === 'director' && r.pendingItems) { · <em>{{ r.pendingItems }} still to decide</em> }</small>
                 <small>Prepared by {{ r.preparedByName }}@if (r.accountantName) { · approved by {{ r.accountantName }} }@if (r.waitingSince) { · waiting {{ ago(r.waitingSince) }} }</small>
                 @if (r.blocked) { <small class="bad"><mat-icon>block</mat-icon> {{ r.blocked }}</small> }
                 @else if (r.accountantComment) { <small class="note">“{{ r.accountantComment }}”</small> }
@@ -1393,6 +1393,7 @@ export class FinanceCreditorsComponent implements OnInit {
   isCompliance(): boolean { return this.batch()?.paymentType === 'Compliance'; }
   readonly complianceKinds = COMPLIANCE_KINDS;
   kindsLabel(keys?: string[] | null): string { return complianceKindsLabel(keys); }
+  supLabel(names?: string[] | null): string { return packSuppliersLabel(names); }
   /** Compliance payments need a sub-kind, and a description when it's Other. Always true for other payment types. */
   complianceOk(): boolean { const d = this.itemDraft; return !this.isCompliance() || (!!d.complianceKind && (d.complianceKind !== 'Other' || !!d.complianceDetail?.trim())); }
   isReqPay(): boolean { return this.batch()?.paymentType === 'RequisitionForm'; }

@@ -2,10 +2,19 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../environments/environment';
 
+/** "Acme Ltd, Bolt Co + 3 more": who a pack pays. People ask about the supplier, not the batch number. */
+export function suppliersLabel(names?: (string | null | undefined)[] | null, show = 2): string {
+  const seen = new Set<string>(), s: string[] = [];
+  for (const n of names ?? []) { const t = (n ?? '').trim(), k = t.toLowerCase(); if (t && !seen.has(k)) { seen.add(k); s.push(t); } }
+  if (!s.length) return '';
+  return s.slice(0, show).join(', ') + (s.length > show ? ` + ${s.length - show} more` : '');
+}
 export interface InboxRow {
   id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string;
   batchDate: string; status: string; statusTitle: string; totalAmount: number; notes?: string; items: number; pendingItems: number;
   preparedByName: string; accountantName?: string; accountantComment?: string; waitingSince?: string; role: 'accountant' | 'director'; blocked?: string;
+  /** Distinct suppliers on the pack, biggest payment first. */
+  suppliers?: string[];
 }
 export interface Doc { id: number; docType: string; title?: string; docTypeTitle?: string; isNotApplicable?: boolean; naReason?: string; originalFileName?: string; fileName: string; contentType?: string; size?: number; version?: number; }
 export interface Item {
@@ -29,7 +38,7 @@ export interface Batch {
 }
 export interface Executive {
   awaitingForMe: number; awaitingAmount: number; nextPayDay: string; paidThisMonth: number; awaitingPopAmount: number; signedLast30: number; signedLast30Amount: number;
-  awaiting: { id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; totalAmount: number; items: number; forMe: boolean; waitingDays: number }[];
+  awaiting: { id: number; batchNumber: string; companyName: string; paymentTypeTitle: string; totalAmount: number; items: number; forMe: boolean; waitingDays: number; suppliers?: { supplierName: string; amount: number }[]; supplierNames?: string[] }[];
   pipeline: { status: string; title: string; count: number; amount: number }[];
   schedule: { date: string; count: number; amount: number; paid: number; loaded: number }[];
   paidByMonth: { label: string; total: number }[];

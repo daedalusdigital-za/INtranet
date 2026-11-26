@@ -26,6 +26,18 @@ export const COMPLIANCE_KINDS: { key: ComplianceKind; title: string }[] = [
 export function complianceKindsLabel(keys?: (string | null)[] | null): string {
   return (keys ?? []).filter(Boolean).map(k => COMPLIANCE_KINDS.find(c => c.key === k)?.title ?? k).join(', ');
 }
+/** Distinct supplier names on a pack, in the order given (the server sends biggest payment first). */
+export function packSuppliers(names?: (string | null)[] | null): string[] {
+  const seen = new Set<string>(), out: string[] = [];
+  for (const n of names ?? []) { const t = (n ?? '').trim(), k = t.toLowerCase(); if (t && !seen.has(k)) { seen.add(k); out.push(t); } }
+  return out;
+}
+/** "Acme Ltd" · "Acme Ltd, Bolt Co" · "Acme Ltd, Bolt Co + 3 more" — who a pack pays, for lists and inboxes. */
+export function packSuppliersLabel(names?: (string | null)[] | null, show = 2): string {
+  const s = packSuppliers(names);
+  if (!s.length) return 'No payments yet';
+  return s.slice(0, show).join(', ') + (s.length > show ? ` + ${s.length - show} more` : '');
+}
 export interface DocRule { docType: string; required: boolean; afterDelivery: boolean; ifReturned: boolean; withRecon?: boolean; }
 export interface CreditorMeta {
   companies: CreditorCompany[];
@@ -44,6 +56,8 @@ export interface BatchRow {
   returnReason?: string; openPrepayments: number; approvedItems: number; queriedItems: number; rejectedItems: number;
   /** Compliance packs: the distinct sub-kinds of their payments. */
   complianceKinds?: string[];
+  /** Supplier on every payment, biggest payment first (may repeat). */
+  suppliers?: string[];
 }
 export interface RequiredDoc { docType: string; title: string; filled: boolean; }
 export interface BatchDoc {
@@ -98,6 +112,8 @@ export interface InboxRow {
   totalAmount: number; notes?: string | null; items: number; pendingItems: number; preparedByName?: string; accountantName?: string | null; accountantComment?: string | null;
   waitingSince?: string | null; role: 'accountant' | 'director'; blocked?: string | null;
   complianceKinds?: string[];
+  /** Distinct suppliers on the pack, biggest payment first. */
+  suppliers?: string[];
 }
 export interface ApproverOption { userId: number; name: string; role: string; email?: string | null; }
 export interface SignaturePayload { signatureImageBase64?: string; useSavedSignature: boolean; }
