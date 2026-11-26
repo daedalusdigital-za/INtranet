@@ -9,7 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, PaymentSchedule, ScheduleBatch, ScheduleItem, InProgressBatch, InProgressDoc } from '../../services/creditor-packs.service';
+import { CreditorPacksService, PaymentSchedule, ScheduleBatch, ScheduleItem, InProgressBatch, InProgressDoc, linesSuppliersLabel } from '../../services/creditor-packs.service';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 import { ReconPreviewDialogComponent } from './recon-preview-dialog.component';
 
@@ -79,7 +79,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
         @for (b of inProgress(); track b.id) {
           <article class="batch ip" [class.open]="open() === -b.id">
             <div class="b-row" (click)="toggle(-b.id)">
-              <div class="b-co"><span class="code">{{ b.companyCode }}</span><div><b>{{ b.companyName }}</b><small>{{ b.batchNumber }} · {{ b.paymentTypeTitle }}</small></div></div>
+              <div class="b-co"><span class="code">{{ b.companyCode }}</span><div><b>{{ sup(b.items) }}</b><small>{{ b.companyName }} · {{ b.batchNumber }} · {{ b.paymentTypeTitle }}</small></div></div>
               <div class="b-amt"><b>{{ b.amount | currency:'ZAR':'R':'1.2-2' }}</b><small>{{ b.itemCount }} payment{{ b.itemCount === 1 ? '' : 's' }} · {{ b.documentCount }} document{{ b.documentCount === 1 ? '' : 's' }}</small></div>
               <ol class="ip-steps" [attr.aria-label]="'Stage: ' + b.statusTitle">
                 @for (s of ipSteps; track s; let k = $index) {
@@ -150,7 +150,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
         @for (b of run.batches; track b.id) {
           <article class="batch" [class.open]="open() === b.id" [class]="'batch st-' + b.status">
             <div class="b-row" (click)="toggle(b.id)">
-              <div class="b-co"><span class="code">{{ b.companyCode }}</span><div><b>{{ b.companyName }}</b><small>{{ b.batchNumber }} · {{ b.paymentTypeTitle }}</small></div></div>
+              <div class="b-co"><span class="code">{{ b.companyCode }}</span><div><b>{{ sup(b.items) }}</b><small>{{ b.companyName }} · {{ b.batchNumber }} · {{ b.paymentTypeTitle }}</small></div></div>
               <div class="b-amt"><b>{{ b.approvedAmount | currency:'ZAR':'R':'1.2-2' }}</b><small>{{ b.approvedItems }} payment{{ b.approvedItems === 1 ? '' : 's' }}</small></div>
               <div class="b-sign"><mat-icon>verified</mat-icon><div><b>{{ b.directorName || '—' }}</b><small>signed {{ b.directorSignedAt | date:'d MMM HH:mm' }}</small></div></div>
               <div class="b-status">
@@ -292,6 +292,7 @@ interface PayRun { date: string; label: string; isNext: boolean; isPast: boolean
 })
 export class FinancePaymentScheduleComponent implements OnInit {
   private api = inject(CreditorPacksService);
+  sup = linesSuppliersLabel;
   private toast = inject(ToastService);
   private router = inject(Router);
   private dialog = inject(MatDialog);

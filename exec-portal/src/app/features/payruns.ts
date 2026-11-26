@@ -1,7 +1,7 @@
 import { Component, ElementRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { Api, IpBatch, IpDoc, PayBatch, PayLine, PaySchedule } from '../core/api';
+import { Api, IpBatch, IpDoc, PayBatch, PayLine, PaySchedule, linesSuppliersLabel } from '../core/api';
 
 type Filter = 'toLoad' | 'loaded' | 'pop' | 'overdue' | 'progress' | null;
 
@@ -41,8 +41,8 @@ type Filter = 'toLoad' | 'loaded' | 'pop' | 'overdue' | 'progress' | null;
             <div class="card pb ipb" [class.back]="p.sentBack">
               <button type="button" class="pbh" (click)="toggle(-p.id)">
                 <div class="l">
-                  <div class="co">{{ p.companyName }} <span [class]="p.sentBack ? 'pill bad' : 'pill warn'">{{ p.statusTitle }}</span></div>
-                  <div class="muted sm">{{ p.batchNumber }} · {{ p.paymentTypeTitle }} · {{ p.itemCount }} payment{{ p.itemCount === 1 ? '' : 's' }} · {{ p.documentCount }} document{{ p.documentCount === 1 ? '' : 's' }}</div>
+                  <div class="co">{{ sup(p.items) || p.companyName }} <span [class]="p.sentBack ? 'pill bad' : 'pill warn'">{{ p.statusTitle }}</span></div>
+                  <div class="muted sm">{{ p.companyName }} · {{ p.batchNumber }} · {{ p.paymentTypeTitle }} · {{ p.itemCount }} payment{{ p.itemCount === 1 ? '' : 's' }} · {{ p.documentCount }} document{{ p.documentCount === 1 ? '' : 's' }}</div>
                   <div class="steps">@for (st of stepNames; track $index) { <span [class.done]="$index < p.stage" [class.now]="$index === p.stage">{{ st }}</span> }</div>
                   <div class="muted sm">{{ whereNow(p) }}</div>
                 </div>
@@ -81,8 +81,8 @@ type Filter = 'toLoad' | 'loaded' | 'pop' | 'overdue' | 'progress' | null;
               <div class="card pb" [class.overdue]="b.overdue">
                 <button type="button" class="pbh" (click)="toggle(b.id)">
                   <div class="l">
-                    <div class="co">{{ b.companyName }} <span [class]="pill(b.status)">{{ b.statusTitle }}</span> @if (b.overdue) { <span class="pill bad">Overdue</span> }</div>
-                    <div class="muted sm">{{ b.batchNumber }} · {{ b.paymentTypeTitle }} · {{ b.approvedItems }} payment{{ b.approvedItems === 1 ? '' : 's' }}@if (b.directorName) { · signed by {{ b.directorName }} }</div>
+                    <div class="co">{{ sup(b.items) || b.companyName }} <span [class]="pill(b.status)">{{ b.statusTitle }}</span> @if (b.overdue) { <span class="pill bad">Overdue</span> }</div>
+                    <div class="muted sm">{{ b.companyName }} · {{ b.batchNumber }} · {{ b.paymentTypeTitle }} · {{ b.approvedItems }} payment{{ b.approvedItems === 1 ? '' : 's' }}@if (b.directorName) { · signed by {{ b.directorName }} }</div>
                     @if (b.status === 'Paid') { <div class="sm" [class.badtxt]="b.popMissing > 0">Proof of payment {{ b.popDone }}/{{ b.approvedItems }}</div> }
                     @if (b.bankExportedAt && b.status === 'Approved') { <div class="muted sm">Bank file downloaded {{ b.bankExportedAt | date:'d MMM HH:mm' }}</div> }
                   </div>
@@ -154,6 +154,7 @@ type Filter = 'toLoad' | 'loaded' | 'pop' | 'overdue' | 'progress' | null;
 })
 export class PayrunsPage implements OnInit {
   api = inject(Api);
+  sup = linesSuppliersLabel;
   private popInput = viewChild<ElementRef<HTMLInputElement>>('popInput');
   private listTop = viewChild<ElementRef<HTMLElement>>('listTop');
   s = signal<PaySchedule | null>(null); loading = signal(true); error = signal(''); open = signal(0); busy = signal(false);

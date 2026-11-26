@@ -9,6 +9,10 @@ export function suppliersLabel(names?: (string | null | undefined)[] | null, sho
   if (!s.length) return '';
   return s.slice(0, show).join(', ') + (s.length > show ? ` + ${s.length - show} more` : '');
 }
+/** Supplier label from a pack's payment lines, biggest payment first. */
+export function linesSuppliersLabel(lines?: { supplierName?: string | null; amount?: number | null }[] | null, show = 2): string {
+  return suppliersLabel([...(lines ?? [])].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0)).map(l => l.supplierName), show);
+}
 export interface InboxRow {
   id: number; batchNumber: string; companyCode: string; companyName: string; paymentType: string; paymentTypeTitle: string;
   batchDate: string; status: string; statusTitle: string; totalAmount: number; notes?: string; items: number; pendingItems: number;

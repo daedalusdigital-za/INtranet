@@ -9,7 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog } from '@angular/material/dialog';
 import * as XLSX from 'xlsx';
 import { ToastService } from '../../ui/toast.service';
-import { CreditorPacksService, HistoryBatch, HistoryLine, PaymentHistory } from '../../services/creditor-packs.service';
+import { CreditorPacksService, HistoryBatch, HistoryLine, PaymentHistory, linesSuppliersLabel } from '../../services/creditor-packs.service';
 import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 
 /**
@@ -59,7 +59,8 @@ import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
         <div class="hb-row" (click)="toggle(b.id)">
           <mat-icon class="chev">{{ open.has(b.id) ? 'expand_more' : 'chevron_right' }}</mat-icon>
           <span class="chip co">{{ b.companyCode }}</span>
-          <b>{{ b.batchNumber }}</b>
+          <b>{{ sup(b.lines) }}</b>
+          <span class="bn">{{ b.batchNumber }}</span>
           <span class="chip">{{ b.paymentTypeTitle }}</span>
           <span class="chip" [class.closed]="b.status === 'Closed'" [class.paid]="b.status === 'Paid'">{{ b.statusTitle }}</span>
           <span class="meta">paid {{ (b.paidAt || b.closedAt) | date:'EEE d MMM yyyy' }} · {{ b.items }} payment{{ b.items === 1 ? '' : 's' }}</span>
@@ -143,6 +144,7 @@ import { PackPreviewDialogComponent } from './pack-preview-dialog.component';
 })
 export class PaymentHistoryComponent implements OnInit {
   api = inject(CreditorPacksService);
+  sup = linesSuppliersLabel;
   private dialog = inject(MatDialog);
   private toast = inject(ToastService);
   private router = inject(Router);

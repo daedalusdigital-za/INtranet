@@ -38,6 +38,10 @@ export function packSuppliersLabel(names?: (string | null)[] | null, show = 2): 
   if (!s.length) return 'No payments yet';
   return s.slice(0, show).join(', ') + (s.length > show ? ` + ${s.length - show} more` : '');
 }
+/** Supplier label from a pack's payment lines, biggest payment first. */
+export function linesSuppliersLabel(lines?: { supplierName?: string | null; amount?: number | null }[] | null, show = 2): string {
+  return packSuppliersLabel([...(lines ?? [])].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0)).map(l => l.supplierName ?? ''), show);
+}
 export interface DocRule { docType: string; required: boolean; afterDelivery: boolean; ifReturned: boolean; withRecon?: boolean; }
 export interface CreditorMeta {
   companies: CreditorCompany[];

@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Api, History } from '../core/api';
+import { Api, History, linesSuppliersLabel } from '../core/api';
 
 /** Payment history: packs that have been paid or closed, with each payment and its proof of payment. Read-only. */
 @Component({
@@ -40,8 +40,8 @@ import { Api, History } from '../core/api';
           <div class="card pb">
             <button type="button" class="pbh" (click)="open.set(open() === b.id ? 0 : b.id)">
               <div class="l">
-                <div class="co">{{ b.companyName }} <span class="pill neutral">{{ b.paymentTypeTitle }}</span> @if (b.status === 'Closed') { <span class="pill ok">Closed</span> } @else { <span class="pill warn">Paid</span> }</div>
-                <div class="muted sm">{{ b.batchNumber }} · paid {{ (b.paidAt || b.closedAt) | date:'d MMM yyyy' }} · {{ b.items }} payment{{ b.items === 1 ? '' : 's' }}@if (b.directorName) { · signed by {{ b.directorName }} }</div>
+                <div class="co">{{ sup(b.lines) || b.companyName }} <span class="pill neutral">{{ b.paymentTypeTitle }}</span> @if (b.status === 'Closed') { <span class="pill ok">Closed</span> } @else { <span class="pill warn">Paid</span> }</div>
+                <div class="muted sm">{{ b.companyName }} · {{ b.batchNumber }} · paid {{ (b.paidAt || b.closedAt) | date:'d MMM yyyy' }} · {{ b.items }} payment{{ b.items === 1 ? '' : 's' }}@if (b.directorName) { · signed by {{ b.directorName }} }</div>
                 @if (b.popMissing) { <div class="muted sm">Proof of payment {{ b.popDone }}/{{ b.items }}</div> }
               </div>
               <div class="r"><b class="amt">{{ b.amount | currency:'ZAR':'R ':'1.2-2' }}</b><span class="chev">{{ open() === b.id ? '▾' : '▸' }}</span></div>
@@ -82,6 +82,7 @@ import { Api, History } from '../core/api';
 })
 export class HistoryPage implements OnInit {
   private api = inject(Api);
+  sup = linesSuppliersLabel;
   periods = [{ days: 30, label: '30 days' }, { days: 90, label: '90 days' }, { days: 365, label: '12 months' }];
   days = 90; q = ''; company = '';
   h = signal<History | null>(null); loading = signal(true); error = signal(''); open = signal(0);
