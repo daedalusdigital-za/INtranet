@@ -64,7 +64,7 @@ export class FlowsComponent implements OnInit, OnDestroy {
   widgetFilter = signal('');
   /** Ids of library widgets already on my Home (by config.libraryId). */
   onMyHome = signal<Set<number>>(new Set());
-  readonly TAB = { overview: 0, human: 1, runs: 2, flows: 3, widgets: 4, templates: 5, cortex: 6 };
+  readonly TAB = { overview: 0, human: 1, runs: 2, flows: 3, widgets: 4, templates: 5, cortex: 6, ai: 7 };
   private tab = signal(0);
   /** The open section. Opening Human flows re-fits its diagram, which only exists while the section is shown. */
   get selectedTab() { return this.tab(); }
@@ -128,6 +128,11 @@ export class FlowsComponent implements OnInit, OnDestroy {
       { key: 'failed', label: 'Failed / cancelled', icon: 'error', items: r.filter(x => x.status === 'failed' || x.status === 'cancelled') },
     ].filter(c => c.items.length || this.runStatus.includes(c.key));
   });
+  /** AI flows: flows with at least one step handed to Welly (step config has a welly block). */
+  aiFlows = computed(() => this.flows().filter(f => this.wellySteps(f).length));
+  wellySkills = computed(() => this.catalog()?.wellySkills ?? []);
+  wellySteps(f: FlowDefinition) { return (f.graph?.steps ?? []).filter(s => !!s.config?.['welly']?.skill); }
+  wellySkillTitle(key: string) { return this.wellySkills().find(k => k.key === key)?.title ?? key; }
   flowsByLevel = computed(() => [1, 2, 3].map(l => ({ level: l, items: this.processFlows().filter(f => f.level === l) })).filter(g => g.items.length));
   /** Side navigation, grouped like Admin settings. */
   navGroups = computed(() => {
@@ -139,6 +144,7 @@ export class FlowsComponent implements OnInit, OnDestroy {
       ] },
       { label: 'Design', items: [
         { tab: this.TAB.human, label: 'Human flows', icon: 'diversity_3', hint: 'How each department and person works day to day', count: this.opsDepartments().length, live: false },
+        { tab: this.TAB.ai, label: 'AI flows', icon: 'smart_toy', hint: 'Steps Welly prepares inside human flows, and the task recorder', count: this.aiFlows().length, live: false },
         { tab: this.TAB.flows, label: 'Flows', icon: 'account_tree', hint: 'Process flows by level: manual, AI-assisted, automated', count: this.processFlows().length, live: false },
         { tab: this.TAB.widgets, label: 'Widgets', icon: 'widgets', hint: 'Home-page tiles fed by flows', count: this.widgets().length, live: false },
         { tab: this.TAB.templates, label: 'Templates', icon: 'auto_awesome', hint: 'Ready-made flows and widgets to copy', count: this.templates().length, live: false },
@@ -167,6 +173,7 @@ export class FlowsComponent implements OnInit, OnDestroy {
       else if (tab === 'operations' || tab === 'human') { this.selectedTab = 1; this.clearQuery(); }
       else if (tab === 'widgets') { this.selectedTab = this.TAB.widgets; this.clearQuery(); }
       else if (tab === 'templates') { this.selectedTab = this.TAB.templates; this.clearQuery(); }
+      else if (tab === 'ai') { this.selectedTab = this.TAB.ai; this.clearQuery(); }
       else if (tab === 'cortex') { this.selectedTab = this.TAB.cortex; this.clearQuery(); }
     });
   }

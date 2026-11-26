@@ -154,12 +154,19 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     this.stopSpeaking();
   }
 
+  private readonly OFFLINE_NOTE = 'AI is currently offline — using basic responses.';
+
   private checkServiceHealth(): void {
     this.chatService.checkHealth().subscribe(available => {
       this.isServiceAvailable = available;
+      // The offline note is a status, not history: drop old copies (they are saved with the chat) so a
+      // brief outage (e.g. a backend restart) doesn't keep saying "offline" after the AI is back.
+      const before = this.messages.length;
+      this.messages = this.messages.filter(m => m.isUser || m.text !== this.OFFLINE_NOTE);
+      if (this.messages.length !== before) this.saveMessages();
       if (!available) {
         // Status note, not a reply: don't light up the unread badge for it
-        this.addBotMessage('AI is currently offline — using basic responses.', false);
+        this.addBotMessage(this.OFFLINE_NOTE, false);
         this.setMascotMood('error', 2500);
       }
     });
@@ -197,7 +204,7 @@ export class ChatbotComponent implements OnInit, OnDestroy {
     if (this.isOpen) {
       this.playGesture('wave');
       this.unreadReplies = 0;
-      if (!this.isServiceAvailable) this.checkServiceHealth();
+      this.checkServiceHealth();
     }
   }
 

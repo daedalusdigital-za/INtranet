@@ -498,6 +498,72 @@
           </section>
         }
       
+        <!-- ════════ AI FLOWS ════════ -->
+        @case (7) {
+          <section class="tab-content fl-ai">
+            <div class="fl-ai-intro">
+              <img src="/welly/happy.png" alt="" />
+              <div>
+                <b>Welly works inside your human flows</b>
+                <p>Hand a step to Welly and it does the legwork first: it looks things up, fills in the form and shows what it found.
+                  A person checks it and clicks <b>Do it</b>, or says <b>Not right</b>. Every step starts at <em>Suggest</em>, so nothing happens without a person.</p>
+              </div>
+            </div>
+
+            <h3 class="fl-level-head"><mat-icon>smart_toy</mat-icon>Welly runs flows<small>Flows with steps Welly prepares</small></h3>
+            @if (aiFlows().length) {
+              <div class="fl-def-grid">
+                @for (f of aiFlows(); track f.id) {
+                  <div class="fl-def clickable" [class.off]="!f.isEnabled" (click)="viewFlow(f)">
+                    <div class="fl-def-head">
+                      <mat-icon class="trig" [matTooltip]="triggerLabel(f)">{{ triggerIcon(f) }}</mat-icon>
+                      <div class="t"><b>{{ f.name }}</b><small>{{ f.departmentName || f.category }} · {{ triggerLabel(f) }}</small></div>
+                      @if (isDesigner()) { <mat-slide-toggle [checked]="f.isEnabled" (click)="$event.stopPropagation()" (change)="toggleFlow(f)" [matTooltip]="f.isEnabled ? 'Pause' : 'Enable'"></mat-slide-toggle> }
+                    </div>
+                    <p>{{ f.description }}</p>
+                    <ul class="fl-ai-steps">
+                      @for (s of wellySteps(f); track s.id) {
+                        <li><mat-icon>smart_toy</mat-icon><span><b>{{ s.name || s.id }}</b> · {{ wellySkillTitle(s.config['welly'].skill) }}</span><em>Suggest</em></li>
+                      }
+                    </ul>
+                    <div class="fl-def-foot" (click)="$event.stopPropagation()">
+                      <span>{{ f.runCount }} runs · {{ f.activeRuns }} active</span>
+                      <span class="spacer"></span>
+                      <button mat-button (click)="viewFlow(f)"><mat-icon>account_tree</mat-icon>Diagram</button>
+                      @if (f.canStart) { <button mat-flat-button color="primary" (click)="startFlow(f)"><mat-icon>play_arrow</mat-icon>Start</button> }
+                      @if (isDesigner()) { <button mat-icon-button [matMenuTriggerFor]="defMenu" [matMenuTriggerData]="{ f: f }"><mat-icon>more_vert</mat-icon></button> }
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <p class="fl-muted">No flow has a step handed to Welly yet. Edit a human flow, open a task step and pick a skill under <b>Hand to Welly</b>.</p>
+            }
+
+            @if (wellySkills().length) {
+              <h3 class="fl-level-head"><mat-icon>construction</mat-icon>What Welly can do<small>Skills you can hand a step to</small></h3>
+              <div class="fl-ai-skills">
+                @for (k of wellySkills(); track k.key) {
+                  <div class="fl-ai-skill">
+                    <div class="h"><b>{{ k.title }}</b><span class="kind" [attr.data-k]="k.kind">{{ k.kind === 'read' ? 'Looks up' : k.kind === 'prepare' ? 'Drafts' : k.kind }}</span></div>
+                    <p>{{ k.description }}</p>
+                  </div>
+                }
+              </div>
+            }
+
+            <h3 class="fl-level-head"><mat-icon>radio_button_checked</mat-icon>Task recorder<small>Coming next</small></h3>
+            <div class="fl-ai-next">
+              <mat-icon>videocam</mat-icon>
+              <div>
+                <b>Show Welly once, and it learns the task</b>
+                <p>Record yourself doing a task in the intranet. Welly writes down the steps, asks what each one is for, and turns it into a step it can prepare for you.
+                  This isn't built yet. It comes after the Invoice to payment trial.</p>
+              </div>
+            </div>
+          </section>
+        }
+
         <!-- ════════ CORTEX ════════ -->
         @case (6) {
           <app-flow-cortex [flows]="flows()" [templates]="templates()" [catalog]="catalog()" [stats]="stats()" [isDesigner]="isDesigner()"
