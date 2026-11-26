@@ -185,6 +185,12 @@ namespace ProjectTracker.API.Models.Flows
         /// <summary>Mirrors the created TodoTask (so the task also shows on the person's dashboard).</summary>
         public int? TodoTaskId { get; set; }
 
+        /// <summary>
+        /// What Welly prepared for this step when the step is handed to a Welly skill (JSON: skill, trust, status,
+        /// summary, evidence, prefill, confidence). Null when the step has no Welly skill.
+        /// </summary>
+        public string? WellyJson { get; set; }
+
         public virtual FlowRun Run { get; set; } = null!;
         public virtual User? CompletedByUser { get; set; }
     }
@@ -202,6 +208,10 @@ namespace ProjectTracker.API.Models.Flows
         public string? DataJson { get; set; }
         public int? UserId { get; set; }
         [MaxLength(150)] public string? UserName { get; set; }
+        /// <summary>Who did it: person | welly | system. Null on events from before this was recorded.</summary>
+        [MaxLength(10)] public string? ActorKind { get; set; }
+        /// <summary>The Welly skill involved, if any (e.g. invoice.check_pod).</summary>
+        [MaxLength(80)] public string? SkillKey { get; set; }
         public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
 
         public virtual FlowRun Run { get; set; } = null!;

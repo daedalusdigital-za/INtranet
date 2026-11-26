@@ -345,6 +345,30 @@
     <mat-form-field appearance="outline"><mat-label>Due in (hours)</mat-label><input matInput type="number" [(ngModel)]="s.config['dueInHours']" /></mat-form-field>
   </div>
   <mat-checkbox [ngModel]="s.config['mirrorTodo'] !== false" (ngModelChange)="s.config['mirrorTodo'] = $event">Also add to assignee's to-do list</mat-checkbox>
+  @if (s.type === 'task' && wellySkills.length) {
+    <label class="fe-sub">Hand to Welly (optional)</label>
+    <mat-form-field appearance="outline" class="full"><mat-label>Welly skill</mat-label>
+      <mat-select [ngModel]="s.config['welly']?.skill || null" (ngModelChange)="setWellySkill(s, $event)">
+        <mat-option [value]="null">No: a person does this step</mat-option>
+        @for (k of wellySkills; track k.key) { <mat-option [value]="k.key">{{ k.title }} <span class="fe-muted">· {{ k.kind }}</span></mat-option> }
+      </mat-select>
+      @if (wellySkillOf(s); as sk) { <mat-hint>{{ sk.description }}</mat-hint> }
+    </mat-form-field>
+    @if (wellySkillOf(s); as sk) {
+      @for (i of sk.inputs; track i.key) {
+        <mat-form-field appearance="outline" class="full"><mat-label>{{ i.label }}{{ i.required ? '' : ' (optional)' }}</mat-label>
+          <input matInput [(ngModel)]="s.config['welly'].inputs[i.key]" placeholder="{{ '{{' }}inputs.{{ i.key }}{{ '}}' }}" />
+        </mat-form-field>
+      }
+      <mat-form-field appearance="outline" class="full"><mat-label>Trust level</mat-label>
+        <mat-select [ngModel]="'suggest'" disabled><mat-option value="suggest">Suggest: Welly prepares it, a person clicks Do it</mat-option></mat-select>
+        <mat-hint>Every step starts at Suggest. Do-and-report and Do-quietly come later.</mat-hint>
+      </mat-form-field>
+      @if (wellyMissingFields(s).length) {
+        <div class="fe-muted">Welly fills in these form fields: {{ wellyMissingFields(s).join(', ') }}. Add them below so the person sees Welly's answers.</div>
+      }
+    }
+  }
   <ng-container *ngTemplateOutlet="assigneePicker; context: { step: s, key: 'escalateTo', label: 'If overdue, escalate to', modes: escalateMode }"></ng-container>
   <label class="fe-sub">Form the assignee fills in (optional)</label>
   @for (f of s.config['form']; track $index; let fi = $index) {

@@ -19,6 +19,8 @@ namespace ProjectTracker.API.Services.Flows
         /// <summary>Dispatch a business event to every enabled event-triggered flow.</summary>
         Task DispatchEventAsync(string eventName, JsonObject payload, string? entityType, string? entityKey, CancellationToken ct = default);
         Task<int> RunScheduledNowAsync(int definitionId, CancellationToken ct = default);
+        /// <summary>A person says Welly's suggestion on a task is wrong: logs a labelled example and leaves the task to them.</summary>
+        Task<FlowTask> RejectWellySuggestionAsync(int taskId, int userId, string reason, CancellationToken ct = default);
     }
 
     /// <summary>
@@ -148,9 +150,13 @@ namespace ProjectTracker.API.Services.Flows
                 if (todo != null && !todo.IsCompleted) { todo.IsCompleted = true; todo.Status = "Completed"; todo.CompletedAt = DateTime.UtcNow; }
             }
 
+            var wellyOutcome = RecordWellyOutcome(task, user, result);
             Audit(task.Run, task.StepId, isApproval ? "approval.decided" : "task.completed",
-                isApproval ? $"{user.FullName} {normalized} \"{task.Title}\"" : $"{user.FullName} completed \"{task.Title}\"",
-                userId, user.FullName, new { decision = normalized, comment, result });
+                isApproval ? $"{user.FullName} {normalized} \"{task.Title}\""
+                    : wellyOutcome == "accepted" ? $"{user.FullName} accepted Welly's suggestion and completed \"{task.Title}\""
+                    : wellyOutcome == "edited" ? $"{user.FullName} changed Welly's suggestion and completed \"{task.Title}\""
+                    : $"{user.FullName} completed \"{task.Title}\"",
+                userId, user.FullName, new { decision = normalized, comment, result, welly = wellyOutcome });
             await _db.SaveChangesAsync(ct);
 
             // Resume the run from the step after the task
@@ -609,6 +615,8 @@ namespace ProjectTracker.API.Services.Flows
             }
 
             Audit(run, step.Id, "task.created", $"{(task.Kind == "approval" ? "Approval" : "Task")} \"{task.Title}\" → {task.AssigneeLabel}{(task.DueAt.HasValue ? $", due {task.DueAt:dd MMM HH:mm}" : "")}", data: new { taskId = task.Id });
+            if (task.Kind == "task" && FlowExpressions.GetElement(cfg, "welly") is { ValueKind: JsonValueKind.Object } wellyCfg)
+                await PrepareWellyAsync(run, step, task, wellyCfg, ctx, ct);
             run.Status = FlowRunStatus.Waiting;
             await _db.SaveChangesAsync(ct);
             await NotifyAssigneesAsync(task, $"{(task.Kind == "approval" ? "Approval needed" : "New task")}: {task.Title}", run, ct);
@@ -776,6 +784,122 @@ namespace ProjectTracker.API.Services.Flows
             };
         }
 
+        // ── Welly on human steps ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// A task step handed to Welly (<c>config.welly = { skill, inputs, trust }</c>). Only the Suggest trust level exists
+        /// for now: Welly runs the skill as the run's starter (so it can never see more than they can), stores what it found
+        /// and prepared on the task, and the person still clicks "Do it". If the skill is missing, refused or fails, the step
+        /// is simply a normal task and the Timeline says why. Never throws: Welly must not break the flow.
+        /// </summary>
+        private async Task PrepareWellyAsync(FlowRun run, FlowStep step, FlowTask task, JsonElement wellyCfg, JsonObject ctx, CancellationToken ct)
+        {
+            var skillKey = wellyCfg.TryGetProperty("skill", out var sk) && sk.ValueKind == JsonValueKind.String ? sk.GetString() ?? "" : "";
+            try
+            {
+                var registry = _sp.GetRequiredService<Welly.IWellySkillRegistry>();
+                var inputsJson = wellyCfg.TryGetProperty("inputs", out var inEl) && inEl.ValueKind == JsonValueKind.Object
+                    ? FlowExpressions.Render(inEl.GetRawText(), ctx, FlowExpressions.JsonStringEscape) : "{}";
+                var inputs = (JsonNode.Parse(inputsJson) as JsonObject) ?? new JsonObject();
+
+                int? runnerId = null;
+                try { runnerId = (await SystemActorAsync(run, ct)).UserId; } catch (InvalidOperationException) { }
+
+                var outcome = runnerId == null
+                    ? new Welly.WellySkillRun { Refused = "No active person to run Welly as." }
+                    : await registry.RunAsync(skillKey, runnerId.Value, inputs, ct);
+                var skill = outcome.Skill;
+                var title = skill?.Title ?? skillKey;
+
+                if (outcome.Refused != null || outcome.Result == null || !outcome.Result.Ok)
+                {
+                    var why = outcome.Refused ?? outcome.Result?.Summary ?? "Welly couldn't run.";
+                    task.WellyJson = new JsonObject
+                    {
+                        ["skill"] = skillKey, ["title"] = title, ["trust"] = "suggest", ["status"] = "fallback",
+                        ["summary"] = why, ["at"] = DateTime.UtcNow.ToString("o")
+                    }.ToJsonString();
+                    Audit(run, step.Id, "welly.fallback", $"Welly couldn't do \"{title}\": {Truncate(why, 300)} It's with {task.AssigneeLabel}.", userName: "Welly", actorKind: "welly", skillKey: skillKey);
+                    return;
+                }
+
+                var r = outcome.Result;
+                var evidence = new JsonArray();
+                foreach (var e in r.Evidence) evidence.Add(new JsonObject { ["label"] = e.Label, ["value"] = e.Value, ["url"] = e.Url });
+                task.WellyJson = new JsonObject
+                {
+                    ["skill"] = skill!.Key, ["title"] = title, ["kind"] = skill.Kind.ToString().ToLowerInvariant(),
+                    ["trust"] = "suggest", ["status"] = "suggested",
+                    ["summary"] = r.Summary, ["confidence"] = r.Confidence, ["evidence"] = evidence,
+                    ["prefill"] = r.Prefill.DeepClone(), ["output"] = r.Output.DeepClone(), ["inputs"] = inputs.DeepClone(),
+                    ["at"] = DateTime.UtcNow.ToString("o")
+                }.ToJsonString();
+                Audit(run, step.Id, "welly.suggested", $"Welly · {title}: {Truncate(r.Summary, 400)}", userName: "Welly",
+                    data: new { skill = skill.Key, r.Confidence, prefill = r.Prefill, evidence = r.Evidence }, actorKind: "welly", skillKey: skill.Key);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Welly step {Step} on run {Run} failed", step.Id, run.Id);
+                task.WellyJson = new JsonObject { ["skill"] = skillKey, ["trust"] = "suggest", ["status"] = "fallback", ["summary"] = "Welly hit an error; do this step as usual." }.ToJsonString();
+                Audit(run, step.Id, "welly.fallback", $"Welly hit an error on \"{skillKey}\"; the step is with {task.AssigneeLabel}.", userName: "Welly", actorKind: "welly", skillKey: skillKey);
+            }
+        }
+
+        /// <summary>On completion of a task Welly prepared: accepted (submitted exactly what Welly prefilled) or edited. Logs a labelled example.</summary>
+        private string? RecordWellyOutcome(FlowTask task, User user, JsonObject? result)
+        {
+            if (string.IsNullOrEmpty(task.WellyJson)) return null;
+            JsonObject? w;
+            try { w = JsonNode.Parse(task.WellyJson) as JsonObject; } catch { return null; }
+            if (w == null || (string?)w["status"] != "suggested") return null;
+
+            var prefill = w["prefill"] as JsonObject ?? new JsonObject();
+            var changed = prefill.Any(kv => !string.Equals(Norm(kv.Value), Norm(result?[kv.Key]), StringComparison.Ordinal));
+            var outcome = changed ? "edited" : "accepted";
+            w["status"] = outcome;
+            w["decidedBy"] = user.FullName;
+            w["decidedAt"] = DateTime.UtcNow.ToString("o");
+            task.WellyJson = w.ToJsonString();
+            _db.WellyFeedback.Add(new Models.Welly.WellyFeedback
+            {
+                SkillKey = (string?)w["skill"] ?? "", FlowRunId = task.FlowRunId, FlowTaskId = task.Id, StepId = task.StepId,
+                Outcome = outcome, ProposalJson = task.WellyJson, FinalJson = result?.ToJsonString(),
+                UserId = user.UserId, UserName = user.FullName, Model = "rules"
+            });
+            return outcome;
+
+            static string Norm(JsonNode? n) => n == null ? "" : (n is JsonValue v && v.TryGetValue<string>(out var s) ? s : n.ToJsonString()).Trim();
+        }
+
+        public async Task<FlowTask> RejectWellySuggestionAsync(int taskId, int userId, string reason, CancellationToken ct = default)
+        {
+            var task = await _db.FlowTasks.Include(t => t.Run).ThenInclude(r => r.Definition).FirstOrDefaultAsync(t => t.Id == taskId, ct)
+                       ?? throw new InvalidOperationException("Task not found");
+            if (task.Status != FlowTaskStatus.Open && task.Status != FlowTaskStatus.Escalated)
+                throw new InvalidOperationException("Task is already closed");
+            if (string.IsNullOrWhiteSpace(reason)) throw new InvalidOperationException("Please say what's wrong, so Welly can learn from it.");
+            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId, ct) ?? throw new InvalidOperationException("User not found");
+            if (!await CanActOnTaskAsync(task, user, ct)) throw new UnauthorizedAccessException("You are not an assignee of this task");
+
+            var w = string.IsNullOrEmpty(task.WellyJson) ? null : JsonNode.Parse(task.WellyJson) as JsonObject;
+            if (w == null || (string?)w["status"] != "suggested") throw new InvalidOperationException("There's no Welly suggestion on this task.");
+            w["status"] = "rejected";
+            w["decidedBy"] = user.FullName;
+            w["decidedAt"] = DateTime.UtcNow.ToString("o");
+            w["reason"] = Truncate(reason.Trim(), 1000);
+            task.WellyJson = w.ToJsonString();
+            var skillKey = (string?)w["skill"] ?? "";
+            _db.WellyFeedback.Add(new Models.Welly.WellyFeedback
+            {
+                SkillKey = skillKey, FlowRunId = task.FlowRunId, FlowTaskId = task.Id, StepId = task.StepId,
+                Outcome = "rejected", ProposalJson = task.WellyJson, Reason = Truncate(reason.Trim(), 1000),
+                UserId = user.UserId, UserName = user.FullName, Model = "rules"
+            });
+            Audit(task.Run, task.StepId, "welly.rejected", $"{user.FullName} said Welly's suggestion was wrong: {Truncate(reason.Trim(), 300)}", userId, user.FullName, actorKind: "person", skillKey: skillKey);
+            await _db.SaveChangesAsync(ct);
+            return task;
+        }
+
         // ── Misc helpers ──────────────────────────────────────────────────────────────
 
         public static FlowGraph ParseGraph(FlowDefinition def)
@@ -813,7 +937,7 @@ namespace ProjectTracker.API.Services.Flows
             catch { return null; }
         }
 
-        private void Audit(FlowRun run, string? stepId, string type, string message, int? userId = null, string? userName = null, object? data = null)
+        private void Audit(FlowRun run, string? stepId, string type, string message, int? userId = null, string? userName = null, object? data = null, string? actorKind = null, string? skillKey = null)
         {
             _db.FlowAuditEvents.Add(new FlowAuditEvent
             {
@@ -824,6 +948,8 @@ namespace ProjectTracker.API.Services.Flows
                 Message = Truncate(message, 1000),
                 UserId = userId,
                 UserName = userName,
+                ActorKind = actorKind ?? (userId != null ? "person" : "system"),
+                SkillKey = skillKey,
                 DataJson = data == null ? null : JsonSerializer.Serialize(data, FlowExpressions.JsonOpts),
                 OccurredAt = DateTime.UtcNow
             });

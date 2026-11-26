@@ -270,6 +270,7 @@ namespace ProjectTracker.API.Data
         public DbSet<Models.Flows.FlowRun> FlowRuns { get; set; }
         public DbSet<Models.Flows.FlowTask> FlowTasks { get; set; }
         public DbSet<Models.Flows.FlowAuditEvent> FlowAuditEvents { get; set; }
+        public DbSet<Models.Welly.WellyFeedback> WellyFeedback { get; set; }
         public DbSet<Models.Flows.FlowWidget> FlowWidgets { get; set; }
 
         // Cortex: the company knowledge graph (nodes, edges, change history)

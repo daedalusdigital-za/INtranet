@@ -118,6 +118,23 @@ export class FlowEditorDialogComponent implements AfterViewInit {
   stepType(t: FlowStepType) { return this.catalog.stepTypes.find(x => x.type === t); }
   stepLabel(id?: string | null): string { const s = this.steps.find(x => x.id === id); return s ? (s.name || s.id) : (id ? `⚠ ${id}` : '— end of flow —'); }
   otherSteps(id: string) { return this.steps.filter(s => s.id !== id); }
+
+  // ── Hand a task to Welly (Suggest only for now) ──
+  get wellySkills() { return this.catalog.wellySkills || []; }
+  wellySkillOf(s: FlowStep) { const k = s.config['welly']?.skill; return k ? this.wellySkills.find(x => x.key === k) : undefined; }
+  setWellySkill(s: FlowStep, key: string | null) {
+    if (!key) { delete s.config['welly']; return; }
+    const skill = this.wellySkills.find(x => x.key === key);
+    const prev = s.config['welly']?.inputs || {};
+    const inputs: Record<string, string> = {};
+    for (const i of skill?.inputs || []) inputs[i.key] = prev[i.key] ?? `{{inputs.${i.key}}}`;
+    s.config['welly'] = { skill: key, inputs, trust: 'suggest' };
+  }
+  wellyMissingFields(s: FlowStep): string[] {
+    const skill = this.wellySkillOf(s);
+    const have = new Set(((s.config['form'] || []) as { key: string }[]).map(f => f.key));
+    return (skill?.prefillKeys || []).filter(k => !have.has(k));
+  }
   selectedStep(): FlowStep | null { return this.steps.find(s => s.id === this.selectedId) ?? null; }
   levelHint = computed(() => ({ 1: 'Manual · a person starts it, people do the steps', 2: 'AI-assisted · Welly analyses & suggests, people decide', 3: 'Automated · triggers itself from events or a schedule' } as any));
 

@@ -9,8 +9,9 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { FlowCatalog, FlowTask, FlowsService } from '../../services/flows.service';
+import { FlowCatalog, FlowTask, FlowsService, WellyTaskInfo } from '../../services/flows.service';
 import { ToastService } from '../../ui/toast.service';
+import { ConfirmService } from '../../ui/confirm.service';
 
 /** Complete a task or decide an approval; renders the step's form fields. Also supports reassigning. */
 @Component({
@@ -30,6 +31,29 @@ import { ToastService } from '../../ui/toast.service';
         <span class="chip">{{ task.assigneeLabel }}</span>
       </div>
       @if (task.description) { <pre class="ftd-desc">{{ task.description }}</pre> }
+
+      @if (mode === 'complete' && welly; as w) {
+        <div class="ftd-welly" [attr.data-s]="w.status">
+          <img class="ftd-welly-face" [src]="w.status === 'fallback' ? '/welly/thinking.png' : '/welly/happy.png'" alt="" />
+          <div class="ftd-welly-main">
+            <div class="ftd-welly-head">
+              <b>{{ wellyHeadline(w) }}</b>
+              @if (w.status === 'suggested' && (w.confidence ?? 1) < 0.5) { <span class="ftd-welly-unsure">Not sure: please check</span> }
+            </div>
+            @if (w.summary) { <div class="ftd-welly-sum">{{ w.summary }}</div> }
+            @if (w.evidence?.length && w.status !== 'fallback') {
+              <ul class="ftd-welly-ev">@for (e of w.evidence!; track $index) { <li><span>{{ e.label }}</span>{{ e.value }}</li> }</ul>
+            }
+            @if (w.status === 'suggested') {
+              <div class="ftd-welly-foot">
+                <span>I've filled the form in. Check it, then click <b>Do it</b>.</span>
+                <button mat-button type="button" (click)="notRight()" [disabled]="busy"><mat-icon>thumb_down_off_alt</mat-icon>Not right</button>
+              </div>
+            }
+            @if (w.status === 'rejected' && w.reason) { <div class="ftd-welly-sum muted">Your note: “{{ w.reason }}”</div> }
+          </div>
+        </div>
+      }
 
       @if (mode === 'complete') {
         <form #f="ngForm" class="ftd-form">
@@ -93,7 +117,7 @@ import { ToastService } from '../../ui/toast.service';
           <button mat-flat-button color="primary" (click)="decide('approved')" [disabled]="busy || !formValid()"><mat-icon>check</mat-icon>Approve</button>
         } @else {
           <button mat-flat-button color="primary" (click)="decide('completed')" [disabled]="busy || !formValid()">
-            @if (busy) { <mat-spinner diameter="18"></mat-spinner> } @else { <mat-icon>task_alt</mat-icon> } Mark done
+            @if (busy) { <mat-spinner diameter="18"></mat-spinner> } @else { <mat-icon>{{ wellyUntouched() ? 'smart_toy' : 'task_alt' }}</mat-icon> } {{ wellyUntouched() ? 'Do it' : 'Mark done' }}
           </button>
         }
       } @else {
@@ -114,6 +138,18 @@ import { ToastService } from '../../ui/toast.service';
     .muted { color: var(--color-text-3); font-size: 12px; }
     .ftd-actions { display: flex; gap: 6px; } .spacer { flex: 1; }
     .ftd-actions button { display: inline-flex; align-items: center; gap: 6px; }
+    .ftd-welly { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; margin: 0 0 14px; border-radius: 12px;
+      background: var(--color-primary-soft); border: 1px solid color-mix(in srgb, var(--color-primary, #2563eb) 25%, transparent); }
+    .ftd-welly[data-s="fallback"], .ftd-welly[data-s="rejected"] { background: var(--color-surface-2); border-color: var(--color-line); }
+    .ftd-welly-face { width: 44px; height: 44px; object-fit: contain; flex: none; }
+    .ftd-welly-main { flex: 1; min-width: 0; display: grid; gap: 6px; font-size: var(--text-sm); color: var(--color-text); }
+    .ftd-welly-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .ftd-welly-unsure { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--color-warn-soft); color: #b45309; }
+    .ftd-welly-sum { line-height: 1.4; }
+    .ftd-welly-ev { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12.5px; color: var(--color-text-2);
+      li { overflow-wrap: anywhere; } span { color: var(--color-text-3); margin-right: 6px; } span::after { content: ':'; } }
+    .ftd-welly-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; color: var(--color-text-2);
+      button { display: inline-flex; align-items: center; gap: 4px; } }
   `]
 })
 export class FlowTaskDialogComponent {
@@ -121,8 +157,10 @@ export class FlowTaskDialogComponent {
   private ref = inject(MatDialogRef<FlowTaskDialogComponent>);
   private api = inject(FlowsService);
   private toast = inject(ToastService);
+  private confirm = inject(ConfirmService);
 
   task = this.data.task;
+  welly: WellyTaskInfo | null = this.task.welly ?? null;
   mode: 'complete' | 'reassign' = 'complete';
   result: Record<string, any> = {};
   comment = '';
@@ -131,6 +169,50 @@ export class FlowTaskDialogComponent {
   reassignUserId: number | null = null;
   reassignDeptId: number | null = null;
   reassignRole: string | null = null;
+
+  constructor() {
+    // Welly prepared this step: start from its answers; the person can change anything before Do it.
+    if (this.welly?.status === 'suggested' && this.welly.prefill) {
+      const keys = new Set((this.task.form || []).map(f => f.key));
+      for (const [k, v] of Object.entries(this.welly.prefill)) if (keys.has(k) && v !== null && v !== '') this.result[k] = v;
+    }
+  }
+
+  wellyHeadline(w: WellyTaskInfo): string {
+    switch (w.status) {
+      case 'suggested': return `Welly prepared this · ${w.title || w.skill}`;
+      case 'fallback': return `Welly couldn't do this one`;
+      case 'rejected': return `You told Welly this was wrong`;
+      default: return `Welly · ${w.title || w.skill}`;
+    }
+  }
+
+  /** True while the form still holds exactly what Welly prepared (so the button reads "Do it"). */
+  wellyUntouched(): boolean {
+    const w = this.welly;
+    if (!w || w.status !== 'suggested' || !w.prefill) return false;
+    const keys = new Set((this.task.form || []).map(f => f.key));
+    return Object.entries(w.prefill).every(([k, v]) => !keys.has(k) || String(this.result[k] ?? '') === String(v ?? ''));
+  }
+
+  async notRight() {
+    const reason = await this.confirm.askText({
+      title: 'What did Welly get wrong?', label: 'What was wrong', required: true, multiline: true,
+      hint: 'This is saved so Welly can learn. The task stays with you.', confirmText: 'Tell Welly'
+    });
+    if (reason === null) return;
+    this.busy = true;
+    this.api.rejectWelly(this.task.id, reason).subscribe({
+      next: t => {
+        this.busy = false;
+        const prefill = this.welly?.prefill || {};
+        for (const k of Object.keys(prefill)) if (String(this.result[k] ?? '') === String(prefill[k] ?? '')) delete this.result[k];
+        this.welly = t.welly ?? null;
+        this.toast.done('Thanks. Welly has noted it; fill the form in yourself.');
+      },
+      error: err => { this.busy = false; this.toast.error(err?.error?.message || 'Could not save that'); }
+    });
+  }
 
   formValid(): boolean {
     for (const f of this.task.form || []) {

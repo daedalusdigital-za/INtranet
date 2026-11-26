@@ -77,9 +77,24 @@ export interface FlowTask {
   form?: { key: string; label: string; type?: string; required?: boolean; options?: string[] }[] | null;
   result?: Record<string, any> | null; comment?: string | null; completedAt?: string | null; completedBy?: string | null; createdAt: string;
   runNumber?: string; runTitle?: string; flowName?: string; level?: number;
+  /** What Welly prepared when the step is handed to a Welly skill. */
+  welly?: WellyTaskInfo | null;
 }
 
-export interface FlowAuditEvent { id: number; stepId?: string | null; type: string; message: string; userName?: string | null; occurredAt: string; data?: any; }
+/** Welly on a human step. status: suggested (waiting for the person) · accepted · edited · rejected · fallback (Welly couldn't, the person does it). */
+export interface WellyTaskInfo {
+  skill: string; title?: string; kind?: string; trust: 'suggest' | 'report' | 'quiet';
+  status: 'suggested' | 'accepted' | 'edited' | 'rejected' | 'fallback';
+  summary?: string; confidence?: number; evidence?: { label: string; value?: string | null; url?: string | null }[];
+  prefill?: Record<string, any>; decidedBy?: string; decidedAt?: string; reason?: string; at?: string;
+}
+
+export interface WellySkillInfo {
+  key: string; title: string; description: string; module: string; kind: string;
+  inputs: { key: string; label: string; required: boolean }[]; prefillKeys: string[];
+}
+
+export interface FlowAuditEvent { id: number; stepId?: string | null; type: string; message: string; userName?: string | null; actorKind?: 'person' | 'welly' | 'system' | null; skillKey?: string | null; occurredAt: string; data?: any; }
 
 export interface FlowRunDetail {
   summary: FlowRunSummary; context: Record<string, any>; graph: FlowGraph; tasks: FlowTask[]; events: FlowAuditEvent[];
@@ -97,6 +112,8 @@ export interface FlowCatalog {
   dataSources: { key: string; name: string; description: string; entityType: string; params: string[]; fields: string[] }[];
   stepTypes: { type: FlowStepType; name: string; icon: string; description: string }[];
   actions: string[];
+  /** Welly skills a human task step can be handed to. Absent from older backends. */
+  wellySkills?: WellySkillInfo[];
 }
 
 export interface FlowStats {
@@ -209,6 +226,10 @@ export class FlowsService {
   allTasks(status = 'open,escalated'): Observable<FlowTask[]> { return this.http.get<FlowTask[]>(`${this.base}/tasks`, { params: { status } }); }
   completeTask(id: number, body: { decision?: string; result?: Record<string, any>; comment?: string }): Observable<{ task: FlowTask; run: FlowRunDetail }> {
     return this.http.post<{ task: FlowTask; run: FlowRunDetail }>(`${this.base}/tasks/${id}/complete`, body);
+  }
+  /** "Not right": tell Welly its suggestion on this task is wrong (logged as a labelled example). */
+  rejectWelly(id: number, reason: string): Observable<FlowTask> {
+    return this.http.post<FlowTask>(`${this.base}/tasks/${id}/welly-reject`, { reason });
   }
   reassign(id: number, body: { userId?: number; role?: string; departmentId?: number }): Observable<FlowRunDetail> {
     return this.http.post<FlowRunDetail>(`${this.base}/tasks/${id}/reassign`, body);

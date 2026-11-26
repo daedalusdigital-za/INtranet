@@ -305,6 +305,12 @@ namespace ProjectTracker.API.Extensions
             services.AddSingleton<Services.Flows.IPayrollHandoff, Services.Flows.PayrollHandoffService>();
             services.AddSingleton<Services.Flows.ITenderHandoff, Services.Flows.TenderHandoffService>();
             services.AddHostedService<Services.Flows.FlowSchedulerService>();
+
+            // Welly skills: the named actions Welly can take on flow steps (same permission checks as the screens)
+            services.AddScoped<Services.Welly.IWellySkill, Services.Welly.CheckPodSkill>();
+            services.AddScoped<Services.Welly.IWellySkill, Services.Welly.CheckPaymentSkill>();
+            services.AddScoped<Services.Welly.IWellySkill, Services.Welly.DraftInvoiceEmailSkill>();
+            services.AddScoped<Services.Welly.IWellySkillRegistry, Services.Welly.WellySkillRegistry>();
             return services;
         }
 

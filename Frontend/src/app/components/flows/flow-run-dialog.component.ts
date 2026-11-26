@@ -65,6 +65,7 @@ import { FlowCanvasComponent } from './flow-canvas.component';
                   <div class="rd-task-main">
                     <b>{{ t.title }}</b>
                     <small>{{ t.assigneeLabel }} · {{ t.priority }}@if (t.dueAt) { · due {{ t.dueAt | date:'dd MMM HH:mm' }} }@if (t.isOverdue && (t.status === 'open' || t.status === 'escalated')) { · <span class="ov">overdue</span> }@if (t.escalationCount) { · escalated ×{{ t.escalationCount }} }</small>
+                    @if (t.welly) { <small class="rd-welly" [attr.data-s]="t.welly.status"><mat-icon>smart_toy</mat-icon>{{ wellyTaskLabel(t.welly.status) }}@if (t.welly.title) { · {{ t.welly.title }} }</small> }
                     @if (t.completedAt) { <small>{{ t.status }} by {{ t.completedBy }} on {{ t.completedAt | date:'dd MMM HH:mm' }}@if (t.comment) { — “{{ t.comment }}” }</small> }
                     @if (t.result && objectKeys(t.result).length) { <small class="rd-kv">@for (k of objectKeys(t.result); track k) { <code>{{ k }}: {{ t.result![k] }}</code> }</small> }
                   </div>
@@ -81,9 +82,15 @@ import { FlowCanvasComponent } from './flow-canvas.component';
                 <div class="rd-ev" [attr.data-t]="e.type">
                   <span class="rd-ev-dot"></span>
                   <div class="rd-ev-main">
-                    <div class="rd-ev-head"><b>{{ e.type }}</b><span class="rd-ev-time">{{ e.occurredAt | date:'dd MMM HH:mm:ss' }}@if (e.userName) { · {{ e.userName }} }</span></div>
+                    <div class="rd-ev-head">
+                      @if (e.actorKind === 'welly') { <span class="rd-actor welly" title="Done by Welly"><mat-icon>smart_toy</mat-icon>Welly</span> }
+                      @else if (e.actorKind === 'person') { <span class="rd-actor person" title="Done by a person"><mat-icon>person</mat-icon>Person</span> }
+                      <b>{{ e.type }}</b><span class="rd-ev-time">{{ e.occurredAt | date:'dd MMM HH:mm:ss' }}@if (e.userName) { · {{ e.userName }} }</span></div>
                     <div class="rd-ev-msg">{{ e.message }}</div>
                     @if (e.data && e.type === 'ai.analyzed') { <pre class="rd-pre">{{ e.data | json }}</pre> }
+                    @if (e.data?.evidence?.length && e.type === 'welly.suggested') {
+                      <ul class="rd-ev-evidence">@for (x of e.data.evidence; track $index) { <li><span>{{ x.label }}:</span> {{ x.value }}</li> }</ul>
+                    }
                   </div>
                 </div>
               }
@@ -133,6 +140,13 @@ import { FlowCanvasComponent } from './flow-canvas.component';
     .rd-ev-dot { width: 12px; height: 12px; border-radius: 50%; background: #94a3b8; margin-top: 3px; border: 2px solid #fff; box-shadow: 0 0 0 1px #cbd5e1; }
     .rd-ev[data-t^="run."] .rd-ev-dot { background: #2563eb; } .rd-ev[data-t="run.failed"] .rd-ev-dot, .rd-ev[data-t="task.escalated"] .rd-ev-dot { background: #dc2626; }
     .rd-ev[data-t="ai.analyzed"] .rd-ev-dot { background: #7c3aed; } .rd-ev[data-t="task.completed"] .rd-ev-dot, .rd-ev[data-t="approval.decided"] .rd-ev-dot, .rd-ev[data-t="run.completed"] .rd-ev-dot { background: #16a34a; }
+    .rd-ev[data-t^="welly."] .rd-ev-dot { background: #db2777; }
+    .rd-actor { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 600; padding: 0 7px 0 4px; border-radius: 999px; line-height: 18px;
+      mat-icon { font-size: 13px; width: 13px; height: 13px; } }
+    .rd-actor.welly { background: #fce7f3; color: #be185d; } .rd-actor.person { background: var(--color-surface-2); color: var(--color-text-2); }
+    .rd-ev-evidence { margin: 4px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-2); span { color: var(--color-text-3); } }
+    .rd-welly { display: inline-flex; align-items: center; gap: 4px; color: #be185d !important; mat-icon { font-size: 14px; width: 14px; height: 14px; } }
+    .rd-welly[data-s="fallback"], .rd-welly[data-s="rejected"] { color: var(--color-text-3) !important; }
     .rd-ev-head { display: flex; gap: 8px; align-items: baseline; b { font-size: 12px; font-family: ui-monospace, Consolas, monospace; color: var(--color-text-2); } }
     .rd-ev-time { font-size: 11px; color: var(--color-text-3); }
     .rd-ev-msg { font-size: 13px; }
@@ -182,6 +196,10 @@ export class FlowRunDialogComponent {
     setTimeout(() => { if (this.canvas) { this.canvas.ensurePositions(); this.canvas.fit(); } }, 50);
   }
 
+  wellyTaskLabel(status: string): string {
+    return ({ suggested: 'Welly prepared this', accepted: 'Welly suggested · accepted', edited: 'Welly suggested · changed by a person',
+              rejected: 'Welly suggested · marked wrong', fallback: "Welly couldn't · done by a person" } as Record<string, string>)[status] || 'Welly';
+  }
   objectKeys(o: any) { return Object.keys(o || {}).filter(k => !['decision', 'comment', 'completedBy', 'completedByUserId', 'completedAt', 'taskId'].includes(k)); }
 
   stepState(s: FlowStep): 'done' | 'current' | 'pending' | 'skipped' {

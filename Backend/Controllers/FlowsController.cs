@@ -165,7 +165,7 @@ namespace ProjectTracker.API.Controllers
         // ── Catalog / lookups ─────────────────────────────────────────────────────────
 
         [HttpGet("catalog")]
-        public async Task<IActionResult> Catalog()
+        public async Task<IActionResult> Catalog([FromServices] Services.Welly.IWellySkillRegistry wellySkills)
         {
             if (await IsModuleBlockedAsync()) return Forbid();
             var designer = await IsDesignerAsync();
@@ -216,7 +216,12 @@ namespace ProjectTracker.API.Controllers
                 {
                     "CREATE_TICKET", "CREATE_TODO", "LOG_INCIDENT", "CREATE_ANNOUNCEMENT", "SEND_MESSAGE", "SEND_EMAIL",
                     "UPDATE_SHIPMENT_STATUS", "CREATE_LEAVE_REQUEST", "CREATE_PROJECT_TASK"
-                }
+                },
+                wellySkills = wellySkills.All.Select(k => new
+                {
+                    key = k.Key, title = k.Title, description = k.Description, module = k.Module, kind = k.Kind.ToString().ToLowerInvariant(),
+                    inputs = k.Inputs.Select(i => new { key = i.Key, label = i.Label, required = i.Required }), prefillKeys = k.PrefillKeys
+                })
             });
         }
 
@@ -634,7 +639,7 @@ namespace ProjectTracker.API.Controllers
                 context = Parse(r.ContextJson, "{}"),
                 graph = Parse(r.GraphJson ?? r.Definition.GraphJson, "{\"steps\":[]}"),
                 tasks = r.Tasks.OrderBy(t => t.CreatedAt).Select(TaskDto),
-                events = events.Select(e => new { e.Id, e.StepId, e.Type, e.Message, e.UserName, e.OccurredAt, data = string.IsNullOrEmpty(e.DataJson) ? (JsonElement?)null : Parse(e.DataJson, "null") })
+                events = events.Select(e => new { e.Id, e.StepId, e.Type, e.Message, e.UserName, e.ActorKind, e.SkillKey, e.OccurredAt, data = string.IsNullOrEmpty(e.DataJson) ? (JsonElement?)null : Parse(e.DataJson, "null") })
             };
         }
 
@@ -656,6 +661,7 @@ namespace ProjectTracker.API.Controllers
             t.AssignedToUserId, t.AssignedToRole, t.AssignedToDepartmentId, t.AssigneeLabel,
             form = string.IsNullOrEmpty(t.FormJson) ? (JsonElement?)null : Parse(t.FormJson, "[]"),
             result = string.IsNullOrEmpty(t.ResultJson) ? (JsonElement?)null : Parse(t.ResultJson, "{}"),
+            welly = string.IsNullOrEmpty(t.WellyJson) ? (JsonElement?)null : Parse(t.WellyJson, "null"),
             t.Comment, t.CompletedAt, completedBy = t.CompletedByUser == null ? null : t.CompletedByUser.Name + " " + t.CompletedByUser.Surname, t.CreatedAt,
             runNumber = t.Run?.RunNumber, runTitle = t.Run?.Title, flowName = t.Run?.Definition?.Name, level = t.Run?.Definition?.Level
         };
@@ -683,6 +689,22 @@ namespace ProjectTracker.API.Controllers
             if (parts.Length > 0) q = q.Where(t => parts.Contains(t.Status));
             var tasks = await q.OrderBy(t => t.DueAt ?? DateTime.MaxValue).ThenByDescending(t => t.CreatedAt).Take(300).ToListAsync();
             return Ok(tasks.Select(TaskDto));
+        }
+
+        public class WellyRejectRequest { public string? Reason { get; set; } }
+
+        /// <summary>"Not right": the person says Welly's suggestion on this task is wrong. Logs a labelled example; the task stays with them.</summary>
+        [HttpPost("tasks/{id:int}/welly-reject")]
+        public async Task<IActionResult> RejectWelly(int id, [FromBody] WellyRejectRequest req)
+        {
+            try
+            {
+                var t = await _engine.RejectWellySuggestionAsync(id, Uid, req.Reason ?? "");
+                var full = await _db.FlowTasks.AsNoTracking().Include(x => x.Run).ThenInclude(r => r.Definition).Include(x => x.CompletedByUser).FirstAsync(x => x.Id == t.Id);
+                return Ok(TaskDto(full));
+            }
+            catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
         }
 
         [HttpPost("tasks/{id:int}/complete")]

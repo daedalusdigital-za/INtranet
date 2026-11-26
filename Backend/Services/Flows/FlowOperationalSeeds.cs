@@ -16,6 +16,9 @@ namespace ProjectTracker.API.Services.Flows
             => new { id, type = "task", name, x, y, nextStepId = next, config = new { title, description = desc, assignTo, dueInHours = due, priority = pri, form = form ?? Array.Empty<object>() } };
         private static object Approval(string id, string name, int x, int y, string title, string desc, object assignTo, string approved, string rejected, int due = 24, object? escalateTo = null)
             => new { id, type = "approval", name, x, y, config = new { title, description = desc, assignTo, dueInHours = due, priority = "Normal", approvedStepId = approved, rejectedStepId = rejected, escalateTo } };
+        /// <summary>A human task handed to a Welly skill at the Suggest trust level: Welly prepares it, the person clicks "Do it".</summary>
+        private static object WellyTask(string id, string name, int x, int y, string title, string desc, object assignTo, string? next, string skill, object inputs, int due = 24, string pri = "Normal", object[]? form = null)
+            => new { id, type = "task", name, x, y, nextStepId = next, config = new { title, description = desc, assignTo, dueInHours = due, priority = pri, form = form ?? Array.Empty<object>(), welly = new { skill, inputs, trust = "suggest" } } };
         private static object If(string id, string name, int x, int y, string expr, string yes, string? no)
             => new { id, type = "condition", name, x, y, config = new { expression = expr, trueStepId = yes, falseStepId = no } };
         private static object Notify(string id, string name, int x, int y, object to, string title, string body, string? next)
@@ -128,6 +131,36 @@ namespace ProjectTracker.API.Services.Flows
                     End("end_over", "Overdue handled", 2300, 260, "overdue"),
                 },
                 "Invoice · {{inputs.invoiceNo}} · {{inputs.customer}}"),
+
+            // Trial copy for "Welly runs human flows": same process, but Welly prepares the POD check, the invoice email and the
+            // payment check (Suggest: a person clicks "Do it"). Nothing in this copy emails a customer: sending is a person's task.
+            Def("Accounts", "Accounts · Invoice to payment (Welly trial)",
+                "Trial of Welly on human steps. Welly checks the POD, drafts the invoice email and checks payment on the customer ageing; a person confirms each step. Nothing here emails customers automatically.",
+                new object[] { Field("customer", "Customer"), Field("invoiceNo", "Invoice number (e.g. IN306379)", required: true), Field("amount", "Amount (R)", "number"), Field("customerEmail", "Customer email"),
+                               Field("skipWait", "Skip the 30-day wait (trial)", "select", true, new[] { "Yes", "No" }) },
+                "capture",
+                new object[]
+                {
+                    WellyTask("capture", "Capture invoice", 60, 60, "Capture {{inputs.invoiceNo}} · {{inputs.customer}}", "Make sure the signed POD is attached before the invoice goes out.", Dept("Accounts"), "haspod",
+                        "invoice.check_pod", new { invoiceNo = "{{inputs.invoiceNo}}" }, 8, "Normal",
+                        new[] { Field("podAttached", "POD attached?", "select", true, new[] { "Yes", "No" }), Field("podReference", "POD reference") }),
+                    If("haspod", "POD attached?", 380, 60, "steps.capture.podAttached == \"Yes\"", "send", "getpod"),
+                    Task("getpod", "Logistics: supply POD", 380, 260, "POD needed for invoice {{inputs.invoiceNo}}", "Customer {{inputs.customer}}: upload the signed POD.", Dept("Logistics"), "send", 24, "High"),
+                    WellyTask("send", "Send invoice", 700, 60, "Send invoice {{inputs.invoiceNo}}", "Welly drafts the email. Attach the invoice and POD, send it from your mailbox, then mark this done.", Dept("Accounts"), "skip",
+                        "invoice.draft_send", new { invoiceNo = "{{inputs.invoiceNo}}", customer = "{{inputs.customer}}", amount = "{{inputs.amount}}", customerEmail = "{{inputs.customerEmail}}", podReference = "{{steps.capture.podReference}}" }, 8, "Normal",
+                        new[] { Field("emailTo", "To", required: true), Field("emailSubject", "Subject", required: true), Field("emailBody", "Email", "textarea", true) }),
+                    If("skip", "Skip the wait?", 1020, 60, "inputs.skipWait == \"Yes\"", "paycheck", "wait"),
+                    Wait("wait", "30-day terms", 1020, 260, 720, "paycheck"),
+                    WellyTask("paycheck", "Check payment", 1340, 60, "Payment received for {{inputs.invoiceNo}}?", "Welly checks the latest customer ageing. Confirm against the bank if it's out of date.", Dept("Accounts"), "paid",
+                        "invoice.check_payment", new { invoiceNo = "{{inputs.invoiceNo}}" }, 24, "Normal",
+                        new[] { Field("paid", "Paid?", "select", true, new[] { "Yes", "No" }) }),
+                    If("paid", "Paid?", 1660, 60, "steps.paycheck.paid == \"Yes\"", "end_paid", "remind"),
+                    End("end_paid", "Paid", 1980, 60, "paid"),
+                    Task("remind", "Send reminder", 1660, 260, "Send a reminder for {{inputs.invoiceNo}}", "Invoice {{inputs.invoiceNo}} (R{{inputs.amount}}) is overdue. Send the customer a reminder.", Dept("Accounts"), "esc", 8),
+                    Task("esc", "Manager: collections", 1980, 260, "Overdue: {{inputs.customer}} · {{inputs.invoiceNo}}", "Decide on hold / handover / payment plan.", DeptRole("Accounts", "Manager"), "end_over", 48, "Urgent"),
+                    End("end_over", "Overdue handled", 2300, 260, "overdue"),
+                },
+                "Invoice (Welly trial) · {{inputs.invoiceNo}} · {{inputs.customer}}", 2),
 
             // ── Finance ───────────────────────────────────────────────────────────────
             Def("Finance Department", "Finance · Month-end close",
